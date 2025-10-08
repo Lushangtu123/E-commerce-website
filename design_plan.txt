@@ -1,0 +1,422 @@
+一、系统架构设计
+1. 整体架构（微服务架构）
+前端层 → API网关 → 微服务层 → 数据层 → 缓存/消息队列
+核心微服务模块：
+
+用户服务：注册、登录、个人信息管理
+商品服务：商品展示、搜索、分类、详情
+订单服务：订单创建、支付、状态管理
+购物车服务：购物车增删改查
+库存服务：库存管理、预占、释放
+支付服务：对接第三方支付
+物流服务：物流信息追踪
+评论服务：商品评价、晒单
+推荐服务：个性化推荐
+
+2. 技术栈选型
+前端：
+
+React/Vue.js + TypeScript
+Next.js（SSR提升SEO）
+TailwindCSS
+
+后端：
+
+Java Spring Boot / Node.js
+Spring Cloud（微服务框架）
+Dubbo/gRPC（服务间通信）
+
+数据库：
+
+MySQL（主数据库）
+MongoDB（商品详情、评论）
+Redis（缓存、session）
+Elasticsearch（商品搜索）
+
+中间件：
+
+RabbitMQ/Kafka（消息队列）
+Nginx（负载均衡）
+Docker + Kubernetes（容器化部署）
+
+二、数据库设计
+1. 用户表 (users)
+sqlCREATE TABLE users (
+    user_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    avatar_url VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email)
+);
+2. 商品表 (products)
+sqlCREATE TABLE products (
+    product_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    category_id INT,
+    brand VARCHAR(100),
+    price DECIMAL(10,2) NOT NULL,
+    original_price DECIMAL(10,2),
+    stock INT DEFAULT 0,
+    sales_count INT DEFAULT 0,
+    rating DECIMAL(2,1) DEFAULT 5.0,
+    main_image VARCHAR(255),
+    status TINYINT DEFAULT 1, -- 1:上架 0:下架
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_category (category_id),
+    INDEX idx_price (price),
+    FULLTEXT idx_title (title)
+);
+3. 订单表 (orders)
+sqlCREATE TABLE orders (
+    order_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_no VARCHAR(32) UNIQUE NOT NULL,
+    user_id BIGINT NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status TINYINT DEFAULT 0, -- 0:待支付 1:已支付 2:已发货 3:已完成 4:已取消
+    payment_method VARCHAR(20),
+    shipping_address_id BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paid_at TIMESTAMP NULL,
+    INDEX idx_user (user_id),
+    INDEX idx_status (status),
+    INDEX idx_created (created_at)
+);
+4. 订单详情表 (order_items)
+sqlCREATE TABLE order_items (
+    item_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    product_name VARCHAR(200),
+    quantity INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    INDEX idx_order (order_id)
+);
+5. 购物车表 (cart)
+sqlCREATE TABLE cart (
+    cart_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    quantity INT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_product (user_id, product_id),
+    INDEX idx_user (user_id)
+);
+6. 收货地址表 (shipping_addresses)
+sqlCREATE TABLE shipping_addresses (
+    address_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    receiver_name VARCHAR(50) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    province VARCHAR(50),
+    city VARCHAR(50),
+    district VARCHAR(50),
+    detail_address VARCHAR(200),
+    is_default TINYINT DEFAULT 0,
+    INDEX idx_user (user_id)
+);
+7. 商品评论表 (reviews)
+sqlCREATE TABLE reviews (
+    review_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    product_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL,
+    rating TINYINT NOT NULL, -- 1-5星
+    content TEXT,
+    images JSON, -- 晒单图片数组
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_product (product_id),
+    INDEX idx_user (user_id)
+);
+三、关键功能实现
+1. 商品搜索（Elasticsearch）
+java@Service
+public class ProductSearchService {
+    
+    @Autowired
+    private ElasticsearchClient esClient;
+    
+    public SearchResult searchProducts(String keyword, int page, int size) {
+        // 构建搜索查询
+        SearchRequest request = SearchRequest.of(s -> s
+            .index("products")
+            .query(q -> q
+                .bool(b -> b
+                    .should(sh -> sh
+                        .match(m -> m
+                            .field("title")
+                            .query(keyword)
+                            .boost(2.0f) // 标题权重更高
+                        )
+                    )
+                    .should(sh -> sh
+                        .match(m -> m
+                            .field("description")
+                            .query(keyword)
+                        )
+                    )
+                )
+            )
+            .from(page * size)
+            .size(size)
+            .highlight(h -> h
+                .fields("title", f -> f)
+            )
+        );
+        
+        // 执行搜索
+        SearchResponse<Product> response = esClient.search(request, Product.class);
+        
+        // 处理结果
+        return buildSearchResult(response);
+    }
+}
+2. 秒杀/高并发下单（分布式锁 + 消息队列）
+java@Service
+public class OrderService {
+    
+    @Autowired
+    private RedissonClient redissonClient;
+    
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+    
+    public OrderResult createOrder(Long userId, Long productId, int quantity) {
+        String lockKey = "product_stock:" + productId;
+        RLock lock = redissonClient.getLock(lockKey);
+        
+        try {
+            // 尝试获取分布式锁
+            if (lock.tryLock(10, 5, TimeUnit.SECONDS)) {
+                // 1. 检查库存（Redis缓存）
+                Integer stock = getStockFromRedis(productId);
+                if (stock < quantity) {
+                    return OrderResult.fail("库存不足");
+                }
+                
+                // 2. 预减库存
+                decrStockInRedis(productId, quantity);
+                
+                // 3. 创建订单记录（状态：待支付）
+                Order order = new Order();
+                order.setUserId(userId);
+                order.setProductId(productId);
+                order.setQuantity(quantity);
+                order.setStatus(OrderStatus.PENDING);
+                orderRepository.save(order);
+                
+                // 4. 发送消息到MQ异步处理
+                OrderMessage message = new OrderMessage(order.getId(), productId, quantity);
+                rabbitTemplate.convertAndSend("order.exchange", "order.create", message);
+                
+                return OrderResult.success(order);
+            } else {
+                return OrderResult.fail("系统繁忙，请稍后重试");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return OrderResult.fail("系统异常");
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+    
+    // 监听订单消息，异步处理库存扣减
+    @RabbitListener(queues = "order.queue")
+    public void handleOrderMessage(OrderMessage message) {
+        // 扣减数据库库存
+        boolean success = productRepository.decrStock(
+            message.getProductId(), 
+            message.getQuantity()
+        );
+        
+        if (!success) {
+            // 库存扣减失败，回滚Redis库存，取消订单
+            incrStockInRedis(message.getProductId(), message.getQuantity());
+            orderRepository.updateStatus(message.getOrderId(), OrderStatus.CANCELLED);
+        }
+    }
+}
+3. 购物车实现（Redis）
+java@Service
+public class CartService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    private static final String CART_KEY_PREFIX = "cart:";
+    
+    // 添加到购物车
+    public void addToCart(Long userId, Long productId, int quantity) {
+        String key = CART_KEY_PREFIX + userId;
+        
+        // 使用Hash结构存储 field:productId value:quantity
+        redisTemplate.opsForHash().increment(key, productId.toString(), quantity);
+        
+        // 设置过期时间（7天）
+        redisTemplate.expire(key, 7, TimeUnit.DAYS);
+    }
+    
+    // 获取购物车列表
+    public List<CartItem> getCartItems(Long userId) {
+        String key = CART_KEY_PREFIX + userId;
+        Map<Object, Object> cartMap = redisTemplate.opsForHash().entries(key);
+        
+        List<CartItem> items = new ArrayList<>();
+        for (Map.Entry<Object, Object> entry : cartMap.entrySet()) {
+            Long productId = Long.parseLong(entry.getKey().toString());
+            Integer quantity = (Integer) entry.getValue();
+            
+            // 从数据库或缓存获取商品详情
+            Product product = productService.getProduct(productId);
+            items.add(new CartItem(product, quantity));
+        }
+        
+        return items;
+    }
+    
+    // 更新数量
+    public void updateQuantity(Long userId, Long productId, int quantity) {
+        String key = CART_KEY_PREFIX + userId;
+        
+        if (quantity <= 0) {
+            redisTemplate.opsForHash().delete(key, productId.toString());
+        } else {
+            redisTemplate.opsForHash().put(key, productId.toString(), quantity);
+        }
+    }
+}
+4. 订单超时自动取消（延迟队列）
+java@Configuration
+public class RabbitMQConfig {
+    
+    // 死信交换机
+    @Bean
+    public DirectExchange orderDlxExchange() {
+        return new DirectExchange("order.dlx.exchange");
+    }
+    
+    // 延迟队列（30分钟TTL）
+    @Bean
+    public Queue orderDelayQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", "order.dlx.exchange");
+        args.put("x-dead-letter-routing-key", "order.timeout");
+        args.put("x-message-ttl", 30 * 60 * 1000); // 30分钟
+        
+        return new Queue("order.delay.queue", true, false, false, args);
+    }
+    
+    // 处理超时订单的队列
+    @Bean
+    public Queue orderTimeoutQueue() {
+        return new Queue("order.timeout.queue");
+    }
+    
+    @Bean
+    public Binding bindingTimeout() {
+        return BindingBuilder.bind(orderTimeoutQueue())
+            .to(orderDlxExchange())
+            .with("order.timeout");
+    }
+}
+
+@Service
+public class OrderTimeoutHandler {
+    
+    // 订单创建时发送延迟消息
+    public void sendDelayMessage(Long orderId) {
+        rabbitTemplate.convertAndSend(
+            "order.delay.queue", 
+            orderId
+        );
+    }
+    
+    // 处理超时订单
+    @RabbitListener(queues = "order.timeout.queue")
+    public void handleTimeoutOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId);
+        
+        // 如果订单仍是待支付状态，则取消订单
+        if (order != null && order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            
+            // 恢复库存
+            restoreStock(order);
+        }
+    }
+}
+5. 商品推荐算法（协同过滤）
+java@Service
+public class RecommendationService {
+    
+    // 基于用户行为的推荐
+    public List<Product> recommendByUserBehavior(Long userId) {
+        // 1. 获取用户浏览/购买历史
+        List<Long> viewedProducts = getUserViewHistory(userId);
+        
+        // 2. 找到相似用户
+        List<Long> similarUsers = findSimilarUsers(userId, viewedProducts);
+        
+        // 3. 获取相似用户喜欢的商品
+        Map<Long, Integer> productScores = new HashMap<>();
+        for (Long similarUser : similarUsers) {
+            List<Long> products = getUserViewHistory(similarUser);
+            for (Long productId : products) {
+                if (!viewedProducts.contains(productId)) {
+                    productScores.merge(productId, 1, Integer::sum);
+                }
+            }
+        }
+        
+        // 4. 按分数排序，返回Top N
+        return productScores.entrySet().stream()
+            .sorted(Map.Entry.<Long, Integer>comparingByValue().reversed())
+            .limit(20)
+            .map(e -> productService.getProduct(e.getKey()))
+            .collect(Collectors.toList());
+    }
+    
+    // 基于商品的协同过滤
+    public List<Product> recommendSimilarProducts(Long productId) {
+        // 使用余弦相似度计算商品相似性
+        // 可以基于：类目、品牌、价格区间、共同购买用户等维度
+        return productRepository.findSimilarProducts(productId, 10);
+    }
+}
+四、性能优化方案
+1. 缓存策略
+
+热门商品信息缓存到Redis（5分钟）
+用户Session存储到Redis
+商品库存使用Redis实时同步
+CDN缓存静态资源（图片、CSS、JS）
+
+2. 数据库优化
+
+读写分离（主从复制）
+分库分表（订单表按月分表）
+添加合适的索引
+使用连接池
+
+3. 异步处理
+
+订单创建后异步发送邮件/短信
+日志异步写入
+数据统计异步计算
+
+4. 限流降级
+
+API网关层面限流（令牌桶算法）
+秒杀活动使用Redis计数器限流
+熔断机制（Hystrix/Sentinel）
+
+这是一个完整的电商系统架构方案，涵盖了核心功能的设计和实现。实际开发中还需要考虑：安全性（SQL注入防护、XSS防护）、监控告警（Prometheus + Grafana）、日志系统（ELK）等方面。

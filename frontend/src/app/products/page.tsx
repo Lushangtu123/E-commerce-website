@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 // 标记为动态页面
@@ -9,7 +9,7 @@ import { productApi } from '@/lib/api';
 import ProductCard from '@/components/ProductCard';
 import toast from 'react-hot-toast';
 
-export default function ProductsPage() {
+function ProductsList() {
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,6 +167,30 @@ export default function ProductsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={
+      <div className="py-8">
+        <div className="container-custom">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="card animate-pulse">
+                <div className="bg-gray-300 h-64 w-full"></div>
+                <div className="p-4 space-y-3">
+                  <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    }>
+      <ProductsList />
+    </Suspense>
   );
 }
 
