@@ -14,6 +14,12 @@ import cartRoutes from './routes/cart.routes';
 import orderRoutes from './routes/order.routes';
 import reviewRoutes from './routes/review.routes';
 
+// 管理员路由
+import adminRoutes from './routes/admin.routes';
+import adminProductRoutes from './routes/admin-product.routes';
+import adminOrderRoutes from './routes/admin-order.routes';
+import adminUserRoutes from './routes/admin-user.routes';
+
 dotenv.config();
 
 const app: Express = express();
@@ -40,6 +46,12 @@ app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
+
+// 管理员API路由
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin/products', adminProductRoutes);
+app.use('/api/admin/orders', adminOrderRoutes);
+app.use('/api/admin/users', adminUserRoutes);
 
 // 404处理
 app.use((req: Request, res: Response) => {
