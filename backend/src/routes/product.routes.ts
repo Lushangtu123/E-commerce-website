@@ -3,11 +3,14 @@ import { ProductController } from '../controllers/product.controller';
 
 const router = Router();
 
+// 获取分类列表（必须在 /:id 之前）
+router.get('/categories', ProductController.getCategories);
+
+// 获取热门商品（必须在 /:id 之前）
+router.get('/hot', ProductController.getHotProducts);
+
 // 获取商品列表
 router.get('/', ProductController.list);
-
-// 获取热门商品
-router.get('/hot', ProductController.getHotProducts);
 
 // 获取商品详情
 router.get('/:id', ProductController.getDetail);

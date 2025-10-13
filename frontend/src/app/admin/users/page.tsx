@@ -168,7 +168,7 @@ export default function AdminUsersPage() {
                         {user.order_count || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{parseFloat(user.total_spent || 0).toFixed(2)}
+                        ¥{(user.total_spent ? parseFloat(user.total_spent) : 0).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {user.status === 1 ? (

@@ -128,5 +128,22 @@ export class ProductController {
       res.status(500).json({ error: '更新商品失败' });
     }
   }
+
+  // 获取分类列表
+  static async getCategories(req: Request, res: Response) {
+    try {
+      const { getPool } = require('../database/mysql');
+      const pool = getPool();
+      
+      const [categories] = await pool.query(
+        'SELECT category_id, name, parent_id, sort_order FROM categories ORDER BY sort_order ASC, category_id ASC'
+      );
+      
+      res.json(categories);
+    } catch (error) {
+      console.error('获取分类列表失败:', error);
+      res.status(500).json({ error: '获取分类列表失败' });
+    }
+  }
 }
 

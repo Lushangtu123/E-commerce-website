@@ -1,0 +1,737 @@
+很好的想法！我来为你设计一个完整的后台管理系统方案。
+
+## 一、后台管理系统架构
+
+### 1. 权限设计（RBAC - 基于角色的访问控制）
+
+**角色表 (roles)**
+```sql
+CREATE TABLE roles (
+    role_id INT PRIMARY KEY AUTO_INCREMENT,
+    role_name VARCHAR(50) NOT NULL,
+    description VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 预设角色
+INSERT INTO roles (role_name, description) VALUES
+('super_admin', '超级管理员 - 拥有所有权限'),
+('product_admin', '商品管理员 - 管理商品上下架'),
+('order_admin', '订单管理员 - 查看订单和用户信息'),
+('data_analyst', '数据分析师 - 查看统计数据');
+```
+
+**管理员表 (admins)**
+```sql
+CREATE TABLE admins (
+    admin_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    real_name VARCHAR(50),
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    role_id INT,
+    status TINYINT DEFAULT 1, -- 1:启用 0:禁用
+    last_login_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES roles(role_id),
+    INDEX idx_username (username)
+);
+```
+
+**权限表 (permissions)**
+```sql
+CREATE TABLE permissions (
+    permission_id INT PRIMARY KEY AUTO_INCREMENT,
+    permission_name VARCHAR(100) NOT NULL,
+    permission_code VARCHAR(50) UNIQUE NOT NULL, -- 如: product:view, user:edit
+    resource VARCHAR(50), -- 资源类型: product, user, order, statistics
+    action VARCHAR(20), -- 操作: view, create, edit, delete
+    description VARCHAR(200)
+);
+```
+
+**角色权限关联表 (role_permissions)**
+```sql
+CREATE TABLE role_permissions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    role_id INT NOT NULL,
+    permission_id INT NOT NULL,
+    UNIQUE KEY uk_role_permission (role_id, permission_id),
+    FOREIGN KEY (role_id) REFERENCES roles(role_id),
+    FOREIGN KEY (permission_id) REFERENCES permissions(permission_id)
+);
+```
+
+**操作日志表 (admin_logs)**
+```sql
+CREATE TABLE admin_logs (
+    log_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    admin_id BIGINT NOT NULL,
+    action VARCHAR(50) NOT NULL, -- 操作类型
+    resource_type VARCHAR(50), -- 资源类型
+    resource_id VARCHAR(100), -- 资源ID
+    description TEXT, -- 操作描述
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_admin (admin_id),
+    INDEX idx_created (created_at)
+);
+```
+
+## 二、核心功能实现
+
+### 1. 管理员认证与权限验证
+
+```java
+@RestController
+@RequestMapping("/admin/api")
+public class AdminAuthController {
+    
+    @Autowired
+    private AdminService adminService;
+    
+    @Autowired
+    private JwtTokenProvider tokenProvider;
+    
+    // 管理员登录
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        try {
+            Admin admin = adminService.authenticate(request.getUsername(), request.getPassword());
+            
+            if (admin.getStatus() == 0) {
+                return ResponseEntity.status(403).body("账号已被禁用");
+            }
+            
+            // 生成JWT Token
+            String token = tokenProvider.generateToken(admin.getAdminId(), admin.getRoleId());
+            
+            // 更新最后登录时间
+            adminService.updateLastLogin(admin.getAdminId());
+            
+            // 记录登录日志
+            adminService.logAction(admin.getAdminId(), "LOGIN", null, null, 
+                "管理员登录", getClientIP(httpRequest), httpRequest.getHeader("User-Agent"));
+            
+            return ResponseEntity.ok(new AuthResponse(token, admin));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body("用户名或密码错误");
+        }
+    }
+    
+    // 获取当前管理员信息
+    @GetMapping("/profile")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> getProfile(@AuthenticationPrincipal AdminPrincipal principal) {
+        Admin admin = adminService.getAdminById(principal.getAdminId());
+        List<String> permissions = adminService.getPermissions(admin.getRoleId());
+        
+        return ResponseEntity.ok(Map.of(
+            "admin", admin,
+            "permissions", permissions
+        ));
+    }
+}
+```
+
+**权限拦截器**
+```java
+@Component
+public class PermissionInterceptor implements HandlerInterceptor {
+    
+    @Autowired
+    private AdminService adminService;
+    
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 从请求中获取当前管理员
+        AdminPrincipal principal = (AdminPrincipal) SecurityContextHolder.getContext()
+            .getAuthentication().getPrincipal();
+        
+        // 检查接口所需权限
+        if (handler instanceof HandlerMethod) {
+            HandlerMethod method = (HandlerMethod) handler;
+            RequirePermission annotation = method.getMethodAnnotation(RequirePermission.class);
+            
+            if (annotation != null) {
+                String requiredPermission = annotation.value();
+                List<String> userPermissions = adminService.getPermissions(principal.getRoleId());
+                
+                if (!userPermissions.contains(requiredPermission)) {
+                    response.setStatus(403);
+                    response.getWriter().write("{\"error\":\"权限不足\"}");
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
+}
+```
+
+### 2. 流量统计功能
+
+**流量统计表**
+```sql
+CREATE TABLE traffic_statistics (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    date DATE NOT NULL,
+    hour TINYINT, -- 0-23
+    page_views INT DEFAULT 0, -- 页面浏览量
+    unique_visitors INT DEFAULT 0, -- 独立访客数
+    new_users INT DEFAULT 0, -- 新用户数
+    bounce_rate DECIMAL(5,2), -- 跳出率
+    avg_session_duration INT, -- 平均会话时长(秒)
+    UNIQUE KEY uk_date_hour (date, hour)
+);
+
+-- 页面访问明细表
+CREATE TABLE page_visits (
+    visit_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT, -- 可为NULL(未登录用户)
+    session_id VARCHAR(100),
+    page_url VARCHAR(500),
+    referrer VARCHAR(500),
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(500),
+    device_type VARCHAR(20), -- mobile, desktop, tablet
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_session (session_id),
+    INDEX idx_created (created_at)
+);
+```
+
+**流量统计API**
+```java
+@RestController
+@RequestMapping("/admin/api/statistics")
+public class StatisticsController {
+    
+    @Autowired
+    private StatisticsService statisticsService;
+    
+    // 获取流量概览
+    @GetMapping("/traffic/overview")
+    @RequirePermission("statistics:view")
+    public ResponseEntity<?> getTrafficOverview(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
+        
+        TrafficOverview overview = statisticsService.getTrafficOverview(startDate, endDate);
+        return ResponseEntity.ok(overview);
+    }
+    
+    // 获取实时流量（最近24小时）
+    @GetMapping("/traffic/realtime")
+    @RequirePermission("statistics:view")
+    public ResponseEntity<?> getRealtimeTraffic() {
+        // 从Redis获取实时数据
+        RealtimeTraffic traffic = statisticsService.getRealtimeTraffic();
+        return ResponseEntity.ok(traffic);
+    }
+    
+    // 获取流量趋势图数据
+    @GetMapping("/traffic/trend")
+    @RequirePermission("statistics:view")
+    public ResponseEntity<?> getTrafficTrend(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
+            @RequestParam(defaultValue = "day") String granularity) { // day, hour
+        
+        List<TrafficData> trend = statisticsService.getTrafficTrend(startDate, endDate, granularity);
+        return ResponseEntity.ok(trend);
+    }
+    
+    // 热门页面排行
+    @GetMapping("/traffic/top-pages")
+    @RequirePermission("statistics:view")
+    public ResponseEntity<?> getTopPages(
+            @RequestParam(defaultValue = "7") int days,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        List<PageStats> topPages = statisticsService.getTopPages(days, limit);
+        return ResponseEntity.ok(topPages);
+    }
+}
+```
+
+**统计服务实现**
+```java
+@Service
+public class StatisticsService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private StatisticsRepository statisticsRepository;
+    
+    // 记录页面访问（在前端埋点或后端拦截器中调用）
+    public void recordPageVisit(PageVisitDTO visit) {
+        // 1. 存储到数据库（异步）
+        CompletableFuture.runAsync(() -> {
+            PageVisit entity = new PageVisit();
+            BeanUtils.copyProperties(visit, entity);
+            pageVisitRepository.save(entity);
+        });
+        
+        // 2. 更新Redis实时计数
+        String dateKey = "traffic:pv:" + LocalDate.now();
+        redisTemplate.opsForValue().increment(dateKey);
+        redisTemplate.expire(dateKey, 7, TimeUnit.DAYS);
+        
+        // 3. 独立访客数（使用HyperLogLog）
+        String uvKey = "traffic:uv:" + LocalDate.now();
+        redisTemplate.opsForHyperLogLog().add(uvKey, visit.getSessionId());
+        redisTemplate.expire(uvKey, 7, TimeUnit.DAYS);
+        
+        // 4. 实时在线人数（使用有序集合，score为时间戳）
+        String onlineKey = "traffic:online";
+        long now = System.currentTimeMillis();
+        redisTemplate.opsForZSet().add(onlineKey, visit.getSessionId(), now);
+        // 移除5分钟前的记录
+        redisTemplate.opsForZSet().removeRangeByScore(onlineKey, 0, now - 5 * 60 * 1000);
+    }
+    
+    // 获取实时流量
+    public RealtimeTraffic getRealtimeTraffic() {
+        LocalDate today = LocalDate.now();
+        
+        // PV
+        Long pv = (Long) redisTemplate.opsForValue().get("traffic:pv:" + today);
+        
+        // UV
+        Long uv = redisTemplate.opsForHyperLogLog().size("traffic:uv:" + today);
+        
+        // 在线人数
+        Long online = redisTemplate.opsForZSet().size("traffic:online");
+        
+        return new RealtimeTraffic(
+            pv != null ? pv : 0,
+            uv != null ? uv : 0,
+            online != null ? online : 0
+        );
+    }
+    
+    // 流量趋势分析
+    public List<TrafficData> getTrafficTrend(LocalDate startDate, LocalDate endDate, String granularity) {
+        if ("hour".equals(granularity)) {
+            return statisticsRepository.getHourlyTraffic(startDate, endDate);
+        } else {
+            return statisticsRepository.getDailyTraffic(startDate, endDate);
+        }
+    }
+}
+```
+
+### 3. 商品购买记录查询
+
+```java
+@RestController
+@RequestMapping("/admin/api/orders")
+public class OrderManagementController {
+    
+    @Autowired
+    private OrderService orderService;
+    
+    // 订单列表查询
+    @GetMapping("")
+    @RequirePermission("order:view")
+    public ResponseEntity<?> getOrders(
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        OrderQueryDTO query = OrderQueryDTO.builder()
+            .orderNo(orderNo)
+            .userId(userId)
+            .status(status)
+            .startDate(startDate)
+            .endDate(endDate)
+            .build();
+        
+        Page<OrderVO> orders = orderService.queryOrders(query, PageRequest.of(page, size));
+        return ResponseEntity.ok(orders);
+    }
+    
+    // 订单详情
+    @GetMapping("/{orderId}")
+    @RequirePermission("order:view")
+    public ResponseEntity<?> getOrderDetail(@PathVariable Long orderId) {
+        OrderDetailVO detail = orderService.getOrderDetail(orderId);
+        return ResponseEntity.ok(detail);
+    }
+    
+    // 导出订单数据
+    @GetMapping("/export")
+    @RequirePermission("order:export")
+    public void exportOrders(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
+            HttpServletResponse response) throws IOException {
+        
+        List<Order> orders = orderService.getOrdersByDateRange(startDate, endDate);
+        
+        response.setContentType("application/vnd.ms-excel");
+        response.setHeader("Content-Disposition", "attachment; filename=orders.xlsx");
+        
+        // 使用EasyExcel导出
+        EasyExcel.write(response.getOutputStream(), OrderExportDTO.class)
+            .sheet("订单数据")
+            .doWrite(orders);
+    }
+    
+    // 订单统计
+    @GetMapping("/statistics")
+    @RequirePermission("order:view")
+    public ResponseEntity<?> getOrderStatistics(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
+        
+        OrderStatistics stats = orderService.getStatistics(startDate, endDate);
+        return ResponseEntity.ok(stats);
+    }
+}
+```
+
+### 4. 用户信息管理
+
+```java
+@RestController
+@RequestMapping("/admin/api/users")
+public class UserManagementController {
+    
+    @Autowired
+    private UserService userService;
+    
+    // 用户列表
+    @GetMapping("")
+    @RequirePermission("user:view")
+    public ResponseEntity<?> getUsers(
+            @RequestParam(required = false) String keyword, // 搜索用户名/邮箱/手机
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        Page<UserVO> users = userService.searchUsers(keyword, status, PageRequest.of(page, size));
+        return ResponseEntity.ok(users);
+    }
+    
+    // 用户详情
+    @GetMapping("/{userId}")
+    @RequirePermission("user:view")
+    public ResponseEntity<?> getUserDetail(@PathVariable Long userId) {
+        UserDetailVO detail = userService.getUserDetail(userId);
+        return ResponseEntity.ok(detail);
+    }
+    
+    // 用户订单历史
+    @GetMapping("/{userId}/orders")
+    @RequirePermission("user:view")
+    public ResponseEntity<?> getUserOrders(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        Page<OrderVO> orders = orderService.getUserOrders(userId, PageRequest.of(page, size));
+        return ResponseEntity.ok(orders);
+    }
+    
+    // 禁用/启用用户
+    @PutMapping("/{userId}/status")
+    @RequirePermission("user:edit")
+    public ResponseEntity<?> updateUserStatus(
+            @PathVariable Long userId,
+            @RequestParam Integer status,
+            @AuthenticationPrincipal AdminPrincipal principal) {
+        
+        userService.updateStatus(userId, status);
+        
+        // 记录操作日志
+        adminService.logAction(principal.getAdminId(), "UPDATE_USER_STATUS", 
+            "user", userId.toString(), 
+            "修改用户状态: " + (status == 1 ? "启用" : "禁用"), null, null);
+        
+        return ResponseEntity.ok("操作成功");
+    }
+    
+    // 用户统计数据
+    @GetMapping("/statistics")
+    @RequirePermission("user:view")
+    public ResponseEntity<?> getUserStatistics() {
+        UserStatistics stats = userService.getStatistics();
+        return ResponseEntity.ok(stats);
+    }
+}
+```
+
+### 5. 商品管理（上下架）
+
+```java
+@RestController
+@RequestMapping("/admin/api/products")
+public class ProductManagementController {
+    
+    @Autowired
+    private ProductService productService;
+    
+    // 商品列表
+    @GetMapping("")
+    @RequirePermission("product:view")
+    public ResponseEntity<?> getProducts(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Integer status, // 1:上架 0:下架
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        ProductQueryDTO query = ProductQueryDTO.builder()
+            .keyword(keyword)
+            .categoryId(categoryId)
+            .status(status)
+            .build();
+        
+        Page<ProductVO> products = productService.queryProducts(query, PageRequest.of(page, size));
+        return ResponseEntity.ok(products);
+    }
+    
+    // 添加商品
+    @PostMapping("")
+    @RequirePermission("product:create")
+    public ResponseEntity<?> createProduct(
+            @RequestBody @Valid ProductCreateDTO dto,
+            @AuthenticationPrincipal AdminPrincipal principal) {
+        
+        Product product = productService.createProduct(dto);
+        
+        // 记录操作日志
+        adminService.logAction(principal.getAdminId(), "CREATE_PRODUCT", 
+            "product", product.getProductId().toString(), 
+            "创建商品: " + product.getTitle(), null, null);
+        
+        return ResponseEntity.ok(product);
+    }
+    
+    // 编辑商品
+    @PutMapping("/{productId}")
+    @RequirePermission("product:edit")
+    public ResponseEntity<?> updateProduct(
+            @PathVariable Long productId,
+            @RequestBody @Valid ProductUpdateDTO dto,
+            @AuthenticationPrincipal AdminPrincipal principal) {
+        
+        Product product = productService.updateProduct(productId, dto);
+        
+        adminService.logAction(principal.getAdminId(), "UPDATE_PRODUCT", 
+            "product", productId.toString(), 
+            "编辑商品: " + product.getTitle(), null, null);
+        
+        return ResponseEntity.ok(product);
+    }
+    
+    // 上架/下架商品
+    @PutMapping("/{productId}/status")
+    @RequirePermission("product:edit")
+    public ResponseEntity<?> updateProductStatus(
+            @PathVariable Long productId,
+            @RequestParam Integer status, // 1:上架 0:下架
+            @AuthenticationPrincipal AdminPrincipal principal) {
+        
+        productService.updateStatus(productId, status);
+        
+        // 如果是下架操作，需要：
+        // 1. 清除相关缓存
+        // 2. 从搜索引擎移除
+        if (status == 0) {
+            productService.removeFromCache(productId);
+            productService.removeFromSearchEngine(productId);
+        }
+        
+        adminService.logAction(principal.getAdminId(), "UPDATE_PRODUCT_STATUS", 
+            "product", productId.toString(), 
+            (status == 1 ? "上架" : "下架") + "商品", null, null);
+        
+        return ResponseEntity.ok("操作成功");
+    }
+    
+    // 批量上下架
+    @PutMapping("/batch/status")
+    @RequirePermission("product:edit")
+    public ResponseEntity<?> batchUpdateStatus(
+            @RequestBody BatchUpdateStatusDTO dto,
+            @AuthenticationPrincipal AdminPrincipal principal) {
+        
+        productService.batchUpdateStatus(dto.getProductIds(), dto.getStatus());
+        
+        adminService.logAction(principal.getAdminId(), "BATCH_UPDATE_PRODUCT_STATUS", 
+            "product", dto.getProductIds().toString(), 
+            "批量" + (dto.getStatus() == 1 ? "上架" : "下架") + "商品", null, null);
+        
+        return ResponseEntity.ok("操作成功");
+    }
+    
+    // 删除商品（软删除）
+    @DeleteMapping("/{productId}")
+    @RequirePermission("product:delete")
+    public ResponseEntity<?> deleteProduct(
+            @PathVariable Long productId,
+            @AuthenticationPrincipal AdminPrincipal principal) {
+        
+        Product product = productService.getProduct(productId);
+        productService.deleteProduct(productId);
+        
+        adminService.logAction(principal.getAdminId(), "DELETE_PRODUCT", 
+            "product", productId.toString(), 
+            "删除商品: " + product.getTitle(), null, null);
+        
+        return ResponseEntity.ok("删除成功");
+    }
+}
+```
+
+## 三、前端页面结构
+
+### 1. 技术栈
+- **框架**: React + TypeScript / Vue 3 + TypeScript
+- **UI组件库**: Ant Design / Element Plus
+- **路由**: React Router / Vue Router
+- **状态管理**: Redux Toolkit / Pinia
+- **图表**: ECharts / Recharts
+- **表格**: Ant Design Table（支持虚拟滚动、导出）
+
+### 2. 页面结构
+
+```
+后台管理系统
+├── 登录页 (/admin/login)
+├── 主界面 (/admin)
+    ├── 侧边栏导航
+    ├── 顶部栏（用户信息、退出）
+    └── 内容区
+        ├── 仪表盘 (/dashboard)
+        │   ├── 核心指标卡片（今日订单、销售额、访客数、新用户）
+        │   ├── 流量趋势图（折线图）
+        │   ├── 销售额趋势图
+        │   ├── 热门商品排行（表格）
+        │   └── 最新订单列表
+        │
+        ├── 流量统计 (/statistics/traffic)
+        │   ├── 实时流量监控
+        │   ├── 流量趋势分析（可选择时间范围、粒度）
+        │   ├── 访问来源分析（饼图）
+        │   ├── 热门页面排行
+        │   └── 用户行为路径分析
+        │
+        ├── 订单管理 (/orders)
+        │   ├── 订单列表（搜索、筛选、分页）
+        │   ├── 订单详情（弹窗/单独页面）
+        │   └── 订单导出功能
+        │
+        ├── 商品管理 (/products)
+        │   ├── 商品列表（搜索、筛选、批量操作）
+        │   ├── 添加商品（表单页面）
+        │   ├── 编辑商品
+        │   └── 上下架操作
+        │
+        ├── 用户管理 (/users)
+        │   ├── 用户列表
+        │   ├── 用户详情（订单历史、行为分析）
+        │   └── 用户状态管理
+        │
+        ├── 权限管理 (/system/permissions)
+        │   ├── 管理员列表
+        │   ├── 角色管理
+        │   └── 权限配置
+        │
+        └── 操作日志 (/system/logs)
+            └── 日志查询和筛选
+```
+
+### 3. 核心页面示例代码
+
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { TrendingUp, ShoppingCart, Users, DollarSign, Eye, Package, AlertCircle } from 'lucide-react';
+
+const AdminDashboard = () => {
+  // 模拟数据
+  const [stats, setStats] = useState({
+    todayOrders: 156,
+    todayRevenue: 45678.90,
+    todayVisitors: 3241,
+    newUsers: 89,
+    orderGrowth: 12.5,
+    revenueGrowth: 18.3,
+    visitorGrowth: -5.2,
+    userGrowth: 23.1
+  });
+
+  const [trafficData] = useState([
+    { time: '00:00', pv: 120, uv: 80 },
+    { time: '04:00', pv: 80, uv: 50 },
+    { time: '08:00', pv: 450, uv: 280 },
+    { time: '12:00', pv: 680, uv: 420 },
+    { time: '16:00', pv: 520, uv: 350 },
+    { time: '20:00', pv: 890, uv: 580 },
+    { time: '23:59', pv: 420, uv: 280 }
+  ]);
+
+  const [revenueData] = useState([
+    { date: '周一', revenue: 12580 },
+    { date: '周二', revenue: 15230 },
+    { date: '周三', revenue: 18900 },
+    { date: '周四', revenue: 16740 },
+    { date: '周五', revenue: 21450 },
+    { date: '周六', revenue: 28900 },
+    { date: '周日', revenue: 25670 }
+  ]);
+
+  const [topProducts] = useState([
+    { id: 1, name: 'iPhone 15 Pro Max 256GB', sales: 458, revenue: 4123580 },
+    { id: 2, name: 'MacBook Pro 14英寸 M3', sales: 234, revenue: 3512300 },
+    { id: 3, name: 'AirPods Pro 2代', sales: 892, revenue: 1784000 },
+    { id: 4, name: 'iPad Air 11英寸', sales: 567, revenue: 2835000 },
+    { id: 5, name: 'Apple Watch Series 9', sales: 423, revenue: 1269000 }
+  ]);
+
+  const [recentOrders] = useState([
+    { orderNo: 'ORD20241008001', user: '张三', amount: 8999, status: '已支付', time: '10:23' },
+    { orderNo: 'ORD20241008002', user: '李四', amount: 1999, status: '待发货', time: '10:18' },
+    { orderNo: 'ORD20241008003', user: '王五', amount: 15999, status: '已支付', time: '10:12' },
+    { orderNo: 'ORD20241008004', user: '赵六', amount: 3499, status: '已完成', time: '09:56' },
+    { orderNo: 'ORD20241008005', user: '孙七', amount: 5699, status: '已支付', time: '09:45' }
+  ]);
+
+  const StatCard = ({ icon: Icon, title, value, growth, color }) => (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="text-gray-500 text-sm mb-1">{title}</p>
+          <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
+          <div className="flex items-center mt-2">
+            <span className={`text-sm font-medium ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {growth >= 0 ? '↑' : '↓'} {Math.abs(growth)}%
+            </span>
+            <span className="text-gray-400 text-xs ml-2">较昨日</span>
+          </div>
+        </div>
+        <div className={`${color} p-4 rounded-full`}>
+          <Icon className="text-white" size={24} />
+        </div>
+      </div>
+    </div>
+  );
+
+  const getStatusColor = (status) => {
+    const colors = {
+      '已支付': 'bg-blue-100 text-blue-700',
+      '待发货': 'bg-yellow-100 text-yellow-700',
+      '已完成': 'bg-green

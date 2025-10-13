@@ -14,10 +14,35 @@ export default function AdminProductsPage() {
     status: ''
   });
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [newProduct, setNewProduct] = useState({
+    title: '',
+    description: '',
+    price: '',
+    stock: '',
+    category_id: '',
+    brand: '',
+    main_image: '',
+    status: 1
+  });
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, [page, filters]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/categories`);
+      const data = await response.json();
+      if (response.ok) {
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('获取分类失败:', error);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -141,6 +166,62 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleAddProduct = async () => {
+    // 验证表单
+    if (!newProduct.title || !newProduct.price || !newProduct.category_id) {
+      toast.error('请填写商品标题、价格和分类');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('admin_token');
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/products`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            title: newProduct.title,
+            description: newProduct.description,
+            price: parseFloat(newProduct.price),
+            stock: parseInt(newProduct.stock) || 0,
+            category_id: parseInt(newProduct.category_id),
+            brand: newProduct.brand,
+            image_url: newProduct.main_image,
+            status: newProduct.status
+          })
+        }
+      );
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast.success('商品添加成功');
+        setShowAddModal(false);
+        setNewProduct({
+          title: '',
+          description: '',
+          price: '',
+          stock: '',
+          category_id: '',
+          brand: '',
+          main_image: '',
+          status: 1
+        });
+        fetchProducts();
+      } else {
+        toast.error(data.error || '添加失败');
+      }
+    } catch (error) {
+      console.error('添加商品失败:', error);
+      toast.error('添加商品失败');
+    }
+  };
+
   const getStatusBadge = (status: number) => {
     if (status === 1) {
       return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">已上架</span>;
@@ -157,7 +238,10 @@ export default function AdminProductsPage() {
             <h1 className="text-2xl font-bold text-gray-900">商品管理</h1>
             <p className="text-gray-600 mt-1">管理商品的上下架和信息</p>
           </div>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
             <span className="flex items-center">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -274,7 +358,7 @@ export default function AdminProductsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <img
-                            src={product.image_url || '/placeholder.png'}
+                            src={product.main_image || '/placeholder.png'}
                             alt={product.title}
                             className="w-12 h-12 rounded-lg object-cover"
                           />
@@ -285,7 +369,7 @@ export default function AdminProductsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{parseFloat(product.price).toFixed(2)}
+                        ¥{product.price ? parseFloat(product.price).toFixed(2) : '0.00'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {product.stock}
@@ -347,6 +431,174 @@ export default function AdminProductsPage() {
             </>
           )}
         </div>
+
+        {/* 添加商品模态框 */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">添加商品</h2>
+                  <button
+                    onClick={() => setShowAddModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* 商品标题 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      商品标题 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newProduct.title}
+                      onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="请输入商品标题"
+                    />
+                  </div>
+
+                  {/* 商品描述 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      商品描述
+                    </label>
+                    <textarea
+                      value={newProduct.description}
+                      onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="请输入商品描述"
+                    />
+                  </div>
+
+                  {/* 价格和库存 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        价格 (元) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={newProduct.price}
+                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        库存
+                      </label>
+                      <input
+                        type="number"
+                        value={newProduct.stock}
+                        onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 分类和品牌 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        分类 <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={newProduct.category_id}
+                        onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">请选择分类</option>
+                        {categories.map((cat) => (
+                          <option key={cat.category_id} value={cat.category_id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        品牌
+                      </label>
+                      <input
+                        type="text"
+                        value={newProduct.brand}
+                        onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="请输入品牌"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 图片URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      商品图片URL
+                    </label>
+                    <input
+                      type="text"
+                      value={newProduct.main_image}
+                      onChange={(e) => setNewProduct({ ...newProduct, main_image: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="https://example.com/image.jpg"
+                    />
+                    {newProduct.main_image && (
+                      <img
+                        src={newProduct.main_image}
+                        alt="预览"
+                        className="mt-2 w-32 h-32 object-cover rounded-lg"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* 状态 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      状态
+                    </label>
+                    <select
+                      value={newProduct.status}
+                      onChange={(e) => setNewProduct({ ...newProduct, status: parseInt(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value={1}>上架</option>
+                      <option value={0}>下架</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 按钮 */}
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleAddProduct}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    添加商品
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AdminLayout>
   );

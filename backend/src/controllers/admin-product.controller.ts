@@ -31,7 +31,7 @@ export const getAdminProducts = async (req: Request, res: Response) => {
     const [products] = await pool.query(
       `SELECT 
         p.*,
-        c.category_name,
+        c.name as category_name,
         (SELECT COUNT(*) FROM order_items oi WHERE oi.product_id = p.product_id) as total_sales
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.category_id
@@ -159,6 +159,7 @@ export const createProduct = async (req: Request, res: Response) => {
       price,
       stock,
       category_id,
+      brand,
       image_url,
       status = 1
     } = req.body;
@@ -169,9 +170,9 @@ export const createProduct = async (req: Request, res: Response) => {
 
     const [result] = await pool.query(
       `INSERT INTO products 
-       (title, description, price, stock, category_id, image_url, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [title, description, price, stock || 0, category_id, image_url, status]
+       (title, description, price, stock, category_id, brand, main_image, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [title, description, price, stock || 0, category_id, brand, image_url, status]
     );
 
     const productId = (result as any).insertId;
@@ -246,7 +247,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       values.push(category_id);
     }
     if (image_url !== undefined) {
-      updates.push('image_url = ?');
+      updates.push('main_image = ?');
       values.push(image_url);
     }
 

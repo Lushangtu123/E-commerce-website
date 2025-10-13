@@ -121,7 +121,7 @@ export default function AdminDashboardPage() {
           <StatCard
             icon={<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             title="今日销售额"
-            value={`¥${stats?.today_revenue?.toFixed(2) || '0.00'}`}
+            value={`¥${stats?.today_revenue ? Number(stats.today_revenue).toFixed(2) : '0.00'}`}
             growth={stats?.revenue_growth}
             color="bg-green-500"
           />
@@ -168,7 +168,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="text-right ml-4">
                     <p className="text-sm font-semibold text-gray-900">销量: {product.total_sales || 0}</p>
-                    <p className="text-xs text-gray-500">¥{product.total_revenue?.toFixed(2) || '0.00'}</p>
+                    <p className="text-xs text-gray-500">¥{product.total_revenue ? Number(product.total_revenue).toFixed(2) : '0.00'}</p>
                   </div>
                 </div>
               ))}
@@ -197,7 +197,7 @@ export default function AdminDashboardPage() {
                   <tr key={order.order_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.order_no}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.username || '未知用户'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{parseFloat(order.total_amount).toFixed(2)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{order.total_amount ? parseFloat(order.total_amount).toFixed(2) : '0.00'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(order.status)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(order.created_at).toLocaleString('zh-CN')}</td>
                   </tr>

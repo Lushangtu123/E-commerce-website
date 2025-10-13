@@ -148,7 +148,7 @@ export default function AdminOrdersPage() {
                         {order.username || '未知用户'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{parseFloat(order.total_amount).toFixed(2)}
+                        ¥{order.total_amount ? parseFloat(order.total_amount).toFixed(2) : '0.00'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {order.item_count || 0}
