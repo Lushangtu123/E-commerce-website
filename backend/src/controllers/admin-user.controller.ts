@@ -19,6 +19,10 @@ export const getAdminUsers = async (req: Request, res: Response) => {
       whereClause += ' AND (u.username LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)';
       params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
+    if (status !== undefined) {
+      whereClause += ' AND u.status = ?';
+      params.push(status);
+    }
 
     const [users] = await pool.query(
       `SELECT 
@@ -26,6 +30,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
         u.username,
         u.email,
         u.phone,
+        u.status,
         u.created_at,
         u.updated_at,
         (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) as order_count,
@@ -72,6 +77,7 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
         u.username,
         u.email,
         u.phone,
+        u.status,
         u.created_at,
         u.updated_at,
         (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) as order_count,
@@ -117,11 +123,47 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
   }
 };
 
-// 更新用户状态（该功能暂不可用，因为用户表没有status字段）
+// 更新用户状态
 export const updateUserStatus = async (req: Request, res: Response) => {
   try {
-    // 由于users表没有status字段，此功能暂时不可用
-    res.status(501).json({ error: '用户状态功能暂未实现，需要先在数据库中添加status字段' });
+    const pool = getPool();
+    const { userId } = req.params;
+    const { status } = req.body;
+
+    if (status === undefined || (status !== 0 && status !== 1)) {
+      return res.status(400).json({ error: '无效的状态值' });
+    }
+
+    // 获取用户信息
+    const [users] = await pool.query(
+      'SELECT user_id, username FROM users WHERE user_id = ?',
+      [userId]
+    );
+
+    if (!Array.isArray(users) || users.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const user = users[0] as any;
+
+    // 更新状态
+    await pool.query(
+      'UPDATE users SET status = ?, updated_at = NOW() WHERE user_id = ?',
+      [status, userId]
+    );
+
+    // 记录操作日志
+    await logAdminAction(
+      (req as any).admin.adminId,
+      'UPDATE_USER_STATUS',
+      'user',
+      userId,
+      `${status === 1 ? '启用' : '禁用'}用户: ${user.username}`,
+      req.ip,
+      req.get('user-agent')
+    );
+
+    res.json({ message: '更新成功', status });
   } catch (error) {
     console.error('更新用户状态失败:', error);
     res.status(500).json({ error: '更新失败' });
@@ -132,10 +174,12 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 export const getUserStatistics = async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    // 用户总数
+    // 用户总数和状态分布
     const [userStats] = await pool.query(
       `SELECT 
-        COUNT(*) as total_users
+        COUNT(*) as total_users,
+        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as active_users,
+        SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as inactive_users
        FROM users`
     );
 

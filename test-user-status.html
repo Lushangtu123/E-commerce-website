@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试用户状态管理</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.success {
+            background: #28a745;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success-msg {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error-msg {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 用户状态管理测试工具</h1>
+    
+    <!-- 登录区域 -->
+    <div class="section">
+        <h2>1. 管理员登录</h2>
+        <input type="text" id="username" value="admin" placeholder="用户名">
+        <input type="password" id="password" value="admin123" placeholder="密码">
+        <button onclick="login()">登录获取 Token</button>
+        <div style="margin-top: 10px;">
+            <small>Token: <span id="tokenDisplay">未登录</span></small>
+        </div>
+    </div>
+
+    <!-- 用户列表 -->
+    <div class="section">
+        <h2>2. 用户列表</h2>
+        <button onclick="fetchUsers()">刷新用户列表</button>
+        <div id="userList"></div>
+    </div>
+
+    <!-- 状态操作 -->
+    <div class="section">
+        <h2>3. 状态操作</h2>
+        <div>
+            <label>用户 ID:</label>
+            <input type="number" id="userId" value="1" min="1">
+            <label>新状态:</label>
+            <select id="newStatus">
+                <option value="0">禁用 (0)</option>
+                <option value="1">启用 (1)</option>
+            </select>
+            <button onclick="updateStatus()">更新状态</button>
+        </div>
+    </div>
+
+    <!-- 结果显示 -->
+    <div id="result"></div>
+
+    <script>
+        let adminToken = '';
+
+        // 登录
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.token) {
+                    adminToken = data.token;
+                    document.getElementById('tokenDisplay').textContent = adminToken.substring(0, 50) + '...';
+                    showResult('登录成功！', 'success');
+                } else {
+                    throw new Error(data.error || '登录失败');
+                }
+            } catch (error) {
+                showResult('登录失败: ' + error.message, 'error');
+            }
+        }
+
+        // 获取用户列表
+        async function fetchUsers() {
+            if (!adminToken) {
+                showResult('请先登录！', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3001/api/admin/users', {
+                    headers: {
+                        'Authorization': `Bearer ${adminToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayUsers(data.users);
+                    showResult(`成功获取 ${data.users.length} 个用户`, 'success');
+                } else {
+                    throw new Error(data.error || '获取失败');
+                }
+            } catch (error) {
+                showResult('获取用户列表失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示用户列表
+        function displayUsers(users) {
+            const listDiv = document.getElementById('userList');
+            
+            if (!users || users.length === 0) {
+                listDiv.innerHTML = '<p>没有用户数据</p>';
+                return;
+            }
+
+            let html = '<table><thead><tr><th>ID</th><th>用户名</th><th>邮箱</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+            
+            users.forEach(user => {
+                const statusClass = user.status === 1 ? 'status-active' : 'status-inactive';
+                const statusText = user.status === 1 ? '正常' : '已禁用';
+                const buttonText = user.status === 1 ? '禁用' : '启用';
+                const newStatus = user.status === 1 ? 0 : 1;
+                
+                html += `
+                    <tr>
+                        <td>${user.user_id}</td>
+                        <td>${user.username}</td>
+                        <td>${user.email}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                        <td>
+                            <button onclick="quickUpdate(${user.user_id}, ${newStatus})" 
+                                    class="${user.status === 1 ? 'danger' : 'success'}">
+                                ${buttonText}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            listDiv.innerHTML = html;
+        }
+
+        // 更新用户状态
+        async function updateStatus() {
+            if (!adminToken) {
+                showResult('请先登录！', 'error');
+                return;
+            }
+
+            const userId = document.getElementById('userId').value;
+            const newStatus = parseInt(document.getElementById('newStatus').value);
+
+            try {
+                const response = await fetch(`http://localhost:3001/api/admin/users/${userId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${adminToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult(`✅ ${data.message}（用户 ${userId} 状态已更新为 ${newStatus}）`, 'success');
+                    fetchUsers(); // 刷新列表
+                } else {
+                    throw new Error(data.error || '更新失败');
+                }
+            } catch (error) {
+                showResult('❌ 更新状态失败: ' + error.message, 'error');
+            }
+        }
+
+        // 快速更新（从列表中点击）
+        async function quickUpdate(userId, newStatus) {
+            document.getElementById('userId').value = userId;
+            document.getElementById('newStatus').value = newStatus;
+            await updateStatus();
+        }
+
+        // 显示结果
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = type === 'success' ? 'success-msg' : 'error-msg';
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 页面加载时自动登录
+        window.onload = function() {
+            login();
+        };
+    </script>
+</body>
+</html>
+
