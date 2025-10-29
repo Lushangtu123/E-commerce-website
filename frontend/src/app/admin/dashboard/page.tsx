@@ -42,9 +42,9 @@ export default function AdminDashboardPage() {
       const trendData = await trendRes.json();
 
       setStats(statsData);
-      setRecentOrders(ordersData);
-      setTopProducts(productsData);
-      setSalesTrend(trendData);
+      setRecentOrders(Array.isArray(ordersData) ? ordersData : ordersData.orders || []);
+      setTopProducts(Array.isArray(productsData) ? productsData : productsData.products || []);
+      setSalesTrend(Array.isArray(trendData) ? trendData : trendData.trend || []);
     } catch (error) {
       console.error('获取数据失败:', error);
     } finally {
@@ -143,6 +143,7 @@ export default function AdminDashboardPage() {
           {/* 销售趋势图 */}
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">销售趋势（最近7天）</h3>
+            {salesTrend && salesTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={salesTrend}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -154,13 +155,18 @@ export default function AdminDashboardPage() {
                 <Line type="monotone" dataKey="order_count" name="订单数" stroke="#10b981" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-500">
+                暂无销售数据
+              </div>
+            )}
           </div>
 
           {/* 热门商品 */}
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">热门商品（最近7天）</h3>
             <div className="space-y-3">
-              {topProducts.map((product, index) => (
+              {topProducts && topProducts.length > 0 ? topProducts.map((product, index) => (
                 <div key={product.product_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center flex-1">
                     <span className="text-lg font-bold text-gray-400 w-6">#{index + 1}</span>
@@ -171,7 +177,9 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-gray-500">¥{product.total_revenue ? Number(product.total_revenue).toFixed(2) : '0.00'}</p>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-center text-gray-500 py-4">暂无数据</p>
+              )}
             </div>
           </div>
         </div>
@@ -193,15 +201,21 @@ export default function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {recentOrders.map((order) => (
-                  <tr key={order.order_id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.order_no}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.username || '未知用户'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{order.total_amount ? parseFloat(order.total_amount).toFixed(2) : '0.00'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(order.status)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(order.created_at).toLocaleString('zh-CN')}</td>
+                {recentOrders && recentOrders.length > 0 ? (
+                  recentOrders.map((order) => (
+                    <tr key={order.order_id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.order_no}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.username || '未知用户'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{order.total_amount ? parseFloat(order.total_amount).toFixed(2) : '0.00'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(order.status)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(order.created_at).toLocaleString('zh-CN')}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500">暂无订单数据</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

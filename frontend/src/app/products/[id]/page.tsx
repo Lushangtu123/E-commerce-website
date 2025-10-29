@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { productApi, cartApi, reviewApi } from '@/lib/api';
+import { productApi, cartApi, reviewApi, favoriteApi, browseApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
 import { FiShoppingCart, FiStar } from 'react-icons/fi';
+import { FaHeart, FaRegHeart } from 'react-icons/fa';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -19,6 +20,8 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriting, setFavoriting] = useState(false);
 
   const productId = parseInt(params.id as string);
 
@@ -26,8 +29,21 @@ export default function ProductDetailPage() {
     if (productId) {
       loadProduct();
       loadReviews();
+      if (isAuthenticated) {
+        checkFavoriteStatus();
+        recordBrowse();
+      }
     }
-  }, [productId]);
+  }, [productId, isAuthenticated]);
+
+  const recordBrowse = async () => {
+    try {
+      await browseApi.record(productId);
+    } catch (error) {
+      // 静默失败，不影响用户体验
+      console.error('记录浏览历史失败:', error);
+    }
+  };
 
   const loadProduct = async () => {
     try {
@@ -81,6 +97,34 @@ export default function ProductDetailPage() {
   const handleBuyNow = async () => {
     await handleAddToCart();
     router.push('/cart');
+  };
+
+  const checkFavoriteStatus = async () => {
+    try {
+      const data: any = await favoriteApi.check(productId);
+      setIsFavorited(data.is_favorited);
+    } catch (error) {
+      console.error('检查收藏状态失败:', error);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!isAuthenticated) {
+      toast.error('请先登录');
+      router.push('/login');
+      return;
+    }
+
+    setFavoriting(true);
+    try {
+      const data: any = await favoriteApi.toggle(productId);
+      setIsFavorited(data.is_favorited);
+      toast.success(data.message);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || '操作失败');
+    } finally {
+      setFavoriting(false);
+    }
   };
 
   if (loading) {
@@ -186,6 +230,19 @@ export default function ProductDetailPage() {
 
             {/* 操作按钮 */}
             <div className="flex space-x-4">
+              <button
+                onClick={handleToggleFavorite}
+                disabled={favoriting}
+                className={`px-6 py-3 rounded-lg border transition ${
+                  isFavorited
+                    ? 'border-red-500 bg-red-50 text-red-500 hover:bg-red-100'
+                    : 'border-gray-300 text-gray-600 hover:border-red-500 hover:text-red-500'
+                }`}
+                title={isFavorited ? '取消收藏' : '收藏'}
+              >
+                {isFavorited ? <FaHeart size={24} /> : <FaRegHeart size={24} />}
+              </button>
+              
               <button
                 onClick={handleAddToCart}
                 disabled={adding || product.stock === 0}

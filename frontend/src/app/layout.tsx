@@ -5,6 +5,8 @@ import './globals.css';
 import Header from '@/components/Header';
 import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -15,6 +17,12 @@ export default function RootLayout({
 }) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith('/admin');
+  const hydrate = useAuthStore((state) => state.hydrate);
+  
+  // 在客户端首次渲染时从localStorage加载状态
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
 
   return (
     <html lang="zh-CN">

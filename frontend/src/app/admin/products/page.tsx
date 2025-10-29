@@ -15,6 +15,7 @@ export default function AdminProductsPage() {
   });
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [newProduct, setNewProduct] = useState({
     title: '',
@@ -26,6 +27,7 @@ export default function AdminProductsPage() {
     main_image: '',
     status: 1
   });
+  const [editProduct, setEditProduct] = useState<any>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -222,6 +224,68 @@ export default function AdminProductsPage() {
     }
   };
 
+  const openEditModal = (product: any) => {
+    setEditProduct({
+      product_id: product.product_id,
+      title: product.title,
+      description: product.description || '',
+      price: product.price.toString(),
+      stock: product.stock.toString(),
+      category_id: product.category_id.toString(),
+      brand: product.brand || '',
+      main_image: product.main_image || '',
+      status: product.status
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditProduct = async () => {
+    // 验证表单
+    if (!editProduct.title || !editProduct.price || !editProduct.category_id) {
+      toast.error('请填写商品标题、价格和分类');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('admin_token');
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${editProduct.product_id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            title: editProduct.title,
+            description: editProduct.description,
+            price: parseFloat(editProduct.price),
+            stock: parseInt(editProduct.stock) || 0,
+            category_id: parseInt(editProduct.category_id),
+            brand: editProduct.brand,
+            image_url: editProduct.main_image,
+            status: editProduct.status
+          })
+        }
+      );
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast.success('商品更新成功');
+        setShowEditModal(false);
+        setEditProduct(null);
+        fetchProducts();
+      } else {
+        toast.error(data.error || '更新失败');
+      }
+    } catch (error) {
+      console.error('更新商品失败:', error);
+      toast.error('更新商品失败');
+    }
+  };
+
   const getStatusBadge = (status: number) => {
     if (status === 1) {
       return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">已上架</span>;
@@ -396,7 +460,12 @@ export default function AdminProductsPage() {
                             上架
                           </button>
                         )}
-                        <button className="text-blue-600 hover:text-blue-900">编辑</button>
+                        <button 
+                          onClick={() => openEditModal(product)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          编辑
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -593,6 +662,180 @@ export default function AdminProductsPage() {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     添加商品
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 编辑商品模态框 */}
+        {showEditModal && editProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">编辑商品</h2>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditProduct(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* 商品标题 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      商品标题 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editProduct.title}
+                      onChange={(e) => setEditProduct({ ...editProduct, title: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="请输入商品标题"
+                    />
+                  </div>
+
+                  {/* 商品描述 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      商品描述
+                    </label>
+                    <textarea
+                      value={editProduct.description}
+                      onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="请输入商品描述"
+                    />
+                  </div>
+
+                  {/* 价格和库存 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        价格 (元) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editProduct.price}
+                        onChange={(e) => setEditProduct({ ...editProduct, price: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        库存
+                      </label>
+                      <input
+                        type="number"
+                        value={editProduct.stock}
+                        onChange={(e) => setEditProduct({ ...editProduct, stock: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 分类和品牌 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        分类 <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={editProduct.category_id}
+                        onChange={(e) => setEditProduct({ ...editProduct, category_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">请选择分类</option>
+                        {categories.map((cat) => (
+                          <option key={cat.category_id} value={cat.category_id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        品牌
+                      </label>
+                      <input
+                        type="text"
+                        value={editProduct.brand}
+                        onChange={(e) => setEditProduct({ ...editProduct, brand: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="请输入品牌"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 图片URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      商品图片URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editProduct.main_image}
+                      onChange={(e) => setEditProduct({ ...editProduct, main_image: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="https://example.com/image.jpg"
+                    />
+                    {editProduct.main_image && (
+                      <img
+                        src={editProduct.main_image}
+                        alt="预览"
+                        className="mt-2 w-32 h-32 object-cover rounded-lg"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* 状态 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      状态
+                    </label>
+                    <select
+                      value={editProduct.status}
+                      onChange={(e) => setEditProduct({ ...editProduct, status: parseInt(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value={1}>上架</option>
+                      <option value={0}>下架</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 按钮 */}
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditProduct(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleEditProduct}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    保存修改
                   </button>
                 </div>
               </div>

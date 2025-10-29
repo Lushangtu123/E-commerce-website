@@ -85,5 +85,34 @@ export const reviewApi = {
   listByUser: (params?: any) => api.get('/reviews/my', { params }),
 };
 
+// 收藏相关API
+export const favoriteApi = {
+  add: (productId: number) => api.post('/favorites', { product_id: productId }),
+  remove: (productId: number) => api.delete(`/favorites/${productId}`),
+  toggle: (productId: number) => api.post('/favorites/toggle', { product_id: productId }),
+  check: (productId: number) => api.get(`/favorites/check/${productId}`),
+  checkMultiple: (productIds: number[]) => api.post('/favorites/check-multiple', { product_ids: productIds }),
+  list: (params?: any) => api.get('/favorites/my', { params }),
+  getCount: () => api.get('/favorites/count'),
+};
+
+// 搜索相关API
+export const searchApi = {
+  record: (keyword: string, resultCount?: number) => api.post('/search/record', { keyword, result_count: resultCount }),
+  getHistory: (limit?: number) => api.get('/search/history', { params: { limit } }),
+  getHot: (days?: number, limit?: number) => api.get('/search/hot', { params: { days, limit } }),
+  getSuggestions: (keyword: string, limit?: number) => api.get('/search/suggestions', { params: { keyword, limit } }),
+  clearHistory: () => api.delete('/search/history'),
+  deleteKeyword: (keyword: string) => api.delete(`/search/history/${encodeURIComponent(keyword)}`),
+};
+
+// 浏览历史相关API
+export const browseApi = {
+  record: (productId: number) => api.post('/browse/record', { product_id: productId }),
+  getHistory: (params?: any) => api.get('/browse/history', { params }),
+  clearHistory: () => api.delete('/browse/history'),
+  deleteRecord: (productId: number) => api.delete(`/browse/history/${productId}`),
+};
+
 export default api;
 

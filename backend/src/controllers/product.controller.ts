@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ProductModel, ProductQuery } from '../models/product.model';
+import { SKUModel } from '../models/sku.model';
 import { getRedisClient } from '../database/redis';
 
 export class ProductController {
@@ -52,10 +53,18 @@ export class ProductController {
         return res.status(404).json({ error: '商品不存在' });
       }
 
-      // 缓存5分钟
-      await redis.setex(cacheKey, 300, JSON.stringify(product));
+      // 获取SKU信息
+      const skus = await SKUModel.findByProductId(productId);
+      const productWithSKU = {
+        ...product,
+        skus: skus.length > 0 ? skus : undefined,
+        has_sku: skus.length > 0
+      };
 
-      res.json({ product });
+      // 缓存5分钟
+      await redis.setex(cacheKey, 300, JSON.stringify(productWithSKU));
+
+      res.json({ product: productWithSKU });
     } catch (error) {
       console.error('获取商品详情失败:', error);
       res.status(500).json({ error: '获取商品详情失败' });

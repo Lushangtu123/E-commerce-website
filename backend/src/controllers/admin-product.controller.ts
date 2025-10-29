@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
+import { SKUModel } from '../models/sku.model';
 import { logAdminAction } from './admin.controller';
 
 // 获取商品列表（管理员）
@@ -320,6 +321,175 @@ export const deleteProduct = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('删除商品失败:', error);
     res.status(500).json({ error: '删除失败' });
+  }
+};
+
+// ==================== SKU 管理 ====================
+
+// 获取商品的所有SKU
+export const getProductSKUs = async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.params;
+    const skus = await SKUModel.findByProductId(parseInt(productId));
+    
+    res.json({ skus });
+  } catch (error) {
+    console.error('获取SKU列表失败:', error);
+    res.status(500).json({ error: '获取SKU列表失败' });
+  }
+};
+
+// 创建SKU
+export const createSKU = async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.params;
+    const { sku_code, specs, price, original_price, stock, image } = req.body;
+
+    if (!sku_code || !specs || !price) {
+      return res.status(400).json({ error: 'SKU编码、规格和价格不能为空' });
+    }
+
+    const skuId = await SKUModel.create({
+      product_id: parseInt(productId),
+      sku_code,
+      specs,
+      price,
+      original_price,
+      stock: stock || 0,
+      image
+    });
+
+    // 记录操作日志
+    await logAdminAction(
+      (req as any).admin.adminId,
+      'CREATE_SKU',
+      'sku',
+      skuId.toString(),
+      `为商品${productId}创建SKU: ${sku_code}`,
+      req.ip,
+      req.get('user-agent')
+    );
+
+    res.status(201).json({
+      message: 'SKU创建成功',
+      sku_id: skuId
+    });
+  } catch (error: any) {
+    console.error('创建SKU失败:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'SKU编码已存在' });
+    }
+    res.status(500).json({ error: '创建SKU失败' });
+  }
+};
+
+// 批量创建SKU
+export const batchCreateSKUs = async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.params;
+    const { skus } = req.body;
+
+    if (!Array.isArray(skus) || skus.length === 0) {
+      return res.status(400).json({ error: 'SKU列表不能为空' });
+    }
+
+    // 添加product_id到每个SKU
+    const skusWithProductId = skus.map(sku => ({
+      ...sku,
+      product_id: parseInt(productId)
+    }));
+
+    await SKUModel.createBatch(skusWithProductId);
+
+    // 记录操作日志
+    await logAdminAction(
+      (req as any).admin.adminId,
+      'BATCH_CREATE_SKU',
+      'sku',
+      productId,
+      `为商品${productId}批量创建${skus.length}个SKU`,
+      req.ip,
+      req.get('user-agent')
+    );
+
+    res.status(201).json({
+      message: `成功创建${skus.length}个SKU`,
+      count: skus.length
+    });
+  } catch (error: any) {
+    console.error('批量创建SKU失败:', error);
+    res.status(500).json({ error: '批量创建SKU失败' });
+  }
+};
+
+// 更新SKU
+export const updateSKU = async (req: Request, res: Response) => {
+  try {
+    const { skuId } = req.params;
+    const { specs, price, original_price, stock, image, status } = req.body;
+
+    const updateData: any = {};
+    if (specs !== undefined) updateData.specs = specs;
+    if (price !== undefined) updateData.price = price;
+    if (original_price !== undefined) updateData.original_price = original_price;
+    if (stock !== undefined) updateData.stock = stock;
+    if (image !== undefined) updateData.image = image;
+    if (status !== undefined) updateData.status = status;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: '没有要更新的字段' });
+    }
+
+    const success = await SKUModel.update(parseInt(skuId), updateData);
+
+    if (!success) {
+      return res.status(404).json({ error: 'SKU不存在' });
+    }
+
+    // 记录操作日志
+    await logAdminAction(
+      (req as any).admin.adminId,
+      'UPDATE_SKU',
+      'sku',
+      skuId,
+      `更新SKU`,
+      req.ip,
+      req.get('user-agent')
+    );
+
+    res.json({ message: '更新成功' });
+  } catch (error) {
+    console.error('更新SKU失败:', error);
+    res.status(500).json({ error: '更新SKU失败' });
+  }
+};
+
+// 删除SKU
+export const deleteSKU = async (req: Request, res: Response) => {
+  try {
+    const { skuId } = req.params;
+
+    const success = await SKUModel.delete(parseInt(skuId));
+
+    if (!success) {
+      return res.status(404).json({ error: 'SKU不存在' });
+    }
+
+    // 记录操作日志
+    await logAdminAction(
+      (req as any).admin.adminId,
+      'DELETE_SKU',
+      'sku',
+      skuId,
+      `删除SKU`,
+      req.ip,
+      req.get('user-agent')
+    );
+
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除SKU失败:', error);
+    res.status(500).json({ error: '删除SKU失败' });
   }
 };
 

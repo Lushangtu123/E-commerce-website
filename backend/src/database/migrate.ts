@@ -124,6 +124,57 @@ const migrations = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_product (product_id),
     INDEX idx_user (user_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // 收藏表
+  `CREATE TABLE IF NOT EXISTS favorites (
+    favorite_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_product (user_id, product_id),
+    INDEX idx_user (user_id),
+    INDEX idx_product (product_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // 商品SKU表
+  `CREATE TABLE IF NOT EXISTS product_skus (
+    sku_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    product_id BIGINT NOT NULL,
+    sku_code VARCHAR(50) UNIQUE NOT NULL,
+    specs JSON COMMENT 'SKU规格 {"颜色":"红色","尺寸":"M"}',
+    price DECIMAL(10,2) NOT NULL,
+    original_price DECIMAL(10,2),
+    stock INT DEFAULT 0,
+    image VARCHAR(255),
+    status TINYINT DEFAULT 1 COMMENT '1:启用 0:禁用',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_product (product_id),
+    INDEX idx_sku_code (sku_code),
+    INDEX idx_status (status)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // 搜索历史表
+  `CREATE TABLE IF NOT EXISTS search_history (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT,
+    keyword VARCHAR(100) NOT NULL,
+    result_count INT DEFAULT 0 COMMENT '搜索结果数量',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_keyword (keyword),
+    INDEX idx_created (created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // 浏览历史表
+  `CREATE TABLE IF NOT EXISTS browse_history (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    browsed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_time (user_id, browsed_at),
+    INDEX idx_product (product_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 

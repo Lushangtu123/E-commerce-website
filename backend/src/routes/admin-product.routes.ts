@@ -5,7 +5,12 @@ import {
   batchUpdateProductStatus,
   createProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  getProductSKUs,
+  createSKU,
+  batchCreateSKUs,
+  updateSKU,
+  deleteSKU
 } from '../controllers/admin-product.controller';
 import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
 
@@ -31,6 +36,23 @@ router.put('/batch/status', requirePermission('product:edit'), batchUpdateProduc
 
 // 删除商品
 router.delete('/:productId', requirePermission('product:delete'), deleteProduct);
+
+// ==================== SKU 管理路由 ====================
+
+// 获取商品的所有SKU
+router.get('/:productId/skus', requirePermission('product:view'), getProductSKUs);
+
+// 创建SKU
+router.post('/:productId/skus', requirePermission('product:create'), createSKU);
+
+// 批量创建SKU
+router.post('/:productId/skus/batch', requirePermission('product:create'), batchCreateSKUs);
+
+// 更新SKU
+router.put('/skus/:skuId', requirePermission('product:edit'), updateSKU);
+
+// 删除SKU
+router.delete('/skus/:skuId', requirePermission('product:delete'), deleteSKU);
 
 export default router;
 
