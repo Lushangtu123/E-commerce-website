@@ -4,6 +4,7 @@ import { OrderModel, OrderStatus } from '../models/order.model';
 import { ProductModel } from '../models/product.model';
 import { CartModel } from '../models/cart.model';
 import { getRedisClient } from '../database/redis';
+import { getOrderRemainingTime } from '../services/order-timeout.service';
 
 export class OrderController {
   // 创建订单
@@ -224,6 +225,40 @@ export class OrderController {
     } catch (error) {
       console.error('确认收货失败:', error);
       res.status(500).json({ error: '确认收货失败' });
+    }
+  }
+
+  // 获取订单剩余支付时间
+  static async getRemainingTime(req: AuthRequest, res: Response) {
+    try {
+      const orderId = parseInt(req.params.id);
+      
+      const order = await OrderModel.findById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: '订单不存在' });
+      }
+
+      if (order.user_id !== req.userId) {
+        return res.status(403).json({ error: '无权访问该订单' });
+      }
+
+      if (order.status !== OrderStatus.PENDING_PAYMENT) {
+        return res.json({ 
+          remaining_minutes: 0,
+          message: '订单不是待支付状态'
+        });
+      }
+
+      const remainingMinutes = await getOrderRemainingTime(orderId);
+
+      res.json({ 
+        remaining_minutes: remainingMinutes,
+        timeout_at: new Date(new Date(order.created_at).getTime() + 30 * 60 * 1000).toISOString()
+      });
+    } catch (error) {
+      console.error('获取剩余时间失败:', error);
+      res.status(500).json({ error: '获取剩余时间失败' });
     }
   }
 }

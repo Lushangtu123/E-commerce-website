@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { connectDatabase } from './database/mysql';
 import { connectRedis } from './database/redis';
 import { connectMongoDB } from './database/mongodb';
+import { startOrderTimeoutChecker } from './services/order-timeout.service';
 
 // 导入路由
 import userRoutes from './routes/user.routes';
@@ -16,6 +17,7 @@ import reviewRoutes from './routes/review.routes';
 import favoriteRoutes from './routes/favorite.routes';
 import searchRoutes from './routes/search.routes';
 import browseRoutes from './routes/browse.routes';
+import recommendationRoutes from './routes/recommendation.routes';
 
 // 管理员路由
 import adminRoutes from './routes/admin.routes';
@@ -52,6 +54,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/browse', browseRoutes);
+app.use('/api/recommendations', recommendationRoutes);
 
 // 管理员API路由
 app.use('/api/admin', adminRoutes);
@@ -85,6 +88,10 @@ async function startServer() {
     
     await connectMongoDB();
     console.log('✓ MongoDB连接成功');
+    
+    // 启动订单超时检查服务
+    startOrderTimeoutChecker();
+    console.log('✓ 订单超时检查服务已启动');
     
     // 启动服务器
     app.listen(PORT, () => {

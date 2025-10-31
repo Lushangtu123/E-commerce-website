@@ -25,5 +25,8 @@ router.post('/:id/pay', OrderController.pay);
 // 确认收货
 router.post('/:id/confirm', OrderController.confirm);
 
+// 获取订单剩余支付时间
+router.get('/:id/remaining-time', OrderController.getRemainingTime);
+
 export default router;
 
