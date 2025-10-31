@@ -426,7 +426,15 @@ npm test
 
 ## 📚 文档
 
+### 核心文档
 - [快速启动指南](./QUICK_START_GUIDE.md) - 详细的安装和配置步骤
+- [环境变量配置](./ENV_SETUP.md) - 环境变量配置详细指南 🆕
+- [API 接口文档](./API.md) - 完整的 API 接口说明和示例 🆕
+- [系统架构文档](./ARCHITECTURE.md) - 系统架构设计和技术选型 🆕
+- [安全策略](./SECURITY.md) - 安全特性和漏洞报告流程 🆕
+- [贡献指南](./CONTRIBUTING.md) - 代码规范和贡献流程 🆕
+
+### 其他文档
 - [项目描述](./PROJECT_DESCRIPTION.md) - 适合求职简历的项目描述
 - [英文文档](./README_EN.md) - English Documentation
 - [开发日志](./开发日志_前端.md) - 开发过程记录
@@ -458,6 +466,8 @@ npm test
 ## 🤝 贡献指南
 
 欢迎提交 Issue 和 Pull Request！
+
+详细的贡献指南请查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 🆕
 
 ### 提交规范
 - `feat:` 新功能

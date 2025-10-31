@@ -1,5 +1,7 @@
 # 快速启动指南 | Quick Start Guide
 
+> 📖 **需要详细的环境变量配置？** 请查看 [环境变量配置指南](./ENV_SETUP.md)
+
 ## 🚀 启动项目
 
 ### 1. 启动 Docker Desktop
@@ -143,31 +145,42 @@ curl http://localhost:3001/health
 cd backend && npm install
 cd ../frontend && npm install
 
-# 2. 启动 Docker Desktop（手动打开应用）
+# 2. 配置环境变量
+cd backend
+cp .env.example .env
+# 编辑 .env 文件，配置数据库等信息
 
-# 3. 启动所有服务
+cd ../frontend
+cp .env.local.example .env.local
+# 编辑 .env.local 文件
+
+# 3. 启动 Docker Desktop（手动打开应用）
+
+# 4. 启动所有服务
 cd ..
 docker-compose up -d
 
-# 4. 等待服务就绪
+# 5. 等待服务就绪
 sleep 30
 
-# 5. 运行数据库迁移
+# 6. 运行数据库迁移
 cd backend
 npm run migrate:dev
 
-# 6. 初始化管理员（可选）
+# 7. 初始化管理员（可选）
 cd ..
 ./init-admin.sh
 
-# 7. 启动后端
+# 8. 启动后端
 cd backend
 npm run dev &
 
-# 8. 启动前端（新终端）
+# 9. 启动前端（新终端）
 cd frontend
 npm run dev
 ```
+
+> 💡 **提示**: 如果遇到连接问题，请查看 [环境变量配置指南](./ENV_SETUP.md) 确保所有配置正确。
 
 ---
 
