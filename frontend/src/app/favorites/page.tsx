@@ -23,7 +23,6 @@ interface FavoriteProduct {
 export default function FavoritesPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { fetchCartCount } = useCartStore();
   const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -70,7 +69,6 @@ export default function FavoritesPage() {
     try {
       await cartApi.add({ product_id: productId, quantity: 1 });
       toast.success('已添加到购物车');
-      fetchCartCount();
     } catch (error: any) {
       toast.error(error.response?.data?.message || '添加失败');
     }

@@ -22,7 +22,6 @@ interface BrowseHistory {
 export default function BrowseHistoryPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { fetchCartCount } = useCartStore();
   const [history, setHistory] = useState<BrowseHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -83,7 +82,6 @@ export default function BrowseHistoryPage() {
     try {
       await cartApi.add({ product_id: productId, quantity: 1 });
       toast.success('已添加到购物车');
-      fetchCartCount();
     } catch (error: any) {
       toast.error(error.response?.data?.message || '添加失败');
     }
