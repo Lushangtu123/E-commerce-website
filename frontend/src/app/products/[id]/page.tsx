@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { productApi, cartApi, reviewApi, favoriteApi, browseApi } from '@/lib/api';
+import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
 import { FiShoppingCart, FiStar } from 'react-icons/fi';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
+import ProductCard from '@/components/ProductCard';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -17,11 +18,13 @@ export default function ProductDetailPage() {
   
   const [product, setProduct] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriting, setFavoriting] = useState(false);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
   const productId = parseInt(params.id as string);
 
@@ -29,6 +32,7 @@ export default function ProductDetailPage() {
     if (productId) {
       loadProduct();
       loadReviews();
+      loadRelatedProducts();
       if (isAuthenticated) {
         checkFavoriteStatus();
         recordBrowse();
@@ -64,6 +68,18 @@ export default function ProductDetailPage() {
       setReviews(data.reviews || []);
     } catch (error) {
       console.error('加载评论失败:', error);
+    }
+  };
+
+  const loadRelatedProducts = async () => {
+    try {
+      setLoadingRecommendations(true);
+      const data: any = await recommendationApi.getRelated(productId, 4);
+      setRelatedProducts(data.related_products || []);
+    } catch (error) {
+      console.error('加载相关推荐失败:', error);
+    } finally {
+      setLoadingRecommendations(false);
     }
   };
 
@@ -307,6 +323,25 @@ export default function ProductDetailPage() {
             </div>
           )}
         </div>
+
+        {/* 相关推荐 */}
+        {relatedProducts.length > 0 && (
+          <div className="card p-6">
+            <h2 className="text-2xl font-bold mb-6">相关推荐</h2>
+            
+            {loadingRecommendations ? (
+              <div className="text-center py-12 text-gray-500">
+                加载中...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {relatedProducts.map((relatedProduct) => (
+                  <ProductCard key={relatedProduct.product_id} product={relatedProduct} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

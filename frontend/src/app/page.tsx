@@ -1,19 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { productApi } from '@/lib/api';
+import { productApi, recommendationApi } from '@/lib/api';
+import { useAuthStore } from '@/store/useAuthStore';
 import ProductCard from '@/components/ProductCard';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
 export default function Home() {
+  const { isAuthenticated } = useAuthStore();
   const [hotProducts, setHotProducts] = useState<any[]>([]);
   const [newProducts, setNewProducts] = useState<any[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    loadRecommendations();
+  }, [isAuthenticated]);
 
   const loadData = async () => {
     try {
@@ -31,6 +39,18 @@ export default function Home() {
       toast.error('加载数据失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRecommendations = async () => {
+    try {
+      setLoadingRecommendations(true);
+      const data: any = await recommendationApi.getGuessYouLike(8);
+      setRecommendations(data.recommendations || []);
+    } catch (error: any) {
+      console.error('加载推荐失败:', error);
+    } finally {
+      setLoadingRecommendations(false);
     }
   };
 
@@ -112,6 +132,45 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* 猜你喜欢 */}
+      {recommendations.length > 0 && (
+        <section className="py-12">
+          <div className="container-custom">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h2 className="text-3xl font-bold">猜你喜欢</h2>
+                <p className="text-gray-600 mt-2">
+                  {isAuthenticated ? '基于您的浏览历史为您推荐' : '热门商品推荐'}
+                </p>
+              </div>
+              <Link href="/products" className="text-primary-600 hover:text-primary-700">
+                查看更多 →
+              </Link>
+            </div>
+            
+            {loadingRecommendations ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="card animate-pulse">
+                    <div className="bg-gray-300 h-64 w-full"></div>
+                    <div className="p-4 space-y-3">
+                      <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                      <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {recommendations.map((product) => (
+                  <ProductCard key={product.product_id} product={product} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 优势特点 */}
       <section className="py-12">

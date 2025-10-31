@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { orderApi } from '@/lib/api';
+import { orderApi, orderTimeoutApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [remainingTime, setRemainingTime] = useState<number | null>(null);
 
   const orderId = parseInt(params.id as string);
 
@@ -31,6 +32,14 @@ export default function OrderDetailPage() {
     }
     loadOrder();
   }, [isAuthenticated, orderId]);
+
+  useEffect(() => {
+    if (order && order.status === 0) {
+      loadRemainingTime();
+      const interval = setInterval(loadRemainingTime, 60000); // 每分钟更新一次
+      return () => clearInterval(interval);
+    }
+  }, [order]);
 
   const loadOrder = async () => {
     try {
@@ -44,6 +53,20 @@ export default function OrderDetailPage() {
       router.push('/orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRemainingTime = async () => {
+    try {
+      const data: any = await orderTimeoutApi.getRemainingTime(orderId);
+      setRemainingTime(data.remaining_minutes);
+      
+      // 如果剩余时间为0，刷新订单状态
+      if (data.remaining_minutes === 0) {
+        loadOrder();
+      }
+    } catch (error: any) {
+      console.error('加载剩余时间失败:', error);
     }
   };
 
@@ -111,6 +134,16 @@ export default function OrderDetailPage() {
               <div className={`text-2xl font-bold ${ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].color}`}>
                 {ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].text}
               </div>
+              {order.status === 0 && remainingTime !== null && remainingTime > 0 && (
+                <div className="mt-2 text-orange-600 text-sm">
+                  ⏰ 剩余支付时间: {remainingTime} 分钟
+                </div>
+              )}
+              {order.status === 0 && remainingTime === 0 && (
+                <div className="mt-2 text-red-600 text-sm">
+                  ⚠️ 订单已超时，即将自动取消
+                </div>
+              )}
             </div>
             <div className="text-right">
               <div className="text-gray-600 mb-2">订单号</div>

@@ -114,5 +114,27 @@ export const browseApi = {
   deleteRecord: (productId: number) => api.delete(`/browse/history/${productId}`),
 };
 
+// 推荐相关API
+export const recommendationApi = {
+  // 个性化推荐（需要登录）
+  getPersonalized: (limit?: number) => 
+    api.get('/recommendations/personalized', { params: { limit } }),
+  
+  // 相关商品推荐
+  getRelated: (productId: number, limit?: number) => 
+    api.get(`/recommendations/related/${productId}`, { params: { limit } }),
+  
+  // 猜你喜欢（可选登录）
+  getGuessYouLike: (limit?: number) => 
+    api.get('/recommendations/guess-you-like', { params: { limit } }),
+};
+
+// 订单超时相关API
+export const orderTimeoutApi = {
+  // 获取订单剩余支付时间
+  getRemainingTime: (orderId: number) => 
+    api.get(`/orders/${orderId}/remaining-time`),
+};
+
 export default api;
 
