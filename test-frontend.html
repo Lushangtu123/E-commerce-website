@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .product-card {
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .product-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <h1>前端功能测试页面</h1>
+    
+    <div class="test-section">
+        <h2>1. 测试猜你喜欢 API</h2>
+        <button onclick="testGuessYouLike()">测试API</button>
+        <div id="guess-result"></div>
+        <div id="guess-products" class="product-grid"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 测试相关推荐 API</h2>
+        <input type="number" id="product-id" placeholder="商品ID" value="4">
+        <button onclick="testRelated()">测试API</button>
+        <div id="related-result"></div>
+        <div id="related-products" class="product-grid"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 测试订单倒计时 API</h2>
+        <input type="number" id="order-id" placeholder="订单ID" value="3">
+        <button onclick="testOrderTime()">测试API (需登录)</button>
+        <div id="order-result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3001/api';
+        
+        async function testGuessYouLike() {
+            const resultDiv = document.getElementById('guess-result');
+            const productsDiv = document.getElementById('guess-products');
+            resultDiv.innerHTML = '加载中...';
+            productsDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_URL}/recommendations/guess-you-like?limit=8`);
+                const data = await response.json();
+                
+                if (data.recommendations && data.recommendations.length > 0) {
+                    resultDiv.innerHTML = `<span class="success">✅ 成功: 获取到 ${data.recommendations.length} 个推荐商品</span>`;
+                    
+                    // 显示商品卡片
+                    productsDiv.innerHTML = data.recommendations.map(p => `
+                        <div class="product-card">
+                            <img src="${p.main_image}" alt="${p.title}">
+                            <h3>${p.title}</h3>
+                            <p>价格: ¥${p.price}</p>
+                            <p>销量: ${p.sales_count}</p>
+                            <p>库存: ${p.stock}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    resultDiv.innerHTML = '<span class="error">❌ 未获取到推荐商品</span>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 错误: ${error.message}</span>`;
+            }
+        }
+        
+        async function testRelated() {
+            const productId = document.getElementById('product-id').value;
+            const resultDiv = document.getElementById('related-result');
+            const productsDiv = document.getElementById('related-products');
+            resultDiv.innerHTML = '加载中...';
+            productsDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_URL}/recommendations/related/${productId}?limit=4`);
+                const data = await response.json();
+                
+                if (data.related_products && data.related_products.length > 0) {
+                    resultDiv.innerHTML = `<span class="success">✅ 成功: 获取到 ${data.related_products.length} 个相关商品</span>`;
+                    
+                    productsDiv.innerHTML = data.related_products.map(p => `
+                        <div class="product-card">
+                            <img src="${p.main_image}" alt="${p.title}">
+                            <h3>${p.title}</h3>
+                            <p>价格: ¥${p.price}</p>
+                            <p>销量: ${p.sales_count}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    resultDiv.innerHTML = '<span class="error">⚠️ 该商品暂无相关推荐（数据较少）</span>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 错误: ${error.message}</span>`;
+            }
+        }
+        
+        async function testOrderTime() {
+            const orderId = document.getElementById('order-id').value;
+            const resultDiv = document.getElementById('order-result');
+            resultDiv.innerHTML = '加载中...';
+            
+            try {
+                // 先尝试不带token
+                const response = await fetch(`${API_URL}/orders/${orderId}/remaining-time`);
+                const data = await response.json();
+                
+                if (data.remaining_minutes !== undefined) {
+                    resultDiv.innerHTML = `<span class="success">✅ 成功: 剩余时间 ${data.remaining_minutes} 分钟</span>`;
+                } else if (data.error) {
+                    resultDiv.innerHTML = `<span class="error">⚠️ ${data.error}</span>`;
+                } else {
+                    resultDiv.innerHTML = '<span class="error">❌ 未知响应</span>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 错误: ${error.message}</span>`;
+            }
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('页面加载完成，开始测试...');
+            testGuessYouLike();
+        };
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .success { background: #4CAF50; color: white; }
+        .error { background: #f44336; color: white; }
+        .warning { background: #ff9800; color: white; }
+        .info { background: #2196F3; color: white; }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        h1 { color: #333; }
+        h2 { color: #666; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover { background: #1976D2; }
+        #result { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 前端功能测试页面</h1>
+    
+    <div class="test-section">
+        <h2>📋 测试说明</h2>
+        <p>本页面用于测试电商平台前端的新功能是否正常显示。</p>
+        <ul>
+            <li><strong>前端地址</strong>: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+            <li><strong>后端地址</strong>: http://localhost:3001</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 快速测试</h2>
+        <button class="btn" onclick="testAPI()">测试后端 API</button>
+        <button class="btn" onclick="openFrontend()">打开前端页面</button>
+        <button class="btn" onclick="testRecommendations()">测试推荐功能</button>
+        <div id="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>✅ 功能检查清单</h2>
+        <h3>1. 首页功能</h3>
+        <ul>
+            <li>访问 <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+            <li>滚动到页面底部，查看是否有 <strong>"猜你喜欢"</strong> 板块</li>
+            <li>检查是否显示8个推荐商品</li>
+            <li>检查商品卡片是否正常显示（图片、标题、价格、评分）</li>
+        </ul>
+
+        <h3>2. 商品详情页功能</h3>
+        <ul>
+            <li>点击任意商品进入详情页</li>
+            <li>滚动到页面底部，查看是否有 <strong>"相关推荐"</strong> 板块</li>
+            <li>检查推荐商品是否正常显示</li>
+        </ul>
+
+        <h3>3. 订单倒计时功能</h3>
+        <ul>
+            <li>登录账号（test@example.com / 123456）</li>
+            <li>创建一个测试订单</li>
+            <li>访问订单详情页</li>
+            <li>检查是否显示 <strong>"剩余支付时间: XX 分钟"</strong></li>
+        </ul>
+
+        <h3>4. 文字显示检查</h3>
+        <ul>
+            <li>检查页面所有中文是否正常显示（无乱码）</li>
+            <li>检查商品标题、价格等信息是否清晰</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 问题排查</h2>
+        <h3>如果看不到新功能：</h3>
+        <ol>
+            <li><strong>清除浏览器缓存</strong>：按 Ctrl+Shift+Delete (Mac: Cmd+Shift+Delete)</li>
+            <li><strong>硬刷新页面</strong>：按 Ctrl+F5 (Mac: Cmd+Shift+R)</li>
+            <li><strong>使用无痕模式</strong>：打开浏览器无痕窗口访问</li>
+            <li><strong>检查控制台</strong>：按 F12 打开开发者工具，查看是否有错误</li>
+        </ol>
+
+        <h3>如果看到乱码：</h3>
+        <ol>
+            <li>检查浏览器编码设置是否为 UTF-8</li>
+            <li>检查后端 API 返回的数据编码</li>
+            <li>重新构建前端镜像（已完成）</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 API 测试结果</h2>
+        <pre id="api-test-result">点击上方"测试后端 API"按钮开始测试...</pre>
+    </div>
+
+    <script>
+        function testAPI() {
+            const result = document.getElementById('result');
+            const apiResult = document.getElementById('api-test-result');
+            result.innerHTML = '<div class="status info">测试中...</div>';
+            apiResult.textContent = '正在测试后端 API...\n';
+
+            // 测试猜你喜欢 API
+            fetch('http://localhost:3001/api/recommendations/guess-you-like?limit=4')
+                .then(res => res.json())
+                .then(data => {
+                    apiResult.textContent += '\n✅ 猜你喜欢 API 测试通过\n';
+                    apiResult.textContent += JSON.stringify(data, null, 2) + '\n';
+                    result.innerHTML = '<div class="status success">✅ API 测试通过！</div>';
+                })
+                .catch(err => {
+                    apiResult.textContent += '\n❌ API 测试失败: ' + err.message + '\n';
+                    result.innerHTML = '<div class="status error">❌ API 测试失败</div>';
+                });
+        }
+
+        function openFrontend() {
+            window.open('http://localhost:3000', '_blank');
+        }
+
+        function testRecommendations() {
+            const result = document.getElementById('result');
+            result.innerHTML = `
+                <div class="status info">测试步骤：</div>
+                <ol>
+                    <li>打开新窗口访问前端：<a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+                    <li>滚动到页面底部</li>
+                    <li>查找"猜你喜欢"板块</li>
+                    <li>如果没看到，请清除浏览器缓存后重试（Ctrl+Shift+Delete）</li>
+                </ol>
+            `;
+        }
+    </script>
+</body>
+</html>
+
