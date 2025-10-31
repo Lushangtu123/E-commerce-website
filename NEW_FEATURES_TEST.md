@@ -434,3 +434,4 @@ CREATE INDEX idx_status_stock ON products(status, stock);
 **测试结果**: ⬜ 通过 ⬜ 失败  
 **备注**: ___________
 
+
