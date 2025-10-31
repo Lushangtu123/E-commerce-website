@@ -8,12 +8,13 @@ import { RowDataPacket } from 'mysql2';
 import mongoose from '../database/mongodb';
 
 interface Product extends RowDataPacket {
-  id: number;
-  name: string;
+  product_id: number;
+  title: string;
   price: number;
   category_id: number;
-  sales: number;
+  sales_count: number;
   main_image: string;
+  stock: number;
 }
 
 interface BrowseHistory {
@@ -55,8 +56,8 @@ export async function getRecommendationsByBrowseHistory(
     const [browsedProducts] = await pool.execute<Product[]>(
       `SELECT DISTINCT category_id 
        FROM products 
-       WHERE id IN (${browsedProductIds.join(',')})
-       AND status = 'active'`
+       WHERE product_id IN (${browsedProductIds.join(',')})
+       AND status = 1`
     );
 
     if (browsedProducts.length === 0) {
@@ -68,19 +69,19 @@ export async function getRecommendationsByBrowseHistory(
     // 3. 推荐同分类下的热门商品（排除已浏览的）
     const [recommendations] = await pool.execute<Product[]>(
       `SELECT 
-        id,
-        name,
+        product_id,
+        title,
         price,
         category_id,
-        sales,
+        sales_count,
         main_image,
         stock
        FROM products
        WHERE category_id IN (${categoryIds.join(',')})
-       AND id NOT IN (${browsedProductIds.join(',')})
-       AND status = 'active'
+       AND product_id NOT IN (${browsedProductIds.join(',')})
+       AND status = 1
        AND stock > 0
-       ORDER BY sales DESC, created_at DESC
+       ORDER BY sales_count DESC, created_at DESC
        LIMIT ?`,
       [limit]
     );
@@ -88,8 +89,8 @@ export async function getRecommendationsByBrowseHistory(
     // 如果推荐商品不足，补充热门商品
     if (recommendations.length < limit) {
       const hotProducts = await getHotProducts(limit - recommendations.length);
-      const existingIds = new Set(recommendations.map(p => p.id));
-      const additionalProducts = hotProducts.filter(p => !existingIds.has(p.id));
+      const existingIds = new Set(recommendations.map(p => p.product_id));
+      const additionalProducts = hotProducts.filter(p => !existingIds.has(p.product_id));
       recommendations.push(...additionalProducts);
     }
 
@@ -161,9 +162,9 @@ export async function getRelatedProducts(
           stock
          FROM products
          WHERE category_id = ?
-         AND id != ?
-         AND id NOT IN (${relatedProducts.map(p => p.id).join(',') || '0'})
-         AND status = 'active'
+         AND product_id != ?
+         AND product_id NOT IN (${relatedProducts.map(p => p.product_id).join(',') || '0'})
+         AND status = 1
          AND stock > 0
          ORDER BY sales DESC
          LIMIT ?`,
@@ -189,19 +190,18 @@ async function getHotProducts(limit: number): Promise<Product[]> {
 
     const [hotProducts] = await pool.execute<Product[]>(
       `SELECT 
-        id,
-        name,
+        product_id,
+        title,
         price,
         category_id,
-        sales,
+        sales_count,
         main_image,
         stock
        FROM products
-       WHERE status = 'active'
+       WHERE status = 1
        AND stock > 0
-       ORDER BY sales DESC, created_at DESC
-       LIMIT ?`,
-      [limit]
+       ORDER BY sales_count DESC, created_at DESC
+       LIMIT ${limit}`
     );
 
     return hotProducts;
