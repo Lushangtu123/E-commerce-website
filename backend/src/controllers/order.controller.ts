@@ -243,7 +243,7 @@ export class OrderController {
         return res.status(403).json({ error: '无权访问该订单' });
       }
 
-      if (order.status !== OrderStatus.PENDING_PAYMENT) {
+      if (order.status !== OrderStatus.PENDING) {
         return res.json({ 
           remaining_minutes: 0,
           message: '订单不是待支付状态'

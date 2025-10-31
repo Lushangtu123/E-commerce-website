@@ -7,14 +7,14 @@ import { getPool } from '../database/mysql';
 import { RowDataPacket } from 'mysql2';
 
 interface PendingOrder extends RowDataPacket {
-  id: number;
+  order_id: number;
   order_no: string;
   user_id: number;
   created_at: Date;
 }
 
 interface OrderItem extends RowDataPacket {
-  id: number;
+  item_id: number;
   product_id: number;
   sku_id: number | null;
   quantity: number;
@@ -37,9 +37,9 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
 
     // 1. 查找超时的待支付订单
     const [timeoutOrders] = await connection.execute<PendingOrder[]>(
-      `SELECT id, order_no, user_id, created_at 
+      `SELECT order_id, order_no, user_id, created_at 
        FROM orders 
-       WHERE status = 'pending_payment' 
+       WHERE status = 0 
        AND TIMESTAMPDIFF(MINUTE, created_at, NOW()) > ?`,
       [ORDER_TIMEOUT_MINUTES]
     );
@@ -50,8 +50,8 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
       try {
         // 2. 获取订单商品信息
         const [orderItems] = await connection.execute<OrderItem[]>(
-          'SELECT id, product_id, sku_id, quantity FROM order_items WHERE order_id = ?',
-          [order.id]
+          'SELECT item_id, product_id, sku_id, quantity FROM order_items WHERE order_id = ?',
+          [order.order_id]
         );
 
         // 3. 恢复库存
@@ -59,13 +59,13 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
           if (item.sku_id) {
             // 恢复 SKU 库存
             await connection.execute(
-              'UPDATE product_skus SET stock = stock + ? WHERE id = ?',
+              'UPDATE product_skus SET stock = stock + ? WHERE sku_id = ?',
               [item.quantity, item.sku_id]
             );
           } else {
             // 恢复商品库存
             await connection.execute(
-              'UPDATE products SET stock = stock + ? WHERE id = ?',
+              'UPDATE products SET stock = stock + ? WHERE product_id = ?',
               [item.quantity, item.product_id]
             );
           }
@@ -74,11 +74,9 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
         // 4. 更新订单状态为已取消
         await connection.execute(
           `UPDATE orders 
-           SET status = 'cancelled', 
-               cancel_reason = '订单超时未支付，系统自动取消',
-               updated_at = NOW()
-           WHERE id = ?`,
-          [order.id]
+           SET status = 4
+           WHERE order_id = ?`,
+          [order.order_id]
         );
 
         console.log(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
@@ -139,7 +137,7 @@ export async function getOrderRemainingTime(orderId: number): Promise<number> {
   const [rows] = await pool.execute<RowDataPacket[]>(
     `SELECT TIMESTAMPDIFF(MINUTE, created_at, NOW()) as elapsed_minutes
      FROM orders 
-     WHERE id = ? AND status = 'pending_payment'`,
+     WHERE order_id = ? AND status = 0`,
     [orderId]
   );
 
