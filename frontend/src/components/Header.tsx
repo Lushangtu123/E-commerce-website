@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp } from 'react-icons/fi';
+import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift } from 'react-icons/fi';
 import { FaHeart } from 'react-icons/fa';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -192,6 +192,15 @@ export default function Header() {
           </form>
           {/* 右侧菜单 */}
           <div className="flex items-center space-x-6">
+            {/* 优惠券 - 始终显示 */}
+            <Link
+              href={isAuthenticated ? "/coupons" : "/login"}
+              className="flex items-center text-gray-700 hover:text-orange-500 transition"
+              title={isAuthenticated ? "优惠券" : "登录领取优惠券"}
+            >
+              <FiGift size={22} />
+            </Link>
+            
             {/* 收藏 */}
             {isAuthenticated && (
               <Link
@@ -219,10 +228,17 @@ export default function Header() {
             {isAuthenticated ? (
               <div className="flex items-center space-x-4">
                 <Link
+                  href="/profile"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                >
+                  <FiUser size={18} />
+                  我的
+                </Link>
+                <Link
                   href="/orders"
                   className="text-gray-700 hover:text-primary-600"
                 >
-                  我的订单
+                  订单
                 </Link>
                 <Link
                   href="/history"
@@ -231,13 +247,13 @@ export default function Header() {
                   <FiClock size={16} />
                   足迹
                 </Link>
-                <div className="flex items-center space-x-2">
-                  <FiUser size={20} className="text-gray-700" />
-                  <span className="text-gray-700">{user?.username}</span>
+                <div className="flex items-center space-x-2 text-gray-700">
+                  <span>{user?.username}</span>
                 </div>
                 <button
                   onClick={handleLogout}
                   className="text-gray-700 hover:text-primary-600"
+                  title="退出登录"
                 >
                   <FiLogOut size={20} />
                 </button>

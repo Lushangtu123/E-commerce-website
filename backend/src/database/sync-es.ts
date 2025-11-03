@@ -1,7 +1,7 @@
 /**
  * 同步 MySQL 商品数据到 Elasticsearch
  */
-import { pool } from './mysql';
+import { connectDatabase, getPool } from './mysql';
 import {
   initProductIndex,
   bulkSyncProductsToES,
@@ -11,6 +11,10 @@ import {
 async function syncAllProducts() {
   try {
     console.log('🚀 开始同步商品数据到 Elasticsearch...');
+
+    // 连接数据库
+    await connectDatabase();
+    const pool = getPool();
 
     // 检查 ES 连接
     const isConnected = await checkESConnection();

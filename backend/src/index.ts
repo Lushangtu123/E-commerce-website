@@ -41,8 +41,14 @@ const PORT = process.env.PORT || 3001;
 app.use(helmet()); // 安全头
 app.use(cors()); // 跨域
 app.use(compression()); // 压缩
-app.use(express.json()); // JSON解析
-app.use(express.urlencoded({ extended: true })); // URL编码解析
+app.use(express.json({ limit: '10mb' })); // JSON解析
+app.use(express.urlencoded({ extended: true, limit: '10mb' })); // URL编码解析
+
+// 设置响应头字符编码
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
 
 // 静态文件
 app.use('/uploads', express.static('uploads'));

@@ -26,13 +26,8 @@ export async function initProductIndex() {
           settings: {
             analysis: {
               analyzer: {
-                ik_max_word_analyzer: {
-                  type: 'custom',
-                  tokenizer: 'ik_max_word',
-                },
-                ik_smart_analyzer: {
-                  type: 'custom',
-                  tokenizer: 'ik_smart',
+                standard_analyzer: {
+                  type: 'standard',
                 },
               },
             },
@@ -42,16 +37,14 @@ export async function initProductIndex() {
               product_id: { type: 'integer' },
               title: {
                 type: 'text',
-                analyzer: 'ik_max_word_analyzer',
-                search_analyzer: 'ik_smart_analyzer',
+                analyzer: 'standard',
                 fields: {
                   keyword: { type: 'keyword' },
                 },
               },
               description: {
                 type: 'text',
-                analyzer: 'ik_max_word_analyzer',
-                search_analyzer: 'ik_smart_analyzer',
+                analyzer: 'standard',
               },
               price: { type: 'float' },
               original_price: { type: 'float' },
@@ -60,7 +53,7 @@ export async function initProductIndex() {
               category_id: { type: 'integer' },
               brand: {
                 type: 'text',
-                analyzer: 'ik_max_word_analyzer',
+                analyzer: 'standard',
                 fields: {
                   keyword: { type: 'keyword' },
                 },

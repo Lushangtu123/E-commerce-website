@@ -113,8 +113,8 @@ export class CouponModel {
     const [coupons] = await pool.execute<RowDataPacket[]>(
       `SELECT * FROM coupons ${whereClause} 
        ORDER BY created_at DESC 
-       LIMIT ? OFFSET ?`,
-      [...queryParams, page_size, offset]
+       LIMIT ${page_size} OFFSET ${offset}`,
+      queryParams
     );
 
     return { coupons: coupons as Coupon[], total };

@@ -56,6 +56,29 @@ export default function Home() {
 
   return (
     <div>
+      {/* 优惠券横幅 - 始终显示 */}
+      <section className="bg-gradient-to-r from-orange-500 to-red-500 text-white py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Link href={isAuthenticated ? "/coupons" : "/login"} className="flex items-center justify-between hover:opacity-90 transition-opacity">
+            <div className="flex items-center gap-3">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+              </svg>
+              <div>
+                <div className="font-semibold text-lg">🎁 领取优惠券，享更多优惠</div>
+                <div className="text-sm opacity-90">{isAuthenticated ? '新用户专享优惠券等你来领' : '登录即可领取专属优惠券'}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{isAuthenticated ? '立即领取' : '立即登录'}</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Link>
+        </div>
+      </section>
+      
       {/* 轮播图区域 */}
       <section className="bg-gradient-to-r from-primary-600 to-primary-800 text-white py-20">
         <div className="container-custom">

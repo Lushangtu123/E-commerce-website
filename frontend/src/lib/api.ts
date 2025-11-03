@@ -136,5 +136,58 @@ export const orderTimeoutApi = {
     api.get(`/orders/${orderId}/remaining-time`),
 };
 
+// 优惠券相关API
+export const couponApi = {
+  // 获取可领取的优惠券列表
+  getAvailable: (page = 1, pageSize = 20) =>
+    api.get('/coupons/available', { params: { page, page_size: pageSize } }),
+  
+  // 领取优惠券
+  receive: (code: string) =>
+    api.post('/coupons/receive', { code }),
+  
+  // 获取我的优惠券
+  getMyCoupons: (status?: number) =>
+    api.get('/coupons/my/list', { params: { status } }),
+  
+  // 获取订单可用优惠券
+  getAvailableForOrder: (amount: number) =>
+    api.get('/coupons/my/available-for-order', { params: { amount } }),
+  
+  // 计算优惠金额
+  calculateDiscount: (userCouponId: number, orderAmount: number) =>
+    api.post('/coupons/calculate', { user_coupon_id: userCouponId, order_amount: orderAmount }),
+};
+
+// 管理员优惠券API
+export const adminCouponApi = {
+  // 创建优惠券
+  create: (data: {
+    code: string;
+    name: string;
+    description?: string;
+    type: number;
+    discount_value: number;
+    min_amount?: number;
+    max_discount?: number;
+    total_quantity: number;
+    per_user_limit?: number;
+    start_time: string;
+    end_time: string;
+  }) => api.post('/admin/coupons', data),
+  
+  // 获取优惠券列表
+  getList: (page = 1, pageSize = 20, status?: number) =>
+    api.get('/admin/coupons', { params: { page, page_size: pageSize, status } }),
+  
+  // 获取优惠券详情
+  getDetail: (id: number) =>
+    api.get(`/admin/coupons/${id}`),
+  
+  // 更新优惠券状态
+  updateStatus: (id: number, status: number) =>
+    api.put(`/admin/coupons/${id}/status`, { status }),
+};
+
 export default api;
 

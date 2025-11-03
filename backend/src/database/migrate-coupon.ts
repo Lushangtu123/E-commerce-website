@@ -1,11 +1,15 @@
 /**
  * 优惠券系统数据库迁移
  */
-import { pool } from './mysql';
+import { connectDatabase, getPool } from './mysql';
 
 async function migrateCouponTables() {
   try {
     console.log('🚀 开始创建优惠券相关表...');
+
+    // 连接数据库
+    await connectDatabase();
+    const pool = getPool();
 
     // 1. 优惠券表
     await pool.execute(`
@@ -37,7 +41,7 @@ async function migrateCouponTables() {
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS user_coupons (
         user_coupon_id INT PRIMARY KEY AUTO_INCREMENT,
-        user_id INT NOT NULL COMMENT '用户ID',
+        user_id BIGINT NOT NULL COMMENT '用户ID',
         coupon_id INT NOT NULL COMMENT '优惠券ID',
         status TINYINT DEFAULT 1 COMMENT '状态: 1=未使用, 2=已使用, 3=已过期',
         used_at DATETIME DEFAULT NULL COMMENT '使用时间',
@@ -54,11 +58,11 @@ async function migrateCouponTables() {
     `);
     console.log('✅ user_coupons 表创建成功');
 
-    // 3. 优惠券使用记录表
+    // 3. 优惠券使用记录表（不使用外键约束，避免类型不匹配问题）
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS coupon_usage_logs (
         log_id INT PRIMARY KEY AUTO_INCREMENT,
-        user_id INT NOT NULL COMMENT '用户ID',
+        user_id BIGINT NOT NULL COMMENT '用户ID',
         coupon_id INT NOT NULL COMMENT '优惠券ID',
         user_coupon_id INT NOT NULL COMMENT '用户优惠券ID',
         order_id INT NOT NULL COMMENT '订单ID',
@@ -67,10 +71,7 @@ async function migrateCouponTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '使用时间',
         INDEX idx_user (user_id),
         INDEX idx_coupon (coupon_id),
-        INDEX idx_order (order_id),
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-        FOREIGN KEY (coupon_id) REFERENCES coupons(coupon_id) ON DELETE CASCADE,
-        FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
+        INDEX idx_order (order_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券使用记录表';
     `);
     console.log('✅ coupon_usage_logs 表创建成功');
