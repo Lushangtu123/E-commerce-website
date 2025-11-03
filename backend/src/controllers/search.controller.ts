@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { SearchHistoryModel } from '../models/search-history.model';
 import { AuthRequest } from '../middleware/auth';
+import { searchProducts as esSearchProducts } from '../database/elasticsearch';
 
 // 记录搜索历史
 export const recordSearch = async (req: AuthRequest, res: Response) => {
@@ -110,6 +111,62 @@ export const getSearchSuggestions = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('获取搜索建议失败:', error);
     res.status(500).json({ message: '获取搜索建议失败' });
+  }
+};
+
+// Elasticsearch 高级搜索
+export const elasticsearchSearch = async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      keyword = '',
+      category_id,
+      min_price,
+      max_price,
+      brand,
+      sort_by = 'sales',
+      sort_order = 'desc',
+      page = 1,
+      page_size = 20,
+    } = req.query;
+
+    // 参数转换
+    const searchParams = {
+      keyword: keyword.toString().trim(),
+      category_id: category_id ? parseInt(category_id.toString()) : undefined,
+      min_price: min_price ? parseFloat(min_price.toString()) : undefined,
+      max_price: max_price ? parseFloat(max_price.toString()) : undefined,
+      brand: brand?.toString(),
+      sort_by: sort_by as 'price' | 'sales' | 'created_at',
+      sort_order: sort_order as 'asc' | 'desc',
+      page: parseInt(page.toString()),
+      page_size: parseInt(page_size.toString()),
+    };
+
+    // 执行搜索
+    const result = await esSearchProducts(searchParams);
+
+    // 记录搜索历史
+    if (searchParams.keyword && result.total > 0) {
+      const userId = req.user?.userId;
+      await SearchHistoryModel.add(searchParams.keyword, userId, result.total);
+    }
+
+    res.json({
+      success: true,
+      data: result.products,
+      pagination: {
+        page: result.page,
+        page_size: result.page_size,
+        total: result.total,
+        total_pages: result.total_pages,
+      },
+    });
+  } catch (error) {
+    console.error('Elasticsearch 搜索失败:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Elasticsearch 搜索失败，请稍后重试' 
+    });
   }
 };
 

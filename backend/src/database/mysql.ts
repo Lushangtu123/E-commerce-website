@@ -37,3 +37,6 @@ export async function query<T = any>(sql: string, params?: any[]): Promise<T> {
   return rows as T;
 }
 
+// 导出 pool 供其他模块使用
+export { pool };
+

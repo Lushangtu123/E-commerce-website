@@ -5,11 +5,15 @@ import {
   getHotKeywords,
   clearSearchHistory,
   deleteSearchKeyword,
-  getSearchSuggestions
+  getSearchSuggestions,
+  elasticsearchSearch
 } from '../controllers/search.controller';
 import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
+
+// Elasticsearch 高级搜索（公开）
+router.get('/es', elasticsearchSearch);
 
 // 获取热搜关键词（公开）
 router.get('/hot', getHotKeywords);

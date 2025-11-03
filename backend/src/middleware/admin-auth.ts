@@ -5,6 +5,15 @@ import { getPool } from '../database/mysql';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
 
 // 扩展 Request 类型
+export interface AdminAuthRequest extends Request {
+  admin?: {
+    adminId: number;
+    username: string;
+    roleId: number;
+    type: string;
+  };
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -117,4 +126,7 @@ export const requirePermission = (permissionCode: string) => {
     }
   };
 };
+
+// 导出为 adminAuthMiddleware
+export const adminAuthMiddleware = authenticateAdmin;
 
