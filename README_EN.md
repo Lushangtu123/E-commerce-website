@@ -22,11 +22,13 @@ A modern, full-featured e-commerce platform built with a microservices architect
 
 ### User Features
 - ✅ User registration, login, and profile management
+- ✅ **Personal Center** - Unified management of personal info, orders, coupons 🆕
 - ✅ Product browsing, searching, and filtering
 - ✅ **Favorites System** - Add/remove favorites, manage favorite lists 🆕
 - ✅ **Search History** - Auto-record search history, popular searches ranking 🆕
 - ✅ **Browse History** - Auto-track browsing records, quick repurchase 🆕
 - ✅ Shopping cart management - Add/delete/modify items
+- ✅ **Coupon System** - Claim coupons, use coupons, discount calculation 🆕
 - ✅ Order creation, payment, viewing, and cancellation
 - ✅ Product reviews and ratings
 
@@ -42,16 +44,19 @@ A modern, full-featured e-commerce platform built with a microservices architect
 ### Order Features
 - ✅ Order creation and checkout
 - ✅ Payment processing (simulated)
+- ✅ **Automatic Order Timeout Cancellation** - Auto-cancel after 30 minutes 🆕
 - ✅ Order status management (pending/paid/shipped/completed)
 - ✅ Order cancellation
 - ✅ Order confirmation and delivery tracking
 - ✅ Detailed order views
+- ✅ **Coupon Usage in Orders** - Select coupons during checkout 🆕
 
 ### Admin Panel 🆕
 - ✅ **Data Analytics Dashboard** - Real-time sales data, order statistics
 - ✅ **Product Management** - CRUD operations, bulk status updates, SKU management
 - ✅ **Order Management** - Order list, status updates, shipping operations
 - ✅ **User Management** - User list, consumption statistics
+- ✅ **Coupon Management** - Create coupons, manage coupon status 🆕
 - ✅ **System Logs** - Admin operation log recording
 - ✅ **Permission Control** - JWT authentication, operation permission verification
 
@@ -61,6 +66,8 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - 📊 Database read-write separation design
 - 🔍 Elasticsearch full-text search ready
 - 📨 RabbitMQ message queue ready
+- ⏰ **Automatic Order Timeout Handling** - Task-based order status management 🆕
+- 🎯 **Smart Recommendation System** - User behavior-based recommendations 🆕
 - 🐳 Docker containerized deployment
 - 🔒 JWT authentication
 - 🎨 Responsive UI design
@@ -116,7 +123,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 
 ## 📦 Database Design
 
-### Core Tables (13 Tables)
+### Core Tables (17 Tables)
 | Table Name | Description | Status |
 |------------|-------------|--------|
 | `users` | User information | ✅ |
@@ -131,6 +138,10 @@ A modern, full-featured e-commerce platform built with a microservices architect
 | `favorites` | Favorites list | 🆕 |
 | `search_history` | Search history | 🆕 |
 | `browse_history` | Browse history | 🆕 |
+| `coupons` | Coupon information | 🆕 |
+| `user_coupons` | User coupon claims | 🆕 |
+| `coupon_usage_logs` | Coupon usage logs | 🆕 |
+| `admins` | Admin accounts | ✅ |
 | `admin_logs` | Admin operation logs | ✅ |
 
 ### Database Features
@@ -277,7 +288,7 @@ E-commerce-website/
 └── DEPLOYMENT.md             # Deployment guide
 ```
 
-## 🔌 API Endpoints (65+ APIs)
+## 🔌 API Endpoints (80+ APIs)
 
 ### User APIs
 - `POST /api/users/register` - User registration
@@ -331,6 +342,24 @@ E-commerce-website/
 - `POST /api/reviews` - Create review
 - `GET /api/reviews/product/:id` - Get product reviews
 - `GET /api/reviews/my` - Get user's reviews
+
+### Coupon APIs 🆕
+**User APIs:**
+- `GET /api/coupons/available` - Get available coupons list
+- `POST /api/coupons/receive` - Claim coupon
+- `GET /api/coupons/my/list` - Get my coupons list
+- `GET /api/coupons/my/available-for-order` - Get coupons available for order
+- `POST /api/coupons/calculate` - Calculate discount amount
+
+**Admin APIs:**
+- `POST /api/admin/coupons` - Create coupon
+- `GET /api/admin/coupons` - Get coupons list
+- `GET /api/admin/coupons/:id` - Get coupon details
+- `PUT /api/admin/coupons/:id/status` - Update coupon status
+
+### Recommendation APIs 🆕
+- `GET /api/recommendations/for-you` - Get personalized recommendations
+- `GET /api/recommendations/related/:productId` - Get related products
 
 ### Admin APIs 🆕
 **Dashboard:**
@@ -422,16 +451,33 @@ npm test
 - [x] Product editing functionality
 - [x] Data analytics dashboard
 - [x] System operation logs
+- [x] Automated order timeout cancellation
+- [x] Product recommendation algorithm
+- [x] **Coupon System** - Complete coupon functionality 🆕
+- [x] **Personal Center Page** - Unified user feature portal 🆕
+
+### Recently Completed 🎉
+- [x] **Coupon System** (2025-11-03)
+  - User side: Coupon center, my coupons, coupon usage
+  - Admin side: Coupon creation, status management
+  - 3 coupon types: Amount off, percentage discount, no threshold
+- [x] **Personal Center Page** (2025-11-03)
+  - User information display
+  - Coupon zone (prominent design)
+  - Feature menu grid (6 quick access links)
+- [x] **Character Encoding Optimization** (2025-11-03)
+  - Complete UTF-8 encoding chain
+  - Fixed Chinese character display issues
+- [x] Automated order timeout cancellation (2025-10-31)
+- [x] Product recommendation algorithm (2025-10-31)
 
 ### In Progress 🚧
 - [ ] Elasticsearch product search implementation
 - [ ] RabbitMQ message queue processing
+- [ ] Coupon usage in order checkout
 
 ### Planned 📋
-- [ ] Automated order timeout cancellation
-- [ ] Product recommendation algorithm
 - [ ] Flash sale functionality
-- [ ] Coupon and promotion system
 - [ ] Logistics tracking
 - [ ] Mobile app version
 - [ ] Further performance optimization
@@ -442,12 +488,13 @@ npm test
 
 | Metric | Count |
 |--------|-------|
-| Lines of Code | 13,700+ |
-| Frontend Pages | 20+ |
-| API Endpoints | 65+ |
-| Database Tables | 13 |
-| Feature Modules | 13 |
-| Git Commits | 100+ |
+| Lines of Code | 19,600+ |
+| Frontend Pages | 24+ |
+| API Endpoints | 80+ |
+| Database Tables | 17 |
+| Feature Modules | 15 |
+| Git Commits | 110+ |
+| Documentation Lines | 7,000+ |
 
 ## 📚 Documentation
 
@@ -459,19 +506,31 @@ npm test
 - [Security Policy](./SECURITY.md) - Security features and vulnerability reporting 🆕
 - [Contributing Guide](./CONTRIBUTING.md) - Code standards and contribution workflow 🆕
 
+### Feature Documentation 🆕
+- [Coupon Frontend Guide](./COUPON_FRONTEND_GUIDE.md) - Detailed coupon functionality guide
+- [Personal Center Guide](./PROFILE_PAGE_GUIDE.md) - Personal center features and design
+- [Admin Guide](./ADMIN_GUIDE.md) - Admin panel usage guide
+
+### Development Documentation
+- [Frontend Development Log](./开发日志_前端.md) - Frontend development records (3,100+ lines)
+- [Backend Development Log](./开发日志_后端.md) - Backend development records (3,900+ lines)
+- [Admin Panel Development Log](./开发日志_管理后台.md) - Admin development records
+
 ### Additional Documentation
 - [Project Description](./PROJECT_DESCRIPTION.md) - Project description for resumes
 - [Chinese Documentation](./README.md) - 中文文档
-- [Development Log](./开发日志_前端.md) - Development process records
 - [Update Log](./UPDATE_20251029.md) - Latest updates
 
 ## 🎨 Interface Preview
 
 ### User Interface
-- 🏠 Home - Product display, popular recommendations
-- 🛍️ Product Details - SKU selection, favorites, reviews
+- 🏠 Home - Product display, popular recommendations, **coupon banner** 🆕
+- 👤 **Personal Center** - Unified management of personal info, orders, coupons 🆕
+- 🎁 **Coupon Center** - Claim coupons, view available offers 🆕
+- 🎫 **My Coupons** - Coupon management, status filtering 🆕
+- 🛍️ Product Details - SKU selection, favorites, reviews, **related recommendations** 🆕
 - 🛒 Shopping Cart - Product management, checkout
-- 📦 Order List - Order management, payment
+- 📦 Order List - Order management, payment, **countdown timer** 🆕
 - ⭐ Favorites - Favorites management
 - 🕐 Browse History - History records
 
@@ -480,6 +539,7 @@ npm test
 - 📦 Product Management - CRUD, SKU management
 - 📋 Order Management - Order processing, status updates
 - 👥 User Management - User list, consumption statistics
+- 🎁 **Coupon Management** - Create coupons, status management 🆕
 
 ## 🐛 Troubleshooting
 
@@ -554,5 +614,43 @@ MIT License
 
 **Project Status**: ✅ Core functionality completed and operational
 
-**Last Updated**: October 29, 2025 | **Version**: 2.0.0
+**Last Updated**: November 3, 2025 | **Version**: 3.0.0
+
+## 🎉 v3.0.0 Release Highlights (2025-11-03)
+
+### ✨ New Features
+- 🎁 **Complete Coupon System**
+  - User side: Coupon center, my coupons, coupon claiming and usage
+  - Admin side: Coupon creation, status management
+  - 3 coupon types: Amount off, percentage discount, no threshold
+  - Coupon status management: Pending, Active, Ended, Disabled
+  
+- 👤 **Personal Center Page**
+  - User information display (blue gradient card)
+  - Coupon zone (prominent orange-red design)
+  - Feature menu grid (6 quick access links)
+  - Unified user feature management portal
+
+- 🎯 **Smart Recommendation System**
+  - Personalized recommendations based on user browsing history
+  - Related product recommendations on product detail pages
+  - "For You" recommendations on homepage
+
+- ⏰ **Automatic Order Timeout Handling**
+  - Auto-cancel orders after 30 minutes of non-payment
+  - Task-based order status management
+
+### 🐛 Bug Fixes
+- ✅ Fixed SQL query parameterization issues (LIMIT/OFFSET)
+- ✅ Fixed character encoding issues (complete UTF-8 chain)
+- ✅ Fixed coupon display garbled text
+- ✅ Fixed frontend import path errors
+- ✅ Optimized user experience and interface design
+
+### 📊 Version Statistics
+- New Code: 5,944 lines
+- New Pages: 4
+- New APIs: 15+
+- New Database Tables: 4
+- Documentation Updates: 3,365 lines
 
