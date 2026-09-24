@@ -1,0 +1,53 @@
+diff --git a/backend/src/controllers/order.controller.ts b/backend/src/controllers/order.controller.ts
+index a8fc479..0f23340 100644
+--- a/backend/src/controllers/order.controller.ts
++++ b/backend/src/controllers/order.controller.ts
+@@ -20,7 +20,13 @@ export class OrderController {
+ 
+       const redis = getRedisClient();
+       let totalAmount = 0;
+-      const orderItems = [];
++      const orderItems: Array<{
++        product_id: number;
++        product_name: string;
++        product_image?: string;
++        quantity: number;
++        price: number;
++      }> = [];
+ 
+       // 验证商品库存和价格
+       for (const item of items) {
+diff --git a/backend/src/database/rabbitmq.ts b/backend/src/database/rabbitmq.ts
+index 8cce0e5..1f58c25 100644
+--- a/backend/src/database/rabbitmq.ts
++++ b/backend/src/database/rabbitmq.ts
+@@ -48,13 +48,13 @@ export async function connectRabbitMQ(): Promise<void> {
+ 
+     logger.info('✅ RabbitMQ 连接成功');
+ 
+-    // 监听连接关闭事件
+-    connection.on('close', () => {
++    // 监听连接关闭事件（用局部 conn，已确保非空）
++    conn.on('close', () => {
+       logger.warn('⚠️ RabbitMQ 连接已关闭');
+       setTimeout(connectRabbitMQ, 5000); // 5秒后重连
+     });
+ 
+-    connection.on('error', (error) => {
++    conn.on('error', (error) => {
+       logger.error({ err: error }, '❌ RabbitMQ 连接错误');
+     });
+   } catch (error) {
+diff --git a/backend/tsconfig.json b/backend/tsconfig.json
+index f2eec0a..45ab5fe 100644
+--- a/backend/tsconfig.json
++++ b/backend/tsconfig.json
+@@ -7,7 +7,7 @@
+     ],
+     "outDir": "./dist",
+     "rootDir": "./src",
+-    "strict": false,
++    "strict": true,
+     "noImplicitAny": false,
+     "esModuleInterop": true,
+     "skipLibCheck": true,

@@ -48,13 +48,13 @@ export async function connectRabbitMQ(): Promise<void> {
 
     logger.info('✅ RabbitMQ 连接成功');
 
-    // 监听连接关闭事件
-    connection.on('close', () => {
+    // 监听连接关闭事件（用局部 conn，已确保非空）
+    conn.on('close', () => {
       logger.warn('⚠️ RabbitMQ 连接已关闭');
       setTimeout(connectRabbitMQ, 5000); // 5秒后重连
     });
 
-    connection.on('error', (error) => {
+    conn.on('error', (error) => {
       logger.error({ err: error }, '❌ RabbitMQ 连接错误');
     });
   } catch (error) {

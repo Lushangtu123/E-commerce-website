@@ -20,7 +20,13 @@ export class OrderController {
 
       const redis = getRedisClient();
       let totalAmount = 0;
-      const orderItems = [];
+      const orderItems: Array<{
+        product_id: number;
+        product_name: string;
+        product_image?: string;
+        quantity: number;
+        price: number;
+      }> = [];
 
       // 验证商品库存和价格
       for (const item of items) {
