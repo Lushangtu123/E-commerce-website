@@ -1,0 +1,647 @@
+diff --git a/frontend/src/app/admin/coupons/page.tsx b/frontend/src/app/admin/coupons/page.tsx
+index 442826c..ccc3f70 100644
+--- a/frontend/src/app/admin/coupons/page.tsx
++++ b/frontend/src/app/admin/coupons/page.tsx
+@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
+ import { useRouter } from 'next/navigation';
+ import { adminCouponApi } from '@/lib/api';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ interface Coupon {
+   coupon_id: number;
+@@ -54,7 +55,7 @@ export default function AdminCouponsPage() {
+       const response = await adminCouponApi.getList(1, 50);
+       setCoupons(response.data || []);
+     } catch (error: any) {
+-      console.error('加载优惠券失败:', error);
++      logger.error('加载优惠券失败:', error);
+       toast.error(error.response?.data?.message || '加载失败');
+     } finally {
+       setLoading(false);
+@@ -90,7 +91,7 @@ export default function AdminCouponsPage() {
+         end_time: '',
+       });
+     } catch (error: any) {
+-      console.error('创建失败:', error);
++      logger.error('创建失败:', error);
+       toast.error(error.response?.data?.message || '创建失败');
+     }
+   };
+@@ -101,7 +102,7 @@ export default function AdminCouponsPage() {
+       toast.success('状态更新成功！');
+       loadCoupons();
+     } catch (error: any) {
+-      console.error('更新失败:', error);
++      logger.error('更新失败:', error);
+       toast.error(error.response?.data?.message || '更新失败');
+     }
+   };
+diff --git a/frontend/src/app/admin/dashboard/page.tsx b/frontend/src/app/admin/dashboard/page.tsx
+index f1961f6..33bb1c9 100644
+--- a/frontend/src/app/admin/dashboard/page.tsx
++++ b/frontend/src/app/admin/dashboard/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState, useEffect } from 'react';
+ import AdminLayout from '@/components/AdminLayout';
+ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
++import { logger } from '@/lib/logger';
+ 
+ export default function AdminDashboardPage() {
+   const [stats, setStats] = useState<any>(null);
+@@ -46,7 +47,7 @@ export default function AdminDashboardPage() {
+       setTopProducts(Array.isArray(productsData) ? productsData : productsData.products || []);
+       setSalesTrend(Array.isArray(trendData) ? trendData : trendData.trend || []);
+     } catch (error) {
+-      console.error('获取数据失败:', error);
++      logger.error('获取数据失败:', error);
+     } finally {
+       setLoading(false);
+     }
+diff --git a/frontend/src/app/admin/login/page.tsx b/frontend/src/app/admin/login/page.tsx
+index dd0bf46..dfda5e4 100644
+--- a/frontend/src/app/admin/login/page.tsx
++++ b/frontend/src/app/admin/login/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState } from 'react';
+ import { useRouter } from 'next/navigation';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function AdminLoginPage() {
+   const router = useRouter();
+@@ -38,7 +39,7 @@ export default function AdminLoginPage() {
+         toast.error(data.error || '登录失败');
+       }
+     } catch (error) {
+-      console.error('登录失败:', error);
++      logger.error('登录失败:', error);
+       toast.error('登录失败，请稍后重试');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/admin/logs/page.tsx b/frontend/src/app/admin/logs/page.tsx
+index 0a5681b..75eae6f 100644
+--- a/frontend/src/app/admin/logs/page.tsx
++++ b/frontend/src/app/admin/logs/page.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useState, useEffect } from 'react';
+ import AdminLayout from '@/components/AdminLayout';
++import { logger } from '@/lib/logger';
+ 
+ export default function AdminLogsPage() {
+   const [logs, setLogs] = useState<any[]>([]);
+@@ -34,7 +35,7 @@ export default function AdminLogsPage() {
+         setTotal(data.pagination.total);
+       }
+     } catch (error) {
+-      console.error('获取日志失败:', error);
++      logger.error('获取日志失败:', error);
+     } finally {
+       setLoading(false);
+     }
+diff --git a/frontend/src/app/admin/orders/page.tsx b/frontend/src/app/admin/orders/page.tsx
+index 565c4fb..6d95fd6 100644
+--- a/frontend/src/app/admin/orders/page.tsx
++++ b/frontend/src/app/admin/orders/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState, useEffect } from 'react';
+ import AdminLayout from '@/components/AdminLayout';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function AdminOrdersPage() {
+   const [orders, setOrders] = useState<any[]>([]);
+@@ -48,7 +49,7 @@ export default function AdminOrdersPage() {
+         toast.error(data.error || '获取订单列表失败');
+       }
+     } catch (error) {
+-      console.error('获取订单列表失败:', error);
++      logger.error('获取订单列表失败:', error);
+       toast.error('获取订单列表失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/admin/products/page.tsx b/frontend/src/app/admin/products/page.tsx
+index a551231..c1acc6e 100644
+--- a/frontend/src/app/admin/products/page.tsx
++++ b/frontend/src/app/admin/products/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState, useEffect } from 'react';
+ import AdminLayout from '@/components/AdminLayout';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function AdminProductsPage() {
+   const [products, setProducts] = useState<any[]>([]);
+@@ -42,7 +43,7 @@ export default function AdminProductsPage() {
+         setCategories(data);
+       }
+     } catch (error) {
+-      console.error('获取分类失败:', error);
++      logger.error('获取分类失败:', error);
+     }
+   };
+ 
+@@ -76,7 +77,7 @@ export default function AdminProductsPage() {
+         toast.error(data.error || '获取商品列表失败');
+       }
+     } catch (error) {
+-      console.error('获取商品列表失败:', error);
++      logger.error('获取商品列表失败:', error);
+       toast.error('获取商品列表失败');
+     } finally {
+       setLoading(false);
+@@ -108,7 +109,7 @@ export default function AdminProductsPage() {
+         toast.error(data.error || '操作失败');
+       }
+     } catch (error) {
+-      console.error('更新状态失败:', error);
++      logger.error('更新状态失败:', error);
+       toast.error('更新状态失败');
+     }
+   };
+@@ -147,7 +148,7 @@ export default function AdminProductsPage() {
+         toast.error(data.error || '批量操作失败');
+       }
+     } catch (error) {
+-      console.error('批量操作失败:', error);
++      logger.error('批量操作失败:', error);
+       toast.error('批量操作失败');
+     }
+   };
+@@ -219,7 +220,7 @@ export default function AdminProductsPage() {
+         toast.error(data.error || '添加失败');
+       }
+     } catch (error) {
+-      console.error('添加商品失败:', error);
++      logger.error('添加商品失败:', error);
+       toast.error('添加商品失败');
+     }
+   };
+@@ -281,7 +282,7 @@ export default function AdminProductsPage() {
+         toast.error(data.error || '更新失败');
+       }
+     } catch (error) {
+-      console.error('更新商品失败:', error);
++      logger.error('更新商品失败:', error);
+       toast.error('更新商品失败');
+     }
+   };
+diff --git a/frontend/src/app/admin/users/page.tsx b/frontend/src/app/admin/users/page.tsx
+index 0bf2ed7..126d42d 100644
+--- a/frontend/src/app/admin/users/page.tsx
++++ b/frontend/src/app/admin/users/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState, useEffect } from 'react';
+ import AdminLayout from '@/components/AdminLayout';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function AdminUsersPage() {
+   const [users, setUsers] = useState<any[]>([]);
+@@ -48,7 +49,7 @@ export default function AdminUsersPage() {
+         toast.error(data.error || '获取用户列表失败');
+       }
+     } catch (error) {
+-      console.error('获取用户列表失败:', error);
++      logger.error('获取用户列表失败:', error);
+       toast.error('获取用户列表失败');
+     } finally {
+       setLoading(false);
+@@ -80,7 +81,7 @@ export default function AdminUsersPage() {
+         toast.error(data.error || '操作失败');
+       }
+     } catch (error) {
+-      console.error('更新状态失败:', error);
++      logger.error('更新状态失败:', error);
+       toast.error('更新状态失败');
+     }
+   };
+diff --git a/frontend/src/app/cart/page.tsx b/frontend/src/app/cart/page.tsx
+index 95f3204..8a80b79 100644
+--- a/frontend/src/app/cart/page.tsx
++++ b/frontend/src/app/cart/page.tsx
+@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
+ import { useCartStore } from '@/store/useCartStore';
+ import toast from 'react-hot-toast';
+ import { FiTrash2, FiShoppingBag } from 'react-icons/fi';
++import { logger } from '@/lib/logger';
+ 
+ export default function CartPage() {
+   const router = useRouter();
+@@ -31,7 +32,7 @@ export default function CartPage() {
+       setItems(data.items || []);
+       setSelectedItems((data.items || []).map((item: any) => item.product_id));
+     } catch (error: any) {
+-      console.error('加载购物车失败:', error);
++      logger.error('加载购物车失败:', error);
+       toast.error('加载购物车失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/coupons/page.tsx b/frontend/src/app/coupons/page.tsx
+index 46f23ab..6dff896 100644
+--- a/frontend/src/app/coupons/page.tsx
++++ b/frontend/src/app/coupons/page.tsx
+@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
+ import { couponApi } from '@/lib/api';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ interface Coupon {
+   coupon_id: number;
+@@ -45,7 +46,7 @@ export default function CouponsPage() {
+       const response = await couponApi.getAvailable(1, 50);
+       setCoupons(response.data || []);
+     } catch (error: any) {
+-      console.error('加载优惠券失败:', error);
++      logger.error('加载优惠券失败:', error);
+       toast.error(error.response?.data?.message || '加载失败');
+     } finally {
+       setLoading(false);
+@@ -74,7 +75,7 @@ export default function CouponsPage() {
+         )
+       );
+     } catch (error: any) {
+-      console.error('领取失败:', error);
++      logger.error('领取失败:', error);
+       const message = error.response?.data?.message || '领取失败';
+       toast.error(message);
+     } finally {
+diff --git a/frontend/src/app/login/page.tsx b/frontend/src/app/login/page.tsx
+index 0f60d9f..3e2197c 100644
+--- a/frontend/src/app/login/page.tsx
++++ b/frontend/src/app/login/page.tsx
+@@ -6,6 +6,7 @@ import Link from 'next/link';
+ import { userApi } from '@/lib/api';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function LoginPage() {
+   const [email, setEmail] = useState('');
+@@ -29,7 +30,7 @@ export default function LoginPage() {
+       toast.success('登录成功');
+       router.push('/');
+     } catch (error: any) {
+-      console.error('登录失败:', error);
++      logger.error('登录失败:', error);
+       toast.error(error.response?.data?.error || '登录失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/my/coupons/page.tsx b/frontend/src/app/my/coupons/page.tsx
+index fcd95d4..cbd4044 100644
+--- a/frontend/src/app/my/coupons/page.tsx
++++ b/frontend/src/app/my/coupons/page.tsx
+@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
+ import { couponApi } from '@/lib/api';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ interface UserCoupon {
+   user_coupon_id: number;
+@@ -52,7 +53,7 @@ export default function MyCouponsPage() {
+       const response = await couponApi.getMyCoupons(activeStatus);
+       setCoupons(response.data || []);
+     } catch (error: any) {
+-      console.error('加载优惠券失败:', error);
++      logger.error('加载优惠券失败:', error);
+       toast.error(error.response?.data?.message || '加载失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/orders/[id]/page.tsx b/frontend/src/app/orders/[id]/page.tsx
+index a72f948..52e07c5 100644
+--- a/frontend/src/app/orders/[id]/page.tsx
++++ b/frontend/src/app/orders/[id]/page.tsx
+@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
+ import { orderApi, orderTimeoutApi } from '@/lib/api';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ const ORDER_STATUS = {
+   0: { text: '待支付', color: 'text-orange-600' },
+@@ -48,7 +49,7 @@ export default function OrderDetailPage() {
+       setOrder(data.order);
+       setItems(data.items || []);
+     } catch (error: any) {
+-      console.error('加载订单失败:', error);
++      logger.error('加载订单失败:', error);
+       toast.error('订单不存在');
+       router.push('/orders');
+     } finally {
+@@ -66,7 +67,7 @@ export default function OrderDetailPage() {
+         loadOrder();
+       }
+     } catch (error: any) {
+-      console.error('加载剩余时间失败:', error);
++      logger.error('加载剩余时间失败:', error);
+     }
+   };
+ 
+diff --git a/frontend/src/app/orders/page.tsx b/frontend/src/app/orders/page.tsx
+index c6b0182..22a8195 100644
+--- a/frontend/src/app/orders/page.tsx
++++ b/frontend/src/app/orders/page.tsx
+@@ -6,6 +6,7 @@ import { orderApi } from '@/lib/api';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
+ import Link from 'next/link';
++import { logger } from '@/lib/logger';
+ 
+ const ORDER_STATUS = {
+   0: { text: '待支付', color: 'text-orange-600' },
+@@ -36,7 +37,7 @@ export default function OrdersPage() {
+       const data: any = await orderApi.list({ status: activeTab });
+       setOrders(data.orders || []);
+     } catch (error: any) {
+-      console.error('加载订单失败:', error);
++      logger.error('加载订单失败:', error);
+       toast.error('加载订单失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/page.tsx b/frontend/src/app/page.tsx
+index 6526831..e3ce7f2 100644
+--- a/frontend/src/app/page.tsx
++++ b/frontend/src/app/page.tsx
+@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
+ import ProductCard from '@/components/ProductCard';
+ import Link from 'next/link';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function Home() {
+   const { isAuthenticated } = useAuthStore();
+@@ -35,7 +36,7 @@ export default function Home() {
+       const newData: any = await productApi.list({ sort: 'created_at DESC', limit: 8 });
+       setNewProducts(newData.products || []);
+     } catch (error: any) {
+-      console.error('加载数据失败:', error);
++      logger.error('加载数据失败:', error);
+       toast.error('加载数据失败');
+     } finally {
+       setLoading(false);
+@@ -48,7 +49,7 @@ export default function Home() {
+       const data: any = await recommendationApi.getGuessYouLike(8);
+       setRecommendations(data.recommendations || []);
+     } catch (error: any) {
+-      console.error('加载推荐失败:', error);
++      logger.error('加载推荐失败:', error);
+     } finally {
+       setLoadingRecommendations(false);
+     }
+diff --git a/frontend/src/app/products/[id]/page.tsx b/frontend/src/app/products/[id]/page.tsx
+index d35510a..a7adac1 100644
+--- a/frontend/src/app/products/[id]/page.tsx
++++ b/frontend/src/app/products/[id]/page.tsx
+@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
+ import { FiShoppingCart, FiStar } from 'react-icons/fi';
+ import { FaHeart, FaRegHeart } from 'react-icons/fa';
+ import ProductCard from '@/components/ProductCard';
++import { logger } from '@/lib/logger';
+ 
+ export default function ProductDetailPage() {
+   const params = useParams();
+@@ -45,7 +46,7 @@ export default function ProductDetailPage() {
+       await browseApi.record(productId);
+     } catch (error) {
+       // 静默失败，不影响用户体验
+-      console.error('记录浏览历史失败:', error);
++      logger.error('记录浏览历史失败:', error);
+     }
+   };
+ 
+@@ -54,7 +55,7 @@ export default function ProductDetailPage() {
+       const data: any = await productApi.getDetail(productId);
+       setProduct(data.product);
+     } catch (error: any) {
+-      console.error('加载商品失败:', error);
++      logger.error('加载商品失败:', error);
+       toast.error('商品不存在');
+       router.push('/products');
+     } finally {
+@@ -67,7 +68,7 @@ export default function ProductDetailPage() {
+       const data: any = await reviewApi.listByProduct(productId, { limit: 5 });
+       setReviews(data.reviews || []);
+     } catch (error) {
+-      console.error('加载评论失败:', error);
++      logger.error('加载评论失败:', error);
+     }
+   };
+ 
+@@ -77,7 +78,7 @@ export default function ProductDetailPage() {
+       const data: any = await recommendationApi.getRelated(productId, 4);
+       setRelatedProducts(data.related_products || []);
+     } catch (error) {
+-      console.error('加载相关推荐失败:', error);
++      logger.error('加载相关推荐失败:', error);
+     } finally {
+       setLoadingRecommendations(false);
+     }
+@@ -120,7 +121,7 @@ export default function ProductDetailPage() {
+       const data: any = await favoriteApi.check(productId);
+       setIsFavorited(data.is_favorited);
+     } catch (error) {
+-      console.error('检查收藏状态失败:', error);
++      logger.error('检查收藏状态失败:', error);
+     }
+   };
+ 
+diff --git a/frontend/src/app/products/page.tsx b/frontend/src/app/products/page.tsx
+index 203631b..d4e1c0d 100644
+--- a/frontend/src/app/products/page.tsx
++++ b/frontend/src/app/products/page.tsx
+@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
+ import { productApi } from '@/lib/api';
+ import ProductCard from '@/components/ProductCard';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ function ProductsList() {
+   const searchParams = useSearchParams();
+@@ -44,7 +45,7 @@ function ProductsList() {
+         totalPages: data.totalPages,
+       });
+     } catch (error: any) {
+-      console.error('加载商品失败:', error);
++      logger.error('加载商品失败:', error);
+       toast.error('加载商品失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/app/profile/page.tsx b/frontend/src/app/profile/page.tsx
+index 5523b7c..178eda0 100644
+--- a/frontend/src/app/profile/page.tsx
++++ b/frontend/src/app/profile/page.tsx
+@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import { userApi, couponApi } from '@/lib/api';
+ import Link from 'next/link';
+-import { 
++import {
+   FiUser, 
+   FiShoppingBag, 
+   FiHeart, 
+@@ -17,6 +17,7 @@ import {
+   FiMapPin,
+   FiPhone
+ } from 'react-icons/fi';
++import { logger } from '@/lib/logger';
+ 
+ interface UserStats {
+   totalOrders: number;
+@@ -63,7 +64,7 @@ export default function ProfilePage() {
+         favoriteCount: 0, // 可以从收藏API获取
+       });
+     } catch (error) {
+-      console.error('加载统计数据失败:', error);
++      logger.error('加载统计数据失败:', error);
+     } finally {
+       setLoading(false);
+     }
+diff --git a/frontend/src/app/register/page.tsx b/frontend/src/app/register/page.tsx
+index 28d3e0e..c72112c 100644
+--- a/frontend/src/app/register/page.tsx
++++ b/frontend/src/app/register/page.tsx
+@@ -6,6 +6,7 @@ import Link from 'next/link';
+ import { userApi } from '@/lib/api';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
++import { logger } from '@/lib/logger';
+ 
+ export default function RegisterPage() {
+   const [formData, setFormData] = useState({
+@@ -52,7 +53,7 @@ export default function RegisterPage() {
+       toast.success('注册成功');
+       router.push('/');
+     } catch (error: any) {
+-      console.error('注册失败:', error);
++      logger.error('注册失败:', error);
+       toast.error(error.response?.data?.error || '注册失败');
+     } finally {
+       setLoading(false);
+diff --git a/frontend/src/components/Header.tsx b/frontend/src/components/Header.tsx
+index c1da2da..36107e9 100644
+--- a/frontend/src/components/Header.tsx
++++ b/frontend/src/components/Header.tsx
+@@ -8,6 +8,7 @@ import { FaHeart } from 'react-icons/fa';
+ import { useState, useEffect, useRef } from 'react';
+ import { useRouter } from 'next/navigation';
+ import { searchApi } from '@/lib/api';
++import { logger } from '@/lib/logger';
+ 
+ export default function Header() {
+   const { isAuthenticated, user, logout } = useAuthStore();
+@@ -43,7 +44,7 @@ export default function Header() {
+       const data: any = await searchApi.getHistory(10);
+       setSearchHistory(data.history || []);
+     } catch (error) {
+-      console.error('获取搜索历史失败:', error);
++      logger.error('获取搜索历史失败:', error);
+     }
+   };
+ 
+@@ -52,7 +53,7 @@ export default function Header() {
+       const data: any = await searchApi.getHot(7, 10);
+       setHotKeywords(data.keywords || []);
+     } catch (error) {
+-      console.error('获取热搜失败:', error);
++      logger.error('获取热搜失败:', error);
+     }
+   };
+ 
+@@ -67,7 +68,7 @@ export default function Header() {
+           await searchApi.record(searchKeyword.trim());
+           fetchSearchHistory();
+         } catch (error) {
+-          console.error('记录搜索历史失败:', error);
++          logger.error('记录搜索历史失败:', error);
+         }
+       }
+     }
+@@ -85,7 +86,7 @@ export default function Header() {
+       await searchApi.deleteKeyword(keyword);
+       fetchSearchHistory();
+     } catch (error) {
+-      console.error('删除搜索记录失败:', error);
++      logger.error('删除搜索记录失败:', error);
+     }
+   };
+ 
+diff --git a/frontend/src/components/ProductCard.tsx b/frontend/src/components/ProductCard.tsx
+index 600d964..89a2b62 100644
+--- a/frontend/src/components/ProductCard.tsx
++++ b/frontend/src/components/ProductCard.tsx
+@@ -7,6 +7,7 @@ import { useCartStore } from '@/store/useCartStore';
+ import { useAuthStore } from '@/store/useAuthStore';
+ import toast from 'react-hot-toast';
+ import { FiShoppingCart } from 'react-icons/fi';
++import { logger } from '@/lib/logger';
+ 
+ interface ProductCardProps {
+   product: any;
+@@ -39,7 +40,7 @@ export default function ProductCard({ product }: ProductCardProps) {
+       });
+       toast.success('已加入购物车');
+     } catch (error: any) {
+-      console.error('加入购物车失败:', error);
++      logger.error('加入购物车失败:', error);
+       toast.error(error.response?.data?.error || '加入购物车失败');
+     } finally {
+       setIsAdding(false);
+diff --git a/frontend/src/lib/logger.ts b/frontend/src/lib/logger.ts
+new file mode 100644
+index 0000000..dc98344
+--- /dev/null
++++ b/frontend/src/lib/logger.ts
+@@ -0,0 +1,31 @@
++/**
++ * 前端日志工具
++ *
++ * - 开发环境：全部输出到 console，方便调试
++ * - 生产环境：仅保留 error（线上排查的最低限度信号），其余静默
++ *
++ * 后续如需上报到日志服务（如 Sentry），只需在这里扩展 error 方法。
++ */
++const isDev = process.env.NODE_ENV === 'development';
++
++type LogArgs = unknown[];
++
++export const logger = {
++  error: (...args: LogArgs): void => {
++    console.error(...args);
++  },
++  warn: (...args: LogArgs): void => {
++    if (isDev) console.warn(...args);
++  },
++  info: (...args: LogArgs): void => {
++    if (isDev) console.info(...args);
++  },
++  log: (...args: LogArgs): void => {
++    if (isDev) console.log(...args);
++  },
++  debug: (...args: LogArgs): void => {
++    if (isDev) console.debug(...args);
++  },
++};
++
++export default logger;
+diff --git a/frontend/src/store/useAuthStore.ts b/frontend/src/store/useAuthStore.ts
+index 39d0583..340b848 100644
+--- a/frontend/src/store/useAuthStore.ts
++++ b/frontend/src/store/useAuthStore.ts
+@@ -1,4 +1,5 @@
+ import { create } from 'zustand';
++import { logger } from '@/lib/logger';
+ 
+ interface User {
+   user_id: number;
+@@ -32,7 +33,7 @@ const loadFromStorage = () => {
+       return { user, token, isAuthenticated: true };
+     }
+   } catch (error) {
+-    console.error('Failed to load auth state:', error);
++    logger.error('Failed to load auth state:', error);
+   }
+   
+   return { user: null, token: null, isAuthenticated: false };

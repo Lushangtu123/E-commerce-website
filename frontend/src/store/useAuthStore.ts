@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logger } from '@/lib/logger';
 
 interface User {
   user_id: number;
@@ -32,7 +33,7 @@ const loadFromStorage = () => {
       return { user, token, isAuthenticated: true };
     }
   } catch (error) {
-    console.error('Failed to load auth state:', error);
+    logger.error('Failed to load auth state:', error);
   }
   
   return { user: null, token: null, isAuthenticated: false };

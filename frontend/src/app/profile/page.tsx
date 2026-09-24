@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { userApi, couponApi } from '@/lib/api';
 import Link from 'next/link';
-import { 
+import {
   FiUser, 
   FiShoppingBag, 
   FiHeart, 
@@ -17,6 +17,7 @@ import {
   FiMapPin,
   FiPhone
 } from 'react-icons/fi';
+import { logger } from '@/lib/logger';
 
 interface UserStats {
   totalOrders: number;
@@ -63,7 +64,7 @@ export default function ProfilePage() {
         favoriteCount: 0, // 可以从收藏API获取
       });
     } catch (error) {
-      console.error('加载统计数据失败:', error);
+      logger.error('加载统计数据失败:', error);
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
 import { FiTrash2, FiShoppingBag } from 'react-icons/fi';
+import { logger } from '@/lib/logger';
 
 export default function CartPage() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function CartPage() {
       setItems(data.items || []);
       setSelectedItems((data.items || []).map((item: any) => item.product_id));
     } catch (error: any) {
-      console.error('加载购物车失败:', error);
+      logger.error('加载购物车失败:', error);
       toast.error('加载购物车失败');
     } finally {
       setLoading(false);

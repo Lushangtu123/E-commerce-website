@@ -7,6 +7,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { FiShoppingCart } from 'react-icons/fi';
+import { logger } from '@/lib/logger';
 
 interface ProductCardProps {
   product: any;
@@ -39,7 +40,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       });
       toast.success('已加入购物车');
     } catch (error: any) {
-      console.error('加入购物车失败:', error);
+      logger.error('加入购物车失败:', error);
       toast.error(error.response?.data?.error || '加入购物车失败');
     } finally {
       setIsAdding(false);

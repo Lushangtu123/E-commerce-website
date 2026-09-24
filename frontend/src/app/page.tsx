@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import ProductCard from '@/components/ProductCard';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function Home() {
   const { isAuthenticated } = useAuthStore();
@@ -35,7 +36,7 @@ export default function Home() {
       const newData: any = await productApi.list({ sort: 'created_at DESC', limit: 8 });
       setNewProducts(newData.products || []);
     } catch (error: any) {
-      console.error('加载数据失败:', error);
+      logger.error('加载数据失败:', error);
       toast.error('加载数据失败');
     } finally {
       setLoading(false);
@@ -48,7 +49,7 @@ export default function Home() {
       const data: any = await recommendationApi.getGuessYouLike(8);
       setRecommendations(data.recommendations || []);
     } catch (error: any) {
-      console.error('加载推荐失败:', error);
+      logger.error('加载推荐失败:', error);
     } finally {
       setLoadingRecommendations(false);
     }

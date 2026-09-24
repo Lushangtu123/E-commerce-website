@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminCouponApi } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 interface Coupon {
   coupon_id: number;
@@ -54,7 +55,7 @@ export default function AdminCouponsPage() {
       const response = await adminCouponApi.getList(1, 50);
       setCoupons(response.data || []);
     } catch (error: any) {
-      console.error('加载优惠券失败:', error);
+      logger.error('加载优惠券失败:', error);
       toast.error(error.response?.data?.message || '加载失败');
     } finally {
       setLoading(false);
@@ -90,7 +91,7 @@ export default function AdminCouponsPage() {
         end_time: '',
       });
     } catch (error: any) {
-      console.error('创建失败:', error);
+      logger.error('创建失败:', error);
       toast.error(error.response?.data?.message || '创建失败');
     }
   };
@@ -101,7 +102,7 @@ export default function AdminCouponsPage() {
       toast.success('状态更新成功！');
       loadCoupons();
     } catch (error: any) {
-      console.error('更新失败:', error);
+      logger.error('更新失败:', error);
       toast.error(error.response?.data?.message || '更新失败');
     }
   };

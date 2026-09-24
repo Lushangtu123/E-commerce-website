@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -29,7 +30,7 @@ export default function LoginPage() {
       toast.success('登录成功');
       router.push('/');
     } catch (error: any) {
-      console.error('登录失败:', error);
+      logger.error('登录失败:', error);
       toast.error(error.response?.data?.error || '登录失败');
     } finally {
       setLoading(false);

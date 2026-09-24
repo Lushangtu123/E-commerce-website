@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { logger } from '@/lib/logger';
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<any>(null);
@@ -46,7 +47,7 @@ export default function AdminDashboardPage() {
       setTopProducts(Array.isArray(productsData) ? productsData : productsData.products || []);
       setSalesTrend(Array.isArray(trendData) ? trendData : trendData.trend || []);
     } catch (error) {
-      console.error('获取数据失败:', error);
+      logger.error('获取数据失败:', error);
     } finally {
       setLoading(false);
     }

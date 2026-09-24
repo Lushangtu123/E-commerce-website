@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { orderApi, orderTimeoutApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -48,7 +49,7 @@ export default function OrderDetailPage() {
       setOrder(data.order);
       setItems(data.items || []);
     } catch (error: any) {
-      console.error('加载订单失败:', error);
+      logger.error('加载订单失败:', error);
       toast.error('订单不存在');
       router.push('/orders');
     } finally {
@@ -66,7 +67,7 @@ export default function OrderDetailPage() {
         loadOrder();
       }
     } catch (error: any) {
-      console.error('加载剩余时间失败:', error);
+      logger.error('加载剩余时间失败:', error);
     }
   };
 

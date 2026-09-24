@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { logger } from '@/lib/logger';
 
 export default function AdminLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -34,7 +35,7 @@ export default function AdminLogsPage() {
         setTotal(data.pagination.total);
       }
     } catch (error) {
-      console.error('获取日志失败:', error);
+      logger.error('获取日志失败:', error);
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { couponApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 interface Coupon {
   coupon_id: number;
@@ -45,7 +46,7 @@ export default function CouponsPage() {
       const response = await couponApi.getAvailable(1, 50);
       setCoupons(response.data || []);
     } catch (error: any) {
-      console.error('加载优惠券失败:', error);
+      logger.error('加载优惠券失败:', error);
       toast.error(error.response?.data?.message || '加载失败');
     } finally {
       setLoading(false);
@@ -74,7 +75,7 @@ export default function CouponsPage() {
         )
       );
     } catch (error: any) {
-      console.error('领取失败:', error);
+      logger.error('领取失败:', error);
       const message = error.response?.data?.message || '领取失败';
       toast.error(message);
     } finally {

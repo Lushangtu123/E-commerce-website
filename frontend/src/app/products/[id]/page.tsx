@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { FiShoppingCart, FiStar } from 'react-icons/fi';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import ProductCard from '@/components/ProductCard';
+import { logger } from '@/lib/logger';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -45,7 +46,7 @@ export default function ProductDetailPage() {
       await browseApi.record(productId);
     } catch (error) {
       // 静默失败，不影响用户体验
-      console.error('记录浏览历史失败:', error);
+      logger.error('记录浏览历史失败:', error);
     }
   };
 
@@ -54,7 +55,7 @@ export default function ProductDetailPage() {
       const data: any = await productApi.getDetail(productId);
       setProduct(data.product);
     } catch (error: any) {
-      console.error('加载商品失败:', error);
+      logger.error('加载商品失败:', error);
       toast.error('商品不存在');
       router.push('/products');
     } finally {
@@ -67,7 +68,7 @@ export default function ProductDetailPage() {
       const data: any = await reviewApi.listByProduct(productId, { limit: 5 });
       setReviews(data.reviews || []);
     } catch (error) {
-      console.error('加载评论失败:', error);
+      logger.error('加载评论失败:', error);
     }
   };
 
@@ -77,7 +78,7 @@ export default function ProductDetailPage() {
       const data: any = await recommendationApi.getRelated(productId, 4);
       setRelatedProducts(data.related_products || []);
     } catch (error) {
-      console.error('加载相关推荐失败:', error);
+      logger.error('加载相关推荐失败:', error);
     } finally {
       setLoadingRecommendations(false);
     }
@@ -120,7 +121,7 @@ export default function ProductDetailPage() {
       const data: any = await favoriteApi.check(productId);
       setIsFavorited(data.is_favorited);
     } catch (error) {
-      console.error('检查收藏状态失败:', error);
+      logger.error('检查收藏状态失败:', error);
     }
   };
 

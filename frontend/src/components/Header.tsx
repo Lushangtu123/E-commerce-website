@@ -8,6 +8,7 @@ import { FaHeart } from 'react-icons/fa';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 export default function Header() {
   const { isAuthenticated, user, logout } = useAuthStore();
@@ -43,7 +44,7 @@ export default function Header() {
       const data: any = await searchApi.getHistory(10);
       setSearchHistory(data.history || []);
     } catch (error) {
-      console.error('获取搜索历史失败:', error);
+      logger.error('获取搜索历史失败:', error);
     }
   };
 
@@ -52,7 +53,7 @@ export default function Header() {
       const data: any = await searchApi.getHot(7, 10);
       setHotKeywords(data.keywords || []);
     } catch (error) {
-      console.error('获取热搜失败:', error);
+      logger.error('获取热搜失败:', error);
     }
   };
 
@@ -67,7 +68,7 @@ export default function Header() {
           await searchApi.record(searchKeyword.trim());
           fetchSearchHistory();
         } catch (error) {
-          console.error('记录搜索历史失败:', error);
+          logger.error('记录搜索历史失败:', error);
         }
       }
     }
@@ -85,7 +86,7 @@ export default function Header() {
       await searchApi.deleteKeyword(keyword);
       fetchSearchHistory();
     } catch (error) {
-      console.error('删除搜索记录失败:', error);
+      logger.error('删除搜索记录失败:', error);
     }
   };
 

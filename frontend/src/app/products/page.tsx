@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { productApi } from '@/lib/api';
 import ProductCard from '@/components/ProductCard';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 function ProductsList() {
   const searchParams = useSearchParams();
@@ -44,7 +45,7 @@ function ProductsList() {
         totalPages: data.totalPages,
       });
     } catch (error: any) {
-      console.error('加载商品失败:', error);
+      logger.error('加载商品失败:', error);
       toast.error('加载商品失败');
     } finally {
       setLoading(false);

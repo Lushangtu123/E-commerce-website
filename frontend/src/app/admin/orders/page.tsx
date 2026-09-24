@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -48,7 +49,7 @@ export default function AdminOrdersPage() {
         toast.error(data.error || '获取订单列表失败');
       }
     } catch (error) {
-      console.error('获取订单列表失败:', error);
+      logger.error('获取订单列表失败:', error);
       toast.error('获取订单列表失败');
     } finally {
       setLoading(false);

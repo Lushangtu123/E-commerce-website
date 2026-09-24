@@ -6,6 +6,7 @@ import { orderApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { logger } from '@/lib/logger';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -36,7 +37,7 @@ export default function OrdersPage() {
       const data: any = await orderApi.list({ status: activeTab });
       setOrders(data.orders || []);
     } catch (error: any) {
-      console.error('加载订单失败:', error);
+      logger.error('加载订单失败:', error);
       toast.error('加载订单失败');
     } finally {
       setLoading(false);

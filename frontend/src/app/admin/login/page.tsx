@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function AdminLoginPage() {
         toast.error(data.error || '登录失败');
       }
     } catch (error) {
-      console.error('登录失败:', error);
+      logger.error('登录失败:', error);
       toast.error('登录失败，请稍后重试');
     } finally {
       setLoading(false);

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -52,7 +53,7 @@ export default function RegisterPage() {
       toast.success('注册成功');
       router.push('/');
     } catch (error: any) {
-      console.error('注册失败:', error);
+      logger.error('注册失败:', error);
       toast.error(error.response?.data?.error || '注册失败');
     } finally {
       setLoading(false);

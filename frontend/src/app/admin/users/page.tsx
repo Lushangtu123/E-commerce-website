@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -48,7 +49,7 @@ export default function AdminUsersPage() {
         toast.error(data.error || '获取用户列表失败');
       }
     } catch (error) {
-      console.error('获取用户列表失败:', error);
+      logger.error('获取用户列表失败:', error);
       toast.error('获取用户列表失败');
     } finally {
       setLoading(false);
@@ -80,7 +81,7 @@ export default function AdminUsersPage() {
         toast.error(data.error || '操作失败');
       }
     } catch (error) {
-      console.error('更新状态失败:', error);
+      logger.error('更新状态失败:', error);
       toast.error('更新状态失败');
     }
   };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -42,7 +43,7 @@ export default function AdminProductsPage() {
         setCategories(data);
       }
     } catch (error) {
-      console.error('获取分类失败:', error);
+      logger.error('获取分类失败:', error);
     }
   };
 
@@ -76,7 +77,7 @@ export default function AdminProductsPage() {
         toast.error(data.error || '获取商品列表失败');
       }
     } catch (error) {
-      console.error('获取商品列表失败:', error);
+      logger.error('获取商品列表失败:', error);
       toast.error('获取商品列表失败');
     } finally {
       setLoading(false);
@@ -108,7 +109,7 @@ export default function AdminProductsPage() {
         toast.error(data.error || '操作失败');
       }
     } catch (error) {
-      console.error('更新状态失败:', error);
+      logger.error('更新状态失败:', error);
       toast.error('更新状态失败');
     }
   };
@@ -147,7 +148,7 @@ export default function AdminProductsPage() {
         toast.error(data.error || '批量操作失败');
       }
     } catch (error) {
-      console.error('批量操作失败:', error);
+      logger.error('批量操作失败:', error);
       toast.error('批量操作失败');
     }
   };
@@ -219,7 +220,7 @@ export default function AdminProductsPage() {
         toast.error(data.error || '添加失败');
       }
     } catch (error) {
-      console.error('添加商品失败:', error);
+      logger.error('添加商品失败:', error);
       toast.error('添加商品失败');
     }
   };
@@ -281,7 +282,7 @@ export default function AdminProductsPage() {
         toast.error(data.error || '更新失败');
       }
     } catch (error) {
-      console.error('更新商品失败:', error);
+      logger.error('更新商品失败:', error);
       toast.error('更新商品失败');
     }
   };
