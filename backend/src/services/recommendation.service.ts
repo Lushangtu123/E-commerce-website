@@ -6,6 +6,7 @@
 import { getPool } from '../database/mysql';
 import { RowDataPacket } from 'mysql2';
 import mongoose from '../database/mongodb';
+import logger from '../utils/logger';
 
 interface Product extends RowDataPacket {
   product_id: number;
@@ -96,7 +97,7 @@ export async function getRecommendationsByBrowseHistory(
 
     return recommendations;
   } catch (error) {
-    console.error('[推荐服务] 获取推荐商品失败:', error);
+    logger.error({ err: error }, '[推荐服务] 获取推荐商品失败');
     // 出错时返回热门商品
     return await getHotProducts(limit);
   }
@@ -176,7 +177,7 @@ export async function getRelatedProducts(
 
     return relatedProducts;
   } catch (error) {
-    console.error('[推荐服务] 获取相关商品失败:', error);
+    logger.error({ err: error }, '[推荐服务] 获取相关商品失败');
     return [];
   }
 }
@@ -206,7 +207,7 @@ async function getHotProducts(limit: number): Promise<Product[]> {
 
     return hotProducts;
   } catch (error) {
-    console.error('[推荐服务] 获取热门商品失败:', error);
+    logger.error({ err: error }, '[推荐服务] 获取热门商品失败');
     return [];
   }
 }
@@ -251,7 +252,7 @@ export async function getNewUserRecommendations(limit: number = 10): Promise<Pro
 
     return recommendations;
   } catch (error) {
-    console.error('[推荐服务] 获取新用户推荐失败:', error);
+    logger.error({ err: error }, '[推荐服务] 获取新用户推荐失败');
     return await getHotProducts(limit);
   }
 }
@@ -275,7 +276,7 @@ export async function getGuessYouLike(
     
     return recommendations;
   } catch (error) {
-    console.error('[推荐服务] 猜你喜欢失败:', error);
+    logger.error({ err: error }, '[推荐服务] 猜你喜欢失败');
     return await getHotProducts(limit);
   }
 }

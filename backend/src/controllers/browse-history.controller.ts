@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { BrowseHistoryModel } from '../models/browse-history.model';
 import { AuthRequest } from '../middleware/auth';
+import logger from '../utils/logger';
 
 // 添加浏览记录
 export const recordBrowse = async (req: AuthRequest, res: Response) => {
@@ -16,7 +17,7 @@ export const recordBrowse = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: '记录成功', id });
   } catch (error) {
-    console.error('记录浏览历史失败:', error);
+    logger.error({ err: error }, '记录浏览历史失败');
     res.status(500).json({ message: '记录浏览历史失败' });
   }
 };
@@ -40,7 +41,7 @@ export const getUserBrowseHistory = async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取浏览历史失败:', error);
+    logger.error({ err: error }, '获取浏览历史失败');
     res.status(500).json({ message: '获取浏览历史失败' });
   }
 };
@@ -57,7 +58,7 @@ export const clearBrowseHistory = async (req: AuthRequest, res: Response) => {
       cleared: success 
     });
   } catch (error) {
-    console.error('清除浏览历史失败:', error);
+    logger.error({ err: error }, '清除浏览历史失败');
     res.status(500).json({ message: '清除浏览历史失败' });
   }
 };
@@ -76,7 +77,7 @@ export const deleteBrowseRecord = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: '删除成功' });
   } catch (error) {
-    console.error('删除浏览记录失败:', error);
+    logger.error({ err: error }, '删除浏览记录失败');
     res.status(500).json({ message: '删除浏览记录失败' });
   }
 };

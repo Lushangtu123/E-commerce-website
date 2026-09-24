@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { ReviewModel } from '../models/review.model';
 import { OrderModel, OrderStatus } from '../models/order.model';
+import logger from '../utils/logger';
 
 export class ReviewController {
   // 创建评论
@@ -52,7 +53,7 @@ export class ReviewController {
         review_id: reviewId
       });
     } catch (error) {
-      console.error('创建评论失败:', error);
+      logger.error({ err: error }, '创建评论失败');
       res.status(500).json({ error: '创建评论失败' });
     }
   }
@@ -74,7 +75,7 @@ export class ReviewController {
         totalPages: Math.ceil(result.total / limit)
       });
     } catch (error) {
-      console.error('获取评论列表失败:', error);
+      logger.error({ err: error }, '获取评论列表失败');
       res.status(500).json({ error: '获取评论列表失败' });
     }
   }
@@ -95,7 +96,7 @@ export class ReviewController {
         totalPages: Math.ceil(result.total / limit)
       });
     } catch (error) {
-      console.error('获取评论列表失败:', error);
+      logger.error({ err: error }, '获取评论列表失败');
       res.status(500).json({ error: '获取评论列表失败' });
     }
   }

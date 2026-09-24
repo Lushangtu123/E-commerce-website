@@ -5,6 +5,7 @@
 
 import { getPool } from '../database/mysql';
 import { RowDataPacket } from 'mysql2';
+import logger from '../utils/logger';
 
 interface PendingOrder extends RowDataPacket {
   order_id: number;
@@ -80,11 +81,11 @@ export async function cancelTimeoutOrder(orderId: number): Promise<boolean> {
     );
 
     await connection.commit();
-    console.log(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
+    logger.info(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
     return true;
   } catch (error) {
     await connection.rollback();
-    console.error(`[订单超时] 取消订单 ${orderId} 失败:`, error);
+    logger.error({ err: error }, `[订单超时] 取消订单 ${orderId} 失败`);
     throw error;
   } finally {
     connection.release();
@@ -107,7 +108,7 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
       [ORDER_TIMEOUT_MINUTES]
     );
 
-    console.log(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
+    logger.info(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
 
     let successCount = 0;
     for (const order of timeoutOrders) {
@@ -115,16 +116,16 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
         const cancelled = await cancelTimeoutOrder(order.order_id);
         if (cancelled) successCount++;
       } catch (error) {
-        console.error(`[订单超时] 处理订单 ${order.order_no} 失败:`, error);
+        logger.error({ err: error }, `[订单超时] 处理订单 ${order.order_no} 失败`);
         // 继续处理下一个订单
       }
     }
 
     if (timeoutOrders.length > 0) {
-      console.log(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
+      logger.info(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
     }
   } catch (error) {
-    console.error('[订单超时检查] 查询超时订单失败:', error);
+    logger.error({ err: error }, '[订单超时检查] 查询超时订单失败');
     throw error;
   }
 }
@@ -134,17 +135,17 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
  * 每5分钟执行一次
  */
 export function startOrderTimeoutChecker(): NodeJS.Timeout {
-  console.log('[订单超时检查] 定时任务已启动，每5分钟检查一次');
+  logger.info('[订单超时检查] 定时任务已启动，每5分钟检查一次');
   
   // 立即执行一次
   checkAndCancelTimeoutOrders().catch(error => {
-    console.error('[订单超时检查] 初始检查失败:', error);
+    logger.error({ err: error }, '[订单超时检查] 初始检查失败');
   });
 
   // 每5分钟执行一次
   return setInterval(() => {
     checkAndCancelTimeoutOrders().catch(error => {
-      console.error('[订单超时检查] 定时检查失败:', error);
+      logger.error({ err: error }, '[订单超时检查] 定时检查失败');
     });
   }, 5 * 60 * 1000); // 5分钟
 }
@@ -154,7 +155,7 @@ export function startOrderTimeoutChecker(): NodeJS.Timeout {
  */
 export function stopOrderTimeoutChecker(timer: NodeJS.Timeout): void {
   clearInterval(timer);
-  console.log('[订单超时检查] 定时任务已停止');
+  logger.info('[订单超时检查] 定时任务已停止');
 }
 
 /**

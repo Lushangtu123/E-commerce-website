@@ -1,0 +1,2624 @@
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index 9e3e5f8..a03088b 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -8,7 +8,7 @@
+       "name": "ecommerce-backend",
+       "version": "1.0.0",
+       "dependencies": {
+-        "@elastic/elasticsearch": "^8.19.1",
++        "@elastic/elasticsearch": "^8.11.0",
+         "amqplib": "^0.10.3",
+         "bcryptjs": "^2.4.3",
+         "compression": "^1.7.4",
+@@ -23,6 +23,7 @@
+         "mongoose": "^8.0.3",
+         "multer": "^1.4.5-lts.1",
+         "mysql2": "^3.6.5",
++        "pino": "^10.3.1",
+         "redis": "^4.6.11",
+         "uuid": "^9.0.1"
+       },
+@@ -36,6 +37,7 @@
+         "@types/multer": "^1.4.11",
+         "@types/node": "^20.10.5",
+         "nodemon": "^3.0.2",
++        "pino-pretty": "^13.1.3",
+         "ts-node": "^10.9.2",
+         "typescript": "^5.3.3"
+       }
+@@ -200,6 +202,12 @@
+         "node": ">=14"
+       }
+     },
++    "node_modules/@pinojs/redact": {
++      "version": "0.4.0",
++      "resolved": "https://registry.npmjs.org/@pinojs/redact/-/redact-0.4.0.tgz",
++      "integrity": "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==",
++      "license": "MIT"
++    },
+     "node_modules/@redis/bloom": {
+       "version": "1.2.0",
+       "resolved": "https://registry.npmjs.org/@redis/bloom/-/bloom-1.2.0.tgz",
+@@ -666,6 +674,15 @@
+       "integrity": "sha512-PCVAQswWemu6UdxsDFFX/+gVeYqKAod3D3UVm91jHwynguOwAvYPhx8nNlM++NqRcK6CxxpUafjmhIdKiHibqg==",
+       "license": "MIT"
+     },
++    "node_modules/atomic-sleep": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/atomic-sleep/-/atomic-sleep-1.0.0.tgz",
++      "integrity": "sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
+     "node_modules/aws-ssl-profiles": {
+       "version": "1.1.2",
+       "resolved": "https://registry.npmjs.org/aws-ssl-profiles/-/aws-ssl-profiles-1.1.2.tgz",
+@@ -944,6 +961,13 @@
+       "integrity": "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==",
+       "license": "MIT"
+     },
++    "node_modules/colorette": {
++      "version": "2.0.20",
++      "resolved": "https://registry.npmjs.org/colorette/-/colorette-2.0.20.tgz",
++      "integrity": "sha512-IfEDxwoWIjkeXL1eXcDiow4UbKjhLdq6/EuSVR9GMN7KVH3r9gQ83e73hsz1Nd1T3ijd5xv1wcWRYO+D6kCI2w==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/command-line-args": {
+       "version": "6.0.1",
+       "resolved": "https://registry.npmjs.org/command-line-args/-/command-line-args-6.0.1.tgz",
+@@ -1096,6 +1120,16 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/dateformat": {
++      "version": "4.6.3",
++      "resolved": "https://registry.npmjs.org/dateformat/-/dateformat-4.6.3.tgz",
++      "integrity": "sha512-2P0p0pFGzHS5EMnhdxQi7aJN+iMheud0UhG4dlE1DLAlvL8JHjJJTX/CSm4JXwV0Ka5nGk3zC5mcb5bUQUxxMA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": "*"
++      }
++    },
+     "node_modules/debug": {
+       "version": "2.6.9",
+       "resolved": "https://registry.npmjs.org/debug/-/debug-2.6.9.tgz",
+@@ -1193,6 +1227,16 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/end-of-stream": {
++      "version": "1.4.5",
++      "resolved": "https://registry.npmjs.org/end-of-stream/-/end-of-stream-1.4.5.tgz",
++      "integrity": "sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "once": "^1.4.0"
++      }
++    },
+     "node_modules/es-define-property": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/es-define-property/-/es-define-property-1.0.1.tgz",
+@@ -1299,6 +1343,20 @@
+         "express": ">= 4.11"
+       }
+     },
++    "node_modules/fast-copy": {
++      "version": "4.1.1",
++      "resolved": "https://registry.npmjs.org/fast-copy/-/fast-copy-4.1.1.tgz",
++      "integrity": "sha512-A4QTJmuiztpGtr6AMeJts9R4hbj2ZBUwtOaKrG6rw2y7t6+IaJKjz5M3XDs8BUznxDH43FVc6A0y/gWlMl4UtA==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/fast-safe-stringify": {
++      "version": "2.1.1",
++      "resolved": "https://registry.npmjs.org/fast-safe-stringify/-/fast-safe-stringify-2.1.1.tgz",
++      "integrity": "sha512-W+KJc2dmILlPplD/H4K9l9LcAHAfPtP6BY84uVLXQ6Evcz9Lcg33Y2z1IVblT6xdY54PXYVHEv+0Wpq8Io6zkA==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/fill-range": {
+       "version": "7.1.1",
+       "resolved": "https://registry.npmjs.org/fill-range/-/fill-range-7.1.1.tgz",
+@@ -1518,6 +1576,13 @@
+         "node": ">=16.0.0"
+       }
+     },
++    "node_modules/help-me": {
++      "version": "5.0.0",
++      "resolved": "https://registry.npmjs.org/help-me/-/help-me-5.0.0.tgz",
++      "integrity": "sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/hpagent": {
+       "version": "1.2.0",
+       "resolved": "https://registry.npmjs.org/hpagent/-/hpagent-1.2.0.tgz",
+@@ -1695,6 +1760,16 @@
+         "@sideway/pinpoint": "^2.0.0"
+       }
+     },
++    "node_modules/joycon": {
++      "version": "3.1.1",
++      "resolved": "https://registry.npmjs.org/joycon/-/joycon-3.1.1.tgz",
++      "integrity": "sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      }
++    },
+     "node_modules/json-bignum": {
+       "version": "0.0.3",
+       "resolved": "https://registry.npmjs.org/json-bignum/-/json-bignum-0.0.3.tgz",
+@@ -2284,6 +2359,15 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/on-exit-leak-free": {
++      "version": "2.1.2",
++      "resolved": "https://registry.npmjs.org/on-exit-leak-free/-/on-exit-leak-free-2.1.2.tgz",
++      "integrity": "sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=14.0.0"
++      }
++    },
+     "node_modules/on-finished": {
+       "version": "2.4.1",
+       "resolved": "https://registry.npmjs.org/on-finished/-/on-finished-2.4.1.tgz",
+@@ -2305,6 +2389,16 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/once": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/once/-/once-1.4.0.tgz",
++      "integrity": "sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "wrappy": "1"
++      }
++    },
+     "node_modules/parseurl": {
+       "version": "1.3.3",
+       "resolved": "https://registry.npmjs.org/parseurl/-/parseurl-1.3.3.tgz",
+@@ -2333,12 +2427,107 @@
+         "url": "https://github.com/sponsors/jonschlinkert"
+       }
+     },
++    "node_modules/pino": {
++      "version": "10.3.1",
++      "resolved": "https://registry.npmjs.org/pino/-/pino-10.3.1.tgz",
++      "integrity": "sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==",
++      "license": "MIT",
++      "dependencies": {
++        "@pinojs/redact": "^0.4.0",
++        "atomic-sleep": "^1.0.0",
++        "on-exit-leak-free": "^2.1.0",
++        "pino-abstract-transport": "^3.0.0",
++        "pino-std-serializers": "^7.0.0",
++        "process-warning": "^5.0.0",
++        "quick-format-unescaped": "^4.0.3",
++        "real-require": "^0.2.0",
++        "safe-stable-stringify": "^2.3.1",
++        "sonic-boom": "^4.0.1",
++        "thread-stream": "^4.0.0"
++      },
++      "bin": {
++        "pino": "bin.js"
++      }
++    },
++    "node_modules/pino-abstract-transport": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/pino-abstract-transport/-/pino-abstract-transport-3.0.0.tgz",
++      "integrity": "sha512-wlfUczU+n7Hy/Ha5j9a/gZNy7We5+cXp8YL+X+PG8S0KXxw7n/JXA3c46Y0zQznIJ83URJiwy7Lh56WLokNuxg==",
++      "license": "MIT",
++      "dependencies": {
++        "split2": "^4.0.0"
++      }
++    },
++    "node_modules/pino-pretty": {
++      "version": "13.1.3",
++      "resolved": "https://registry.npmjs.org/pino-pretty/-/pino-pretty-13.1.3.tgz",
++      "integrity": "sha512-ttXRkkOz6WWC95KeY9+xxWL6AtImwbyMHrL1mSwqwW9u+vLp/WIElvHvCSDg0xO/Dzrggz1zv3rN5ovTRVowKg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "colorette": "^2.0.7",
++        "dateformat": "^4.6.3",
++        "fast-copy": "^4.0.0",
++        "fast-safe-stringify": "^2.1.1",
++        "help-me": "^5.0.0",
++        "joycon": "^3.1.1",
++        "minimist": "^1.2.6",
++        "on-exit-leak-free": "^2.1.0",
++        "pino-abstract-transport": "^3.0.0",
++        "pump": "^3.0.0",
++        "secure-json-parse": "^4.0.0",
++        "sonic-boom": "^4.0.1",
++        "strip-json-comments": "^5.0.2"
++      },
++      "bin": {
++        "pino-pretty": "bin.js"
++      }
++    },
++    "node_modules/pino-pretty/node_modules/secure-json-parse": {
++      "version": "4.1.0",
++      "resolved": "https://registry.npmjs.org/secure-json-parse/-/secure-json-parse-4.1.0.tgz",
++      "integrity": "sha512-l4KnYfEyqYJxDwlNVyRfO2E4NTHfMKAWdUuA8J0yve2Dz/E/PdBepY03RvyJpssIpRFwJoCD55wA+mEDs6ByWA==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fastify"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/fastify"
++        }
++      ],
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/pino-std-serializers": {
++      "version": "7.1.0",
++      "resolved": "https://registry.npmjs.org/pino-std-serializers/-/pino-std-serializers-7.1.0.tgz",
++      "integrity": "sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==",
++      "license": "MIT"
++    },
+     "node_modules/process-nextick-args": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/process-nextick-args/-/process-nextick-args-2.0.1.tgz",
+       "integrity": "sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==",
+       "license": "MIT"
+     },
++    "node_modules/process-warning": {
++      "version": "5.1.0",
++      "resolved": "https://registry.npmjs.org/process-warning/-/process-warning-5.1.0.tgz",
++      "integrity": "sha512-jQSaVHsPgtyw60e1rQ/A+/ArPEj/S8pS/vFnyGa/gYFXrKk/6RuDkoqVDQ5NI5MmS01698ltlAk0NoDBNLujRw==",
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fastify"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/fastify"
++        }
++      ],
++      "license": "MIT"
++    },
+     "node_modules/proxy-addr": {
+       "version": "2.0.7",
+       "resolved": "https://registry.npmjs.org/proxy-addr/-/proxy-addr-2.0.7.tgz",
+@@ -2359,6 +2548,17 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/pump": {
++      "version": "3.0.4",
++      "resolved": "https://registry.npmjs.org/pump/-/pump-3.0.4.tgz",
++      "integrity": "sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "end-of-stream": "^1.1.0",
++        "once": "^1.3.1"
++      }
++    },
+     "node_modules/punycode": {
+       "version": "2.3.1",
+       "resolved": "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz",
+@@ -2389,6 +2589,12 @@
+       "integrity": "sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==",
+       "license": "MIT"
+     },
++    "node_modules/quick-format-unescaped": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/quick-format-unescaped/-/quick-format-unescaped-4.0.4.tgz",
++      "integrity": "sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==",
++      "license": "MIT"
++    },
+     "node_modules/range-parser": {
+       "version": "1.2.1",
+       "resolved": "https://registry.npmjs.org/range-parser/-/range-parser-1.2.1.tgz",
+@@ -2447,6 +2653,15 @@
+         "node": ">=8.10.0"
+       }
+     },
++    "node_modules/real-require": {
++      "version": "0.2.0",
++      "resolved": "https://registry.npmjs.org/real-require/-/real-require-0.2.0.tgz",
++      "integrity": "sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 12.13.0"
++      }
++    },
+     "node_modules/redis": {
+       "version": "4.7.1",
+       "resolved": "https://registry.npmjs.org/redis/-/redis-4.7.1.tgz",
+@@ -2511,6 +2726,15 @@
+       ],
+       "license": "MIT"
+     },
++    "node_modules/safe-stable-stringify": {
++      "version": "2.5.0",
++      "resolved": "https://registry.npmjs.org/safe-stable-stringify/-/safe-stable-stringify-2.5.0.tgz",
++      "integrity": "sha512-b3rppTKm9T+PsVCBEOUR46GWI7fdOs00VKZ1+9c1EWDaDMvjQc6tUwuFyIprgGgTcWoVHSKrU8H31ZHA2e0RHA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      }
++    },
+     "node_modules/safer-buffer": {
+       "version": "2.1.2",
+       "resolved": "https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz",
+@@ -2701,6 +2925,15 @@
+         "node": ">=10"
+       }
+     },
++    "node_modules/sonic-boom": {
++      "version": "4.2.1",
++      "resolved": "https://registry.npmjs.org/sonic-boom/-/sonic-boom-4.2.1.tgz",
++      "integrity": "sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==",
++      "license": "MIT",
++      "dependencies": {
++        "atomic-sleep": "^1.0.0"
++      }
++    },
+     "node_modules/sparse-bitfield": {
+       "version": "3.0.3",
+       "resolved": "https://registry.npmjs.org/sparse-bitfield/-/sparse-bitfield-3.0.3.tgz",
+@@ -2710,6 +2943,15 @@
+         "memory-pager": "^1.0.2"
+       }
+     },
++    "node_modules/split2": {
++      "version": "4.2.0",
++      "resolved": "https://registry.npmjs.org/split2/-/split2-4.2.0.tgz",
++      "integrity": "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==",
++      "license": "ISC",
++      "engines": {
++        "node": ">= 10.x"
++      }
++    },
+     "node_modules/sqlstring": {
+       "version": "2.3.3",
+       "resolved": "https://registry.npmjs.org/sqlstring/-/sqlstring-2.3.3.tgz",
+@@ -2757,6 +2999,19 @@
+       "integrity": "sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==",
+       "license": "MIT"
+     },
++    "node_modules/strip-json-comments": {
++      "version": "5.0.3",
++      "resolved": "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-5.0.3.tgz",
++      "integrity": "sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=14.16"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/table-layout": {
+       "version": "4.1.1",
+       "resolved": "https://registry.npmjs.org/table-layout/-/table-layout-4.1.1.tgz",
+@@ -2770,6 +3025,24 @@
+         "node": ">=12.17"
+       }
+     },
++    "node_modules/thread-stream": {
++      "version": "4.2.0",
++      "resolved": "https://registry.npmjs.org/thread-stream/-/thread-stream-4.2.0.tgz",
++      "integrity": "sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==",
++      "license": "MIT",
++      "dependencies": {
++        "real-require": "^1.0.0"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/thread-stream/node_modules/real-require": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/real-require/-/real-require-1.0.0.tgz",
++      "integrity": "sha512-P4nbQYQfePJxRSmY+v/KINxVucm4NF3p3s7pJveMTtom52FR4YGltUQLB8idDXwDDWW+eYrWDFbuzUnjoWHF7g==",
++      "license": "MIT"
++    },
+     "node_modules/to-regex-range": {
+       "version": "5.0.1",
+       "resolved": "https://registry.npmjs.org/to-regex-range/-/to-regex-range-5.0.1.tgz",
+@@ -3023,6 +3296,13 @@
+         "node": ">=12.17"
+       }
+     },
++    "node_modules/wrappy": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz",
++      "integrity": "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==",
++      "dev": true,
++      "license": "ISC"
++    },
+     "node_modules/xtend": {
+       "version": "4.0.2",
+       "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
+diff --git a/backend/package.json b/backend/package.json
+index ccc4346..c39632c 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -33,7 +33,8 @@
+     "multer": "^1.4.5-lts.1",
+     "compression": "^1.7.4",
+     "helmet": "^7.1.0",
+-    "express-rate-limit": "^7.1.5"
++    "express-rate-limit": "^7.1.5",
++    "pino": "^10.3.1"
+   },
+   "devDependencies": {
+     "@types/express": "^4.17.21",
+@@ -46,7 +47,8 @@
+     "@types/amqplib": "^0.10.4",
+     "typescript": "^5.3.3",
+     "ts-node": "^10.9.2",
+-    "nodemon": "^3.0.2"
++    "nodemon": "^3.0.2",
++    "pino-pretty": "^13.1.3"
+   }
+ }
+ 
+diff --git a/backend/src/controllers/admin-coupon.controller.ts b/backend/src/controllers/admin-coupon.controller.ts
+index e2d7fb3..c4ce906 100644
+--- a/backend/src/controllers/admin-coupon.controller.ts
++++ b/backend/src/controllers/admin-coupon.controller.ts
+@@ -4,6 +4,7 @@
+ import { Response } from 'express';
+ import { AdminAuthRequest } from '../middleware/admin-auth';
+ import { CouponModel, CouponType, CouponStatus } from '../models/coupon.model';
++import logger from '../utils/logger';
+ 
+ export class AdminCouponController {
+   /**
+@@ -80,7 +81,7 @@ export class AdminCouponController {
+         data: { coupon_id: couponId },
+       });
+     } catch (error) {
+-      console.error('创建优惠券失败:', error);
++      logger.error({ err: error }, '创建优惠券失败');
+       res.status(500).json({
+         success: false,
+         message: '创建优惠券失败',
+@@ -116,7 +117,7 @@ export class AdminCouponController {
+         },
+       });
+     } catch (error) {
+-      console.error('获取优惠券列表失败:', error);
++      logger.error({ err: error }, '获取优惠券列表失败');
+       res.status(500).json({
+         success: false,
+         message: '获取优惠券列表失败',
+@@ -144,7 +145,7 @@ export class AdminCouponController {
+         data: coupon,
+       });
+     } catch (error) {
+-      console.error('获取优惠券详情失败:', error);
++      logger.error({ err: error }, '获取优惠券详情失败');
+       res.status(500).json({
+         success: false,
+         message: '获取优惠券详情失败',
+@@ -182,7 +183,7 @@ export class AdminCouponController {
+         message: '更新成功',
+       });
+     } catch (error) {
+-      console.error('更新优惠券状态失败:', error);
++      logger.error({ err: error }, '更新优惠券状态失败');
+       res.status(500).json({
+         success: false,
+         message: '更新优惠券状态失败',
+diff --git a/backend/src/controllers/admin-order.controller.ts b/backend/src/controllers/admin-order.controller.ts
+index 0ae70a0..aaa7db4 100644
+--- a/backend/src/controllers/admin-order.controller.ts
++++ b/backend/src/controllers/admin-order.controller.ts
+@@ -1,6 +1,7 @@
+ import { Request, Response } from 'express';
+ import { getPool } from '../database/mysql';
+ import { logAdminAction } from './admin.controller';
++import logger from '../utils/logger';
+ 
+ // 获取订单列表（管理员）
+ export const getAdminOrders = async (req: Request, res: Response) => {
+@@ -67,7 +68,7 @@ export const getAdminOrders = async (req: Request, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取订单列表失败:', error);
++    logger.error({ err: error }, '获取订单列表失败');
+     res.status(500).json({ error: '获取订单列表失败' });
+   }
+ };
+@@ -120,7 +121,7 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
+       items
+     });
+   } catch (error) {
+-    console.error('获取订单详情失败:', error);
++    logger.error({ err: error }, '获取订单详情失败');
+     res.status(500).json({ error: '获取订单详情失败' });
+   }
+ };
+@@ -169,7 +170,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '更新成功', status });
+   } catch (error) {
+-    console.error('更新订单状态失败:', error);
++    logger.error({ err: error }, '更新订单状态失败');
+     res.status(500).json({ error: '更新失败' });
+   }
+ };
+@@ -211,7 +212,7 @@ export const getOrderStatistics = async (req: Request, res: Response) => {
+ 
+     res.json(stats[0]);
+   } catch (error) {
+-    console.error('获取订单统计失败:', error);
++    logger.error({ err: error }, '获取订单统计失败');
+     res.status(500).json({ error: '获取统计失败' });
+   }
+ };
+diff --git a/backend/src/controllers/admin-product.controller.ts b/backend/src/controllers/admin-product.controller.ts
+index 61aaba2..3639ad5 100644
+--- a/backend/src/controllers/admin-product.controller.ts
++++ b/backend/src/controllers/admin-product.controller.ts
+@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
+ import { getPool } from '../database/mysql';
+ import { SKUModel } from '../models/sku.model';
+ import { logAdminAction } from './admin.controller';
++import logger from '../utils/logger';
+ 
+ // 获取商品列表（管理员）
+ export const getAdminProducts = async (req: Request, res: Response) => {
+@@ -59,7 +60,7 @@ export const getAdminProducts = async (req: Request, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取商品列表失败:', error);
++    logger.error({ err: error }, '获取商品列表失败');
+     res.status(500).json({ error: '获取商品列表失败' });
+   }
+ };
+@@ -106,7 +107,7 @@ export const updateProductStatus = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '更新成功', status });
+   } catch (error) {
+-    console.error('更新商品状态失败:', error);
++    logger.error({ err: error }, '更新商品状态失败');
+     res.status(500).json({ error: '更新失败' });
+   }
+ };
+@@ -145,7 +146,7 @@ export const batchUpdateProductStatus = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '批量更新成功', count: productIds.length });
+   } catch (error) {
+-    console.error('批量更新商品状态失败:', error);
++    logger.error({ err: error }, '批量更新商品状态失败');
+     res.status(500).json({ error: '批量更新失败' });
+   }
+ };
+@@ -194,7 +195,7 @@ export const createProduct = async (req: Request, res: Response) => {
+       product_id: productId
+     });
+   } catch (error) {
+-    console.error('创建商品失败:', error);
++    logger.error({ err: error }, '创建商品失败');
+     res.status(500).json({ error: '创建失败' });
+   }
+ };
+@@ -277,7 +278,7 @@ export const updateProduct = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '更新成功' });
+   } catch (error) {
+-    console.error('更新商品失败:', error);
++    logger.error({ err: error }, '更新商品失败');
+     res.status(500).json({ error: '更新失败' });
+   }
+ };
+@@ -319,7 +320,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '删除成功' });
+   } catch (error) {
+-    console.error('删除商品失败:', error);
++    logger.error({ err: error }, '删除商品失败');
+     res.status(500).json({ error: '删除失败' });
+   }
+ };
+@@ -334,7 +335,7 @@ export const getProductSKUs = async (req: Request, res: Response) => {
+     
+     res.json({ skus });
+   } catch (error) {
+-    console.error('获取SKU列表失败:', error);
++    logger.error({ err: error }, '获取SKU列表失败');
+     res.status(500).json({ error: '获取SKU列表失败' });
+   }
+ };
+@@ -375,7 +376,7 @@ export const createSKU = async (req: Request, res: Response) => {
+       sku_id: skuId
+     });
+   } catch (error: any) {
+-    console.error('创建SKU失败:', error);
++    logger.error({ err: error }, '创建SKU失败');
+     if (error.code === 'ER_DUP_ENTRY') {
+       return res.status(400).json({ error: 'SKU编码已存在' });
+     }
+@@ -417,7 +418,7 @@ export const batchCreateSKUs = async (req: Request, res: Response) => {
+       count: skus.length
+     });
+   } catch (error: any) {
+-    console.error('批量创建SKU失败:', error);
++    logger.error({ err: error }, '批量创建SKU失败');
+     res.status(500).json({ error: '批量创建SKU失败' });
+   }
+ };
+@@ -459,7 +460,7 @@ export const updateSKU = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '更新成功' });
+   } catch (error) {
+-    console.error('更新SKU失败:', error);
++    logger.error({ err: error }, '更新SKU失败');
+     res.status(500).json({ error: '更新SKU失败' });
+   }
+ };
+@@ -488,7 +489,7 @@ export const deleteSKU = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '删除成功' });
+   } catch (error) {
+-    console.error('删除SKU失败:', error);
++    logger.error({ err: error }, '删除SKU失败');
+     res.status(500).json({ error: '删除SKU失败' });
+   }
+ };
+diff --git a/backend/src/controllers/admin-user.controller.ts b/backend/src/controllers/admin-user.controller.ts
+index 9d561fe..c15e910 100644
+--- a/backend/src/controllers/admin-user.controller.ts
++++ b/backend/src/controllers/admin-user.controller.ts
+@@ -1,6 +1,7 @@
+ import { Request, Response } from 'express';
+ import { getPool } from '../database/mysql';
+ import { logAdminAction } from './admin.controller';
++import logger from '../utils/logger';
+ 
+ // 获取用户列表（管理员）
+ export const getAdminUsers = async (req: Request, res: Response) => {
+@@ -59,7 +60,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取用户列表失败:', error);
++    logger.error({ err: error }, '获取用户列表失败');
+     res.status(500).json({ error: '获取用户列表失败' });
+   }
+ };
+@@ -118,7 +119,7 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
+       addresses
+     });
+   } catch (error) {
+-    console.error('获取用户详情失败:', error);
++    logger.error({ err: error }, '获取用户详情失败');
+     res.status(500).json({ error: '获取用户详情失败' });
+   }
+ };
+@@ -165,7 +166,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
+ 
+     res.json({ message: '更新成功', status });
+   } catch (error) {
+-    console.error('更新用户状态失败:', error);
++    logger.error({ err: error }, '更新用户状态失败');
+     res.status(500).json({ error: '更新失败' });
+   }
+ };
+@@ -207,7 +208,7 @@ export const getUserStatistics = async (req: Request, res: Response) => {
+       weekly_trend: weeklyTrend
+     });
+   } catch (error) {
+-    console.error('获取用户统计失败:', error);
++    logger.error({ err: error }, '获取用户统计失败');
+     res.status(500).json({ error: '获取统计失败' });
+   }
+ };
+@@ -249,7 +250,7 @@ export const getUserOrders = async (req: Request, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取用户订单失败:', error);
++    logger.error({ err: error }, '获取用户订单失败');
+     res.status(500).json({ error: '获取订单失败' });
+   }
+ };
+diff --git a/backend/src/controllers/admin.controller.ts b/backend/src/controllers/admin.controller.ts
+index 1eb6dc6..9378f5e 100644
+--- a/backend/src/controllers/admin.controller.ts
++++ b/backend/src/controllers/admin.controller.ts
+@@ -3,6 +3,7 @@ import { getPool } from '../database/mysql';
+ import bcrypt from 'bcryptjs';
+ import jwt from 'jsonwebtoken';
+ import { Admin } from '../models/admin.model';
++import logger from '../utils/logger';
+ 
+ const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
+ 
+@@ -87,7 +88,7 @@ export const adminLogin = async (req: Request, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('管理员登录失败:', error);
++    logger.error({ err: error }, '管理员登录失败');
+     res.status(500).json({ error: '登录失败' });
+   }
+ };
+@@ -126,7 +127,7 @@ export const getAdminProfile = async (req: Request, res: Response) => {
+       permissions
+     });
+   } catch (error) {
+-    console.error('获取管理员信息失败:', error);
++    logger.error({ err: error }, '获取管理员信息失败');
+     res.status(500).json({ error: '获取信息失败' });
+   }
+ };
+@@ -207,7 +208,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
+       revenue_growth: parseFloat(revenueGrowth.toString())
+     });
+   } catch (error) {
+-    console.error('获取仪表盘数据失败:', error);
++    logger.error({ err: error }, '获取仪表盘数据失败');
+     res.status(500).json({ error: '获取数据失败' });
+   }
+ };
+@@ -236,7 +237,7 @@ export const getRecentOrders = async (req: Request, res: Response) => {
+ 
+     res.json(orders);
+   } catch (error) {
+-    console.error('获取最近订单失败:', error);
++    logger.error({ err: error }, '获取最近订单失败');
+     res.status(500).json({ error: '获取订单失败' });
+   }
+ };
+@@ -269,7 +270,7 @@ export const getTopProducts = async (req: Request, res: Response) => {
+ 
+     res.json(products);
+   } catch (error) {
+-    console.error('获取热门商品失败:', error);
++    logger.error({ err: error }, '获取热门商品失败');
+     res.status(500).json({ error: '获取商品失败' });
+   }
+ };
+@@ -294,7 +295,7 @@ export const getSalesTrend = async (req: Request, res: Response) => {
+ 
+     res.json(trend);
+   } catch (error) {
+-    console.error('获取销售趋势失败:', error);
++    logger.error({ err: error }, '获取销售趋势失败');
+     res.status(500).json({ error: '获取趋势失败' });
+   }
+ };
+@@ -317,7 +318,7 @@ export async function logAdminAction(
+       [adminId, action, resourceType, resourceId, description, ipAddress || null, userAgent || null]
+     );
+   } catch (error) {
+-    console.error('记录操作日志失败:', error);
++    logger.error({ err: error }, '记录操作日志失败');
+   }
+ }
+ 
+@@ -381,7 +382,7 @@ export const getAdminLogs = async (req: Request, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取操作日志失败:', error);
++    logger.error({ err: error }, '获取操作日志失败');
+     res.status(500).json({ error: '获取日志失败' });
+   }
+ };
+diff --git a/backend/src/controllers/browse-history.controller.ts b/backend/src/controllers/browse-history.controller.ts
+index 8004043..5082659 100644
+--- a/backend/src/controllers/browse-history.controller.ts
++++ b/backend/src/controllers/browse-history.controller.ts
+@@ -1,6 +1,7 @@
+ import { Response } from 'express';
+ import { BrowseHistoryModel } from '../models/browse-history.model';
+ import { AuthRequest } from '../middleware/auth';
++import logger from '../utils/logger';
+ 
+ // 添加浏览记录
+ export const recordBrowse = async (req: AuthRequest, res: Response) => {
+@@ -16,7 +17,7 @@ export const recordBrowse = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ message: '记录成功', id });
+   } catch (error) {
+-    console.error('记录浏览历史失败:', error);
++    logger.error({ err: error }, '记录浏览历史失败');
+     res.status(500).json({ message: '记录浏览历史失败' });
+   }
+ };
+@@ -40,7 +41,7 @@ export const getUserBrowseHistory = async (req: AuthRequest, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取浏览历史失败:', error);
++    logger.error({ err: error }, '获取浏览历史失败');
+     res.status(500).json({ message: '获取浏览历史失败' });
+   }
+ };
+@@ -57,7 +58,7 @@ export const clearBrowseHistory = async (req: AuthRequest, res: Response) => {
+       cleared: success 
+     });
+   } catch (error) {
+-    console.error('清除浏览历史失败:', error);
++    logger.error({ err: error }, '清除浏览历史失败');
+     res.status(500).json({ message: '清除浏览历史失败' });
+   }
+ };
+@@ -76,7 +77,7 @@ export const deleteBrowseRecord = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ message: '删除成功' });
+   } catch (error) {
+-    console.error('删除浏览记录失败:', error);
++    logger.error({ err: error }, '删除浏览记录失败');
+     res.status(500).json({ message: '删除浏览记录失败' });
+   }
+ };
+diff --git a/backend/src/controllers/cart.controller.ts b/backend/src/controllers/cart.controller.ts
+index 66b3f0e..5c35c53 100644
+--- a/backend/src/controllers/cart.controller.ts
++++ b/backend/src/controllers/cart.controller.ts
+@@ -1,6 +1,7 @@
+ import { Response } from 'express';
+ import { AuthRequest } from '../middleware/auth';
+ import { CartModel } from '../models/cart.model';
++import logger from '../utils/logger';
+ 
+ export class CartController {
+   // 获取购物车列表
+@@ -10,7 +11,7 @@ export class CartController {
+       
+       res.json({ items });
+     } catch (error) {
+-      console.error('获取购物车失败:', error);
++      logger.error({ err: error }, '获取购物车失败');
+       res.status(500).json({ error: '获取购物车失败' });
+     }
+   }
+@@ -32,7 +33,7 @@ export class CartController {
+         res.status(400).json({ error: '添加失败' });
+       }
+     } catch (error) {
+-      console.error('添加购物车失败:', error);
++      logger.error({ err: error }, '添加购物车失败');
+       res.status(500).json({ error: '添加购物车失败' });
+     }
+   }
+@@ -54,7 +55,7 @@ export class CartController {
+         res.status(400).json({ error: '更新失败' });
+       }
+     } catch (error) {
+-      console.error('更新购物车失败:', error);
++      logger.error({ err: error }, '更新购物车失败');
+       res.status(500).json({ error: '更新购物车失败' });
+     }
+   }
+@@ -72,7 +73,7 @@ export class CartController {
+         res.status(400).json({ error: '删除失败' });
+       }
+     } catch (error) {
+-      console.error('删除购物车商品失败:', error);
++      logger.error({ err: error }, '删除购物车商品失败');
+       res.status(500).json({ error: '删除购物车商品失败' });
+     }
+   }
+@@ -88,7 +89,7 @@ export class CartController {
+         res.status(400).json({ error: '清空失败' });
+       }
+     } catch (error) {
+-      console.error('清空购物车失败:', error);
++      logger.error({ err: error }, '清空购物车失败');
+       res.status(500).json({ error: '清空购物车失败' });
+     }
+   }
+diff --git a/backend/src/controllers/coupon.controller.ts b/backend/src/controllers/coupon.controller.ts
+index 88976e7..68e29e5 100644
+--- a/backend/src/controllers/coupon.controller.ts
++++ b/backend/src/controllers/coupon.controller.ts
+@@ -4,6 +4,7 @@
+ import { Response } from 'express';
+ import { AuthRequest } from '../middleware/auth';
+ import { CouponModel, CouponStatus, UserCouponStatus } from '../models/coupon.model';
++import logger from '../utils/logger';
+ 
+ export class CouponController {
+   /**
+@@ -31,7 +32,7 @@ export class CouponController {
+         },
+       });
+     } catch (error) {
+-      console.error('获取优惠券列表失败:', error);
++      logger.error({ err: error }, '获取优惠券列表失败');
+       res.status(500).json({
+         success: false,
+         message: '获取优惠券列表失败',
+@@ -59,7 +60,7 @@ export class CouponController {
+         data: coupon,
+       });
+     } catch (error) {
+-      console.error('获取优惠券详情失败:', error);
++      logger.error({ err: error }, '获取优惠券详情失败');
+       res.status(500).json({
+         success: false,
+         message: '获取优惠券详情失败',
+@@ -104,7 +105,7 @@ export class CouponController {
+         data: { user_coupon_id: userCouponId },
+       });
+     } catch (error: any) {
+-      console.error('领取优惠券失败:', error);
++      logger.error({ err: error }, '领取优惠券失败');
+       res.status(400).json({
+         success: false,
+         message: error.message || '领取优惠券失败',
+@@ -129,7 +130,7 @@ export class CouponController {
+         data: coupons,
+       });
+     } catch (error) {
+-      console.error('获取用户优惠券失败:', error);
++      logger.error({ err: error }, '获取用户优惠券失败');
+       res.status(500).json({
+         success: false,
+         message: '获取用户优惠券失败',
+@@ -190,7 +191,7 @@ export class CouponController {
+         data: availableCoupons,
+       });
+     } catch (error) {
+-      console.error('获取可用优惠券失败:', error);
++      logger.error({ err: error }, '获取可用优惠券失败');
+       res.status(500).json({
+         success: false,
+         message: '获取可用优惠券失败',
+@@ -251,7 +252,7 @@ export class CouponController {
+         },
+       });
+     } catch (error) {
+-      console.error('计算优惠金额失败:', error);
++      logger.error({ err: error }, '计算优惠金额失败');
+       res.status(500).json({
+         success: false,
+         message: '计算优惠金额失败',
+diff --git a/backend/src/controllers/favorite.controller.ts b/backend/src/controllers/favorite.controller.ts
+index 3648997..7e8d328 100644
+--- a/backend/src/controllers/favorite.controller.ts
++++ b/backend/src/controllers/favorite.controller.ts
+@@ -1,6 +1,7 @@
+ import { Response } from 'express';
+ import { FavoriteModel } from '../models/favorite.model';
+ import { AuthRequest } from '../middleware/auth';
++import logger from '../utils/logger';
+ 
+ // 添加收藏
+ export const addFavorite = async (req: AuthRequest, res: Response) => {
+@@ -26,7 +27,7 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
+       favorite_id: favoriteId
+     });
+   } catch (error) {
+-    console.error('添加收藏失败:', error);
++    logger.error({ err: error }, '添加收藏失败');
+     res.status(500).json({ message: '添加收藏失败' });
+   }
+ };
+@@ -45,7 +46,7 @@ export const removeFavorite = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ message: '取消收藏成功' });
+   } catch (error) {
+-    console.error('取消收藏失败:', error);
++    logger.error({ err: error }, '取消收藏失败');
+     res.status(500).json({ message: '取消收藏失败' });
+   }
+ };
+@@ -77,7 +78,7 @@ export const toggleFavorite = async (req: AuthRequest, res: Response) => {
+       });
+     }
+   } catch (error) {
+-    console.error('切换收藏状态失败:', error);
++    logger.error({ err: error }, '切换收藏状态失败');
+     res.status(500).json({ message: '操作失败' });
+   }
+ };
+@@ -92,7 +93,7 @@ export const checkFavorite = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ is_favorited: isFavorited });
+   } catch (error) {
+-    console.error('检查收藏状态失败:', error);
++    logger.error({ err: error }, '检查收藏状态失败');
+     res.status(500).json({ message: '检查收藏状态失败' });
+   }
+ };
+@@ -116,7 +117,7 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
+       }
+     });
+   } catch (error) {
+-    console.error('获取收藏列表失败:', error);
++    logger.error({ err: error }, '获取收藏列表失败');
+     res.status(500).json({ message: '获取收藏列表失败' });
+   }
+ };
+@@ -138,7 +139,7 @@ export const checkMultipleFavorites = async (req: AuthRequest, res: Response) =>
+ 
+     res.json({ favorites: favoriteMap });
+   } catch (error) {
+-    console.error('批量检查收藏状态失败:', error);
++    logger.error({ err: error }, '批量检查收藏状态失败');
+     res.status(500).json({ message: '批量检查收藏状态失败' });
+   }
+ };
+@@ -151,7 +152,7 @@ export const getFavoriteCount = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ count });
+   } catch (error) {
+-    console.error('获取收藏数量失败:', error);
++    logger.error({ err: error }, '获取收藏数量失败');
+     res.status(500).json({ message: '获取收藏数量失败' });
+   }
+ };
+diff --git a/backend/src/controllers/order.controller.ts b/backend/src/controllers/order.controller.ts
+index e884e2c..a8fc479 100644
+--- a/backend/src/controllers/order.controller.ts
++++ b/backend/src/controllers/order.controller.ts
+@@ -6,6 +6,7 @@ import { CartModel } from '../models/cart.model';
+ import { getRedisClient } from '../database/redis';
+ import { getOrderRemainingTime } from '../services/order-timeout.service';
+ import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
++import logger from '../utils/logger';
+ 
+ export class OrderController {
+   // 创建订单
+@@ -69,7 +70,7 @@ export class OrderController {
+       // MQ 不可用不影响订单创建，订单超时检查定时任务会兜底处理
+       const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
+       if (!timeoutMsgSent) {
+-        console.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
++        logger.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
+       }
+ 
+       res.status(201).json({
+@@ -77,7 +78,7 @@ export class OrderController {
+         order_id: orderId
+       });
+     } catch (error) {
+-      console.error('创建订单失败:', error);
++      logger.error({ err: error }, '创建订单失败');
+       res.status(500).json({ error: '创建订单失败' });
+     }
+   }
+@@ -106,7 +107,7 @@ export class OrderController {
+         items
+       });
+     } catch (error) {
+-      console.error('获取订单详情失败:', error);
++      logger.error({ err: error }, '获取订单详情失败');
+       res.status(500).json({ error: '获取订单详情失败' });
+     }
+   }
+@@ -128,7 +129,7 @@ export class OrderController {
+         totalPages: Math.ceil(result.total / limit)
+       });
+     } catch (error) {
+-      console.error('获取订单列表失败:', error);
++      logger.error({ err: error }, '获取订单列表失败');
+       res.status(500).json({ error: '获取订单列表失败' });
+     }
+   }
+@@ -165,7 +166,7 @@ export class OrderController {
+ 
+       res.json({ message: '订单已取消' });
+     } catch (error) {
+-      console.error('取消订单失败:', error);
++      logger.error({ err: error }, '取消订单失败');
+       res.status(500).json({ error: '取消订单失败' });
+     }
+   }
+@@ -200,7 +201,7 @@ export class OrderController {
+ 
+       res.json({ message: '支付成功' });
+     } catch (error) {
+-      console.error('支付订单失败:', error);
++      logger.error({ err: error }, '支付订单失败');
+       res.status(500).json({ error: '支付订单失败' });
+     }
+   }
+@@ -229,7 +230,7 @@ export class OrderController {
+ 
+       res.json({ message: '确认收货成功' });
+     } catch (error) {
+-      console.error('确认收货失败:', error);
++      logger.error({ err: error }, '确认收货失败');
+       res.status(500).json({ error: '确认收货失败' });
+     }
+   }
+@@ -263,7 +264,7 @@ export class OrderController {
+         timeout_at: new Date(new Date(order.created_at).getTime() + 30 * 60 * 1000).toISOString()
+       });
+     } catch (error) {
+-      console.error('获取剩余时间失败:', error);
++      logger.error({ err: error }, '获取剩余时间失败');
+       res.status(500).json({ error: '获取剩余时间失败' });
+     }
+   }
+diff --git a/backend/src/controllers/product.controller.ts b/backend/src/controllers/product.controller.ts
+index 8b4adff..e5c8817 100644
+--- a/backend/src/controllers/product.controller.ts
++++ b/backend/src/controllers/product.controller.ts
+@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
+ import { ProductModel, ProductQuery } from '../models/product.model';
+ import { SKUModel } from '../models/sku.model';
+ import { getRedisClient } from '../database/redis';
++import logger from '../utils/logger';
+ 
+ export class ProductController {
+   // 获取商品列表
+@@ -27,7 +28,7 @@ export class ProductController {
+         totalPages: Math.ceil(result.total / params.limit!)
+       });
+     } catch (error) {
+-      console.error('获取商品列表失败:', error);
++      logger.error({ err: error }, '获取商品列表失败');
+       res.status(500).json({ error: '获取商品列表失败' });
+     }
+   }
+@@ -66,7 +67,7 @@ export class ProductController {
+ 
+       res.json({ product: productWithSKU });
+     } catch (error) {
+-      console.error('获取商品详情失败:', error);
++      logger.error({ err: error }, '获取商品详情失败');
+       res.status(500).json({ error: '获取商品详情失败' });
+     }
+   }
+@@ -93,7 +94,7 @@ export class ProductController {
+ 
+       res.json({ products });
+     } catch (error) {
+-      console.error('获取热门商品失败:', error);
++      logger.error({ err: error }, '获取热门商品失败');
+       res.status(500).json({ error: '获取热门商品失败' });
+     }
+   }
+@@ -109,7 +110,7 @@ export class ProductController {
+         product_id: productId
+       });
+     } catch (error) {
+-      console.error('创建商品失败:', error);
++      logger.error({ err: error }, '创建商品失败');
+       res.status(500).json({ error: '创建商品失败' });
+     }
+   }
+@@ -133,7 +134,7 @@ export class ProductController {
+         res.status(400).json({ error: '商品更新失败' });
+       }
+     } catch (error) {
+-      console.error('更新商品失败:', error);
++      logger.error({ err: error }, '更新商品失败');
+       res.status(500).json({ error: '更新商品失败' });
+     }
+   }
+@@ -150,7 +151,7 @@ export class ProductController {
+       
+       res.json(categories);
+     } catch (error) {
+-      console.error('获取分类列表失败:', error);
++      logger.error({ err: error }, '获取分类列表失败');
+       res.status(500).json({ error: '获取分类列表失败' });
+     }
+   }
+diff --git a/backend/src/controllers/recommendation.controller.ts b/backend/src/controllers/recommendation.controller.ts
+index 2105192..5d477cd 100644
+--- a/backend/src/controllers/recommendation.controller.ts
++++ b/backend/src/controllers/recommendation.controller.ts
+@@ -5,6 +5,7 @@ import {
+   getRelatedProducts,
+   getGuessYouLike
+ } from '../services/recommendation.service';
++import logger from '../utils/logger';
+ 
+ export class RecommendationController {
+   /**
+@@ -22,7 +23,7 @@ export class RecommendationController {
+         total: recommendations.length
+       });
+     } catch (error) {
+-      console.error('获取个性化推荐失败:', error);
++      logger.error({ err: error }, '获取个性化推荐失败');
+       res.status(500).json({ error: '获取推荐失败' });
+     }
+   }
+@@ -46,7 +47,7 @@ export class RecommendationController {
+         total: relatedProducts.length
+       });
+     } catch (error) {
+-      console.error('获取相关商品失败:', error);
++      logger.error({ err: error }, '获取相关商品失败');
+       res.status(500).json({ error: '获取相关商品失败' });
+     }
+   }
+@@ -66,7 +67,7 @@ export class RecommendationController {
+         total: recommendations.length
+       });
+     } catch (error) {
+-      console.error('获取猜你喜欢失败:', error);
++      logger.error({ err: error }, '获取猜你喜欢失败');
+       res.status(500).json({ error: '获取推荐失败' });
+     }
+   }
+diff --git a/backend/src/controllers/review.controller.ts b/backend/src/controllers/review.controller.ts
+index 3d45eab..d999926 100644
+--- a/backend/src/controllers/review.controller.ts
++++ b/backend/src/controllers/review.controller.ts
+@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
+ import { AuthRequest } from '../middleware/auth';
+ import { ReviewModel } from '../models/review.model';
+ import { OrderModel, OrderStatus } from '../models/order.model';
++import logger from '../utils/logger';
+ 
+ export class ReviewController {
+   // 创建评论
+@@ -52,7 +53,7 @@ export class ReviewController {
+         review_id: reviewId
+       });
+     } catch (error) {
+-      console.error('创建评论失败:', error);
++      logger.error({ err: error }, '创建评论失败');
+       res.status(500).json({ error: '创建评论失败' });
+     }
+   }
+@@ -74,7 +75,7 @@ export class ReviewController {
+         totalPages: Math.ceil(result.total / limit)
+       });
+     } catch (error) {
+-      console.error('获取评论列表失败:', error);
++      logger.error({ err: error }, '获取评论列表失败');
+       res.status(500).json({ error: '获取评论列表失败' });
+     }
+   }
+@@ -95,7 +96,7 @@ export class ReviewController {
+         totalPages: Math.ceil(result.total / limit)
+       });
+     } catch (error) {
+-      console.error('获取评论列表失败:', error);
++      logger.error({ err: error }, '获取评论列表失败');
+       res.status(500).json({ error: '获取评论列表失败' });
+     }
+   }
+diff --git a/backend/src/controllers/search.controller.ts b/backend/src/controllers/search.controller.ts
+index bd72e0d..9797227 100644
+--- a/backend/src/controllers/search.controller.ts
++++ b/backend/src/controllers/search.controller.ts
+@@ -2,6 +2,7 @@ import { Response } from 'express';
+ import { SearchHistoryModel } from '../models/search-history.model';
+ import { AuthRequest } from '../middleware/auth';
+ import { searchProducts as esSearchProducts } from '../database/elasticsearch';
++import logger from '../utils/logger';
+ 
+ // 记录搜索历史
+ export const recordSearch = async (req: AuthRequest, res: Response) => {
+@@ -21,7 +22,7 @@ export const recordSearch = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ message: '记录成功', id });
+   } catch (error) {
+-    console.error('记录搜索历史失败:', error);
++    logger.error({ err: error }, '记录搜索历史失败');
+     res.status(500).json({ message: '记录搜索历史失败' });
+   }
+ };
+@@ -36,7 +37,7 @@ export const getUserSearchHistory = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ history });
+   } catch (error) {
+-    console.error('获取搜索历史失败:', error);
++    logger.error({ err: error }, '获取搜索历史失败');
+     res.status(500).json({ message: '获取搜索历史失败' });
+   }
+ };
+@@ -51,7 +52,7 @@ export const getHotKeywords = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ keywords });
+   } catch (error) {
+-    console.error('获取热搜关键词失败:', error);
++    logger.error({ err: error }, '获取热搜关键词失败');
+     res.status(500).json({ message: '获取热搜关键词失败' });
+   }
+ };
+@@ -68,7 +69,7 @@ export const clearSearchHistory = async (req: AuthRequest, res: Response) => {
+       cleared: success 
+     });
+   } catch (error) {
+-    console.error('清除搜索历史失败:', error);
++    logger.error({ err: error }, '清除搜索历史失败');
+     res.status(500).json({ message: '清除搜索历史失败' });
+   }
+ };
+@@ -87,7 +88,7 @@ export const deleteSearchKeyword = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ message: '删除成功' });
+   } catch (error) {
+-    console.error('删除搜索记录失败:', error);
++    logger.error({ err: error }, '删除搜索记录失败');
+     res.status(500).json({ message: '删除搜索记录失败' });
+   }
+ };
+@@ -109,7 +110,7 @@ export const getSearchSuggestions = async (req: AuthRequest, res: Response) => {
+ 
+     res.json({ suggestions });
+   } catch (error) {
+-    console.error('获取搜索建议失败:', error);
++    logger.error({ err: error }, '获取搜索建议失败');
+     res.status(500).json({ message: '获取搜索建议失败' });
+   }
+ };
+@@ -162,7 +163,7 @@ export const elasticsearchSearch = async (req: AuthRequest, res: Response) => {
+       },
+     });
+   } catch (error) {
+-    console.error('Elasticsearch 搜索失败:', error);
++    logger.error({ err: error }, 'Elasticsearch 搜索失败');
+     res.status(500).json({ 
+       success: false,
+       message: 'Elasticsearch 搜索失败，请稍后重试' 
+diff --git a/backend/src/controllers/user.controller.ts b/backend/src/controllers/user.controller.ts
+index b358709..c88fbed 100644
+--- a/backend/src/controllers/user.controller.ts
++++ b/backend/src/controllers/user.controller.ts
+@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
+ import { UserModel } from '../models/user.model';
+ import bcrypt from 'bcryptjs';
+ import jwt from 'jsonwebtoken';
++import logger from '../utils/logger';
+ 
+ export class UserController {
+   // 注册
+@@ -46,7 +47,7 @@ export class UserController {
+         user: { user_id: userId, username, email }
+       });
+     } catch (error) {
+-      console.error('注册失败:', error);
++      logger.error({ err: error }, '注册失败');
+       res.status(500).json({ error: '注册失败' });
+     }
+   }
+@@ -92,7 +93,7 @@ export class UserController {
+         }
+       });
+     } catch (error) {
+-      console.error('登录失败:', error);
++      logger.error({ err: error }, '登录失败');
+       res.status(500).json({ error: '登录失败' });
+     }
+   }
+@@ -108,7 +109,7 @@ export class UserController {
+ 
+       res.json({ user });
+     } catch (error) {
+-      console.error('获取用户信息失败:', error);
++      logger.error({ err: error }, '获取用户信息失败');
+       res.status(500).json({ error: '获取用户信息失败' });
+     }
+   }
+@@ -131,7 +132,7 @@ export class UserController {
+         res.status(400).json({ error: '更新失败' });
+       }
+     } catch (error) {
+-      console.error('更新用户信息失败:', error);
++      logger.error({ err: error }, '更新用户信息失败');
+       res.status(500).json({ error: '更新用户信息失败' });
+     }
+   }
+diff --git a/backend/src/database/admin-migrate.ts b/backend/src/database/admin-migrate.ts
+index 24bfba9..de44c91 100644
+--- a/backend/src/database/admin-migrate.ts
++++ b/backend/src/database/admin-migrate.ts
+@@ -1,4 +1,5 @@
+ import { connectDatabase, getPool } from './mysql';
++import logger from '../utils/logger';
+ 
+ async function runAdminMigrations() {
+   // 首先连接数据库
+@@ -7,10 +8,10 @@ async function runAdminMigrations() {
+   const connection = await pool.getConnection();
+   
+   try {
+-    console.log('开始执行管理员系统数据库迁移...\n');
++    logger.info('开始执行管理员系统数据库迁移...\n');
+ 
+     // 1. 创建角色表
+-    console.log('创建角色表...');
++    logger.info('创建角色表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS roles (
+         role_id INT PRIMARY KEY AUTO_INCREMENT,
+@@ -22,7 +23,7 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 2. 创建管理员表
+-    console.log('创建管理员表...');
++    logger.info('创建管理员表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS admins (
+         admin_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+@@ -43,7 +44,7 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 3. 创建权限表
+-    console.log('创建权限表...');
++    logger.info('创建权限表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS permissions (
+         permission_id INT PRIMARY KEY AUTO_INCREMENT,
+@@ -58,7 +59,7 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 4. 创建角色权限关联表
+-    console.log('创建角色权限关联表...');
++    logger.info('创建角色权限关联表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS role_permissions (
+         id INT PRIMARY KEY AUTO_INCREMENT,
+@@ -72,7 +73,7 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 5. 创建操作日志表
+-    console.log('创建操作日志表...');
++    logger.info('创建操作日志表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS admin_logs (
+         log_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+@@ -92,7 +93,7 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 6. 创建流量统计表
+-    console.log('创建流量统计表...');
++    logger.info('创建流量统计表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS traffic_statistics (
+         id BIGINT PRIMARY KEY AUTO_INCREMENT,
+@@ -110,7 +111,7 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 7. 创建页面访问记录表
+-    console.log('创建页面访问记录表...');
++    logger.info('创建页面访问记录表...');
+     await connection.query(`
+       CREATE TABLE IF NOT EXISTS page_visits (
+         visit_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+@@ -129,10 +130,10 @@ async function runAdminMigrations() {
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+     `);
+ 
+-    console.log('\n✓ 所有管理员系统表创建成功！\n');
++    logger.info('\n✓ 所有管理员系统表创建成功！\n');
+ 
+     // 插入初始数据
+-    console.log('插入初始角色数据...');
++    logger.info('插入初始角色数据...');
+     await connection.query(`
+       INSERT IGNORE INTO roles (role_name, description) VALUES
+       ('super_admin', '超级管理员 - 拥有所有权限'),
+@@ -141,7 +142,7 @@ async function runAdminMigrations() {
+       ('data_analyst', '数据分析师 - 查看统计数据')
+     `);
+ 
+-    console.log('插入初始权限数据...');
++    logger.info('插入初始权限数据...');
+     await connection.query(`
+       INSERT IGNORE INTO permissions (permission_name, permission_code, resource, action, description) VALUES
+       ('查看商品', 'product:view', 'product', 'view', '查看商品列表和详情'),
+@@ -160,14 +161,14 @@ async function runAdminMigrations() {
+     `);
+ 
+     // 为超级管理员分配所有权限
+-    console.log('为超级管理员分配权限...');
++    logger.info('为超级管理员分配权限...');
+     await connection.query(`
+       INSERT IGNORE INTO role_permissions (role_id, permission_id)
+       SELECT 1, permission_id FROM permissions
+     `);
+ 
+     // 创建默认管理员账号（密码：admin123）
+-    console.log('创建默认管理员账号...');
++    logger.info('创建默认管理员账号...');
+     const bcrypt = require('bcryptjs');
+     const defaultPassword = await bcrypt.hash('admin123', 10);
+     
+@@ -176,14 +177,14 @@ async function runAdminMigrations() {
+       VALUES ('admin', ?, '系统管理员', 'admin@example.com', 1, 1)
+     `, [defaultPassword]);
+ 
+-    console.log('\n✓ 初始数据插入成功！');
+-    console.log('\n默认管理员账号:');
+-    console.log('用户名: admin');
+-    console.log('密码: admin123');
+-    console.log('请登录后立即修改密码！\n');
++    logger.info('\n✓ 初始数据插入成功！');
++    logger.info('\n默认管理员账号:');
++    logger.info('用户名: admin');
++    logger.info('密码: admin123');
++    logger.info('请登录后立即修改密码！\n');
+ 
+   } catch (error) {
+-    console.error('迁移失败:', error);
++    logger.error({ err: error }, '迁移失败');
+     throw error;
+   } finally {
+     connection.release();
+@@ -194,11 +195,11 @@ async function runAdminMigrations() {
+ if (require.main === module) {
+   runAdminMigrations()
+     .then(() => {
+-      console.log('管理员系统初始化完成！');
++      logger.info('管理员系统初始化完成！');
+       process.exit(0);
+     })
+     .catch((error) => {
+-      console.error('初始化失败:', error);
++      logger.error({ err: error }, '初始化失败');
+       process.exit(1);
+     });
+ }
+diff --git a/backend/src/database/elasticsearch.ts b/backend/src/database/elasticsearch.ts
+index 6ab575d..a848452 100644
+--- a/backend/src/database/elasticsearch.ts
++++ b/backend/src/database/elasticsearch.ts
+@@ -1,4 +1,5 @@
+ import { Client } from '@elastic/elasticsearch';
++import logger from '../utils/logger';
+ 
+ // 创建 Elasticsearch 客户端
+ const esClient = new Client({
+@@ -66,12 +67,12 @@ export async function initProductIndex() {
+           },
+         },
+       });
+-      console.log(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 创建成功`);
++      logger.info(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 创建成功`);
+     } else {
+-      console.log(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 已存在`);
++      logger.info(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 已存在`);
+     }
+   } catch (error) {
+-    console.error('❌ 初始化 Elasticsearch 索引失败:', error);
++    logger.error({ err: error }, '❌ 初始化 Elasticsearch 索引失败');
+     throw error;
+   }
+ }
+@@ -100,9 +101,9 @@ export async function syncProductToES(product: any) {
+         updated_at: product.updated_at,
+       },
+     });
+-    console.log(`✅ 商品 ${product.product_id} 同步到 ES 成功`);
++    logger.info(`✅ 商品 ${product.product_id} 同步到 ES 成功`);
+   } catch (error) {
+-    console.error(`❌ 商品 ${product.product_id} 同步到 ES 失败:`, error);
++    logger.error({ err: error }, `❌ 商品 ${product.product_id} 同步到 ES 失败`);
+     throw error;
+   }
+ }
+@@ -134,19 +135,19 @@ export async function bulkSyncProductsToES(products: any[]) {
+     const result = await esClient.bulk({ body });
+     
+     if (result.errors) {
+-      console.error('❌ 批量同步部分商品失败');
++      logger.error('❌ 批量同步部分商品失败');
+       result.items.forEach((item: any, index: number) => {
+         if (item.index?.error) {
+-          console.error(`商品 ${products[index].product_id} 同步失败:`, item.index.error);
++          logger.error({ err: item.index.error }, `商品 ${products[index].product_id} 同步失败`);
+         }
+       });
+     } else {
+-      console.log(`✅ 批量同步 ${products.length} 个商品到 ES 成功`);
++      logger.info(`✅ 批量同步 ${products.length} 个商品到 ES 成功`);
+     }
+ 
+     return result;
+   } catch (error) {
+-    console.error('❌ 批量同步商品到 ES 失败:', error);
++    logger.error({ err: error }, '❌ 批量同步商品到 ES 失败');
+     throw error;
+   }
+ }
+@@ -160,10 +161,10 @@ export async function deleteProductFromES(productId: number) {
+       index: PRODUCT_INDEX,
+       id: productId.toString(),
+     });
+-    console.log(`✅ 商品 ${productId} 从 ES 删除成功`);
++    logger.info(`✅ 商品 ${productId} 从 ES 删除成功`);
+   } catch (error: any) {
+     if (error.meta?.statusCode !== 404) {
+-      console.error(`❌ 商品 ${productId} 从 ES 删除失败:`, error);
++      logger.error({ err: error }, `❌ 商品 ${productId} 从 ES 删除失败`);
+       throw error;
+     }
+   }
+@@ -274,7 +275,7 @@ export async function searchProducts(params: {
+       total_pages: Math.ceil(total / page_size),
+     };
+   } catch (error) {
+-    console.error('❌ ES 搜索失败:', error);
++    logger.error({ err: error }, '❌ ES 搜索失败');
+     throw error;
+   }
+ }
+@@ -306,7 +307,7 @@ export async function getSearchSuggestions(prefix: string, limit: number = 10) {
+     }
+     return [];
+   } catch (error) {
+-    console.error('❌ 获取搜索建议失败:', error);
++    logger.error({ err: error }, '❌ 获取搜索建议失败');
+     return [];
+   }
+ }
+@@ -317,10 +318,10 @@ export async function getSearchSuggestions(prefix: string, limit: number = 10) {
+ export async function checkESConnection() {
+   try {
+     const health = await esClient.cluster.health();
+-    console.log('✅ Elasticsearch 连接成功:', health);
++    logger.info({ health }, '✅ Elasticsearch 连接成功');
+     return true;
+   } catch (error) {
+-    console.error('❌ Elasticsearch 连接失败:', error);
++    logger.error({ err: error }, '❌ Elasticsearch 连接失败');
+     return false;
+   }
+ }
+diff --git a/backend/src/database/migrate-coupon.ts b/backend/src/database/migrate-coupon.ts
+index c702c25..f942625 100644
+--- a/backend/src/database/migrate-coupon.ts
++++ b/backend/src/database/migrate-coupon.ts
+@@ -2,10 +2,11 @@
+  * 优惠券系统数据库迁移
+  */
+ import { connectDatabase, getPool } from './mysql';
++import logger from '../utils/logger';
+ 
+ async function migrateCouponTables() {
+   try {
+-    console.log('🚀 开始创建优惠券相关表...');
++    logger.info('🚀 开始创建优惠券相关表...');
+ 
+     // 连接数据库
+     await connectDatabase();
+@@ -35,7 +36,7 @@ async function migrateCouponTables() {
+         INDEX idx_time (start_time, end_time)
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券表';
+     `);
+-    console.log('✅ coupons 表创建成功');
++    logger.info('✅ coupons 表创建成功');
+ 
+     // 2. 用户优惠券表
+     await pool.execute(`
+@@ -56,7 +57,7 @@ async function migrateCouponTables() {
+         FOREIGN KEY (coupon_id) REFERENCES coupons(coupon_id) ON DELETE CASCADE
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户优惠券表';
+     `);
+-    console.log('✅ user_coupons 表创建成功');
++    logger.info('✅ user_coupons 表创建成功');
+ 
+     // 3. 优惠券使用记录表（不使用外键约束，避免类型不匹配问题）
+     await pool.execute(`
+@@ -74,11 +75,11 @@ async function migrateCouponTables() {
+         INDEX idx_order (order_id)
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券使用记录表';
+     `);
+-    console.log('✅ coupon_usage_logs 表创建成功');
++    logger.info('✅ coupon_usage_logs 表创建成功');
+ 
+-    console.log('🎉 优惠券相关表创建完成！');
++    logger.info('🎉 优惠券相关表创建完成！');
+   } catch (error) {
+-    console.error('❌ 创建优惠券表失败:', error);
++    logger.error({ err: error }, '❌ 创建优惠券表失败');
+     throw error;
+   }
+ }
+@@ -86,11 +87,11 @@ async function migrateCouponTables() {
+ // 执行迁移
+ migrateCouponTables()
+   .then(() => {
+-    console.log('✅ 迁移任务完成');
++    logger.info('✅ 迁移任务完成');
+     process.exit(0);
+   })
+   .catch((error) => {
+-    console.error('💥 迁移任务失败:', error);
++    logger.error({ err: error }, '💥 迁移任务失败');
+     process.exit(1);
+   });
+ 
+diff --git a/backend/src/database/migrate.ts b/backend/src/database/migrate.ts
+index a64e7e4..644736e 100644
+--- a/backend/src/database/migrate.ts
++++ b/backend/src/database/migrate.ts
+@@ -1,5 +1,6 @@
+ import { getPool } from './mysql';
+ import { connectDatabase } from './mysql';
++import logger from '../utils/logger';
+ 
+ const migrations = [
+   // 用户表
+@@ -181,19 +182,19 @@ const migrations = [
+ async function runMigrations() {
+   try {
+     await connectDatabase();
+-    console.log('开始执行数据库迁移...\n');
++    logger.info('开始执行数据库迁移...\n');
+ 
+     const pool = getPool();
+     
+     for (let i = 0; i < migrations.length; i++) {
+-      console.log(`执行迁移 ${i + 1}/${migrations.length}...`);
++      logger.info(`执行迁移 ${i + 1}/${migrations.length}...`);
+       await pool.execute(migrations[i]);
+     }
+ 
+-    console.log('\n✓ 所有迁移执行成功！');
++    logger.info('\n✓ 所有迁移执行成功！');
+     process.exit(0);
+   } catch (error) {
+-    console.error('迁移失败:', error);
++    logger.error({ err: error }, '迁移失败');
+     process.exit(1);
+   }
+ }
+diff --git a/backend/src/database/mongodb.ts b/backend/src/database/mongodb.ts
+index 4362eff..e39f43e 100644
+--- a/backend/src/database/mongodb.ts
++++ b/backend/src/database/mongodb.ts
+@@ -1,5 +1,6 @@
+ import mongoose from 'mongoose';
+ import dotenv from 'dotenv';
++import logger from '../utils/logger';
+ 
+ dotenv.config();
+ 
+@@ -9,7 +10,7 @@ export async function connectMongoDB() {
+   await mongoose.connect(uri);
+   
+   mongoose.connection.on('error', (err) => {
+-    console.error('MongoDB错误:', err);
++    logger.error({ err }, 'MongoDB错误');
+   });
+ }
+ 
+diff --git a/backend/src/database/rabbitmq.ts b/backend/src/database/rabbitmq.ts
+index f77d695..8cce0e5 100644
+--- a/backend/src/database/rabbitmq.ts
++++ b/backend/src/database/rabbitmq.ts
+@@ -1,4 +1,5 @@
+ import * as amqp from 'amqplib';
++import logger from '../utils/logger';
+ 
+ let connection: amqp.Connection | null = null;
+ let channel: amqp.Channel | null = null;
+@@ -26,7 +27,7 @@ export async function connectRabbitMQ(): Promise<void> {
+   try {
+     const rabbitmqUrl = process.env.RABBITMQ_URL || 'amqp://admin:admin123@rabbitmq:5672';
+     
+-    console.log('🐰 正在连接 RabbitMQ...');
++    logger.info('🐰 正在连接 RabbitMQ...');
+     const conn = await amqp.connect(rabbitmqUrl);
+     connection = conn as any;
+     channel = await conn.createChannel();
+@@ -45,19 +46,19 @@ export async function connectRabbitMQ(): Promise<void> {
+       },
+     });
+ 
+-    console.log('✅ RabbitMQ 连接成功');
++    logger.info('✅ RabbitMQ 连接成功');
+ 
+     // 监听连接关闭事件
+     connection.on('close', () => {
+-      console.warn('⚠️ RabbitMQ 连接已关闭');
++      logger.warn('⚠️ RabbitMQ 连接已关闭');
+       setTimeout(connectRabbitMQ, 5000); // 5秒后重连
+     });
+ 
+     connection.on('error', (error) => {
+-      console.error('❌ RabbitMQ 连接错误:', error);
++      logger.error({ err: error }, '❌ RabbitMQ 连接错误');
+     });
+   } catch (error) {
+-    console.error('❌ 连接 RabbitMQ 失败:', error);
++    logger.error({ err: error }, '❌ 连接 RabbitMQ 失败');
+     // 5秒后重试
+     setTimeout(connectRabbitMQ, 5000);
+   }
+@@ -88,7 +89,7 @@ export async function publishMessage(
+       persistent: true, // 持久化消息
+     });
+   } catch (error) {
+-    console.error(`❌ 发布消息到队列 ${queueName} 失败:`, error);
++    logger.error({ err: error }, `❌ 发布消息到队列 ${queueName} 失败`);
+     return false;
+   }
+ }
+@@ -118,7 +119,7 @@ export async function publishOrderTimeoutCheck(
+       expiration: String(delayMs),
+     });
+   } catch (error) {
+-    console.error('❌ 发布订单超时检查消息失败:', error);
++    logger.error({ err: error }, '❌ 发布订单超时检查消息失败');
+     return false;
+   }
+ }
+@@ -137,24 +138,24 @@ export async function consumeQueue(
+       if (msg) {
+         try {
+           const content = JSON.parse(msg.content.toString());
+-          console.log(`📨 收到消息 [${queueName}]:`, content);
++          logger.info({ content }, `📨 收到消息 [${queueName}]`);
+           
+           await handler(content);
+           
+           // 确认消息已处理
+           ch.ack(msg);
+-          console.log(`✅ 消息处理成功 [${queueName}]`);
++          logger.info(`✅ 消息处理成功 [${queueName}]`);
+         } catch (error) {
+-          console.error(`❌ 处理消息失败 [${queueName}]:`, error);
++          logger.error({ err: error }, `❌ 处理消息失败 [${queueName}]`);
+           // 拒绝消息并重新入队
+           ch.nack(msg, false, true);
+         }
+       }
+     });
+ 
+-    console.log(`👂 开始监听队列: ${queueName}`);
++    logger.info(`👂 开始监听队列: ${queueName}`);
+   } catch (error) {
+-    console.error(`❌ 消费队列 ${queueName} 失败:`, error);
++    logger.error({ err: error }, `❌ 消费队列 ${queueName} 失败`);
+     throw error;
+   }
+ }
+@@ -172,9 +173,9 @@ export async function closeRabbitMQ(): Promise<void> {
+       await (connection as any).close();
+       connection = null;
+     }
+-    console.log('✅ RabbitMQ 连接已关闭');
++    logger.info('✅ RabbitMQ 连接已关闭');
+   } catch (error) {
+-    console.error('❌ 关闭 RabbitMQ 连接失败:', error);
++    logger.error({ err: error }, '❌ 关闭 RabbitMQ 连接失败');
+   }
+ }
+ 
+diff --git a/backend/src/database/redis.ts b/backend/src/database/redis.ts
+index 18d324b..b032b01 100644
+--- a/backend/src/database/redis.ts
++++ b/backend/src/database/redis.ts
+@@ -1,5 +1,6 @@
+ import Redis from 'ioredis';
+ import dotenv from 'dotenv';
++import logger from '../utils/logger';
+ 
+ dotenv.config();
+ 
+@@ -17,11 +18,11 @@ export async function connectRedis() {
+   });
+ 
+   redisClient.on('error', (err) => {
+-    console.error('Redis错误:', err);
++    logger.error({ err }, 'Redis错误');
+   });
+ 
+   redisClient.on('connect', () => {
+-    console.log('Redis连接中...');
++    logger.info('Redis连接中...');
+   });
+ 
+   await redisClient.ping();
+diff --git a/backend/src/database/seed.ts b/backend/src/database/seed.ts
+index 301bd30..3928e72 100644
+--- a/backend/src/database/seed.ts
++++ b/backend/src/database/seed.ts
+@@ -1,6 +1,7 @@
+ import { getPool } from './mysql';
+ import { connectDatabase } from './mysql';
+ import bcrypt from 'bcryptjs';
++import logger from '../utils/logger';
+ 
+ const categories = [
+   { name: '电子产品', parent_id: null, sort_order: 1 },
+@@ -116,12 +117,12 @@ const products = [
+ async function seed() {
+   try {
+     await connectDatabase();
+-    console.log('开始填充示例数据...\n');
++    logger.info('开始填充示例数据...\n');
+ 
+     const pool = getPool();
+ 
+     // 清空现有数据
+-    console.log('清空现有数据...');
++    logger.info('清空现有数据...');
+     await pool.execute('SET FOREIGN_KEY_CHECKS = 0');
+     await pool.execute('TRUNCATE TABLE categories');
+     await pool.execute('TRUNCATE TABLE products');
+@@ -129,17 +130,17 @@ async function seed() {
+     await pool.execute('SET FOREIGN_KEY_CHECKS = 1');
+ 
+     // 插入分类
+-    console.log('插入商品分类...');
++    logger.info('插入商品分类...');
+     for (const category of categories) {
+       await pool.execute(
+         'INSERT INTO categories (name, parent_id, sort_order) VALUES (?, ?, ?)',
+         [category.name, category.parent_id, category.sort_order]
+       );
+     }
+-    console.log(`✓ 已插入 ${categories.length} 个分类`);
++    logger.info(`✓ 已插入 ${categories.length} 个分类`);
+ 
+     // 插入商品
+-    console.log('插入商品...');
++    logger.info('插入商品...');
+     for (const product of products) {
+       await pool.execute(
+         `INSERT INTO products (title, description, category_id, brand, price, original_price, stock, main_image, sales_count, status)
+@@ -158,25 +159,25 @@ async function seed() {
+         ]
+       );
+     }
+-    console.log(`✓ 已插入 ${products.length} 个商品`);
++    logger.info(`✓ 已插入 ${products.length} 个商品`);
+ 
+     // 创建测试用户
+-    console.log('创建测试用户...');
++    logger.info('创建测试用户...');
+     const password_hash = await bcrypt.hash('123456', 10);
+     await pool.execute(
+       'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+       ['testuser', 'test@example.com', password_hash]
+     );
+-    console.log('✓ 已创建测试用户 (email: test@example.com, password: 123456)');
++    logger.info('✓ 已创建测试用户 (email: test@example.com, password: 123456)');
+ 
+-    console.log('\n✓ 示例数据填充完成！');
+-    console.log('\n可以使用以下账号登录:');
+-    console.log('邮箱: test@example.com');
+-    console.log('密码: 123456');
++    logger.info('\n✓ 示例数据填充完成！');
++    logger.info('\n可以使用以下账号登录:');
++    logger.info('邮箱: test@example.com');
++    logger.info('密码: 123456');
+     
+     process.exit(0);
+   } catch (error) {
+-    console.error('填充数据失败:', error);
++    logger.error({ err: error }, '填充数据失败');
+     process.exit(1);
+   }
+ }
+diff --git a/backend/src/database/sync-es.ts b/backend/src/database/sync-es.ts
+index 3cfe5b9..1f398b5 100644
+--- a/backend/src/database/sync-es.ts
++++ b/backend/src/database/sync-es.ts
+@@ -7,10 +7,11 @@ import {
+   bulkSyncProductsToES,
+   checkESConnection,
+ } from './elasticsearch';
++import logger from '../utils/logger';
+ 
+ async function syncAllProducts() {
+   try {
+-    console.log('🚀 开始同步商品数据到 Elasticsearch...');
++    logger.info('🚀 开始同步商品数据到 Elasticsearch...');
+ 
+     // 连接数据库
+     await connectDatabase();
+@@ -45,19 +46,19 @@ async function syncAllProducts() {
+     );
+ 
+     const productArray = products as any[];
+-    console.log(`📦 从 MySQL 获取到 ${productArray.length} 个商品`);
++    logger.info(`📦 从 MySQL 获取到 ${productArray.length} 个商品`);
+ 
+     if (productArray.length === 0) {
+-      console.log('⚠️ 没有商品需要同步');
++      logger.info('⚠️ 没有商品需要同步');
+       return;
+     }
+ 
+     // 批量同步到 ES
+     await bulkSyncProductsToES(productArray);
+ 
+-    console.log('✅ 商品数据同步完成！');
++    logger.info('✅ 商品数据同步完成！');
+   } catch (error) {
+-    console.error('❌ 同步失败:', error);
++    logger.error({ err: error }, '❌ 同步失败');
+     throw error;
+   }
+ }
+@@ -65,11 +66,11 @@ async function syncAllProducts() {
+ // 执行同步
+ syncAllProducts()
+   .then(() => {
+-    console.log('🎉 同步任务完成');
++    logger.info('🎉 同步任务完成');
+     process.exit(0);
+   })
+   .catch((error) => {
+-    console.error('💥 同步任务失败:', error);
++    logger.error({ err: error }, '💥 同步任务失败');
+     process.exit(1);
+   });
+ 
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index cbefdda..690cf7b 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -11,6 +11,7 @@ import { checkESConnection } from './database/elasticsearch';
+ import { startOrderTimeoutChecker } from './services/order-timeout.service';
+ import { startMessageQueueConsumers } from './services/message-queue.service';
+ import { apiLimiter } from './middleware/rate-limit';
++import { requestLogger } from './middleware/request-logger';
+ 
+ // 导入路由
+ import userRoutes from './routes/user.routes';
+@@ -32,6 +33,7 @@ import adminCouponRoutes from './routes/admin-coupon.routes';
+ 
+ // 优惠券路由
+ import couponRoutes from './routes/coupon.routes';
++import logger from './utils/logger';
+ 
+ dotenv.config();
+ 
+@@ -54,6 +56,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
+ // 静态文件
+ app.use('/uploads', express.static('uploads'));
+ 
++// HTTP 请求日志
++app.use(requestLogger);
++
+ // 健康检查（不计入限流）
+ app.get('/health', (req: Request, res: Response) => {
+   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+@@ -88,7 +93,7 @@ app.use((req: Request, res: Response) => {
+ 
+ // 错误处理中间件
+ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+-  console.error('错误:', err);
++  logger.error({ err }, '错误');
+   res.status(500).json({ 
+     error: '服务器内部错误',
+     message: process.env.NODE_ENV === 'development' ? err.message : undefined
+@@ -100,46 +105,46 @@ async function startServer() {
+   try {
+     // 连接数据库
+     await connectDatabase();
+-    console.log('✓ MySQL数据库连接成功');
++    logger.info('✓ MySQL数据库连接成功');
+     
+     await connectRedis();
+-    console.log('✓ Redis连接成功');
++    logger.info('✓ Redis连接成功');
+     
+     await connectMongoDB();
+-    console.log('✓ MongoDB连接成功');
++    logger.info('✓ MongoDB连接成功');
+     
+     // 连接 RabbitMQ
+     await connectRabbitMQ();
+-    console.log('✓ RabbitMQ连接成功');
++    logger.info('✓ RabbitMQ连接成功');
+     
+     // 检查 Elasticsearch 连接（不阻塞启动）
+     checkESConnection().then((connected) => {
+       if (connected) {
+-        console.log('✓ Elasticsearch连接成功');
++        logger.info('✓ Elasticsearch连接成功');
+       } else {
+-        console.warn('⚠️ Elasticsearch连接失败，搜索功能可能不可用');
++        logger.warn('⚠️ Elasticsearch连接失败，搜索功能可能不可用');
+       }
+     });
+     
+     // 启动订单超时检查服务
+     startOrderTimeoutChecker();
+-    console.log('✓ 订单超时检查服务已启动');
++    logger.info('✓ 订单超时检查服务已启动');
+     
+     // 启动消息队列消费者
+     await startMessageQueueConsumers();
+-    console.log('✓ 消息队列消费者已启动');
++    logger.info('✓ 消息队列消费者已启动');
+     
+     // 启动服务器
+     app.listen(PORT, () => {
+-      console.log(`\n🚀 服务器运行在 http://localhost:${PORT}`);
+-      console.log(`📝 环境: ${process.env.NODE_ENV}`);
+-      console.log(`\n📚 新功能已启用:`);
+-      console.log(`  • Elasticsearch 商品搜索`);
+-      console.log(`  • RabbitMQ 消息队列`);
+-      console.log(`  • 优惠券系统`);
++      logger.info(`\n🚀 服务器运行在 http://localhost:${PORT}`);
++      logger.info(`📝 环境: ${process.env.NODE_ENV}`);
++      logger.info(`\n📚 新功能已启用:`);
++      logger.info(`  • Elasticsearch 商品搜索`);
++      logger.info(`  • RabbitMQ 消息队列`);
++      logger.info(`  • 优惠券系统`);
+     });
+   } catch (error) {
+-    console.error('启动失败:', error);
++    logger.error({ err: error }, '启动失败');
+     process.exit(1);
+   }
+ }
+diff --git a/backend/src/middleware/admin-auth.ts b/backend/src/middleware/admin-auth.ts
+index 7315479..d70e12c 100644
+--- a/backend/src/middleware/admin-auth.ts
++++ b/backend/src/middleware/admin-auth.ts
+@@ -1,6 +1,7 @@
+ import { Request, Response, NextFunction } from 'express';
+ import jwt from 'jsonwebtoken';
+ import { getPool } from '../database/mysql';
++import logger from '../utils/logger';
+ 
+ const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
+ 
+@@ -82,7 +83,7 @@ export const authenticateAdmin = async (
+     if (error instanceof jwt.TokenExpiredError) {
+       return res.status(401).json({ error: '令牌已过期' });
+     }
+-    console.error('管理员认证失败:', error);
++    logger.error({ err: error }, '管理员认证失败');
+     res.status(500).json({ error: '认证失败' });
+   }
+ };
+@@ -121,7 +122,7 @@ export const requirePermission = (permissionCode: string) => {
+ 
+       next();
+     } catch (error) {
+-      console.error('权限验证失败:', error);
++      logger.error({ err: error }, '权限验证失败');
+       res.status(500).json({ error: '权限验证失败' });
+     }
+   };
+diff --git a/backend/src/middleware/request-logger.ts b/backend/src/middleware/request-logger.ts
+new file mode 100644
+index 0000000..0d53df9
+--- /dev/null
++++ b/backend/src/middleware/request-logger.ts
+@@ -0,0 +1,29 @@
++/**
++ * HTTP 请求日志中间件
++ * 记录每个请求的方法、路径、状态码与耗时
++ */
++import { Request, Response, NextFunction } from 'express';
++import logger from '../utils/logger';
++
++export function requestLogger(req: Request, res: Response, next: NextFunction): void {
++  const start = Date.now();
++
++  res.on('finish', () => {
++    const data = {
++      method: req.method,
++      url: req.originalUrl,
++      status: res.statusCode,
++      durationMs: Date.now() - start,
++      ip: req.ip,
++    };
++    if (res.statusCode >= 500) {
++      logger.error(data, 'HTTP请求');
++    } else if (res.statusCode >= 400) {
++      logger.warn(data, 'HTTP请求');
++    } else {
++      logger.info(data, 'HTTP请求');
++    }
++  });
++
++  next();
++}
+diff --git a/backend/src/services/message-queue.service.ts b/backend/src/services/message-queue.service.ts
+index 9ac382e..253616d 100644
+--- a/backend/src/services/message-queue.service.ts
++++ b/backend/src/services/message-queue.service.ts
+@@ -6,6 +6,7 @@ import { publishMessage, publishOrderTimeoutCheck, consumeQueue, QUEUES } from '
+ import { pool } from '../database/mysql';
+ import { RowDataPacket } from 'mysql2';
+ import { cancelTimeoutOrder } from './order-timeout.service';
++import logger from '../utils/logger';
+ 
+ /**
+  * 订单创建消息处理器
+@@ -13,7 +14,7 @@ import { cancelTimeoutOrder } from './order-timeout.service';
+ export async function handleOrderCreated(message: any) {
+   const { order_id, user_id, items } = message;
+   
+-  console.log(`📦 处理订单创建消息: order_id=${order_id}`);
++  logger.info(`📦 处理订单创建消息: order_id=${order_id}`);
+ 
+   try {
+     // 发送库存扣减消息
+@@ -34,9 +35,9 @@ export async function handleOrderCreated(message: any) {
+       content: `您的订单 ${order_id} 已创建成功，请尽快完成支付。`,
+     });
+ 
+-    console.log(`✅ 订单创建消息处理完成: order_id=${order_id}`);
++    logger.info(`✅ 订单创建消息处理完成: order_id=${order_id}`);
+   } catch (error) {
+-    console.error('❌ 处理订单创建消息失败:', error);
++    logger.error({ err: error }, '❌ 处理订单创建消息失败');
+     throw error;
+   }
+ }
+@@ -47,7 +48,7 @@ export async function handleOrderCreated(message: any) {
+ export async function handleOrderPaid(message: any) {
+   const { order_id, user_id } = message;
+   
+-  console.log(`💰 处理订单支付消息: order_id=${order_id}`);
++  logger.info(`💰 处理订单支付消息: order_id=${order_id}`);
+ 
+   try {
+     // 更新商品销量
+@@ -77,9 +78,9 @@ export async function handleOrderPaid(message: any) {
+       content: `您的订单 ${order_id} 已支付成功，我们会尽快为您发货。`,
+     });
+ 
+-    console.log(`✅ 订单支付消息处理完成: order_id=${order_id}`);
++    logger.info(`✅ 订单支付消息处理完成: order_id=${order_id}`);
+   } catch (error) {
+-    console.error('❌ 处理订单支付消息失败:', error);
++    logger.error({ err: error }, '❌ 处理订单支付消息失败');
+     throw error;
+   }
+ }
+@@ -90,7 +91,7 @@ export async function handleOrderPaid(message: any) {
+ export async function handleOrderCancelled(message: any) {
+   const { order_id, user_id, items } = message;
+   
+-  console.log(`❌ 处理订单取消消息: order_id=${order_id}`);
++  logger.info(`❌ 处理订单取消消息: order_id=${order_id}`);
+ 
+   try {
+     // 发送库存恢复消息
+@@ -111,9 +112,9 @@ export async function handleOrderCancelled(message: any) {
+       content: `您的订单 ${order_id} 已取消，库存已恢复。`,
+     });
+ 
+-    console.log(`✅ 订单取消消息处理完成: order_id=${order_id}`);
++    logger.info(`✅ 订单取消消息处理完成: order_id=${order_id}`);
+   } catch (error) {
+-    console.error('❌ 处理订单取消消息失败:', error);
++    logger.error({ err: error }, '❌ 处理订单取消消息失败');
+     throw error;
+   }
+ }
+@@ -124,7 +125,7 @@ export async function handleOrderCancelled(message: any) {
+ export async function handleStockDeduction(message: any) {
+   const { order_id, sku_id, quantity } = message;
+   
+-  console.log(`📉 处理库存扣减: sku_id=${sku_id}, quantity=${quantity}`);
++  logger.info(`📉 处理库存扣减: sku_id=${sku_id}, quantity=${quantity}`);
+ 
+   try {
+     const connection = await pool.getConnection();
+@@ -147,7 +148,7 @@ export async function handleStockDeduction(message: any) {
+       }
+ 
+       await connection.commit();
+-      console.log(`✅ 库存扣减成功: sku_id=${sku_id}, quantity=${quantity}`);
++      logger.info(`✅ 库存扣减成功: sku_id=${sku_id}, quantity=${quantity}`);
+     } catch (error) {
+       await connection.rollback();
+       throw error;
+@@ -155,7 +156,7 @@ export async function handleStockDeduction(message: any) {
+       connection.release();
+     }
+   } catch (error) {
+-    console.error('❌ 库存扣减失败:', error);
++    logger.error({ err: error }, '❌ 库存扣减失败');
+     throw error;
+   }
+ }
+@@ -166,7 +167,7 @@ export async function handleStockDeduction(message: any) {
+ export async function handleStockRecovery(message: any) {
+   const { order_id, sku_id, quantity } = message;
+   
+-  console.log(`📈 处理库存恢复: sku_id=${sku_id}, quantity=${quantity}`);
++  logger.info(`📈 处理库存恢复: sku_id=${sku_id}, quantity=${quantity}`);
+ 
+   try {
+     await pool.execute(
+@@ -176,9 +177,9 @@ export async function handleStockRecovery(message: any) {
+       [quantity, sku_id]
+     );
+ 
+-    console.log(`✅ 库存恢复成功: sku_id=${sku_id}, quantity=${quantity}`);
++    logger.info(`✅ 库存恢复成功: sku_id=${sku_id}, quantity=${quantity}`);
+   } catch (error) {
+-    console.error('❌ 库存恢复失败:', error);
++    logger.error({ err: error }, '❌ 库存恢复失败');
+     throw error;
+   }
+ }
+@@ -189,11 +190,11 @@ export async function handleStockRecovery(message: any) {
+ export async function handleEmailNotification(message: any) {
+   const { type, user_id, subject, content } = message;
+   
+-  console.log(`📧 模拟发送邮件通知:`);
+-  console.log(`   类型: ${type}`);
+-  console.log(`   用户: ${user_id}`);
+-  console.log(`   主题: ${subject}`);
+-  console.log(`   内容: ${content}`);
++  logger.info(`📧 模拟发送邮件通知:`);
++  logger.info(`   类型: ${type}`);
++  logger.info(`   用户: ${user_id}`);
++  logger.info(`   主题: ${subject}`);
++  logger.info(`   内容: ${content}`);
+ 
+   // 这里应该调用真实的邮件服务
+   // 例如: await sendEmail(user_email, subject, content);
+@@ -201,7 +202,7 @@ export async function handleEmailNotification(message: any) {
+   // 模拟邮件发送延迟
+   await new Promise(resolve => setTimeout(resolve, 1000));
+   
+-  console.log(`✅ 邮件通知已发送`);
++  logger.info(`✅ 邮件通知已发送`);
+ }
+ 
+ /**
+@@ -211,13 +212,13 @@ export async function handleEmailNotification(message: any) {
+ export async function handleOrderTimeoutCheck(message: any) {
+   const { order_id, user_id } = message;
+ 
+-  console.log(`⏰ 处理订单超时检查: order_id=${order_id}`);
++  logger.info(`⏰ 处理订单超时检查: order_id=${order_id}`);
+ 
+   try {
+     const cancelled = await cancelTimeoutOrder(order_id);
+ 
+     if (!cancelled) {
+-      console.log(`⏭️ 订单 ${order_id} 无需取消（已支付或已取消）`);
++      logger.info(`⏭️ 订单 ${order_id} 无需取消（已支付或已取消）`);
+       return;
+     }
+ 
+@@ -230,9 +231,9 @@ export async function handleOrderTimeoutCheck(message: any) {
+       content: `您的订单 ${order_id} 因超时未支付已自动取消，库存已恢复。`,
+     });
+ 
+-    console.log(`✅ 订单超时取消处理完成: order_id=${order_id}`);
++    logger.info(`✅ 订单超时取消处理完成: order_id=${order_id}`);
+   } catch (error) {
+-    console.error('❌ 处理订单超时检查失败:', error);
++    logger.error({ err: error }, '❌ 处理订单超时检查失败');
+     throw error;
+   }
+ }
+@@ -242,7 +243,7 @@ export async function handleOrderTimeoutCheck(message: any) {
+  */
+ export async function startMessageQueueConsumers() {
+   try {
+-    console.log('🚀 启动消息队列消费者...');
++    logger.info('🚀 启动消息队列消费者...');
+ 
+     // 订单相关队列
+     await consumeQueue(QUEUES.ORDER_CREATED, handleOrderCreated);
+@@ -257,9 +258,9 @@ export async function startMessageQueueConsumers() {
+     // 通知相关队列
+     await consumeQueue(QUEUES.EMAIL_NOTIFICATION, handleEmailNotification);
+ 
+-    console.log('✅ 所有消息队列消费者已启动');
++    logger.info('✅ 所有消息队列消费者已启动');
+   } catch (error) {
+-    console.error('❌ 启动消息队列消费者失败:', error);
++    logger.error({ err: error }, '❌ 启动消息队列消费者失败');
+     throw error;
+   }
+ }
+diff --git a/backend/src/services/order-timeout.service.ts b/backend/src/services/order-timeout.service.ts
+index 0234bf1..4506a6f 100644
+--- a/backend/src/services/order-timeout.service.ts
++++ b/backend/src/services/order-timeout.service.ts
+@@ -5,6 +5,7 @@
+ 
+ import { getPool } from '../database/mysql';
+ import { RowDataPacket } from 'mysql2';
++import logger from '../utils/logger';
+ 
+ interface PendingOrder extends RowDataPacket {
+   order_id: number;
+@@ -80,11 +81,11 @@ export async function cancelTimeoutOrder(orderId: number): Promise<boolean> {
+     );
+ 
+     await connection.commit();
+-    console.log(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
++    logger.info(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
+     return true;
+   } catch (error) {
+     await connection.rollback();
+-    console.error(`[订单超时] 取消订单 ${orderId} 失败:`, error);
++    logger.error({ err: error }, `[订单超时] 取消订单 ${orderId} 失败`);
+     throw error;
+   } finally {
+     connection.release();
+@@ -107,7 +108,7 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
+       [ORDER_TIMEOUT_MINUTES]
+     );
+ 
+-    console.log(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
++    logger.info(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
+ 
+     let successCount = 0;
+     for (const order of timeoutOrders) {
+@@ -115,16 +116,16 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
+         const cancelled = await cancelTimeoutOrder(order.order_id);
+         if (cancelled) successCount++;
+       } catch (error) {
+-        console.error(`[订单超时] 处理订单 ${order.order_no} 失败:`, error);
++        logger.error({ err: error }, `[订单超时] 处理订单 ${order.order_no} 失败`);
+         // 继续处理下一个订单
+       }
+     }
+ 
+     if (timeoutOrders.length > 0) {
+-      console.log(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
++      logger.info(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
+     }
+   } catch (error) {
+-    console.error('[订单超时检查] 查询超时订单失败:', error);
++    logger.error({ err: error }, '[订单超时检查] 查询超时订单失败');
+     throw error;
+   }
+ }
+@@ -134,17 +135,17 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
+  * 每5分钟执行一次
+  */
+ export function startOrderTimeoutChecker(): NodeJS.Timeout {
+-  console.log('[订单超时检查] 定时任务已启动，每5分钟检查一次');
++  logger.info('[订单超时检查] 定时任务已启动，每5分钟检查一次');
+   
+   // 立即执行一次
+   checkAndCancelTimeoutOrders().catch(error => {
+-    console.error('[订单超时检查] 初始检查失败:', error);
++    logger.error({ err: error }, '[订单超时检查] 初始检查失败');
+   });
+ 
+   // 每5分钟执行一次
+   return setInterval(() => {
+     checkAndCancelTimeoutOrders().catch(error => {
+-      console.error('[订单超时检查] 定时检查失败:', error);
++      logger.error({ err: error }, '[订单超时检查] 定时检查失败');
+     });
+   }, 5 * 60 * 1000); // 5分钟
+ }
+@@ -154,7 +155,7 @@ export function startOrderTimeoutChecker(): NodeJS.Timeout {
+  */
+ export function stopOrderTimeoutChecker(timer: NodeJS.Timeout): void {
+   clearInterval(timer);
+-  console.log('[订单超时检查] 定时任务已停止');
++  logger.info('[订单超时检查] 定时任务已停止');
+ }
+ 
+ /**
+diff --git a/backend/src/services/recommendation.service.ts b/backend/src/services/recommendation.service.ts
+index 82716ef..2ed79bc 100644
+--- a/backend/src/services/recommendation.service.ts
++++ b/backend/src/services/recommendation.service.ts
+@@ -6,6 +6,7 @@
+ import { getPool } from '../database/mysql';
+ import { RowDataPacket } from 'mysql2';
+ import mongoose from '../database/mongodb';
++import logger from '../utils/logger';
+ 
+ interface Product extends RowDataPacket {
+   product_id: number;
+@@ -96,7 +97,7 @@ export async function getRecommendationsByBrowseHistory(
+ 
+     return recommendations;
+   } catch (error) {
+-    console.error('[推荐服务] 获取推荐商品失败:', error);
++    logger.error({ err: error }, '[推荐服务] 获取推荐商品失败');
+     // 出错时返回热门商品
+     return await getHotProducts(limit);
+   }
+@@ -176,7 +177,7 @@ export async function getRelatedProducts(
+ 
+     return relatedProducts;
+   } catch (error) {
+-    console.error('[推荐服务] 获取相关商品失败:', error);
++    logger.error({ err: error }, '[推荐服务] 获取相关商品失败');
+     return [];
+   }
+ }
+@@ -206,7 +207,7 @@ async function getHotProducts(limit: number): Promise<Product[]> {
+ 
+     return hotProducts;
+   } catch (error) {
+-    console.error('[推荐服务] 获取热门商品失败:', error);
++    logger.error({ err: error }, '[推荐服务] 获取热门商品失败');
+     return [];
+   }
+ }
+@@ -251,7 +252,7 @@ export async function getNewUserRecommendations(limit: number = 10): Promise<Pro
+ 
+     return recommendations;
+   } catch (error) {
+-    console.error('[推荐服务] 获取新用户推荐失败:', error);
++    logger.error({ err: error }, '[推荐服务] 获取新用户推荐失败');
+     return await getHotProducts(limit);
+   }
+ }
+@@ -275,7 +276,7 @@ export async function getGuessYouLike(
+     
+     return recommendations;
+   } catch (error) {
+-    console.error('[推荐服务] 猜你喜欢失败:', error);
++    logger.error({ err: error }, '[推荐服务] 猜你喜欢失败');
+     return await getHotProducts(limit);
+   }
+ }
+diff --git a/backend/src/utils/logger.ts b/backend/src/utils/logger.ts
+new file mode 100644
+index 0000000..6df5b50
+--- /dev/null
++++ b/backend/src/utils/logger.ts
+@@ -0,0 +1,49 @@
++/**
++ * 统一日志
++ *
++ * - 生产环境：默认输出 JSON 到 stdout，由日志采集系统收集
++ * - 开发环境：通过 pino-pretty 输出带颜色的可读日志
++ * - 配置 LOG_FILE 后，同时写入该文件（JSON 格式，自动创建目录）
++ *
++ * 用法：
++ *   import logger from '../utils/logger';
++ *   logger.info('服务启动');
++ *   logger.info({ port }, '服务启动');
++ *   logger.error({ err }, '数据库连接失败');
++ *
++ * 环境变量：
++ *   LOG_LEVEL   日志级别（默认开发环境 debug，生产环境 info）
++ *   LOG_FILE    日志文件路径（可选）
++ */
++import pino from 'pino';
++
++const isProduction = process.env.NODE_ENV === 'production';
++const level = process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug');
++
++const targets: pino.TransportTargetOptions[] = [];
++
++// 开发环境：带颜色的可读输出
++if (!isProduction) {
++  targets.push({
++    target: 'pino-pretty',
++    options: {
++      colorize: true,
++      translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
++      ignore: 'pid,hostname',
++    },
++  });
++}
++
++// 配置了 LOG_FILE 时，同时写入日志文件（JSON 格式）
++if (process.env.LOG_FILE) {
++  targets.push({
++    target: 'pino/file',
++    options: { destination: process.env.LOG_FILE, mkdir: true },
++  });
++}
++
++// 有 target 时走 worker 线程 transport，否则直接输出到 stdout
++const logger =
++  targets.length > 0 ? pino({ level }, pino.transport({ targets })) : pino({ level });
++
++export default logger;

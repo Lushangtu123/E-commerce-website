@@ -1,5 +1,6 @@
 import { getPool } from './mysql';
 import { connectDatabase } from './mysql';
+import logger from '../utils/logger';
 
 const migrations = [
   // 用户表
@@ -181,19 +182,19 @@ const migrations = [
 async function runMigrations() {
   try {
     await connectDatabase();
-    console.log('开始执行数据库迁移...\n');
+    logger.info('开始执行数据库迁移...\n');
 
     const pool = getPool();
     
     for (let i = 0; i < migrations.length; i++) {
-      console.log(`执行迁移 ${i + 1}/${migrations.length}...`);
+      logger.info(`执行迁移 ${i + 1}/${migrations.length}...`);
       await pool.execute(migrations[i]);
     }
 
-    console.log('\n✓ 所有迁移执行成功！');
+    logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);
   } catch (error) {
-    console.error('迁移失败:', error);
+    logger.error({ err: error }, '迁移失败');
     process.exit(1);
   }
 }

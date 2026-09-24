@@ -1,4 +1,5 @@
 import { Client } from '@elastic/elasticsearch';
+import logger from '../utils/logger';
 
 // 创建 Elasticsearch 客户端
 const esClient = new Client({
@@ -66,12 +67,12 @@ export async function initProductIndex() {
           },
         },
       });
-      console.log(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 创建成功`);
+      logger.info(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 创建成功`);
     } else {
-      console.log(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 已存在`);
+      logger.info(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 已存在`);
     }
   } catch (error) {
-    console.error('❌ 初始化 Elasticsearch 索引失败:', error);
+    logger.error({ err: error }, '❌ 初始化 Elasticsearch 索引失败');
     throw error;
   }
 }
@@ -100,9 +101,9 @@ export async function syncProductToES(product: any) {
         updated_at: product.updated_at,
       },
     });
-    console.log(`✅ 商品 ${product.product_id} 同步到 ES 成功`);
+    logger.info(`✅ 商品 ${product.product_id} 同步到 ES 成功`);
   } catch (error) {
-    console.error(`❌ 商品 ${product.product_id} 同步到 ES 失败:`, error);
+    logger.error({ err: error }, `❌ 商品 ${product.product_id} 同步到 ES 失败`);
     throw error;
   }
 }
@@ -134,19 +135,19 @@ export async function bulkSyncProductsToES(products: any[]) {
     const result = await esClient.bulk({ body });
     
     if (result.errors) {
-      console.error('❌ 批量同步部分商品失败');
+      logger.error('❌ 批量同步部分商品失败');
       result.items.forEach((item: any, index: number) => {
         if (item.index?.error) {
-          console.error(`商品 ${products[index].product_id} 同步失败:`, item.index.error);
+          logger.error({ err: item.index.error }, `商品 ${products[index].product_id} 同步失败`);
         }
       });
     } else {
-      console.log(`✅ 批量同步 ${products.length} 个商品到 ES 成功`);
+      logger.info(`✅ 批量同步 ${products.length} 个商品到 ES 成功`);
     }
 
     return result;
   } catch (error) {
-    console.error('❌ 批量同步商品到 ES 失败:', error);
+    logger.error({ err: error }, '❌ 批量同步商品到 ES 失败');
     throw error;
   }
 }
@@ -160,10 +161,10 @@ export async function deleteProductFromES(productId: number) {
       index: PRODUCT_INDEX,
       id: productId.toString(),
     });
-    console.log(`✅ 商品 ${productId} 从 ES 删除成功`);
+    logger.info(`✅ 商品 ${productId} 从 ES 删除成功`);
   } catch (error: any) {
     if (error.meta?.statusCode !== 404) {
-      console.error(`❌ 商品 ${productId} 从 ES 删除失败:`, error);
+      logger.error({ err: error }, `❌ 商品 ${productId} 从 ES 删除失败`);
       throw error;
     }
   }
@@ -274,7 +275,7 @@ export async function searchProducts(params: {
       total_pages: Math.ceil(total / page_size),
     };
   } catch (error) {
-    console.error('❌ ES 搜索失败:', error);
+    logger.error({ err: error }, '❌ ES 搜索失败');
     throw error;
   }
 }
@@ -306,7 +307,7 @@ export async function getSearchSuggestions(prefix: string, limit: number = 10) {
     }
     return [];
   } catch (error) {
-    console.error('❌ 获取搜索建议失败:', error);
+    logger.error({ err: error }, '❌ 获取搜索建议失败');
     return [];
   }
 }
@@ -317,10 +318,10 @@ export async function getSearchSuggestions(prefix: string, limit: number = 10) {
 export async function checkESConnection() {
   try {
     const health = await esClient.cluster.health();
-    console.log('✅ Elasticsearch 连接成功:', health);
+    logger.info({ health }, '✅ Elasticsearch 连接成功');
     return true;
   } catch (error) {
-    console.error('❌ Elasticsearch 连接失败:', error);
+    logger.error({ err: error }, '❌ Elasticsearch 连接失败');
     return false;
   }
 }

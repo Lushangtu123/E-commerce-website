@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { ProductModel, ProductQuery } from '../models/product.model';
 import { SKUModel } from '../models/sku.model';
 import { getRedisClient } from '../database/redis';
+import logger from '../utils/logger';
 
 export class ProductController {
   // 获取商品列表
@@ -27,7 +28,7 @@ export class ProductController {
         totalPages: Math.ceil(result.total / params.limit!)
       });
     } catch (error) {
-      console.error('获取商品列表失败:', error);
+      logger.error({ err: error }, '获取商品列表失败');
       res.status(500).json({ error: '获取商品列表失败' });
     }
   }
@@ -66,7 +67,7 @@ export class ProductController {
 
       res.json({ product: productWithSKU });
     } catch (error) {
-      console.error('获取商品详情失败:', error);
+      logger.error({ err: error }, '获取商品详情失败');
       res.status(500).json({ error: '获取商品详情失败' });
     }
   }
@@ -93,7 +94,7 @@ export class ProductController {
 
       res.json({ products });
     } catch (error) {
-      console.error('获取热门商品失败:', error);
+      logger.error({ err: error }, '获取热门商品失败');
       res.status(500).json({ error: '获取热门商品失败' });
     }
   }
@@ -109,7 +110,7 @@ export class ProductController {
         product_id: productId
       });
     } catch (error) {
-      console.error('创建商品失败:', error);
+      logger.error({ err: error }, '创建商品失败');
       res.status(500).json({ error: '创建商品失败' });
     }
   }
@@ -133,7 +134,7 @@ export class ProductController {
         res.status(400).json({ error: '商品更新失败' });
       }
     } catch (error) {
-      console.error('更新商品失败:', error);
+      logger.error({ err: error }, '更新商品失败');
       res.status(500).json({ error: '更新商品失败' });
     }
   }
@@ -150,7 +151,7 @@ export class ProductController {
       
       res.json(categories);
     } catch (error) {
-      console.error('获取分类列表失败:', error);
+      logger.error({ err: error }, '获取分类列表失败');
       res.status(500).json({ error: '获取分类列表失败' });
     }
   }

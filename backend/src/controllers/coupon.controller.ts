@@ -4,6 +4,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { CouponModel, CouponStatus, UserCouponStatus } from '../models/coupon.model';
+import logger from '../utils/logger';
 
 export class CouponController {
   /**
@@ -31,7 +32,7 @@ export class CouponController {
         },
       });
     } catch (error) {
-      console.error('获取优惠券列表失败:', error);
+      logger.error({ err: error }, '获取优惠券列表失败');
       res.status(500).json({
         success: false,
         message: '获取优惠券列表失败',
@@ -59,7 +60,7 @@ export class CouponController {
         data: coupon,
       });
     } catch (error) {
-      console.error('获取优惠券详情失败:', error);
+      logger.error({ err: error }, '获取优惠券详情失败');
       res.status(500).json({
         success: false,
         message: '获取优惠券详情失败',
@@ -104,7 +105,7 @@ export class CouponController {
         data: { user_coupon_id: userCouponId },
       });
     } catch (error: any) {
-      console.error('领取优惠券失败:', error);
+      logger.error({ err: error }, '领取优惠券失败');
       res.status(400).json({
         success: false,
         message: error.message || '领取优惠券失败',
@@ -129,7 +130,7 @@ export class CouponController {
         data: coupons,
       });
     } catch (error) {
-      console.error('获取用户优惠券失败:', error);
+      logger.error({ err: error }, '获取用户优惠券失败');
       res.status(500).json({
         success: false,
         message: '获取用户优惠券失败',
@@ -190,7 +191,7 @@ export class CouponController {
         data: availableCoupons,
       });
     } catch (error) {
-      console.error('获取可用优惠券失败:', error);
+      logger.error({ err: error }, '获取可用优惠券失败');
       res.status(500).json({
         success: false,
         message: '获取可用优惠券失败',
@@ -251,7 +252,7 @@ export class CouponController {
         },
       });
     } catch (error) {
-      console.error('计算优惠金额失败:', error);
+      logger.error({ err: error }, '计算优惠金额失败');
       res.status(500).json({
         success: false,
         message: '计算优惠金额失败',

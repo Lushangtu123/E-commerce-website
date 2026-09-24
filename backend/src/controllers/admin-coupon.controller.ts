@@ -4,6 +4,7 @@
 import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/admin-auth';
 import { CouponModel, CouponType, CouponStatus } from '../models/coupon.model';
+import logger from '../utils/logger';
 
 export class AdminCouponController {
   /**
@@ -80,7 +81,7 @@ export class AdminCouponController {
         data: { coupon_id: couponId },
       });
     } catch (error) {
-      console.error('创建优惠券失败:', error);
+      logger.error({ err: error }, '创建优惠券失败');
       res.status(500).json({
         success: false,
         message: '创建优惠券失败',
@@ -116,7 +117,7 @@ export class AdminCouponController {
         },
       });
     } catch (error) {
-      console.error('获取优惠券列表失败:', error);
+      logger.error({ err: error }, '获取优惠券列表失败');
       res.status(500).json({
         success: false,
         message: '获取优惠券列表失败',
@@ -144,7 +145,7 @@ export class AdminCouponController {
         data: coupon,
       });
     } catch (error) {
-      console.error('获取优惠券详情失败:', error);
+      logger.error({ err: error }, '获取优惠券详情失败');
       res.status(500).json({
         success: false,
         message: '获取优惠券详情失败',
@@ -182,7 +183,7 @@ export class AdminCouponController {
         message: '更新成功',
       });
     } catch (error) {
-      console.error('更新优惠券状态失败:', error);
+      logger.error({ err: error }, '更新优惠券状态失败');
       res.status(500).json({
         success: false,
         message: '更新优惠券状态失败',

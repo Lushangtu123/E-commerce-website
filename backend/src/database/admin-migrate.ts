@@ -1,4 +1,5 @@
 import { connectDatabase, getPool } from './mysql';
+import logger from '../utils/logger';
 
 async function runAdminMigrations() {
   // 首先连接数据库
@@ -7,10 +8,10 @@ async function runAdminMigrations() {
   const connection = await pool.getConnection();
   
   try {
-    console.log('开始执行管理员系统数据库迁移...\n');
+    logger.info('开始执行管理员系统数据库迁移...\n');
 
     // 1. 创建角色表
-    console.log('创建角色表...');
+    logger.info('创建角色表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS roles (
         role_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -22,7 +23,7 @@ async function runAdminMigrations() {
     `);
 
     // 2. 创建管理员表
-    console.log('创建管理员表...');
+    logger.info('创建管理员表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS admins (
         admin_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -43,7 +44,7 @@ async function runAdminMigrations() {
     `);
 
     // 3. 创建权限表
-    console.log('创建权限表...');
+    logger.info('创建权限表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS permissions (
         permission_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -58,7 +59,7 @@ async function runAdminMigrations() {
     `);
 
     // 4. 创建角色权限关联表
-    console.log('创建角色权限关联表...');
+    logger.info('创建角色权限关联表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS role_permissions (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -72,7 +73,7 @@ async function runAdminMigrations() {
     `);
 
     // 5. 创建操作日志表
-    console.log('创建操作日志表...');
+    logger.info('创建操作日志表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS admin_logs (
         log_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -92,7 +93,7 @@ async function runAdminMigrations() {
     `);
 
     // 6. 创建流量统计表
-    console.log('创建流量统计表...');
+    logger.info('创建流量统计表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS traffic_statistics (
         id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -110,7 +111,7 @@ async function runAdminMigrations() {
     `);
 
     // 7. 创建页面访问记录表
-    console.log('创建页面访问记录表...');
+    logger.info('创建页面访问记录表...');
     await connection.query(`
       CREATE TABLE IF NOT EXISTS page_visits (
         visit_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -129,10 +130,10 @@ async function runAdminMigrations() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    console.log('\n✓ 所有管理员系统表创建成功！\n');
+    logger.info('\n✓ 所有管理员系统表创建成功！\n');
 
     // 插入初始数据
-    console.log('插入初始角色数据...');
+    logger.info('插入初始角色数据...');
     await connection.query(`
       INSERT IGNORE INTO roles (role_name, description) VALUES
       ('super_admin', '超级管理员 - 拥有所有权限'),
@@ -141,7 +142,7 @@ async function runAdminMigrations() {
       ('data_analyst', '数据分析师 - 查看统计数据')
     `);
 
-    console.log('插入初始权限数据...');
+    logger.info('插入初始权限数据...');
     await connection.query(`
       INSERT IGNORE INTO permissions (permission_name, permission_code, resource, action, description) VALUES
       ('查看商品', 'product:view', 'product', 'view', '查看商品列表和详情'),
@@ -160,14 +161,14 @@ async function runAdminMigrations() {
     `);
 
     // 为超级管理员分配所有权限
-    console.log('为超级管理员分配权限...');
+    logger.info('为超级管理员分配权限...');
     await connection.query(`
       INSERT IGNORE INTO role_permissions (role_id, permission_id)
       SELECT 1, permission_id FROM permissions
     `);
 
     // 创建默认管理员账号（密码：admin123）
-    console.log('创建默认管理员账号...');
+    logger.info('创建默认管理员账号...');
     const bcrypt = require('bcryptjs');
     const defaultPassword = await bcrypt.hash('admin123', 10);
     
@@ -176,14 +177,14 @@ async function runAdminMigrations() {
       VALUES ('admin', ?, '系统管理员', 'admin@example.com', 1, 1)
     `, [defaultPassword]);
 
-    console.log('\n✓ 初始数据插入成功！');
-    console.log('\n默认管理员账号:');
-    console.log('用户名: admin');
-    console.log('密码: admin123');
-    console.log('请登录后立即修改密码！\n');
+    logger.info('\n✓ 初始数据插入成功！');
+    logger.info('\n默认管理员账号:');
+    logger.info('用户名: admin');
+    logger.info('密码: admin123');
+    logger.info('请登录后立即修改密码！\n');
 
   } catch (error) {
-    console.error('迁移失败:', error);
+    logger.error({ err: error }, '迁移失败');
     throw error;
   } finally {
     connection.release();
@@ -194,11 +195,11 @@ async function runAdminMigrations() {
 if (require.main === module) {
   runAdminMigrations()
     .then(() => {
-      console.log('管理员系统初始化完成！');
+      logger.info('管理员系统初始化完成！');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('初始化失败:', error);
+      logger.error({ err: error }, '初始化失败');
       process.exit(1);
     });
 }

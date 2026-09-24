@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import logger from '../utils/logger';
 
 dotenv.config();
 
@@ -9,7 +10,7 @@ export async function connectMongoDB() {
   await mongoose.connect(uri);
   
   mongoose.connection.on('error', (err) => {
-    console.error('MongoDB错误:', err);
+    logger.error({ err }, 'MongoDB错误');
   });
 }
 

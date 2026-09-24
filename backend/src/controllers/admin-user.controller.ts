@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { logAdminAction } from './admin.controller';
+import logger from '../utils/logger';
 
 // 获取用户列表（管理员）
 export const getAdminUsers = async (req: Request, res: Response) => {
@@ -59,7 +60,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取用户列表失败:', error);
+    logger.error({ err: error }, '获取用户列表失败');
     res.status(500).json({ error: '获取用户列表失败' });
   }
 };
@@ -118,7 +119,7 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
       addresses
     });
   } catch (error) {
-    console.error('获取用户详情失败:', error);
+    logger.error({ err: error }, '获取用户详情失败');
     res.status(500).json({ error: '获取用户详情失败' });
   }
 };
@@ -165,7 +166,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 
     res.json({ message: '更新成功', status });
   } catch (error) {
-    console.error('更新用户状态失败:', error);
+    logger.error({ err: error }, '更新用户状态失败');
     res.status(500).json({ error: '更新失败' });
   }
 };
@@ -207,7 +208,7 @@ export const getUserStatistics = async (req: Request, res: Response) => {
       weekly_trend: weeklyTrend
     });
   } catch (error) {
-    console.error('获取用户统计失败:', error);
+    logger.error({ err: error }, '获取用户统计失败');
     res.status(500).json({ error: '获取统计失败' });
   }
 };
@@ -249,7 +250,7 @@ export const getUserOrders = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取用户订单失败:', error);
+    logger.error({ err: error }, '获取用户订单失败');
     res.status(500).json({ error: '获取订单失败' });
   }
 };

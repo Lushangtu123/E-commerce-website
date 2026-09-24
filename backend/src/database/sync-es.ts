@@ -7,10 +7,11 @@ import {
   bulkSyncProductsToES,
   checkESConnection,
 } from './elasticsearch';
+import logger from '../utils/logger';
 
 async function syncAllProducts() {
   try {
-    console.log('🚀 开始同步商品数据到 Elasticsearch...');
+    logger.info('🚀 开始同步商品数据到 Elasticsearch...');
 
     // 连接数据库
     await connectDatabase();
@@ -45,19 +46,19 @@ async function syncAllProducts() {
     );
 
     const productArray = products as any[];
-    console.log(`📦 从 MySQL 获取到 ${productArray.length} 个商品`);
+    logger.info(`📦 从 MySQL 获取到 ${productArray.length} 个商品`);
 
     if (productArray.length === 0) {
-      console.log('⚠️ 没有商品需要同步');
+      logger.info('⚠️ 没有商品需要同步');
       return;
     }
 
     // 批量同步到 ES
     await bulkSyncProductsToES(productArray);
 
-    console.log('✅ 商品数据同步完成！');
+    logger.info('✅ 商品数据同步完成！');
   } catch (error) {
-    console.error('❌ 同步失败:', error);
+    logger.error({ err: error }, '❌ 同步失败');
     throw error;
   }
 }
@@ -65,11 +66,11 @@ async function syncAllProducts() {
 // 执行同步
 syncAllProducts()
   .then(() => {
-    console.log('🎉 同步任务完成');
+    logger.info('🎉 同步任务完成');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('💥 同步任务失败:', error);
+    logger.error({ err: error }, '💥 同步任务失败');
     process.exit(1);
   });
 

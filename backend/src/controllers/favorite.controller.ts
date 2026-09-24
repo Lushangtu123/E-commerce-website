@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { FavoriteModel } from '../models/favorite.model';
 import { AuthRequest } from '../middleware/auth';
+import logger from '../utils/logger';
 
 // 添加收藏
 export const addFavorite = async (req: AuthRequest, res: Response) => {
@@ -26,7 +27,7 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
       favorite_id: favoriteId
     });
   } catch (error) {
-    console.error('添加收藏失败:', error);
+    logger.error({ err: error }, '添加收藏失败');
     res.status(500).json({ message: '添加收藏失败' });
   }
 };
@@ -45,7 +46,7 @@ export const removeFavorite = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: '取消收藏成功' });
   } catch (error) {
-    console.error('取消收藏失败:', error);
+    logger.error({ err: error }, '取消收藏失败');
     res.status(500).json({ message: '取消收藏失败' });
   }
 };
@@ -77,7 +78,7 @@ export const toggleFavorite = async (req: AuthRequest, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('切换收藏状态失败:', error);
+    logger.error({ err: error }, '切换收藏状态失败');
     res.status(500).json({ message: '操作失败' });
   }
 };
@@ -92,7 +93,7 @@ export const checkFavorite = async (req: AuthRequest, res: Response) => {
 
     res.json({ is_favorited: isFavorited });
   } catch (error) {
-    console.error('检查收藏状态失败:', error);
+    logger.error({ err: error }, '检查收藏状态失败');
     res.status(500).json({ message: '检查收藏状态失败' });
   }
 };
@@ -116,7 +117,7 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取收藏列表失败:', error);
+    logger.error({ err: error }, '获取收藏列表失败');
     res.status(500).json({ message: '获取收藏列表失败' });
   }
 };
@@ -138,7 +139,7 @@ export const checkMultipleFavorites = async (req: AuthRequest, res: Response) =>
 
     res.json({ favorites: favoriteMap });
   } catch (error) {
-    console.error('批量检查收藏状态失败:', error);
+    logger.error({ err: error }, '批量检查收藏状态失败');
     res.status(500).json({ message: '批量检查收藏状态失败' });
   }
 };
@@ -151,7 +152,7 @@ export const getFavoriteCount = async (req: AuthRequest, res: Response) => {
 
     res.json({ count });
   } catch (error) {
-    console.error('获取收藏数量失败:', error);
+    logger.error({ err: error }, '获取收藏数量失败');
     res.status(500).json({ message: '获取收藏数量失败' });
   }
 };

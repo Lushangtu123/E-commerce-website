@@ -6,6 +6,7 @@ import { publishMessage, publishOrderTimeoutCheck, consumeQueue, QUEUES } from '
 import { pool } from '../database/mysql';
 import { RowDataPacket } from 'mysql2';
 import { cancelTimeoutOrder } from './order-timeout.service';
+import logger from '../utils/logger';
 
 /**
  * 订单创建消息处理器
@@ -13,7 +14,7 @@ import { cancelTimeoutOrder } from './order-timeout.service';
 export async function handleOrderCreated(message: any) {
   const { order_id, user_id, items } = message;
   
-  console.log(`📦 处理订单创建消息: order_id=${order_id}`);
+  logger.info(`📦 处理订单创建消息: order_id=${order_id}`);
 
   try {
     // 发送库存扣减消息
@@ -34,9 +35,9 @@ export async function handleOrderCreated(message: any) {
       content: `您的订单 ${order_id} 已创建成功，请尽快完成支付。`,
     });
 
-    console.log(`✅ 订单创建消息处理完成: order_id=${order_id}`);
+    logger.info(`✅ 订单创建消息处理完成: order_id=${order_id}`);
   } catch (error) {
-    console.error('❌ 处理订单创建消息失败:', error);
+    logger.error({ err: error }, '❌ 处理订单创建消息失败');
     throw error;
   }
 }
@@ -47,7 +48,7 @@ export async function handleOrderCreated(message: any) {
 export async function handleOrderPaid(message: any) {
   const { order_id, user_id } = message;
   
-  console.log(`💰 处理订单支付消息: order_id=${order_id}`);
+  logger.info(`💰 处理订单支付消息: order_id=${order_id}`);
 
   try {
     // 更新商品销量
@@ -77,9 +78,9 @@ export async function handleOrderPaid(message: any) {
       content: `您的订单 ${order_id} 已支付成功，我们会尽快为您发货。`,
     });
 
-    console.log(`✅ 订单支付消息处理完成: order_id=${order_id}`);
+    logger.info(`✅ 订单支付消息处理完成: order_id=${order_id}`);
   } catch (error) {
-    console.error('❌ 处理订单支付消息失败:', error);
+    logger.error({ err: error }, '❌ 处理订单支付消息失败');
     throw error;
   }
 }
@@ -90,7 +91,7 @@ export async function handleOrderPaid(message: any) {
 export async function handleOrderCancelled(message: any) {
   const { order_id, user_id, items } = message;
   
-  console.log(`❌ 处理订单取消消息: order_id=${order_id}`);
+  logger.info(`❌ 处理订单取消消息: order_id=${order_id}`);
 
   try {
     // 发送库存恢复消息
@@ -111,9 +112,9 @@ export async function handleOrderCancelled(message: any) {
       content: `您的订单 ${order_id} 已取消，库存已恢复。`,
     });
 
-    console.log(`✅ 订单取消消息处理完成: order_id=${order_id}`);
+    logger.info(`✅ 订单取消消息处理完成: order_id=${order_id}`);
   } catch (error) {
-    console.error('❌ 处理订单取消消息失败:', error);
+    logger.error({ err: error }, '❌ 处理订单取消消息失败');
     throw error;
   }
 }
@@ -124,7 +125,7 @@ export async function handleOrderCancelled(message: any) {
 export async function handleStockDeduction(message: any) {
   const { order_id, sku_id, quantity } = message;
   
-  console.log(`📉 处理库存扣减: sku_id=${sku_id}, quantity=${quantity}`);
+  logger.info(`📉 处理库存扣减: sku_id=${sku_id}, quantity=${quantity}`);
 
   try {
     const connection = await pool.getConnection();
@@ -147,7 +148,7 @@ export async function handleStockDeduction(message: any) {
       }
 
       await connection.commit();
-      console.log(`✅ 库存扣减成功: sku_id=${sku_id}, quantity=${quantity}`);
+      logger.info(`✅ 库存扣减成功: sku_id=${sku_id}, quantity=${quantity}`);
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -155,7 +156,7 @@ export async function handleStockDeduction(message: any) {
       connection.release();
     }
   } catch (error) {
-    console.error('❌ 库存扣减失败:', error);
+    logger.error({ err: error }, '❌ 库存扣减失败');
     throw error;
   }
 }
@@ -166,7 +167,7 @@ export async function handleStockDeduction(message: any) {
 export async function handleStockRecovery(message: any) {
   const { order_id, sku_id, quantity } = message;
   
-  console.log(`📈 处理库存恢复: sku_id=${sku_id}, quantity=${quantity}`);
+  logger.info(`📈 处理库存恢复: sku_id=${sku_id}, quantity=${quantity}`);
 
   try {
     await pool.execute(
@@ -176,9 +177,9 @@ export async function handleStockRecovery(message: any) {
       [quantity, sku_id]
     );
 
-    console.log(`✅ 库存恢复成功: sku_id=${sku_id}, quantity=${quantity}`);
+    logger.info(`✅ 库存恢复成功: sku_id=${sku_id}, quantity=${quantity}`);
   } catch (error) {
-    console.error('❌ 库存恢复失败:', error);
+    logger.error({ err: error }, '❌ 库存恢复失败');
     throw error;
   }
 }
@@ -189,11 +190,11 @@ export async function handleStockRecovery(message: any) {
 export async function handleEmailNotification(message: any) {
   const { type, user_id, subject, content } = message;
   
-  console.log(`📧 模拟发送邮件通知:`);
-  console.log(`   类型: ${type}`);
-  console.log(`   用户: ${user_id}`);
-  console.log(`   主题: ${subject}`);
-  console.log(`   内容: ${content}`);
+  logger.info(`📧 模拟发送邮件通知:`);
+  logger.info(`   类型: ${type}`);
+  logger.info(`   用户: ${user_id}`);
+  logger.info(`   主题: ${subject}`);
+  logger.info(`   内容: ${content}`);
 
   // 这里应该调用真实的邮件服务
   // 例如: await sendEmail(user_email, subject, content);
@@ -201,7 +202,7 @@ export async function handleEmailNotification(message: any) {
   // 模拟邮件发送延迟
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  console.log(`✅ 邮件通知已发送`);
+  logger.info(`✅ 邮件通知已发送`);
 }
 
 /**
@@ -211,13 +212,13 @@ export async function handleEmailNotification(message: any) {
 export async function handleOrderTimeoutCheck(message: any) {
   const { order_id, user_id } = message;
 
-  console.log(`⏰ 处理订单超时检查: order_id=${order_id}`);
+  logger.info(`⏰ 处理订单超时检查: order_id=${order_id}`);
 
   try {
     const cancelled = await cancelTimeoutOrder(order_id);
 
     if (!cancelled) {
-      console.log(`⏭️ 订单 ${order_id} 无需取消（已支付或已取消）`);
+      logger.info(`⏭️ 订单 ${order_id} 无需取消（已支付或已取消）`);
       return;
     }
 
@@ -230,9 +231,9 @@ export async function handleOrderTimeoutCheck(message: any) {
       content: `您的订单 ${order_id} 因超时未支付已自动取消，库存已恢复。`,
     });
 
-    console.log(`✅ 订单超时取消处理完成: order_id=${order_id}`);
+    logger.info(`✅ 订单超时取消处理完成: order_id=${order_id}`);
   } catch (error) {
-    console.error('❌ 处理订单超时检查失败:', error);
+    logger.error({ err: error }, '❌ 处理订单超时检查失败');
     throw error;
   }
 }
@@ -242,7 +243,7 @@ export async function handleOrderTimeoutCheck(message: any) {
  */
 export async function startMessageQueueConsumers() {
   try {
-    console.log('🚀 启动消息队列消费者...');
+    logger.info('🚀 启动消息队列消费者...');
 
     // 订单相关队列
     await consumeQueue(QUEUES.ORDER_CREATED, handleOrderCreated);
@@ -257,9 +258,9 @@ export async function startMessageQueueConsumers() {
     // 通知相关队列
     await consumeQueue(QUEUES.EMAIL_NOTIFICATION, handleEmailNotification);
 
-    console.log('✅ 所有消息队列消费者已启动');
+    logger.info('✅ 所有消息队列消费者已启动');
   } catch (error) {
-    console.error('❌ 启动消息队列消费者失败:', error);
+    logger.error({ err: error }, '❌ 启动消息队列消费者失败');
     throw error;
   }
 }

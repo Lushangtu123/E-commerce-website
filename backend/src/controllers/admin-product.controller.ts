@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { SKUModel } from '../models/sku.model';
 import { logAdminAction } from './admin.controller';
+import logger from '../utils/logger';
 
 // 获取商品列表（管理员）
 export const getAdminProducts = async (req: Request, res: Response) => {
@@ -59,7 +60,7 @@ export const getAdminProducts = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取商品列表失败:', error);
+    logger.error({ err: error }, '获取商品列表失败');
     res.status(500).json({ error: '获取商品列表失败' });
   }
 };
@@ -106,7 +107,7 @@ export const updateProductStatus = async (req: Request, res: Response) => {
 
     res.json({ message: '更新成功', status });
   } catch (error) {
-    console.error('更新商品状态失败:', error);
+    logger.error({ err: error }, '更新商品状态失败');
     res.status(500).json({ error: '更新失败' });
   }
 };
@@ -145,7 +146,7 @@ export const batchUpdateProductStatus = async (req: Request, res: Response) => {
 
     res.json({ message: '批量更新成功', count: productIds.length });
   } catch (error) {
-    console.error('批量更新商品状态失败:', error);
+    logger.error({ err: error }, '批量更新商品状态失败');
     res.status(500).json({ error: '批量更新失败' });
   }
 };
@@ -194,7 +195,7 @@ export const createProduct = async (req: Request, res: Response) => {
       product_id: productId
     });
   } catch (error) {
-    console.error('创建商品失败:', error);
+    logger.error({ err: error }, '创建商品失败');
     res.status(500).json({ error: '创建失败' });
   }
 };
@@ -277,7 +278,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     res.json({ message: '更新成功' });
   } catch (error) {
-    console.error('更新商品失败:', error);
+    logger.error({ err: error }, '更新商品失败');
     res.status(500).json({ error: '更新失败' });
   }
 };
@@ -319,7 +320,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
     res.json({ message: '删除成功' });
   } catch (error) {
-    console.error('删除商品失败:', error);
+    logger.error({ err: error }, '删除商品失败');
     res.status(500).json({ error: '删除失败' });
   }
 };
@@ -334,7 +335,7 @@ export const getProductSKUs = async (req: Request, res: Response) => {
     
     res.json({ skus });
   } catch (error) {
-    console.error('获取SKU列表失败:', error);
+    logger.error({ err: error }, '获取SKU列表失败');
     res.status(500).json({ error: '获取SKU列表失败' });
   }
 };
@@ -375,7 +376,7 @@ export const createSKU = async (req: Request, res: Response) => {
       sku_id: skuId
     });
   } catch (error: any) {
-    console.error('创建SKU失败:', error);
+    logger.error({ err: error }, '创建SKU失败');
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'SKU编码已存在' });
     }
@@ -417,7 +418,7 @@ export const batchCreateSKUs = async (req: Request, res: Response) => {
       count: skus.length
     });
   } catch (error: any) {
-    console.error('批量创建SKU失败:', error);
+    logger.error({ err: error }, '批量创建SKU失败');
     res.status(500).json({ error: '批量创建SKU失败' });
   }
 };
@@ -459,7 +460,7 @@ export const updateSKU = async (req: Request, res: Response) => {
 
     res.json({ message: '更新成功' });
   } catch (error) {
-    console.error('更新SKU失败:', error);
+    logger.error({ err: error }, '更新SKU失败');
     res.status(500).json({ error: '更新SKU失败' });
   }
 };
@@ -488,7 +489,7 @@ export const deleteSKU = async (req: Request, res: Response) => {
 
     res.json({ message: '删除成功' });
   } catch (error) {
-    console.error('删除SKU失败:', error);
+    logger.error({ err: error }, '删除SKU失败');
     res.status(500).json({ error: '删除SKU失败' });
   }
 };

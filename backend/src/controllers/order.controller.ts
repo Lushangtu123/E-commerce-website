@@ -6,6 +6,7 @@ import { CartModel } from '../models/cart.model';
 import { getRedisClient } from '../database/redis';
 import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
+import logger from '../utils/logger';
 
 export class OrderController {
   // 创建订单
@@ -69,7 +70,7 @@ export class OrderController {
       // MQ 不可用不影响订单创建，订单超时检查定时任务会兜底处理
       const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
       if (!timeoutMsgSent) {
-        console.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
+        logger.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
       }
 
       res.status(201).json({
@@ -77,7 +78,7 @@ export class OrderController {
         order_id: orderId
       });
     } catch (error) {
-      console.error('创建订单失败:', error);
+      logger.error({ err: error }, '创建订单失败');
       res.status(500).json({ error: '创建订单失败' });
     }
   }
@@ -106,7 +107,7 @@ export class OrderController {
         items
       });
     } catch (error) {
-      console.error('获取订单详情失败:', error);
+      logger.error({ err: error }, '获取订单详情失败');
       res.status(500).json({ error: '获取订单详情失败' });
     }
   }
@@ -128,7 +129,7 @@ export class OrderController {
         totalPages: Math.ceil(result.total / limit)
       });
     } catch (error) {
-      console.error('获取订单列表失败:', error);
+      logger.error({ err: error }, '获取订单列表失败');
       res.status(500).json({ error: '获取订单列表失败' });
     }
   }
@@ -165,7 +166,7 @@ export class OrderController {
 
       res.json({ message: '订单已取消' });
     } catch (error) {
-      console.error('取消订单失败:', error);
+      logger.error({ err: error }, '取消订单失败');
       res.status(500).json({ error: '取消订单失败' });
     }
   }
@@ -200,7 +201,7 @@ export class OrderController {
 
       res.json({ message: '支付成功' });
     } catch (error) {
-      console.error('支付订单失败:', error);
+      logger.error({ err: error }, '支付订单失败');
       res.status(500).json({ error: '支付订单失败' });
     }
   }
@@ -229,7 +230,7 @@ export class OrderController {
 
       res.json({ message: '确认收货成功' });
     } catch (error) {
-      console.error('确认收货失败:', error);
+      logger.error({ err: error }, '确认收货失败');
       res.status(500).json({ error: '确认收货失败' });
     }
   }
@@ -263,7 +264,7 @@ export class OrderController {
         timeout_at: new Date(new Date(order.created_at).getTime() + 30 * 60 * 1000).toISOString()
       });
     } catch (error) {
-      console.error('获取剩余时间失败:', error);
+      logger.error({ err: error }, '获取剩余时间失败');
       res.status(500).json({ error: '获取剩余时间失败' });
     }
   }

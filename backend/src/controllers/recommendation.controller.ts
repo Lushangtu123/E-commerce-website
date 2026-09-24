@@ -5,6 +5,7 @@ import {
   getRelatedProducts,
   getGuessYouLike
 } from '../services/recommendation.service';
+import logger from '../utils/logger';
 
 export class RecommendationController {
   /**
@@ -22,7 +23,7 @@ export class RecommendationController {
         total: recommendations.length
       });
     } catch (error) {
-      console.error('获取个性化推荐失败:', error);
+      logger.error({ err: error }, '获取个性化推荐失败');
       res.status(500).json({ error: '获取推荐失败' });
     }
   }
@@ -46,7 +47,7 @@ export class RecommendationController {
         total: relatedProducts.length
       });
     } catch (error) {
-      console.error('获取相关商品失败:', error);
+      logger.error({ err: error }, '获取相关商品失败');
       res.status(500).json({ error: '获取相关商品失败' });
     }
   }
@@ -66,7 +67,7 @@ export class RecommendationController {
         total: recommendations.length
       });
     } catch (error) {
-      console.error('获取猜你喜欢失败:', error);
+      logger.error({ err: error }, '获取猜你喜欢失败');
       res.status(500).json({ error: '获取推荐失败' });
     }
   }

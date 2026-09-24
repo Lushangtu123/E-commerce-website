@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
+import logger from '../utils/logger';
 
 dotenv.config();
 
@@ -17,11 +18,11 @@ export async function connectRedis() {
   });
 
   redisClient.on('error', (err) => {
-    console.error('Redis错误:', err);
+    logger.error({ err }, 'Redis错误');
   });
 
   redisClient.on('connect', () => {
-    console.log('Redis连接中...');
+    logger.info('Redis连接中...');
   });
 
   await redisClient.ping();

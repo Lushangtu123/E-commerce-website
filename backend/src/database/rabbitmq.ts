@@ -1,4 +1,5 @@
 import * as amqp from 'amqplib';
+import logger from '../utils/logger';
 
 let connection: amqp.Connection | null = null;
 let channel: amqp.Channel | null = null;
@@ -26,7 +27,7 @@ export async function connectRabbitMQ(): Promise<void> {
   try {
     const rabbitmqUrl = process.env.RABBITMQ_URL || 'amqp://admin:admin123@rabbitmq:5672';
     
-    console.log('🐰 正在连接 RabbitMQ...');
+    logger.info('🐰 正在连接 RabbitMQ...');
     const conn = await amqp.connect(rabbitmqUrl);
     connection = conn as any;
     channel = await conn.createChannel();
@@ -45,19 +46,19 @@ export async function connectRabbitMQ(): Promise<void> {
       },
     });
 
-    console.log('✅ RabbitMQ 连接成功');
+    logger.info('✅ RabbitMQ 连接成功');
 
     // 监听连接关闭事件
     connection.on('close', () => {
-      console.warn('⚠️ RabbitMQ 连接已关闭');
+      logger.warn('⚠️ RabbitMQ 连接已关闭');
       setTimeout(connectRabbitMQ, 5000); // 5秒后重连
     });
 
     connection.on('error', (error) => {
-      console.error('❌ RabbitMQ 连接错误:', error);
+      logger.error({ err: error }, '❌ RabbitMQ 连接错误');
     });
   } catch (error) {
-    console.error('❌ 连接 RabbitMQ 失败:', error);
+    logger.error({ err: error }, '❌ 连接 RabbitMQ 失败');
     // 5秒后重试
     setTimeout(connectRabbitMQ, 5000);
   }
@@ -88,7 +89,7 @@ export async function publishMessage(
       persistent: true, // 持久化消息
     });
   } catch (error) {
-    console.error(`❌ 发布消息到队列 ${queueName} 失败:`, error);
+    logger.error({ err: error }, `❌ 发布消息到队列 ${queueName} 失败`);
     return false;
   }
 }
@@ -118,7 +119,7 @@ export async function publishOrderTimeoutCheck(
       expiration: String(delayMs),
     });
   } catch (error) {
-    console.error('❌ 发布订单超时检查消息失败:', error);
+    logger.error({ err: error }, '❌ 发布订单超时检查消息失败');
     return false;
   }
 }
@@ -137,24 +138,24 @@ export async function consumeQueue(
       if (msg) {
         try {
           const content = JSON.parse(msg.content.toString());
-          console.log(`📨 收到消息 [${queueName}]:`, content);
+          logger.info({ content }, `📨 收到消息 [${queueName}]`);
           
           await handler(content);
           
           // 确认消息已处理
           ch.ack(msg);
-          console.log(`✅ 消息处理成功 [${queueName}]`);
+          logger.info(`✅ 消息处理成功 [${queueName}]`);
         } catch (error) {
-          console.error(`❌ 处理消息失败 [${queueName}]:`, error);
+          logger.error({ err: error }, `❌ 处理消息失败 [${queueName}]`);
           // 拒绝消息并重新入队
           ch.nack(msg, false, true);
         }
       }
     });
 
-    console.log(`👂 开始监听队列: ${queueName}`);
+    logger.info(`👂 开始监听队列: ${queueName}`);
   } catch (error) {
-    console.error(`❌ 消费队列 ${queueName} 失败:`, error);
+    logger.error({ err: error }, `❌ 消费队列 ${queueName} 失败`);
     throw error;
   }
 }
@@ -172,9 +173,9 @@ export async function closeRabbitMQ(): Promise<void> {
       await (connection as any).close();
       connection = null;
     }
-    console.log('✅ RabbitMQ 连接已关闭');
+    logger.info('✅ RabbitMQ 连接已关闭');
   } catch (error) {
-    console.error('❌ 关闭 RabbitMQ 连接失败:', error);
+    logger.error({ err: error }, '❌ 关闭 RabbitMQ 连接失败');
   }
 }
 

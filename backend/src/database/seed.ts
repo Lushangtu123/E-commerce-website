@@ -1,6 +1,7 @@
 import { getPool } from './mysql';
 import { connectDatabase } from './mysql';
 import bcrypt from 'bcryptjs';
+import logger from '../utils/logger';
 
 const categories = [
   { name: '电子产品', parent_id: null, sort_order: 1 },
@@ -116,12 +117,12 @@ const products = [
 async function seed() {
   try {
     await connectDatabase();
-    console.log('开始填充示例数据...\n');
+    logger.info('开始填充示例数据...\n');
 
     const pool = getPool();
 
     // 清空现有数据
-    console.log('清空现有数据...');
+    logger.info('清空现有数据...');
     await pool.execute('SET FOREIGN_KEY_CHECKS = 0');
     await pool.execute('TRUNCATE TABLE categories');
     await pool.execute('TRUNCATE TABLE products');
@@ -129,17 +130,17 @@ async function seed() {
     await pool.execute('SET FOREIGN_KEY_CHECKS = 1');
 
     // 插入分类
-    console.log('插入商品分类...');
+    logger.info('插入商品分类...');
     for (const category of categories) {
       await pool.execute(
         'INSERT INTO categories (name, parent_id, sort_order) VALUES (?, ?, ?)',
         [category.name, category.parent_id, category.sort_order]
       );
     }
-    console.log(`✓ 已插入 ${categories.length} 个分类`);
+    logger.info(`✓ 已插入 ${categories.length} 个分类`);
 
     // 插入商品
-    console.log('插入商品...');
+    logger.info('插入商品...');
     for (const product of products) {
       await pool.execute(
         `INSERT INTO products (title, description, category_id, brand, price, original_price, stock, main_image, sales_count, status)
@@ -158,25 +159,25 @@ async function seed() {
         ]
       );
     }
-    console.log(`✓ 已插入 ${products.length} 个商品`);
+    logger.info(`✓ 已插入 ${products.length} 个商品`);
 
     // 创建测试用户
-    console.log('创建测试用户...');
+    logger.info('创建测试用户...');
     const password_hash = await bcrypt.hash('123456', 10);
     await pool.execute(
       'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
       ['testuser', 'test@example.com', password_hash]
     );
-    console.log('✓ 已创建测试用户 (email: test@example.com, password: 123456)');
+    logger.info('✓ 已创建测试用户 (email: test@example.com, password: 123456)');
 
-    console.log('\n✓ 示例数据填充完成！');
-    console.log('\n可以使用以下账号登录:');
-    console.log('邮箱: test@example.com');
-    console.log('密码: 123456');
+    logger.info('\n✓ 示例数据填充完成！');
+    logger.info('\n可以使用以下账号登录:');
+    logger.info('邮箱: test@example.com');
+    logger.info('密码: 123456');
     
     process.exit(0);
   } catch (error) {
-    console.error('填充数据失败:', error);
+    logger.error({ err: error }, '填充数据失败');
     process.exit(1);
   }
 }

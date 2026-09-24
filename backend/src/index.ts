@@ -11,6 +11,7 @@ import { checkESConnection } from './database/elasticsearch';
 import { startOrderTimeoutChecker } from './services/order-timeout.service';
 import { startMessageQueueConsumers } from './services/message-queue.service';
 import { apiLimiter } from './middleware/rate-limit';
+import { requestLogger } from './middleware/request-logger';
 
 // 导入路由
 import userRoutes from './routes/user.routes';
@@ -32,6 +33,7 @@ import adminCouponRoutes from './routes/admin-coupon.routes';
 
 // 优惠券路由
 import couponRoutes from './routes/coupon.routes';
+import logger from './utils/logger';
 
 dotenv.config();
 
@@ -53,6 +55,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // 静态文件
 app.use('/uploads', express.static('uploads'));
+
+// HTTP 请求日志
+app.use(requestLogger);
 
 // 健康检查（不计入限流）
 app.get('/health', (req: Request, res: Response) => {
@@ -88,7 +93,7 @@ app.use((req: Request, res: Response) => {
 
 // 错误处理中间件
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('错误:', err);
+  logger.error({ err }, '错误');
   res.status(500).json({ 
     error: '服务器内部错误',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -100,46 +105,46 @@ async function startServer() {
   try {
     // 连接数据库
     await connectDatabase();
-    console.log('✓ MySQL数据库连接成功');
+    logger.info('✓ MySQL数据库连接成功');
     
     await connectRedis();
-    console.log('✓ Redis连接成功');
+    logger.info('✓ Redis连接成功');
     
     await connectMongoDB();
-    console.log('✓ MongoDB连接成功');
+    logger.info('✓ MongoDB连接成功');
     
     // 连接 RabbitMQ
     await connectRabbitMQ();
-    console.log('✓ RabbitMQ连接成功');
+    logger.info('✓ RabbitMQ连接成功');
     
     // 检查 Elasticsearch 连接（不阻塞启动）
     checkESConnection().then((connected) => {
       if (connected) {
-        console.log('✓ Elasticsearch连接成功');
+        logger.info('✓ Elasticsearch连接成功');
       } else {
-        console.warn('⚠️ Elasticsearch连接失败，搜索功能可能不可用');
+        logger.warn('⚠️ Elasticsearch连接失败，搜索功能可能不可用');
       }
     });
     
     // 启动订单超时检查服务
     startOrderTimeoutChecker();
-    console.log('✓ 订单超时检查服务已启动');
+    logger.info('✓ 订单超时检查服务已启动');
     
     // 启动消息队列消费者
     await startMessageQueueConsumers();
-    console.log('✓ 消息队列消费者已启动');
+    logger.info('✓ 消息队列消费者已启动');
     
     // 启动服务器
     app.listen(PORT, () => {
-      console.log(`\n🚀 服务器运行在 http://localhost:${PORT}`);
-      console.log(`📝 环境: ${process.env.NODE_ENV}`);
-      console.log(`\n📚 新功能已启用:`);
-      console.log(`  • Elasticsearch 商品搜索`);
-      console.log(`  • RabbitMQ 消息队列`);
-      console.log(`  • 优惠券系统`);
+      logger.info(`\n🚀 服务器运行在 http://localhost:${PORT}`);
+      logger.info(`📝 环境: ${process.env.NODE_ENV}`);
+      logger.info(`\n📚 新功能已启用:`);
+      logger.info(`  • Elasticsearch 商品搜索`);
+      logger.info(`  • RabbitMQ 消息队列`);
+      logger.info(`  • 优惠券系统`);
     });
   } catch (error) {
-    console.error('启动失败:', error);
+    logger.error({ err: error }, '启动失败');
     process.exit(1);
   }
 }

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { logAdminAction } from './admin.controller';
+import logger from '../utils/logger';
 
 // 获取订单列表（管理员）
 export const getAdminOrders = async (req: Request, res: Response) => {
@@ -67,7 +68,7 @@ export const getAdminOrders = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取订单列表失败:', error);
+    logger.error({ err: error }, '获取订单列表失败');
     res.status(500).json({ error: '获取订单列表失败' });
   }
 };
@@ -120,7 +121,7 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
       items
     });
   } catch (error) {
-    console.error('获取订单详情失败:', error);
+    logger.error({ err: error }, '获取订单详情失败');
     res.status(500).json({ error: '获取订单详情失败' });
   }
 };
@@ -169,7 +170,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
     res.json({ message: '更新成功', status });
   } catch (error) {
-    console.error('更新订单状态失败:', error);
+    logger.error({ err: error }, '更新订单状态失败');
     res.status(500).json({ error: '更新失败' });
   }
 };
@@ -211,7 +212,7 @@ export const getOrderStatistics = async (req: Request, res: Response) => {
 
     res.json(stats[0]);
   } catch (error) {
-    console.error('获取订单统计失败:', error);
+    logger.error({ err: error }, '获取订单统计失败');
     res.status(500).json({ error: '获取统计失败' });
   }
 };

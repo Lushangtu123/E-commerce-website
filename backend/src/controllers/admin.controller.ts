@@ -3,6 +3,7 @@ import { getPool } from '../database/mysql';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Admin } from '../models/admin.model';
+import logger from '../utils/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
 
@@ -87,7 +88,7 @@ export const adminLogin = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('管理员登录失败:', error);
+    logger.error({ err: error }, '管理员登录失败');
     res.status(500).json({ error: '登录失败' });
   }
 };
@@ -126,7 +127,7 @@ export const getAdminProfile = async (req: Request, res: Response) => {
       permissions
     });
   } catch (error) {
-    console.error('获取管理员信息失败:', error);
+    logger.error({ err: error }, '获取管理员信息失败');
     res.status(500).json({ error: '获取信息失败' });
   }
 };
@@ -207,7 +208,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       revenue_growth: parseFloat(revenueGrowth.toString())
     });
   } catch (error) {
-    console.error('获取仪表盘数据失败:', error);
+    logger.error({ err: error }, '获取仪表盘数据失败');
     res.status(500).json({ error: '获取数据失败' });
   }
 };
@@ -236,7 +237,7 @@ export const getRecentOrders = async (req: Request, res: Response) => {
 
     res.json(orders);
   } catch (error) {
-    console.error('获取最近订单失败:', error);
+    logger.error({ err: error }, '获取最近订单失败');
     res.status(500).json({ error: '获取订单失败' });
   }
 };
@@ -269,7 +270,7 @@ export const getTopProducts = async (req: Request, res: Response) => {
 
     res.json(products);
   } catch (error) {
-    console.error('获取热门商品失败:', error);
+    logger.error({ err: error }, '获取热门商品失败');
     res.status(500).json({ error: '获取商品失败' });
   }
 };
@@ -294,7 +295,7 @@ export const getSalesTrend = async (req: Request, res: Response) => {
 
     res.json(trend);
   } catch (error) {
-    console.error('获取销售趋势失败:', error);
+    logger.error({ err: error }, '获取销售趋势失败');
     res.status(500).json({ error: '获取趋势失败' });
   }
 };
@@ -317,7 +318,7 @@ export async function logAdminAction(
       [adminId, action, resourceType, resourceId, description, ipAddress || null, userAgent || null]
     );
   } catch (error) {
-    console.error('记录操作日志失败:', error);
+    logger.error({ err: error }, '记录操作日志失败');
   }
 }
 
@@ -381,7 +382,7 @@ export const getAdminLogs = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('获取操作日志失败:', error);
+    logger.error({ err: error }, '获取操作日志失败');
     res.status(500).json({ error: '获取日志失败' });
   }
 };

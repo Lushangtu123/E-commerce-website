@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getPool } from '../database/mysql';
+import logger from '../utils/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
 
@@ -82,7 +83,7 @@ export const authenticateAdmin = async (
     if (error instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ error: '令牌已过期' });
     }
-    console.error('管理员认证失败:', error);
+    logger.error({ err: error }, '管理员认证失败');
     res.status(500).json({ error: '认证失败' });
   }
 };
@@ -121,7 +122,7 @@ export const requirePermission = (permissionCode: string) => {
 
       next();
     } catch (error) {
-      console.error('权限验证失败:', error);
+      logger.error({ err: error }, '权限验证失败');
       res.status(500).json({ error: '权限验证失败' });
     }
   };

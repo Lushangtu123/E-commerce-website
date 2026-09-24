@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { UserModel } from '../models/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import logger from '../utils/logger';
 
 export class UserController {
   // 注册
@@ -46,7 +47,7 @@ export class UserController {
         user: { user_id: userId, username, email }
       });
     } catch (error) {
-      console.error('注册失败:', error);
+      logger.error({ err: error }, '注册失败');
       res.status(500).json({ error: '注册失败' });
     }
   }
@@ -92,7 +93,7 @@ export class UserController {
         }
       });
     } catch (error) {
-      console.error('登录失败:', error);
+      logger.error({ err: error }, '登录失败');
       res.status(500).json({ error: '登录失败' });
     }
   }
@@ -108,7 +109,7 @@ export class UserController {
 
       res.json({ user });
     } catch (error) {
-      console.error('获取用户信息失败:', error);
+      logger.error({ err: error }, '获取用户信息失败');
       res.status(500).json({ error: '获取用户信息失败' });
     }
   }
@@ -131,7 +132,7 @@ export class UserController {
         res.status(400).json({ error: '更新失败' });
       }
     } catch (error) {
-      console.error('更新用户信息失败:', error);
+      logger.error({ err: error }, '更新用户信息失败');
       res.status(500).json({ error: '更新用户信息失败' });
     }
   }

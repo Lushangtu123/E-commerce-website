@@ -2,10 +2,11 @@
  * 优惠券系统数据库迁移
  */
 import { connectDatabase, getPool } from './mysql';
+import logger from '../utils/logger';
 
 async function migrateCouponTables() {
   try {
-    console.log('🚀 开始创建优惠券相关表...');
+    logger.info('🚀 开始创建优惠券相关表...');
 
     // 连接数据库
     await connectDatabase();
@@ -35,7 +36,7 @@ async function migrateCouponTables() {
         INDEX idx_time (start_time, end_time)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券表';
     `);
-    console.log('✅ coupons 表创建成功');
+    logger.info('✅ coupons 表创建成功');
 
     // 2. 用户优惠券表
     await pool.execute(`
@@ -56,7 +57,7 @@ async function migrateCouponTables() {
         FOREIGN KEY (coupon_id) REFERENCES coupons(coupon_id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户优惠券表';
     `);
-    console.log('✅ user_coupons 表创建成功');
+    logger.info('✅ user_coupons 表创建成功');
 
     // 3. 优惠券使用记录表（不使用外键约束，避免类型不匹配问题）
     await pool.execute(`
@@ -74,11 +75,11 @@ async function migrateCouponTables() {
         INDEX idx_order (order_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券使用记录表';
     `);
-    console.log('✅ coupon_usage_logs 表创建成功');
+    logger.info('✅ coupon_usage_logs 表创建成功');
 
-    console.log('🎉 优惠券相关表创建完成！');
+    logger.info('🎉 优惠券相关表创建完成！');
   } catch (error) {
-    console.error('❌ 创建优惠券表失败:', error);
+    logger.error({ err: error }, '❌ 创建优惠券表失败');
     throw error;
   }
 }
@@ -86,11 +87,11 @@ async function migrateCouponTables() {
 // 执行迁移
 migrateCouponTables()
   .then(() => {
-    console.log('✅ 迁移任务完成');
+    logger.info('✅ 迁移任务完成');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('💥 迁移任务失败:', error);
+    logger.error({ err: error }, '💥 迁移任务失败');
     process.exit(1);
   });
 

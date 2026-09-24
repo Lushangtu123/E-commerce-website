@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { CartModel } from '../models/cart.model';
+import logger from '../utils/logger';
 
 export class CartController {
   // 获取购物车列表
@@ -10,7 +11,7 @@ export class CartController {
       
       res.json({ items });
     } catch (error) {
-      console.error('获取购物车失败:', error);
+      logger.error({ err: error }, '获取购物车失败');
       res.status(500).json({ error: '获取购物车失败' });
     }
   }
@@ -32,7 +33,7 @@ export class CartController {
         res.status(400).json({ error: '添加失败' });
       }
     } catch (error) {
-      console.error('添加购物车失败:', error);
+      logger.error({ err: error }, '添加购物车失败');
       res.status(500).json({ error: '添加购物车失败' });
     }
   }
@@ -54,7 +55,7 @@ export class CartController {
         res.status(400).json({ error: '更新失败' });
       }
     } catch (error) {
-      console.error('更新购物车失败:', error);
+      logger.error({ err: error }, '更新购物车失败');
       res.status(500).json({ error: '更新购物车失败' });
     }
   }
@@ -72,7 +73,7 @@ export class CartController {
         res.status(400).json({ error: '删除失败' });
       }
     } catch (error) {
-      console.error('删除购物车商品失败:', error);
+      logger.error({ err: error }, '删除购物车商品失败');
       res.status(500).json({ error: '删除购物车商品失败' });
     }
   }
@@ -88,7 +89,7 @@ export class CartController {
         res.status(400).json({ error: '清空失败' });
       }
     } catch (error) {
-      console.error('清空购物车失败:', error);
+      logger.error({ err: error }, '清空购物车失败');
       res.status(500).json({ error: '清空购物车失败' });
     }
   }

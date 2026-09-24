@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { SearchHistoryModel } from '../models/search-history.model';
 import { AuthRequest } from '../middleware/auth';
 import { searchProducts as esSearchProducts } from '../database/elasticsearch';
+import logger from '../utils/logger';
 
 // 记录搜索历史
 export const recordSearch = async (req: AuthRequest, res: Response) => {
@@ -21,7 +22,7 @@ export const recordSearch = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: '记录成功', id });
   } catch (error) {
-    console.error('记录搜索历史失败:', error);
+    logger.error({ err: error }, '记录搜索历史失败');
     res.status(500).json({ message: '记录搜索历史失败' });
   }
 };
@@ -36,7 +37,7 @@ export const getUserSearchHistory = async (req: AuthRequest, res: Response) => {
 
     res.json({ history });
   } catch (error) {
-    console.error('获取搜索历史失败:', error);
+    logger.error({ err: error }, '获取搜索历史失败');
     res.status(500).json({ message: '获取搜索历史失败' });
   }
 };
@@ -51,7 +52,7 @@ export const getHotKeywords = async (req: AuthRequest, res: Response) => {
 
     res.json({ keywords });
   } catch (error) {
-    console.error('获取热搜关键词失败:', error);
+    logger.error({ err: error }, '获取热搜关键词失败');
     res.status(500).json({ message: '获取热搜关键词失败' });
   }
 };
@@ -68,7 +69,7 @@ export const clearSearchHistory = async (req: AuthRequest, res: Response) => {
       cleared: success 
     });
   } catch (error) {
-    console.error('清除搜索历史失败:', error);
+    logger.error({ err: error }, '清除搜索历史失败');
     res.status(500).json({ message: '清除搜索历史失败' });
   }
 };
@@ -87,7 +88,7 @@ export const deleteSearchKeyword = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: '删除成功' });
   } catch (error) {
-    console.error('删除搜索记录失败:', error);
+    logger.error({ err: error }, '删除搜索记录失败');
     res.status(500).json({ message: '删除搜索记录失败' });
   }
 };
@@ -109,7 +110,7 @@ export const getSearchSuggestions = async (req: AuthRequest, res: Response) => {
 
     res.json({ suggestions });
   } catch (error) {
-    console.error('获取搜索建议失败:', error);
+    logger.error({ err: error }, '获取搜索建议失败');
     res.status(500).json({ message: '获取搜索建议失败' });
   }
 };
@@ -162,7 +163,7 @@ export const elasticsearchSearch = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Elasticsearch 搜索失败:', error);
+    logger.error({ err: error }, 'Elasticsearch 搜索失败');
     res.status(500).json({ 
       success: false,
       message: 'Elasticsearch 搜索失败，请稍后重试' 
