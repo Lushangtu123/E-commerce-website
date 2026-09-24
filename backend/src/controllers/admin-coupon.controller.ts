@@ -4,6 +4,7 @@
 import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/admin-auth';
 import { CouponModel, CouponType, CouponStatus } from '../models/coupon.model';
+import { logAdminAction } from './admin.controller';
 import logger from '../utils/logger';
 
 export class AdminCouponController {
@@ -80,6 +81,17 @@ export class AdminCouponController {
         message: '优惠券创建成功',
         data: { coupon_id: couponId },
       });
+
+      // 记录操作日志
+      await logAdminAction(
+        req.admin?.adminId || 0,
+        'CREATE_COUPON',
+        'coupon',
+        String(couponId),
+        `创建优惠券: ${name} (${code})`,
+        req.ip,
+        req.get('user-agent')
+      );
     } catch (error) {
       logger.error({ err: error }, '创建优惠券失败');
       res.status(500).json({
@@ -177,6 +189,17 @@ export class AdminCouponController {
       }
 
       await CouponModel.updateStatus(couponId, status);
+
+      // 记录操作日志
+      await logAdminAction(
+        req.admin?.adminId || 0,
+        'UPDATE_COUPON_STATUS',
+        'coupon',
+        String(couponId),
+        `${status === CouponStatus.ENABLED ? '启用' : '停用'}优惠券: ${coupon.name} (${coupon.code})`,
+        req.ip,
+        req.get('user-agent')
+      );
 
       res.json({
         success: true,
