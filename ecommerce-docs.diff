@@ -1,0 +1,242 @@
+diff --git a/README.md b/README.md
+index ad22a05..b88bd69 100644
+--- a/README.md
++++ b/README.md
+@@ -7,7 +7,7 @@
+ 
+ 这是一个基于微服务架构的现代化电商平台，采用前后端分离设计，实现了完整的电商核心功能和管理后台。
+ 
+-**📚 English Documentation**: [README_EN.md](./README_EN.md) | **🚀 快速开始**: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
++**📚 English Documentation**: [README_EN.md](./README_EN.md) | **🚀 快速开始**: [QUICKSTART.md](./QUICKSTART.md)
+ 
+ ## 🎯 项目亮点
+ 
+@@ -474,7 +474,7 @@ npm test
+ ## 📚 文档
+ 
+ ### 核心文档
+-- [快速启动指南](./QUICK_START_GUIDE.md) - 详细的安装和配置步骤
++- [快速启动指南](./QUICKSTART.md) - 详细的安装和配置步骤
+ - [环境变量配置](./ENV_SETUP.md) - 环境变量配置详细指南 🆕
+ - [API 接口文档](./API.md) - 完整的 API 接口说明和示例 🆕
+ - [系统架构文档](./ARCHITECTURE.md) - 系统架构设计和技术选型 🆕
+@@ -482,19 +482,20 @@ npm test
+ - [贡献指南](./CONTRIBUTING.md) - 代码规范和贡献流程 🆕
+ 
+ ### 功能文档 🆕
+-- [优惠券前端使用指南](./COUPON_FRONTEND_GUIDE.md) - 优惠券功能详细说明
+-- [个人中心页面指南](./PROFILE_PAGE_GUIDE.md) - 个人中心功能和设计
+-- [管理后台文档](./ADMIN_GUIDE.md) - 管理后台使用说明
++- [优惠券前端使用指南](./docs/guides/COUPON_FRONTEND_GUIDE.md) - 优惠券功能详细说明
++- [个人中心页面指南](./docs/guides/PROFILE_PAGE_GUIDE.md) - 个人中心功能和设计
++- [管理后台文档](./docs/guides/ADMIN_GUIDE.md) - 管理后台使用说明
+ 
+ ### 开发文档
+-- [开发日志_前端](./开发日志_前端.md) - 前端开发过程记录（3,100+ 行）
+-- [开发日志_后端](./开发日志_后端.md) - 后端开发过程记录（3,900+ 行）
+-- [开发日志_管理后台](./开发日志_管理后台.md) - 管理后台开发记录
++- [前端开发日志](./docs/archive/开发日志_前端.md) - 前端开发过程记录（3,100+ 行）
++- [后端开发日志](./docs/archive/开发日志_后端.md) - 后端开发过程记录（3,900+ 行）
++- [管理后台开发记录](./docs/archive/开发日志_管理后台.md) - 管理后台开发记录
+ 
+ ### 其他文档
+-- [项目描述](./PROJECT_DESCRIPTION.md) - 适合求职简历的项目描述
++- [项目描述](./docs/archive/PROJECT_DESCRIPTION.md) - 适合求职简历的项目描述
+ - [英文文档](./README_EN.md) - English Documentation
+-- [更新记录](./UPDATE_20251029.md) - 最新更新内容
++- [更新记录](./docs/archive/UPDATE_20251029.md) - 历史更新内容
++- [历史文档归档](./docs/archive/README.md) - 开发过程中的更新总结、测试报告等历史文档索引
+ 
+ ## 🎨 界面预览
+ 
+@@ -519,9 +520,10 @@ npm test
+ ## 🐛 问题排查
+ 
+ 如遇到问题，请查看：
+-1. [开发日志_前端.md](./开发日志_前端.md) - 前端常见问题
+-2. [开发日志_后端.md](./开发日志_后端.md) - 后端常见问题
+-3. [开发日志_管理后台.md](./开发日志_管理后台.md) - 管理后台问题
++1. [故障排查指南](./TROUBLESHOOTING.md) - 常见问题与解决方案
++2. [前端开发日志](./docs/archive/开发日志_前端.md) - 前端常见问题（历史记录）
++3. [后端开发日志](./docs/archive/开发日志_后端.md) - 后端常见问题（历史记录）
++4. [管理后台开发记录](./docs/archive/开发日志_管理后台.md) - 管理后台问题（历史记录）
+ 
+ ## 🤝 贡献指南
+ 
+diff --git a/DEBUG_ADD_PRODUCT.md b/docs/archive/DEBUG_ADD_PRODUCT.md
+similarity index 100%
+rename from DEBUG_ADD_PRODUCT.md
+rename to docs/archive/DEBUG_ADD_PRODUCT.md
+diff --git a/DEPLOYMENT_TEST_SUMMARY.md b/docs/archive/DEPLOYMENT_TEST_SUMMARY.md
+similarity index 100%
+rename from DEPLOYMENT_TEST_SUMMARY.md
+rename to docs/archive/DEPLOYMENT_TEST_SUMMARY.md
+diff --git a/DOCUMENTATION_IMPROVEMENTS.md b/docs/archive/DOCUMENTATION_IMPROVEMENTS.md
+similarity index 100%
+rename from DOCUMENTATION_IMPROVEMENTS.md
+rename to docs/archive/DOCUMENTATION_IMPROVEMENTS.md
+diff --git a/FAVORITE_FEATURE_TEST.md b/docs/archive/FAVORITE_FEATURE_TEST.md
+similarity index 100%
+rename from FAVORITE_FEATURE_TEST.md
+rename to docs/archive/FAVORITE_FEATURE_TEST.md
+diff --git a/FEATURE_UPDATE_20251031.md b/docs/archive/FEATURE_UPDATE_20251031.md
+similarity index 100%
+rename from FEATURE_UPDATE_20251031.md
+rename to docs/archive/FEATURE_UPDATE_20251031.md
+diff --git a/FINAL_TEST_REPORT.md b/docs/archive/FINAL_TEST_REPORT.md
+similarity index 100%
+rename from FINAL_TEST_REPORT.md
+rename to docs/archive/FINAL_TEST_REPORT.md
+diff --git a/FINAL_UPDATE_SUMMARY_20251031.md b/docs/archive/FINAL_UPDATE_SUMMARY_20251031.md
+similarity index 100%
+rename from FINAL_UPDATE_SUMMARY_20251031.md
+rename to docs/archive/FINAL_UPDATE_SUMMARY_20251031.md
+diff --git a/FRONTEND_TEST_REPORT.md b/docs/archive/FRONTEND_TEST_REPORT.md
+similarity index 100%
+rename from FRONTEND_TEST_REPORT.md
+rename to docs/archive/FRONTEND_TEST_REPORT.md
+diff --git a/FRONTEND_UPDATE_20251031.md b/docs/archive/FRONTEND_UPDATE_20251031.md
+similarity index 100%
+rename from FRONTEND_UPDATE_20251031.md
+rename to docs/archive/FRONTEND_UPDATE_20251031.md
+diff --git a/NEW_FEATURES_SUMMARY.md b/docs/archive/NEW_FEATURES_SUMMARY.md
+similarity index 100%
+rename from NEW_FEATURES_SUMMARY.md
+rename to docs/archive/NEW_FEATURES_SUMMARY.md
+diff --git a/NEW_FEATURES_TEST.md b/docs/archive/NEW_FEATURES_TEST.md
+similarity index 100%
+rename from NEW_FEATURES_TEST.md
+rename to docs/archive/NEW_FEATURES_TEST.md
+diff --git a/NEW_FEATURES_V2.md b/docs/archive/NEW_FEATURES_V2.md
+similarity index 100%
+rename from NEW_FEATURES_V2.md
+rename to docs/archive/NEW_FEATURES_V2.md
+diff --git a/PROJECT_DESCRIPTION.md b/docs/archive/PROJECT_DESCRIPTION.md
+similarity index 100%
+rename from PROJECT_DESCRIPTION.md
+rename to docs/archive/PROJECT_DESCRIPTION.md
+diff --git a/PROJECT_SUMMARY.md b/docs/archive/PROJECT_SUMMARY.md
+similarity index 100%
+rename from PROJECT_SUMMARY.md
+rename to docs/archive/PROJECT_SUMMARY.md
+diff --git a/QUICK_START_GUIDE.md b/docs/archive/QUICK_START_GUIDE.md
+similarity index 100%
+rename from QUICK_START_GUIDE.md
+rename to docs/archive/QUICK_START_GUIDE.md
+diff --git a/docs/archive/README.md b/docs/archive/README.md
+new file mode 100644
+index 0000000..32d29a4
+--- /dev/null
++++ b/docs/archive/README.md
+@@ -0,0 +1,47 @@
++# 📦 文档归档
++
++> 这里存放的是项目开发过程中的**历史记录文档**（更新总结、测试报告、开发日志等）。
++> 它们记录了某个时间点的开发状态，仅供追溯查阅，**内容可能已过时**，请以根目录的核心文档为准。
++
++## 核心文档（根目录）
++
++| 文档 | 说明 |
++|------|------|
++| [README.md](../README.md) | 项目总览 |
++| [QUICKSTART.md](../QUICKSTART.md) | 快速上手 |
++| [API.md](../API.md) | 接口文档 |
++| [ARCHITECTURE.md](../ARCHITECTURE.md) | 系统架构 |
++| [DEPLOYMENT.md](../DEPLOYMENT.md) | 部署指南 |
++| [ENV_SETUP.md](../ENV_SETUP.md) | 环境变量配置 |
++| [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) | 故障排查 |
++| [CONTRIBUTING.md](../CONTRIBUTING.md) | 贡献指南 |
++| [SECURITY.md](../SECURITY.md) | 安全策略 |
++| [CHANGELOG.md](../CHANGELOG.md) | 变更记录 |
++
++## 功能指南（docs/guides/）
++
++- [管理后台使用说明](../guides/ADMIN_GUIDE.md)
++- [优惠券前端使用指南](../guides/COUPON_FRONTEND_GUIDE.md)
++- [个人中心页面指南](../guides/PROFILE_PAGE_GUIDE.md)
++
++## 归档文件清单
++
++### 更新总结
++- FINAL_UPDATE_SUMMARY_20251031.md、UPDATE_SUMMARY.md、UPDATE_20251029.md、UPDATE_ENV_CONFIG.md
++- FEATURE_UPDATE_20251031.md、FRONTEND_UPDATE_20251031.md
++
++### 新功能记录
++- NEW_FEATURES_SUMMARY.md、NEW_FEATURES_TEST.md、NEW_FEATURES_V2.md
++
++### 测试报告
++- FINAL_TEST_REPORT.md、FRONTEND_TEST_REPORT.md、DEPLOYMENT_TEST_SUMMARY.md
++- TEST_CHECKLIST.md、FAVORITE_FEATURE_TEST.md、DEBUG_ADD_PRODUCT.md
++
++### 开发日志
++- 开发日志_前端.md、开发日志_后端.md、开发日志_管理后台.md、开发日志_更新记录.md、开发日志_使用说明.md
++- 工作日志_20251013.md、启动记录_20251008.md、管理员系统创建总结.md
++
++### 其他
++- PROJECT_SUMMARY.md、PROJECT_DESCRIPTION.md、RESUME_PROJECT.md
++- QUICK_START_GUIDE.md（已被 QUICKSTART.md 取代）
++- DOCUMENTATION_IMPROVEMENTS.md
+diff --git a/RESUME_PROJECT.md b/docs/archive/RESUME_PROJECT.md
+similarity index 100%
+rename from RESUME_PROJECT.md
+rename to docs/archive/RESUME_PROJECT.md
+diff --git a/TEST_CHECKLIST.md b/docs/archive/TEST_CHECKLIST.md
+similarity index 100%
+rename from TEST_CHECKLIST.md
+rename to docs/archive/TEST_CHECKLIST.md
+diff --git a/UPDATE_20251029.md b/docs/archive/UPDATE_20251029.md
+similarity index 100%
+rename from UPDATE_20251029.md
+rename to docs/archive/UPDATE_20251029.md
+diff --git a/UPDATE_ENV_CONFIG.md b/docs/archive/UPDATE_ENV_CONFIG.md
+similarity index 100%
+rename from UPDATE_ENV_CONFIG.md
+rename to docs/archive/UPDATE_ENV_CONFIG.md
+diff --git a/UPDATE_SUMMARY.md b/docs/archive/UPDATE_SUMMARY.md
+similarity index 100%
+rename from UPDATE_SUMMARY.md
+rename to docs/archive/UPDATE_SUMMARY.md
+diff --git "a/\345\220\257\345\212\250\350\256\260\345\275\225_20251008.md" "b/docs/archive/\345\220\257\345\212\250\350\256\260\345\275\225_20251008.md"
+similarity index 100%
+rename from "\345\220\257\345\212\250\350\256\260\345\275\225_20251008.md"
+rename to "docs/archive/\345\220\257\345\212\250\350\256\260\345\275\225_20251008.md"
+diff --git "a/\345\267\245\344\275\234\346\227\245\345\277\227_20251013.md" "b/docs/archive/\345\267\245\344\275\234\346\227\245\345\277\227_20251013.md"
+similarity index 100%
+rename from "\345\267\245\344\275\234\346\227\245\345\277\227_20251013.md"
+rename to "docs/archive/\345\267\245\344\275\234\346\227\245\345\277\227_20251013.md"
+diff --git "a/\345\274\200\345\217\221\346\227\245\345\277\227_\344\275\277\347\224\250\350\257\264\346\230\216.md" "b/docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\344\275\277\347\224\250\350\257\264\346\230\216.md"
+similarity index 100%
+rename from "\345\274\200\345\217\221\346\227\245\345\277\227_\344\275\277\347\224\250\350\257\264\346\230\216.md"
+rename to "docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\344\275\277\347\224\250\350\257\264\346\230\216.md"
+diff --git "a/\345\274\200\345\217\221\346\227\245\345\277\227_\345\211\215\347\253\257.md" "b/docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\345\211\215\347\253\257.md"
+similarity index 100%
+rename from "\345\274\200\345\217\221\346\227\245\345\277\227_\345\211\215\347\253\257.md"
+rename to "docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\345\211\215\347\253\257.md"
+diff --git "a/\345\274\200\345\217\221\346\227\245\345\277\227_\345\220\216\347\253\257.md" "b/docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\345\220\216\347\253\257.md"
+similarity index 100%
+rename from "\345\274\200\345\217\221\346\227\245\345\277\227_\345\220\216\347\253\257.md"
+rename to "docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\345\220\216\347\253\257.md"
+diff --git "a/\345\274\200\345\217\221\346\227\245\345\277\227_\346\233\264\346\226\260\350\256\260\345\275\225.md" "b/docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\346\233\264\346\226\260\350\256\260\345\275\225.md"
+similarity index 100%
+rename from "\345\274\200\345\217\221\346\227\245\345\277\227_\346\233\264\346\226\260\350\256\260\345\275\225.md"
+rename to "docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\346\233\264\346\226\260\350\256\260\345\275\225.md"
+diff --git "a/\345\274\200\345\217\221\346\227\245\345\277\227_\347\256\241\347\220\206\345\220\216\345\217\260.md" "b/docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\347\256\241\347\220\206\345\220\216\345\217\260.md"
+similarity index 100%
+rename from "\345\274\200\345\217\221\346\227\245\345\277\227_\347\256\241\347\220\206\345\220\216\345\217\260.md"
+rename to "docs/archive/\345\274\200\345\217\221\346\227\245\345\277\227_\347\256\241\347\220\206\345\220\216\345\217\260.md"
+diff --git "a/\347\256\241\347\220\206\345\221\230\347\263\273\347\273\237\345\210\233\345\273\272\346\200\273\347\273\223.md" "b/docs/archive/\347\256\241\347\220\206\345\221\230\347\263\273\347\273\237\345\210\233\345\273\272\346\200\273\347\273\223.md"
+similarity index 100%
+rename from "\347\256\241\347\220\206\345\221\230\347\263\273\347\273\237\345\210\233\345\273\272\346\200\273\347\273\223.md"
+rename to "docs/archive/\347\256\241\347\220\206\345\221\230\347\263\273\347\273\237\345\210\233\345\273\272\346\200\273\347\273\223.md"
+diff --git a/ADMIN_GUIDE.md b/docs/guides/ADMIN_GUIDE.md
+similarity index 100%
+rename from ADMIN_GUIDE.md
+rename to docs/guides/ADMIN_GUIDE.md
+diff --git a/COUPON_FRONTEND_GUIDE.md b/docs/guides/COUPON_FRONTEND_GUIDE.md
+similarity index 100%
+rename from COUPON_FRONTEND_GUIDE.md
+rename to docs/guides/COUPON_FRONTEND_GUIDE.md
+diff --git a/PROFILE_PAGE_GUIDE.md b/docs/guides/PROFILE_PAGE_GUIDE.md
+similarity index 100%
+rename from PROFILE_PAGE_GUIDE.md
+rename to docs/guides/PROFILE_PAGE_GUIDE.md

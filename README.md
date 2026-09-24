@@ -7,7 +7,7 @@
 
 这是一个基于微服务架构的现代化电商平台，采用前后端分离设计，实现了完整的电商核心功能和管理后台。
 
-**📚 English Documentation**: [README_EN.md](./README_EN.md) | **🚀 快速开始**: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
+**📚 English Documentation**: [README_EN.md](./README_EN.md) | **🚀 快速开始**: [QUICKSTART.md](./QUICKSTART.md)
 
 ## 🎯 项目亮点
 
@@ -474,7 +474,7 @@ npm test
 ## 📚 文档
 
 ### 核心文档
-- [快速启动指南](./QUICK_START_GUIDE.md) - 详细的安装和配置步骤
+- [快速启动指南](./QUICKSTART.md) - 详细的安装和配置步骤
 - [环境变量配置](./ENV_SETUP.md) - 环境变量配置详细指南 🆕
 - [API 接口文档](./API.md) - 完整的 API 接口说明和示例 🆕
 - [系统架构文档](./ARCHITECTURE.md) - 系统架构设计和技术选型 🆕
@@ -482,19 +482,20 @@ npm test
 - [贡献指南](./CONTRIBUTING.md) - 代码规范和贡献流程 🆕
 
 ### 功能文档 🆕
-- [优惠券前端使用指南](./COUPON_FRONTEND_GUIDE.md) - 优惠券功能详细说明
-- [个人中心页面指南](./PROFILE_PAGE_GUIDE.md) - 个人中心功能和设计
-- [管理后台文档](./ADMIN_GUIDE.md) - 管理后台使用说明
+- [优惠券前端使用指南](./docs/guides/COUPON_FRONTEND_GUIDE.md) - 优惠券功能详细说明
+- [个人中心页面指南](./docs/guides/PROFILE_PAGE_GUIDE.md) - 个人中心功能和设计
+- [管理后台文档](./docs/guides/ADMIN_GUIDE.md) - 管理后台使用说明
 
 ### 开发文档
-- [开发日志_前端](./开发日志_前端.md) - 前端开发过程记录（3,100+ 行）
-- [开发日志_后端](./开发日志_后端.md) - 后端开发过程记录（3,900+ 行）
-- [开发日志_管理后台](./开发日志_管理后台.md) - 管理后台开发记录
+- [前端开发日志](./docs/archive/开发日志_前端.md) - 前端开发过程记录（3,100+ 行）
+- [后端开发日志](./docs/archive/开发日志_后端.md) - 后端开发过程记录（3,900+ 行）
+- [管理后台开发记录](./docs/archive/开发日志_管理后台.md) - 管理后台开发记录
 
 ### 其他文档
-- [项目描述](./PROJECT_DESCRIPTION.md) - 适合求职简历的项目描述
+- [项目描述](./docs/archive/PROJECT_DESCRIPTION.md) - 适合求职简历的项目描述
 - [英文文档](./README_EN.md) - English Documentation
-- [更新记录](./UPDATE_20251029.md) - 最新更新内容
+- [更新记录](./docs/archive/UPDATE_20251029.md) - 历史更新内容
+- [历史文档归档](./docs/archive/README.md) - 开发过程中的更新总结、测试报告等历史文档索引
 
 ## 🎨 界面预览
 
@@ -519,9 +520,10 @@ npm test
 ## 🐛 问题排查
 
 如遇到问题，请查看：
-1. [开发日志_前端.md](./开发日志_前端.md) - 前端常见问题
-2. [开发日志_后端.md](./开发日志_后端.md) - 后端常见问题
-3. [开发日志_管理后台.md](./开发日志_管理后台.md) - 管理后台问题
+1. [故障排查指南](./TROUBLESHOOTING.md) - 常见问题与解决方案
+2. [前端开发日志](./docs/archive/开发日志_前端.md) - 前端常见问题（历史记录）
+3. [后端开发日志](./docs/archive/开发日志_后端.md) - 后端常见问题（历史记录）
+4. [管理后台开发记录](./docs/archive/开发日志_管理后台.md) - 管理后台问题（历史记录）
 
 ## 🤝 贡献指南
 
