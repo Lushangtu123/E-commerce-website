@@ -1,0 +1,131 @@
+diff --git a/backend/.env.example b/backend/.env.example
+index 679ad90..55fa64c 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -145,6 +145,9 @@ RATE_LIMIT_MAX=100
+ # 限流时间窗口（毫秒）
+ RATE_LIMIT_WINDOW=60000
+ 
++# 登录/注册限流：每个 IP 在时间窗口内的最大尝试次数（防暴力破解）
++RATE_LIMIT_AUTH_MAX=10
++
+ # ================================
+ # 其他配置
+ # ================================
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index a986702..cbefdda 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -10,6 +10,7 @@ import { connectRabbitMQ } from './database/rabbitmq';
+ import { checkESConnection } from './database/elasticsearch';
+ import { startOrderTimeoutChecker } from './services/order-timeout.service';
+ import { startMessageQueueConsumers } from './services/message-queue.service';
++import { apiLimiter } from './middleware/rate-limit';
+ 
+ // 导入路由
+ import userRoutes from './routes/user.routes';
+@@ -53,11 +54,14 @@ app.use((req: Request, res: Response, next: NextFunction) => {
+ // 静态文件
+ app.use('/uploads', express.static('uploads'));
+ 
+-// 健康检查
++// 健康检查（不计入限流）
+ app.get('/health', (req: Request, res: Response) => {
+   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+ });
+ 
++// API 通用限流
++app.use('/api', apiLimiter);
++
+ // API路由
+ app.use('/api/users', userRoutes);
+ app.use('/api/products', productRoutes);
+diff --git a/backend/src/middleware/rate-limit.ts b/backend/src/middleware/rate-limit.ts
+new file mode 100644
+index 0000000..9a6dec9
+--- /dev/null
++++ b/backend/src/middleware/rate-limit.ts
+@@ -0,0 +1,40 @@
++/**
++ * 限流中间件
++ * 基于 express-rate-limit，防止接口被刷与暴力破解登录
++ *
++ * 注意：如果后端部署在反向代理（Nginx）之后，需要在 index.ts 中开启
++ * app.set('trust proxy', 1)，否则限流会按代理服务器 IP 统计
++ */
++import { rateLimit } from 'express-rate-limit';
++
++// 限流时间窗口（毫秒），默认 60 秒
++const WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW || '', 10) || 60 * 1000;
++// 通用 API 限流：每个 IP 每个窗口期最大请求数，默认 100
++const API_MAX = parseInt(process.env.RATE_LIMIT_MAX || '', 10) || 100;
++// 登录/注册限流：每个 IP 每个窗口期最大尝试次数，默认 10
++const AUTH_MAX = parseInt(process.env.RATE_LIMIT_AUTH_MAX || '', 10) || 10;
++
++/**
++ * 通用 API 限流
++ * 挂载在 /api 下，/health 与 /uploads 不受影响
++ */
++export const apiLimiter = rateLimit({
++  windowMs: WINDOW_MS,
++  limit: API_MAX,
++  standardHeaders: 'draft-7',
++  legacyHeaders: false,
++  message: { error: '请求过于频繁，请稍后再试' },
++});
++
++/**
++ * 登录/注册限流（防暴力破解）
++ * 只统计失败请求，正常登录不受影响
++ */
++export const authLimiter = rateLimit({
++  windowMs: WINDOW_MS,
++  limit: AUTH_MAX,
++  standardHeaders: 'draft-7',
++  legacyHeaders: false,
++  skipSuccessfulRequests: true,
++  message: { error: '登录尝试过于频繁，请稍后再试' },
++});
+diff --git a/backend/src/routes/admin.routes.ts b/backend/src/routes/admin.routes.ts
+index 7af21c7..5aa1046 100644
+--- a/backend/src/routes/admin.routes.ts
++++ b/backend/src/routes/admin.routes.ts
+@@ -9,11 +9,12 @@ import {
+   getAdminLogs
+ } from '../controllers/admin.controller';
+ import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
++import { authLimiter } from '../middleware/rate-limit';
+ 
+ const router = express.Router();
+ 
+-// 公开路由
+-router.post('/login', adminLogin);
++// 公开路由（防暴力破解）
++router.post('/login', authLimiter, adminLogin);
+ 
+ // 需要认证的路由
+ router.use(authenticateAdmin);
+diff --git a/backend/src/routes/user.routes.ts b/backend/src/routes/user.routes.ts
+index 26edce5..83a2411 100644
+--- a/backend/src/routes/user.routes.ts
++++ b/backend/src/routes/user.routes.ts
+@@ -1,14 +1,15 @@
+ import { Router } from 'express';
+ import { UserController } from '../controllers/user.controller';
+ import { authMiddleware } from '../middleware/auth';
++import { authLimiter } from '../middleware/rate-limit';
+ 
+ const router = Router();
+ 
+-// 注册
+-router.post('/register', UserController.register);
++// 注册（防刷）
++router.post('/register', authLimiter, UserController.register);
+ 
+-// 登录
+-router.post('/login', UserController.login);
++// 登录（防暴力破解）
++router.post('/login', authLimiter, UserController.login);
+ 
+ // 获取个人信息（需要登录）
+ router.get('/profile', authMiddleware, UserController.getProfile);
