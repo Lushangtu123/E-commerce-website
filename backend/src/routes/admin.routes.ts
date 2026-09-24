@@ -9,11 +9,12 @@ import {
   getAdminLogs
 } from '../controllers/admin.controller';
 import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
+import { authLimiter } from '../middleware/rate-limit';
 
 const router = express.Router();
 
-// 公开路由
-router.post('/login', adminLogin);
+// 公开路由（防暴力破解）
+router.post('/login', authLimiter, adminLogin);
 
 // 需要认证的路由
 router.use(authenticateAdmin);

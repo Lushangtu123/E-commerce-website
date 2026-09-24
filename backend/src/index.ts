@@ -10,6 +10,7 @@ import { connectRabbitMQ } from './database/rabbitmq';
 import { checkESConnection } from './database/elasticsearch';
 import { startOrderTimeoutChecker } from './services/order-timeout.service';
 import { startMessageQueueConsumers } from './services/message-queue.service';
+import { apiLimiter } from './middleware/rate-limit';
 
 // 导入路由
 import userRoutes from './routes/user.routes';
@@ -53,10 +54,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // 静态文件
 app.use('/uploads', express.static('uploads'));
 
-// 健康检查
+// 健康检查（不计入限流）
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// API 通用限流
+app.use('/api', apiLimiter);
 
 // API路由
 app.use('/api/users', userRoutes);
