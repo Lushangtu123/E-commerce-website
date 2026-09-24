@@ -34,15 +34,19 @@ import adminCouponRoutes from './routes/admin-coupon.routes';
 // 优惠券路由
 import couponRoutes from './routes/coupon.routes';
 import logger from './utils/logger';
+import { validateEnv, getCorsOrigins } from './utils/validate-env';
 
 dotenv.config();
+
+// 启动前校验环境变量（生产环境缺失关键配置时拒绝启动）
+validateEnv();
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
 
 // 中间件
 app.use(helmet()); // 安全头
-app.use(cors()); // 跨域
+app.use(cors({ origin: getCorsOrigins() })); // 跨域：CORS_ORIGIN 限制来源
 app.use(compression()); // 压缩
 app.use(express.json({ limit: '10mb' })); // JSON解析
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // URL编码解析
