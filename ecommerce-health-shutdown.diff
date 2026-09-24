@@ -1,0 +1,276 @@
+diff --git a/backend/src/__tests__/utils/health.test.ts b/backend/src/__tests__/utils/health.test.ts
+new file mode 100644
+index 0000000..3906519
+--- /dev/null
++++ b/backend/src/__tests__/utils/health.test.ts
+@@ -0,0 +1,83 @@
++/**
++ * 健康检查测试（mock 全部数据库模块）
++ */
++jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
++jest.mock('../../database/redis', () => ({ getRedisClient: jest.fn() }));
++jest.mock('../../database/rabbitmq', () => ({ getChannel: jest.fn() }));
++jest.mock('../../database/mongodb', () => ({
++  __esModule: true,
++  default: { connection: { db: null } },
++}));
++
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const { getPool } = require('../../database/mysql');
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const { getRedisClient } = require('../../database/redis');
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const { getChannel } = require('../../database/rabbitmq');
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const mongoose = require('../../database/mongodb').default;
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const { getHealthReport } = require('../../utils/health');
++
++function mockAllUp() {
++  getPool.mockReturnValue({ query: jest.fn().mockResolvedValue([[]]) });
++  getRedisClient.mockReturnValue({ ping: jest.fn().mockResolvedValue('PONG') });
++  mongoose.connection.db = { admin: () => ({ ping: jest.fn().mockResolvedValue({ ok: 1 }) }) };
++  getChannel.mockReturnValue({});
++}
++
++beforeEach(() => {
++  jest.clearAllMocks();
++  mockAllUp();
++});
++
++test('全部依赖正常时状态为 ok', async () => {
++  const report = await getHealthReport();
++  expect(report.status).toBe('ok');
++  expect(typeof report.timestamp).toBe('string');
++  expect(typeof report.uptimeSeconds).toBe('number');
++  for (const dep of Object.values(report.dependencies) as any[]) {
++    expect(dep.status).toBe('up');
++    expect(typeof dep.latencyMs).toBe('number');
++  }
++  expect(Object.keys(report.dependencies).sort()).toEqual(
++    ['mongodb', 'mysql', 'rabbitmq', 'redis'].sort()
++  );
++});
++
++test('MySQL 异常时状态为 degraded 并携带错误信息', async () => {
++  getPool.mockReturnValue({
++    query: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED')),
++  });
++  const report = await getHealthReport();
++  expect(report.status).toBe('degraded');
++  expect(report.dependencies.mysql.status).toBe('down');
++  expect(report.dependencies.mysql.error).toContain('ECONNREFUSED');
++  expect(report.dependencies.redis.status).toBe('up');
++});
++
++test('依赖检查超时时标记为 down', async () => {
++  getRedisClient.mockReturnValue({ ping: jest.fn().mockReturnValue(new Promise(() => {})) });
++  const report = await getHealthReport();
++  expect(report.status).toBe('degraded');
++  expect(report.dependencies.redis.status).toBe('down');
++  expect(report.dependencies.redis.error).toBe('检查超时');
++}, 10000);
++
++test('RabbitMQ 未初始化时标记为 down', async () => {
++  getChannel.mockImplementation(() => {
++    throw new Error('RabbitMQ未初始化');
++  });
++  const report = await getHealthReport();
++  expect(report.status).toBe('degraded');
++  expect(report.dependencies.rabbitmq.status).toBe('down');
++});
++
++test('MongoDB 未连接时标记为 down', async () => {
++  mongoose.connection.db = null;
++  const report = await getHealthReport();
++  expect(report.status).toBe('degraded');
++  expect(report.dependencies.mongodb.status).toBe('down');
++  expect(report.dependencies.mongodb.error).toBe('MongoDB未初始化');
++});
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index d042620..66094b9 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -12,6 +12,11 @@ import { startOrderTimeoutChecker } from './services/order-timeout.service';
+ import { startMessageQueueConsumers } from './services/message-queue.service';
+ import { apiLimiter } from './middleware/rate-limit';
+ import { requestLogger } from './middleware/request-logger';
++import { getHealthReport } from './utils/health';
++import { getPool } from './database/mysql';
++import { getRedisClient } from './database/redis';
++import mongoose from './database/mongodb';
++import { closeRabbitMQ } from './database/rabbitmq';
+ 
+ // 导入路由
+ import userRoutes from './routes/user.routes';
+@@ -63,9 +68,10 @@ app.use('/uploads', express.static('uploads'));
+ // HTTP 请求日志
+ app.use(requestLogger);
+ 
+-// 健康检查（不计入限流）
+-app.get('/health', (req: Request, res: Response) => {
+-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
++// 健康检查（不计入限流）：依赖异常时返回 503
++app.get('/health', async (req: Request, res: Response) => {
++  const report = await getHealthReport();
++  res.status(report.status === 'ok' ? 200 : 503).json(report);
+ });
+ 
+ // API 通用限流
+@@ -139,7 +145,7 @@ async function startServer() {
+     logger.info('✓ 消息队列消费者已启动');
+     
+     // 启动服务器
+-    app.listen(PORT, () => {
++    const server = app.listen(PORT, () => {
+       logger.info(`\n🚀 服务器运行在 http://localhost:${PORT}`);
+       logger.info(`📝 环境: ${process.env.NODE_ENV}`);
+       logger.info(`\n📚 新功能已启用:`);
+@@ -147,6 +153,9 @@ async function startServer() {
+       logger.info(`  • RabbitMQ 消息队列`);
+       logger.info(`  • 优惠券系统`);
+     });
++
++    // 优雅关闭：先停新连接，再关各依赖连接
++    gracefulShutdown(server);
+   } catch (error) {
+     logger.error({ err: error }, '启动失败');
+     process.exit(1);
+@@ -155,3 +164,63 @@ async function startServer() {
+ 
+ startServer();
+ 
++/** 优雅关闭超时兜底（毫秒） */
++const SHUTDOWN_TIMEOUT_MS = 10000;
++
++/**
++ * 优雅关闭：停止接受新连接 → 等待已有请求完成 → 依次关闭各依赖连接
++ * 各依赖关闭互不影响，单个失败只记日志不中断流程
++ */
++function gracefulShutdown(server: import('http').Server) {
++  const shutdown = async (signal: string) => {
++    logger.info(`收到 ${signal}，开始优雅关闭...`);
++
++    // 超时兜底：10 秒内未完成则强制退出
++    const forceTimer = setTimeout(() => {
++      logger.error('优雅关闭超时，强制退出');
++      process.exit(1);
++    }, SHUTDOWN_TIMEOUT_MS);
++    forceTimer.unref();
++
++    try {
++      // 1. 停止接受新连接，等待已有请求处理完
++      await new Promise<void>((resolve) => server.close(() => resolve()));
++      logger.info('HTTP 服务已停止接受新连接');
++
++      // 2. 依次关闭依赖连接
++      await closeRabbitMQ();
++
++      try {
++        await getPool().end();
++        logger.info('MySQL 连接池已关闭');
++      } catch (err) {
++        logger.error({ err }, '关闭 MySQL 连接池失败');
++      }
++
++      try {
++        getRedisClient().disconnect();
++        logger.info('Redis 连接已关闭');
++      } catch (err) {
++        logger.error({ err }, '关闭 Redis 连接失败');
++      }
++
++      try {
++        await mongoose.disconnect();
++        logger.info('MongoDB 连接已关闭');
++      } catch (err) {
++        logger.error({ err }, '关闭 MongoDB 连接失败');
++      }
++
++      clearTimeout(forceTimer);
++      logger.info('优雅关闭完成');
++      process.exit(0);
++    } catch (err) {
++      logger.error({ err }, '优雅关闭过程出错');
++      process.exit(1);
++    }
++  };
++
++  process.on('SIGTERM', () => shutdown('SIGTERM'));
++  process.on('SIGINT', () => shutdown('SIGINT'));
++}
++
+diff --git a/backend/src/utils/health.ts b/backend/src/utils/health.ts
+new file mode 100644
+index 0000000..cea3aa5
+--- /dev/null
++++ b/backend/src/utils/health.ts
+@@ -0,0 +1,68 @@
++import { getPool } from '../database/mysql';
++import { getRedisClient } from '../database/redis';
++import mongoose from '../database/mongodb';
++import { getChannel } from '../database/rabbitmq';
++
++export interface DependencyStatus {
++  status: 'up' | 'down';
++  latencyMs?: number;
++  error?: string;
++}
++
++export interface HealthReport {
++  status: 'ok' | 'degraded';
++  timestamp: string;
++  uptimeSeconds: number;
++  dependencies: Record<string, DependencyStatus>;
++}
++
++/** 单个依赖检查超时时间 */
++const CHECK_TIMEOUT_MS = 3000;
++
++async function checkDependency(check: () => Promise<unknown>): Promise<DependencyStatus> {
++  const start = Date.now();
++  let timer: NodeJS.Timeout | undefined;
++  try {
++    await Promise.race([
++      check(),
++      new Promise((_, reject) => {
++        timer = setTimeout(() => reject(new Error('检查超时')), CHECK_TIMEOUT_MS);
++      }),
++    ]);
++    return { status: 'up', latencyMs: Date.now() - start };
++  } catch (err: any) {
++    return { status: 'down', error: err?.message || '未知错误' };
++  } finally {
++    if (timer) clearTimeout(timer);
++  }
++}
++
++/**
++ * 生成健康检查报告
++ * 覆盖启动时必需的 4 个依赖（MySQL/Redis/MongoDB/RabbitMQ）；
++ * 任一异常则整体状态为 degraded
++ */
++export async function getHealthReport(): Promise<HealthReport> {
++  const [mysql, redis, mongodb, rabbitmq] = await Promise.all([
++    checkDependency(() => getPool().query('SELECT 1')),
++    checkDependency(() => getRedisClient().ping()),
++    checkDependency(() =>
++      mongoose.connection.db
++        ? mongoose.connection.db.admin().ping()
++        : Promise.reject(new Error('MongoDB未初始化'))
++    ),
++    checkDependency(async () => {
++      getChannel(); // 未初始化时抛错
++    }),
++  ]);
++
++  const dependencies = { mysql, redis, mongodb, rabbitmq };
++  const allUp = Object.values(dependencies).every((d) => d.status === 'up');
++
++  return {
++    status: allUp ? 'ok' : 'degraded',
++    timestamp: new Date().toISOString(),
++    uptimeSeconds: Math.floor(process.uptime()),
++    dependencies,
++  };
++}

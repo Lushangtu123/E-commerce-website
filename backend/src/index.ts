@@ -12,6 +12,11 @@ import { startOrderTimeoutChecker } from './services/order-timeout.service';
 import { startMessageQueueConsumers } from './services/message-queue.service';
 import { apiLimiter } from './middleware/rate-limit';
 import { requestLogger } from './middleware/request-logger';
+import { getHealthReport } from './utils/health';
+import { getPool } from './database/mysql';
+import { getRedisClient } from './database/redis';
+import mongoose from './database/mongodb';
+import { closeRabbitMQ } from './database/rabbitmq';
 
 // 导入路由
 import userRoutes from './routes/user.routes';
@@ -63,9 +68,10 @@ app.use('/uploads', express.static('uploads'));
 // HTTP 请求日志
 app.use(requestLogger);
 
-// 健康检查（不计入限流）
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// 健康检查（不计入限流）：依赖异常时返回 503
+app.get('/health', async (req: Request, res: Response) => {
+  const report = await getHealthReport();
+  res.status(report.status === 'ok' ? 200 : 503).json(report);
 });
 
 // API 通用限流
@@ -139,7 +145,7 @@ async function startServer() {
     logger.info('✓ 消息队列消费者已启动');
     
     // 启动服务器
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       logger.info(`\n🚀 服务器运行在 http://localhost:${PORT}`);
       logger.info(`📝 环境: ${process.env.NODE_ENV}`);
       logger.info(`\n📚 新功能已启用:`);
@@ -147,6 +153,9 @@ async function startServer() {
       logger.info(`  • RabbitMQ 消息队列`);
       logger.info(`  • 优惠券系统`);
     });
+
+    // 优雅关闭：先停新连接，再关各依赖连接
+    gracefulShutdown(server);
   } catch (error) {
     logger.error({ err: error }, '启动失败');
     process.exit(1);
@@ -154,4 +163,64 @@ async function startServer() {
 }
 
 startServer();
+
+/** 优雅关闭超时兜底（毫秒） */
+const SHUTDOWN_TIMEOUT_MS = 10000;
+
+/**
+ * 优雅关闭：停止接受新连接 → 等待已有请求完成 → 依次关闭各依赖连接
+ * 各依赖关闭互不影响，单个失败只记日志不中断流程
+ */
+function gracefulShutdown(server: import('http').Server) {
+  const shutdown = async (signal: string) => {
+    logger.info(`收到 ${signal}，开始优雅关闭...`);
+
+    // 超时兜底：10 秒内未完成则强制退出
+    const forceTimer = setTimeout(() => {
+      logger.error('优雅关闭超时，强制退出');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    forceTimer.unref();
+
+    try {
+      // 1. 停止接受新连接，等待已有请求处理完
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      logger.info('HTTP 服务已停止接受新连接');
+
+      // 2. 依次关闭依赖连接
+      await closeRabbitMQ();
+
+      try {
+        await getPool().end();
+        logger.info('MySQL 连接池已关闭');
+      } catch (err) {
+        logger.error({ err }, '关闭 MySQL 连接池失败');
+      }
+
+      try {
+        getRedisClient().disconnect();
+        logger.info('Redis 连接已关闭');
+      } catch (err) {
+        logger.error({ err }, '关闭 Redis 连接失败');
+      }
+
+      try {
+        await mongoose.disconnect();
+        logger.info('MongoDB 连接已关闭');
+      } catch (err) {
+        logger.error({ err }, '关闭 MongoDB 连接失败');
+      }
+
+      clearTimeout(forceTimer);
+      logger.info('优雅关闭完成');
+      process.exit(0);
+    } catch (err) {
+      logger.error({ err }, '优雅关闭过程出错');
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
 
