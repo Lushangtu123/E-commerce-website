@@ -8,10 +8,16 @@ export const QUEUES = {
   ORDER_CREATED: 'order.created',
   ORDER_PAID: 'order.paid',
   ORDER_CANCELLED: 'order.cancelled',
+  ORDER_TIMEOUT_CHECK: 'order.timeout_check',
   STOCK_DEDUCTION: 'stock.deduction',
   STOCK_RECOVERY: 'stock.recovery',
   EMAIL_NOTIFICATION: 'email.notification',
 };
+
+// 订单超时检查延迟队列：消息到期后经死信路由到真正的超时检查队列
+// （使用 TTL + DLX 实现，无需 rabbitmq-delayed-message 插件）
+const ORDER_TIMEOUT_DELAY_QUEUE = 'order.timeout_check.delay';
+export const ORDER_TIMEOUT_DELAY_MS = 30 * 60 * 1000; // 30分钟，与订单超时配置一致
 
 /**
  * 连接到 RabbitMQ
@@ -29,6 +35,15 @@ export async function connectRabbitMQ(): Promise<void> {
     for (const queueName of Object.values(QUEUES)) {
       await channel.assertQueue(queueName, { durable: true });
     }
+
+    // 声明订单超时检查延迟队列：消息 TTL 到期后死信路由到 order.timeout_check
+    await channel.assertQueue(ORDER_TIMEOUT_DELAY_QUEUE, {
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': '',
+        'x-dead-letter-routing-key': QUEUES.ORDER_TIMEOUT_CHECK,
+      },
+    });
 
     console.log('✅ RabbitMQ 连接成功');
 
@@ -74,6 +89,36 @@ export async function publishMessage(
     });
   } catch (error) {
     console.error(`❌ 发布消息到队列 ${queueName} 失败:`, error);
+    return false;
+  }
+}
+
+/**
+ * 发布订单超时检查消息（延迟投递）
+ * 订单创建时调用；delayMs 后消息经死信路由到 order.timeout_check 队列，
+ * 消费者收到后若订单仍未支付则自动取消
+ */
+export async function publishOrderTimeoutCheck(
+  orderId: number,
+  userId: number,
+  delayMs: number = ORDER_TIMEOUT_DELAY_MS
+): Promise<boolean> {
+  try {
+    const ch = getChannel();
+    const content = Buffer.from(
+      JSON.stringify({
+        order_id: orderId,
+        user_id: userId,
+        timestamp: new Date().toISOString(),
+      })
+    );
+
+    return ch.sendToQueue(ORDER_TIMEOUT_DELAY_QUEUE, content, {
+      persistent: true,
+      expiration: String(delayMs),
+    });
+  } catch (error) {
+    console.error('❌ 发布订单超时检查消息失败:', error);
     return false;
   }
 }

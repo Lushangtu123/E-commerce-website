@@ -167,8 +167,15 @@ export class AdminCouponController {
         });
       }
 
-      // TODO: 实现更新状态的逻辑
-      // await CouponModel.updateStatus(couponId, status);
+      const coupon = await CouponModel.findById(couponId);
+      if (!coupon) {
+        return res.status(404).json({
+          success: false,
+          message: '优惠券不存在',
+        });
+      }
+
+      await CouponModel.updateStatus(couponId, status);
 
       res.json({
         success: true,

@@ -5,6 +5,7 @@ import { ProductModel } from '../models/product.model';
 import { CartModel } from '../models/cart.model';
 import { getRedisClient } from '../database/redis';
 import { getOrderRemainingTime } from '../services/order-timeout.service';
+import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
 
 export class OrderController {
   // 创建订单
@@ -64,7 +65,12 @@ export class OrderController {
       const productIds = orderItems.map(item => item.product_id);
       await CartModel.removeMultiple(req.userId!, productIds);
 
-      // TODO: 发送订单超时取消消息到MQ
+      // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）
+      // MQ 不可用不影响订单创建，订单超时检查定时任务会兜底处理
+      const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
+      if (!timeoutMsgSent) {
+        console.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
+      }
 
       res.status(201).json({
         message: '订单创建成功',

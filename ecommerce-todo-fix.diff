@@ -1,0 +1,375 @@
+diff --git a/backend/src/controllers/admin-coupon.controller.ts b/backend/src/controllers/admin-coupon.controller.ts
+index c6c5848..e2d7fb3 100644
+--- a/backend/src/controllers/admin-coupon.controller.ts
++++ b/backend/src/controllers/admin-coupon.controller.ts
+@@ -167,8 +167,15 @@ export class AdminCouponController {
+         });
+       }
+ 
+-      // TODO: 实现更新状态的逻辑
+-      // await CouponModel.updateStatus(couponId, status);
++      const coupon = await CouponModel.findById(couponId);
++      if (!coupon) {
++        return res.status(404).json({
++          success: false,
++          message: '优惠券不存在',
++        });
++      }
++
++      await CouponModel.updateStatus(couponId, status);
+ 
+       res.json({
+         success: true,
+diff --git a/backend/src/controllers/order.controller.ts b/backend/src/controllers/order.controller.ts
+index 3a6105d..e884e2c 100644
+--- a/backend/src/controllers/order.controller.ts
++++ b/backend/src/controllers/order.controller.ts
+@@ -5,6 +5,7 @@ import { ProductModel } from '../models/product.model';
+ import { CartModel } from '../models/cart.model';
+ import { getRedisClient } from '../database/redis';
+ import { getOrderRemainingTime } from '../services/order-timeout.service';
++import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
+ 
+ export class OrderController {
+   // 创建订单
+@@ -64,7 +65,12 @@ export class OrderController {
+       const productIds = orderItems.map(item => item.product_id);
+       await CartModel.removeMultiple(req.userId!, productIds);
+ 
+-      // TODO: 发送订单超时取消消息到MQ
++      // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）
++      // MQ 不可用不影响订单创建，订单超时检查定时任务会兜底处理
++      const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
++      if (!timeoutMsgSent) {
++        console.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
++      }
+ 
+       res.status(201).json({
+         message: '订单创建成功',
+diff --git a/backend/src/database/rabbitmq.ts b/backend/src/database/rabbitmq.ts
+index ef49f02..f77d695 100644
+--- a/backend/src/database/rabbitmq.ts
++++ b/backend/src/database/rabbitmq.ts
+@@ -8,11 +8,17 @@ export const QUEUES = {
+   ORDER_CREATED: 'order.created',
+   ORDER_PAID: 'order.paid',
+   ORDER_CANCELLED: 'order.cancelled',
++  ORDER_TIMEOUT_CHECK: 'order.timeout_check',
+   STOCK_DEDUCTION: 'stock.deduction',
+   STOCK_RECOVERY: 'stock.recovery',
+   EMAIL_NOTIFICATION: 'email.notification',
+ };
+ 
++// 订单超时检查延迟队列：消息到期后经死信路由到真正的超时检查队列
++// （使用 TTL + DLX 实现，无需 rabbitmq-delayed-message 插件）
++const ORDER_TIMEOUT_DELAY_QUEUE = 'order.timeout_check.delay';
++export const ORDER_TIMEOUT_DELAY_MS = 30 * 60 * 1000; // 30分钟，与订单超时配置一致
++
+ /**
+  * 连接到 RabbitMQ
+  */
+@@ -30,6 +36,15 @@ export async function connectRabbitMQ(): Promise<void> {
+       await channel.assertQueue(queueName, { durable: true });
+     }
+ 
++    // 声明订单超时检查延迟队列：消息 TTL 到期后死信路由到 order.timeout_check
++    await channel.assertQueue(ORDER_TIMEOUT_DELAY_QUEUE, {
++      durable: true,
++      arguments: {
++        'x-dead-letter-exchange': '',
++        'x-dead-letter-routing-key': QUEUES.ORDER_TIMEOUT_CHECK,
++      },
++    });
++
+     console.log('✅ RabbitMQ 连接成功');
+ 
+     // 监听连接关闭事件
+@@ -78,6 +93,36 @@ export async function publishMessage(
+   }
+ }
+ 
++/**
++ * 发布订单超时检查消息（延迟投递）
++ * 订单创建时调用；delayMs 后消息经死信路由到 order.timeout_check 队列，
++ * 消费者收到后若订单仍未支付则自动取消
++ */
++export async function publishOrderTimeoutCheck(
++  orderId: number,
++  userId: number,
++  delayMs: number = ORDER_TIMEOUT_DELAY_MS
++): Promise<boolean> {
++  try {
++    const ch = getChannel();
++    const content = Buffer.from(
++      JSON.stringify({
++        order_id: orderId,
++        user_id: userId,
++        timestamp: new Date().toISOString(),
++      })
++    );
++
++    return ch.sendToQueue(ORDER_TIMEOUT_DELAY_QUEUE, content, {
++      persistent: true,
++      expiration: String(delayMs),
++    });
++  } catch (error) {
++    console.error('❌ 发布订单超时检查消息失败:', error);
++    return false;
++  }
++}
++
+ /**
+  * 消费队列消息
+  */
+diff --git a/backend/src/models/coupon.model.ts b/backend/src/models/coupon.model.ts
+index b561e0f..e86aa34 100644
+--- a/backend/src/models/coupon.model.ts
++++ b/backend/src/models/coupon.model.ts
+@@ -289,6 +289,17 @@ export class CouponModel {
+     return Math.min(discount, orderAmount);
+   }
+ 
++  /**
++   * 更新优惠券状态（启用/禁用）
++   */
++  static async updateStatus(couponId: number, status: CouponStatus): Promise<boolean> {
++    const [result] = await pool.execute<ResultSetHeader>(
++      'UPDATE coupons SET status = ?, updated_at = NOW() WHERE coupon_id = ?',
++      [status, couponId]
++    );
++    return result.affectedRows > 0;
++  }
++
+   /**
+    * 更新过期的用户优惠券状态
+    */
+diff --git a/backend/src/services/message-queue.service.ts b/backend/src/services/message-queue.service.ts
+index 7fcd7ba..9ac382e 100644
+--- a/backend/src/services/message-queue.service.ts
++++ b/backend/src/services/message-queue.service.ts
+@@ -2,9 +2,10 @@
+  * 消息队列服务
+  * 处理订单、库存等异步任务
+  */
+-import { publishMessage, consumeQueue, QUEUES } from '../database/rabbitmq';
++import { publishMessage, publishOrderTimeoutCheck, consumeQueue, QUEUES } from '../database/rabbitmq';
+ import { pool } from '../database/mysql';
+ import { RowDataPacket } from 'mysql2';
++import { cancelTimeoutOrder } from './order-timeout.service';
+ 
+ /**
+  * 订单创建消息处理器
+@@ -203,6 +204,39 @@ export async function handleEmailNotification(message: any) {
+   console.log(`✅ 邮件通知已发送`);
+ }
+ 
++/**
++ * 订单超时检查消息处理器
++ * 订单创建 30 分钟后触发：若订单仍未支付则自动取消并恢复库存
++ */
++export async function handleOrderTimeoutCheck(message: any) {
++  const { order_id, user_id } = message;
++
++  console.log(`⏰ 处理订单超时检查: order_id=${order_id}`);
++
++  try {
++    const cancelled = await cancelTimeoutOrder(order_id);
++
++    if (!cancelled) {
++      console.log(`⏭️ 订单 ${order_id} 无需取消（已支付或已取消）`);
++      return;
++    }
++
++    // 发送超时取消通知邮件（模拟）
++    await publishMessage(QUEUES.EMAIL_NOTIFICATION, {
++      type: 'order_cancelled',
++      user_id,
++      order_id,
++      subject: '订单已超时取消',
++      content: `您的订单 ${order_id} 因超时未支付已自动取消，库存已恢复。`,
++    });
++
++    console.log(`✅ 订单超时取消处理完成: order_id=${order_id}`);
++  } catch (error) {
++    console.error('❌ 处理订单超时检查失败:', error);
++    throw error;
++  }
++}
++
+ /**
+  * 启动所有消息队列消费者
+  */
+@@ -214,6 +248,7 @@ export async function startMessageQueueConsumers() {
+     await consumeQueue(QUEUES.ORDER_CREATED, handleOrderCreated);
+     await consumeQueue(QUEUES.ORDER_PAID, handleOrderPaid);
+     await consumeQueue(QUEUES.ORDER_CANCELLED, handleOrderCancelled);
++    await consumeQueue(QUEUES.ORDER_TIMEOUT_CHECK, handleOrderTimeoutCheck);
+ 
+     // 库存相关队列
+     await consumeQueue(QUEUES.STOCK_DEDUCTION, handleStockDeduction);
+@@ -229,6 +264,14 @@ export async function startMessageQueueConsumers() {
+   }
+ }
+ 
++/**
++ * 发送订单超时检查消息（延迟 30 分钟投递）
++ * 订单创建时调用；若 30 分钟后订单仍未支付，消费者将自动取消订单
++ */
++export async function sendOrderTimeoutCheckMessage(orderId: number, userId: number) {
++  return await publishOrderTimeoutCheck(orderId, userId);
++}
++
+ /**
+  * 发送订单创建消息
+  */
+diff --git a/backend/src/services/order-timeout.service.ts b/backend/src/services/order-timeout.service.ts
+index 0f1a525..0234bf1 100644
+--- a/backend/src/services/order-timeout.service.ts
++++ b/backend/src/services/order-timeout.service.ts
+@@ -26,17 +26,80 @@ interface OrderItem extends RowDataPacket {
+ const ORDER_TIMEOUT_MINUTES = 30;
+ 
+ /**
+- * 检查并取消超时订单
++ * 取消单个超时订单：恢复库存并更新状态
++ * 仅当订单仍为待支付（status = 0）时执行，否则返回 false
+  */
+-export async function checkAndCancelTimeoutOrders(): Promise<void> {
++export async function cancelTimeoutOrder(orderId: number): Promise<boolean> {
+   const pool = getPool();
+   const connection = await pool.getConnection();
+ 
+   try {
+     await connection.beginTransaction();
+ 
++    // 1. 确认订单仍为待支付
++    const [orders] = await connection.execute<PendingOrder[]>(
++      'SELECT order_id, order_no, user_id, created_at FROM orders WHERE order_id = ? AND status = 0',
++      [orderId]
++    );
++
++    if (orders.length === 0) {
++      await connection.rollback();
++      return false;
++    }
++    const order = orders[0];
++
++    // 2. 获取订单商品信息
++    const [orderItems] = await connection.execute<OrderItem[]>(
++      'SELECT item_id, product_id, sku_id, quantity FROM order_items WHERE order_id = ?',
++      [order.order_id]
++    );
++
++    // 3. 恢复库存
++    for (const item of orderItems) {
++      if (item.sku_id) {
++        // 恢复 SKU 库存
++        await connection.execute(
++          'UPDATE product_skus SET stock = stock + ? WHERE sku_id = ?',
++          [item.quantity, item.sku_id]
++        );
++      } else {
++        // 恢复商品库存
++        await connection.execute(
++          'UPDATE products SET stock = stock + ? WHERE product_id = ?',
++          [item.quantity, item.product_id]
++        );
++      }
++    }
++
++    // 4. 更新订单状态为已取消
++    await connection.execute(
++      `UPDATE orders 
++       SET status = 4
++       WHERE order_id = ?`,
++      [order.order_id]
++    );
++
++    await connection.commit();
++    console.log(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
++    return true;
++  } catch (error) {
++    await connection.rollback();
++    console.error(`[订单超时] 取消订单 ${orderId} 失败:`, error);
++    throw error;
++  } finally {
++    connection.release();
++  }
++}
++
++/**
++ * 检查并取消超时订单
++ */
++export async function checkAndCancelTimeoutOrders(): Promise<void> {
++  const pool = getPool();
++
++  try {
+     // 1. 查找超时的待支付订单
+-    const [timeoutOrders] = await connection.execute<PendingOrder[]>(
++    const [timeoutOrders] = await pool.execute<PendingOrder[]>(
+       `SELECT order_id, order_no, user_id, created_at 
+        FROM orders 
+        WHERE status = 0 
+@@ -46,57 +109,23 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
+ 
+     console.log(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
+ 
++    let successCount = 0;
+     for (const order of timeoutOrders) {
+       try {
+-        // 2. 获取订单商品信息
+-        const [orderItems] = await connection.execute<OrderItem[]>(
+-          'SELECT item_id, product_id, sku_id, quantity FROM order_items WHERE order_id = ?',
+-          [order.order_id]
+-        );
+-
+-        // 3. 恢复库存
+-        for (const item of orderItems) {
+-          if (item.sku_id) {
+-            // 恢复 SKU 库存
+-            await connection.execute(
+-              'UPDATE product_skus SET stock = stock + ? WHERE sku_id = ?',
+-              [item.quantity, item.sku_id]
+-            );
+-          } else {
+-            // 恢复商品库存
+-            await connection.execute(
+-              'UPDATE products SET stock = stock + ? WHERE product_id = ?',
+-              [item.quantity, item.product_id]
+-            );
+-          }
+-        }
+-
+-        // 4. 更新订单状态为已取消
+-        await connection.execute(
+-          `UPDATE orders 
+-           SET status = 4
+-           WHERE order_id = ?`,
+-          [order.order_id]
+-        );
+-
+-        console.log(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
++        const cancelled = await cancelTimeoutOrder(order.order_id);
++        if (cancelled) successCount++;
+       } catch (error) {
+         console.error(`[订单超时] 处理订单 ${order.order_no} 失败:`, error);
+         // 继续处理下一个订单
+       }
+     }
+ 
+-    await connection.commit();
+-    
+     if (timeoutOrders.length > 0) {
+-      console.log(`[订单超时检查] 成功处理 ${timeoutOrders.length} 个超时订单`);
++      console.log(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
+     }
+   } catch (error) {
+-    await connection.rollback();
+-    console.error('[订单超时检查] 事务失败:', error);
++    console.error('[订单超时检查] 查询超时订单失败:', error);
+     throw error;
+-  } finally {
+-    connection.release();
+   }
+ }
+ 

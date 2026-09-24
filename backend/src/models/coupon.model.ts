@@ -290,6 +290,17 @@ export class CouponModel {
   }
 
   /**
+   * 更新优惠券状态（启用/禁用）
+   */
+  static async updateStatus(couponId: number, status: CouponStatus): Promise<boolean> {
+    const [result] = await pool.execute<ResultSetHeader>(
+      'UPDATE coupons SET status = ?, updated_at = NOW() WHERE coupon_id = ?',
+      [status, couponId]
+    );
+    return result.affectedRows > 0;
+  }
+
+  /**
    * 更新过期的用户优惠券状态
    */
   static async updateExpiredCoupons(): Promise<number> {
