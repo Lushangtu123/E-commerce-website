@@ -13,6 +13,8 @@ import { startMessageQueueConsumers } from './services/message-queue.service';
 import { apiLimiter } from './middleware/rate-limit';
 import { requestLogger } from './middleware/request-logger';
 import { getHealthReport } from './utils/health';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './utils/swagger';
 import { getPool } from './database/mysql';
 import { getRedisClient } from './database/redis';
 import mongoose from './database/mongodb';
@@ -69,10 +71,26 @@ app.use('/uploads', express.static('uploads'));
 app.use(requestLogger);
 
 // 健康检查（不计入限流）：依赖异常时返回 503
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     tags: [运维]
+ *     summary: 健康检查
+ *     description: 返回 MySQL / Redis / MongoDB / RabbitMQ 的连通状态；任一依赖异常时返回 503
+ *     responses:
+ *       200:
+ *         description: 所有依赖正常
+ *       503:
+ *         description: 存在异常依赖
+ */
 app.get('/health', async (req: Request, res: Response) => {
   const report = await getHealthReport();
   res.status(report.status === 'ok' ? 200 : 503).json(report);
 });
+
+// API 文档
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // API 通用限流
 app.use('/api', apiLimiter);

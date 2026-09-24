@@ -1,0 +1,3229 @@
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index a48050d..55e39a9 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -25,6 +25,8 @@
+         "mysql2": "^3.6.5",
+         "pino": "^10.3.1",
+         "redis": "^4.6.11",
++        "swagger-jsdoc": "^6.3.0",
++        "swagger-ui-express": "^5.0.1",
+         "uuid": "^9.0.1"
+       },
+       "devDependencies": {
+@@ -38,6 +40,8 @@
+         "@types/multer": "^1.4.11",
+         "@types/node": "^20.10.5",
+         "@types/supertest": "^7.2.1",
++        "@types/swagger-jsdoc": "^6.0.4",
++        "@types/swagger-ui-express": "^4.1.8",
+         "jest": "^30.5.2",
+         "nodemon": "^3.0.2",
+         "pino-pretty": "^13.1.3",
+@@ -47,6 +51,82 @@
+         "typescript": "^5.3.3"
+       }
+     },
++    "node_modules/@apidevtools/json-schema-ref-parser": {
++      "version": "14.0.1",
++      "resolved": "https://registry.npmjs.org/@apidevtools/json-schema-ref-parser/-/json-schema-ref-parser-14.0.1.tgz",
++      "integrity": "sha512-Oc96zvmxx1fqoSEdUmfmvvb59/KDOnUoJ7s2t7bISyAn0XEz57LCCw8k2Y4Pf3mwKaZLMciESALORLgfe2frCw==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/json-schema": "^7.0.15",
++        "js-yaml": "^4.1.0"
++      },
++      "engines": {
++        "node": ">= 16"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/philsturgeon"
++      }
++    },
++    "node_modules/@apidevtools/json-schema-ref-parser/node_modules/argparse": {
++      "version": "2.0.1",
++      "resolved": "https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz",
++      "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==",
++      "license": "Python-2.0"
++    },
++    "node_modules/@apidevtools/json-schema-ref-parser/node_modules/js-yaml": {
++      "version": "4.3.2",
++      "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.2.tgz",
++      "integrity": "sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==",
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/puzrin"
++        },
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/nodeca"
++        }
++      ],
++      "license": "MIT",
++      "dependencies": {
++        "argparse": "^2.0.1"
++      },
++      "bin": {
++        "js-yaml": "bin/js-yaml.js"
++      }
++    },
++    "node_modules/@apidevtools/openapi-schemas": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/@apidevtools/openapi-schemas/-/openapi-schemas-2.1.0.tgz",
++      "integrity": "sha512-Zc1AlqrJlX3SlpupFGpiLi2EbteyP7fXmUOGup6/DnkRgjP9bgMM/ag+n91rsv0U1Gpz0H3VILA/o3bW7Ua6BQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/@apidevtools/swagger-methods": {
++      "version": "3.0.2",
++      "resolved": "https://registry.npmjs.org/@apidevtools/swagger-methods/-/swagger-methods-3.0.2.tgz",
++      "integrity": "sha512-QAkD5kK2b1WfjDS/UQn/qQkbwF31uqRjPTrsCs5ZG9BQGAkjwvqGFjjPqAuzac/IYzpPtRzjCP1WrTuAIjMrXg==",
++      "license": "MIT"
++    },
++    "node_modules/@apidevtools/swagger-parser": {
++      "version": "12.1.0",
++      "resolved": "https://registry.npmjs.org/@apidevtools/swagger-parser/-/swagger-parser-12.1.0.tgz",
++      "integrity": "sha512-e5mJoswsnAX0jG+J09xHFYQXb/bUc5S3pLpMxUuRUA2H8T2kni3yEoyz2R3Dltw5f4A6j6rPNMpWTK+iVDFlng==",
++      "license": "MIT",
++      "dependencies": {
++        "@apidevtools/json-schema-ref-parser": "14.0.1",
++        "@apidevtools/openapi-schemas": "^2.1.0",
++        "@apidevtools/swagger-methods": "^3.0.2",
++        "ajv": "^8.17.1",
++        "ajv-draft-04": "^1.0.0",
++        "call-me-maybe": "^1.0.2"
++      },
++      "peerDependencies": {
++        "openapi-types": ">=7"
++      }
++    },
+     "node_modules/@babel/code-frame": {
+       "version": "7.29.7",
+       "resolved": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz",
+@@ -1834,6 +1914,13 @@
+         "@redis/client": "^1.0.0"
+       }
+     },
++    "node_modules/@scarf/scarf": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/@scarf/scarf/-/scarf-1.4.0.tgz",
++      "integrity": "sha512-xxeapPiUXdZAE3che6f3xogoJPeZgig6omHEy1rIY5WVsB3H2BHNnZH+gHG6x91SCWyQCzWGsuL2Hh3ClO5/qQ==",
++      "hasInstallScript": true,
++      "license": "Apache-2.0"
++    },
+     "node_modules/@sideway/address": {
+       "version": "4.1.5",
+       "resolved": "https://registry.npmjs.org/@sideway/address/-/address-4.1.5.tgz",
+@@ -2124,6 +2211,12 @@
+         "pretty-format": "^30.0.0"
+       }
+     },
++    "node_modules/@types/json-schema": {
++      "version": "7.0.15",
++      "resolved": "https://registry.npmjs.org/@types/json-schema/-/json-schema-7.0.15.tgz",
++      "integrity": "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==",
++      "license": "MIT"
++    },
+     "node_modules/@types/jsonwebtoken": {
+       "version": "9.0.10",
+       "resolved": "https://registry.npmjs.org/@types/jsonwebtoken/-/jsonwebtoken-9.0.10.tgz",
+@@ -2254,6 +2347,24 @@
+         "@types/superagent": "^8.1.0"
+       }
+     },
++    "node_modules/@types/swagger-jsdoc": {
++      "version": "6.0.4",
++      "resolved": "https://registry.npmjs.org/@types/swagger-jsdoc/-/swagger-jsdoc-6.0.4.tgz",
++      "integrity": "sha512-W+Xw5epcOZrF/AooUM/PccNMSAFOKWZA5dasNyMujTwsBkU74njSJBpvCCJhHAJ95XRMzQrrW844Btu0uoetwQ==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/@types/swagger-ui-express": {
++      "version": "4.1.8",
++      "resolved": "https://registry.npmjs.org/@types/swagger-ui-express/-/swagger-ui-express-4.1.8.tgz",
++      "integrity": "sha512-AhZV8/EIreHFmBV5wAs0gzJUNq9JbbSXgJLQubCC0jtIo6prnI9MIRRxnU4MZX9RB9yXxF1V4R7jtLl/Wcj31g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/express": "*",
++        "@types/serve-static": "*"
++      }
++    },
+     "node_modules/@types/webidl-conversions": {
+       "version": "7.0.3",
+       "resolved": "https://registry.npmjs.org/@types/webidl-conversions/-/webidl-conversions-7.0.3.tgz",
+@@ -2654,6 +2765,36 @@
+         "node": ">=0.4.0"
+       }
+     },
++    "node_modules/ajv": {
++      "version": "8.20.0",
++      "resolved": "https://registry.npmjs.org/ajv/-/ajv-8.20.0.tgz",
++      "integrity": "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==",
++      "license": "MIT",
++      "dependencies": {
++        "fast-deep-equal": "^3.1.3",
++        "fast-uri": "^3.0.1",
++        "json-schema-traverse": "^1.0.0",
++        "require-from-string": "^2.0.2"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/epoberezkin"
++      }
++    },
++    "node_modules/ajv-draft-04": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/ajv-draft-04/-/ajv-draft-04-1.0.0.tgz",
++      "integrity": "sha512-mv00Te6nmYbRp5DCwclxtt7yV/joXJPGS7nM+97GdxvuttCOfgI3K4U25zboyeX0O+myI8ERluxQe5wljMmVIw==",
++      "license": "MIT",
++      "peerDependencies": {
++        "ajv": "^8.5.0"
++      },
++      "peerDependenciesMeta": {
++        "ajv": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/amqplib": {
+       "version": "0.10.9",
+       "resolved": "https://registry.npmjs.org/amqplib/-/amqplib-0.10.9.tgz",
+@@ -3146,6 +3287,12 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/call-me-maybe": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/call-me-maybe/-/call-me-maybe-1.0.2.tgz",
++      "integrity": "sha512-HpX65o1Hnr9HH25ojC1YGs7HCQLq0GCOibSaWER0eNpgJ/Z1MZv2mTc7+xh6WOPxbRVcmgbv4hGU+uSQ/2xFZQ==",
++      "license": "MIT"
++    },
+     "node_modules/callsites": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/callsites/-/callsites-3.1.0.tgz",
+@@ -3394,6 +3541,15 @@
+         "node": ">=12.20.0"
+       }
+     },
++    "node_modules/commander": {
++      "version": "6.2.0",
++      "resolved": "https://registry.npmjs.org/commander/-/commander-6.2.0.tgz",
++      "integrity": "sha512-zP4jEKbe8SHzKJYQmq8Y9gYjtO/POJLgIdKgV7B9qNmABVFVc+ctqSX6iXh4mCpJfRBOabiZ2YKPg8ciDw6C+Q==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 6"
++      }
++    },
+     "node_modules/component-emitter": {
+       "version": "1.3.1",
+       "resolved": "https://registry.npmjs.org/component-emitter/-/component-emitter-1.3.1.tgz",
+@@ -3536,7 +3692,6 @@
+       "version": "7.0.6",
+       "resolved": "https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz",
+       "integrity": "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "path-key": "^3.1.0",
+@@ -3670,6 +3825,18 @@
+         "node": ">=0.3.1"
+       }
+     },
++    "node_modules/doctrine": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/doctrine/-/doctrine-3.0.0.tgz",
++      "integrity": "sha512-yS+Q5i3hBf7GBkd4KG8a7eBNNWNGLTaEwwYWUijIYM7zrlYDM0BFXHjjPWlWZ1Rg7UaddZeIDmi9jF3HmqiQ2w==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "esutils": "^2.0.2"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
+     "node_modules/dotenv": {
+       "version": "16.6.1",
+       "resolved": "https://registry.npmjs.org/dotenv/-/dotenv-16.6.1.tgz",
+@@ -3867,6 +4034,15 @@
+         "node": ">=4"
+       }
+     },
++    "node_modules/esutils": {
++      "version": "2.0.3",
++      "resolved": "https://registry.npmjs.org/esutils/-/esutils-2.0.3.tgz",
++      "integrity": "sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==",
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/etag": {
+       "version": "1.8.1",
+       "resolved": "https://registry.npmjs.org/etag/-/etag-1.8.1.tgz",
+@@ -3996,6 +4172,12 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/fast-deep-equal": {
++      "version": "3.1.3",
++      "resolved": "https://registry.npmjs.org/fast-deep-equal/-/fast-deep-equal-3.1.3.tgz",
++      "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==",
++      "license": "MIT"
++    },
+     "node_modules/fast-json-stable-stringify": {
+       "version": "2.1.0",
+       "resolved": "https://registry.npmjs.org/fast-json-stable-stringify/-/fast-json-stable-stringify-2.1.0.tgz",
+@@ -4010,6 +4192,22 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/fast-uri": {
++      "version": "3.1.8",
++      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz",
++      "integrity": "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==",
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fastify"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/fastify"
++        }
++      ],
++      "license": "BSD-3-Clause"
++    },
+     "node_modules/fb-watchman": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/fb-watchman/-/fb-watchman-2.0.2.tgz",
+@@ -4092,7 +4290,6 @@
+       "version": "3.3.1",
+       "resolved": "https://registry.npmjs.org/foreground-child/-/foreground-child-3.3.1.tgz",
+       "integrity": "sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==",
+-      "dev": true,
+       "license": "ISC",
+       "dependencies": {
+         "cross-spawn": "^7.0.6",
+@@ -4109,7 +4306,6 @@
+       "version": "4.1.0",
+       "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz",
+       "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==",
+-      "dev": true,
+       "license": "ISC",
+       "engines": {
+         "node": ">=14"
+@@ -4725,7 +4921,6 @@
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz",
+       "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==",
+-      "dev": true,
+       "license": "ISC"
+     },
+     "node_modules/istanbul-lib-coverage": {
+@@ -5565,6 +5760,12 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/json-schema-traverse": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-1.0.0.tgz",
++      "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
++      "license": "MIT"
++    },
+     "node_modules/json5": {
+       "version": "2.2.3",
+       "resolved": "https://registry.npmjs.org/json5/-/json5-2.2.3.tgz",
+@@ -5727,6 +5928,12 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/lodash.mergewith": {
++      "version": "4.6.2",
++      "resolved": "https://registry.npmjs.org/lodash.mergewith/-/lodash.mergewith-4.6.2.tgz",
++      "integrity": "sha512-GK3g5RPZWTRSeLSpgP8Xhra+pnjBC56q9FZYe1d5RN3TJ35dbkGy3YqBSMbyCrlbi+CM9Z3Jk5yTL7RCsqboyQ==",
++      "license": "MIT"
++    },
+     "node_modules/lodash.once": {
+       "version": "4.1.1",
+       "resolved": "https://registry.npmjs.org/lodash.once/-/lodash.once-4.1.1.tgz",
+@@ -5913,7 +6120,6 @@
+       "version": "7.1.3",
+       "resolved": "https://registry.npmjs.org/minipass/-/minipass-7.1.3.tgz",
+       "integrity": "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A==",
+-      "dev": true,
+       "license": "BlueOak-1.0.0",
+       "engines": {
+         "node": ">=16 || 14 >=14.17"
+@@ -6362,6 +6568,13 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/openapi-types": {
++      "version": "12.1.3",
++      "resolved": "https://registry.npmjs.org/openapi-types/-/openapi-types-12.1.3.tgz",
++      "integrity": "sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==",
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/p-limit": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/p-limit/-/p-limit-3.1.0.tgz",
+@@ -6421,7 +6634,6 @@
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz",
+       "integrity": "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==",
+-      "dev": true,
+       "license": "BlueOak-1.0.0"
+     },
+     "node_modules/parse-json": {
+@@ -6466,7 +6678,6 @@
+       "version": "3.1.1",
+       "resolved": "https://registry.npmjs.org/path-key/-/path-key-3.1.1.tgz",
+       "integrity": "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==",
+-      "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=8"
+@@ -6476,7 +6687,6 @@
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/path-scurry/-/path-scurry-2.0.2.tgz",
+       "integrity": "sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg==",
+-      "dev": true,
+       "license": "BlueOak-1.0.0",
+       "dependencies": {
+         "lru-cache": "^11.0.0",
+@@ -6493,7 +6703,6 @@
+       "version": "11.5.3",
+       "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.3.tgz",
+       "integrity": "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==",
+-      "dev": true,
+       "license": "BlueOak-1.0.0",
+       "engines": {
+         "node": "20 || >=22"
+@@ -6877,6 +7086,15 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/require-from-string": {
++      "version": "2.0.2",
++      "resolved": "https://registry.npmjs.org/require-from-string/-/require-from-string-2.0.2.tgz",
++      "integrity": "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/requires-port": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/requires-port/-/requires-port-1.0.0.tgz",
+@@ -7038,7 +7256,6 @@
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/shebang-command/-/shebang-command-2.0.0.tgz",
+       "integrity": "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "shebang-regex": "^3.0.0"
+@@ -7051,7 +7268,6 @@
+       "version": "3.0.0",
+       "resolved": "https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz",
+       "integrity": "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==",
+-      "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=8"
+@@ -7496,6 +7712,134 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/swagger-jsdoc": {
++      "version": "6.3.0",
++      "resolved": "https://registry.npmjs.org/swagger-jsdoc/-/swagger-jsdoc-6.3.0.tgz",
++      "integrity": "sha512-I+iQjVGV3t28pOkQUJv2MncthvOtkEactOn8R76SvSYhxgtIn7FoqfDHwQaN+GBnQdXQLrhgDXseKitmJcHMsA==",
++      "license": "MIT",
++      "dependencies": {
++        "@apidevtools/swagger-parser": "^12.1.0",
++        "commander": "6.2.0",
++        "doctrine": "3.0.0",
++        "glob": "11.1.0",
++        "lodash.mergewith": "^4.6.2",
++        "yaml": "2.0.0-1"
++      },
++      "bin": {
++        "swagger-jsdoc": "bin/swagger-jsdoc.js"
++      },
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
++    "node_modules/swagger-jsdoc/node_modules/@isaacs/cliui": {
++      "version": "9.0.0",
++      "resolved": "https://registry.npmjs.org/@isaacs/cliui/-/cliui-9.0.0.tgz",
++      "integrity": "sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==",
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/swagger-jsdoc/node_modules/balanced-match": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
++      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
++      "license": "MIT",
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
++    "node_modules/swagger-jsdoc/node_modules/brace-expansion": {
++      "version": "5.0.12",
++      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
++      "integrity": "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==",
++      "license": "MIT",
++      "dependencies": {
++        "balanced-match": "^4.0.2"
++      },
++      "engines": {
++        "node": "20 || >=22"
++      }
++    },
++    "node_modules/swagger-jsdoc/node_modules/glob": {
++      "version": "11.1.0",
++      "resolved": "https://registry.npmjs.org/glob/-/glob-11.1.0.tgz",
++      "integrity": "sha512-vuNwKSaKiqm7g0THUBu2x7ckSs3XJLXE+2ssL7/MfTGPLLcrJQ/4Uq1CjPTtO5cCIiRxqvN6Twy1qOwhL0Xjcw==",
++      "deprecated": "Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me",
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "foreground-child": "^3.3.1",
++        "jackspeak": "^4.1.1",
++        "minimatch": "^10.1.1",
++        "minipass": "^7.1.2",
++        "package-json-from-dist": "^1.0.0",
++        "path-scurry": "^2.0.0"
++      },
++      "bin": {
++        "glob": "dist/esm/bin.mjs"
++      },
++      "engines": {
++        "node": "20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/swagger-jsdoc/node_modules/jackspeak": {
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/jackspeak/-/jackspeak-4.2.3.tgz",
++      "integrity": "sha512-ykkVRwrYvFm1nb2AJfKKYPr0emF6IiXDYUaFx4Zn9ZuIH7MrzEZ3sD5RlqGXNRpHtvUHJyOnCEFxOlNDtGo7wg==",
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "@isaacs/cliui": "^9.0.0"
++      },
++      "engines": {
++        "node": "20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/swagger-jsdoc/node_modules/minimatch": {
++      "version": "10.2.6",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz",
++      "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==",
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "brace-expansion": "^5.0.8"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/swagger-ui-dist": {
++      "version": "5.33.0",
++      "resolved": "https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-5.33.0.tgz",
++      "integrity": "sha512-wpdK+m6BU5yj6pmUdMskZVTSWYG4DLglAx3sIhylloY37i8O37IrH+YEpqdXNfpaTGxILRBFzUqLF2jKqbfI7A==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@scarf/scarf": "=1.4.0"
++      }
++    },
++    "node_modules/swagger-ui-express": {
++      "version": "5.0.1",
++      "resolved": "https://registry.npmjs.org/swagger-ui-express/-/swagger-ui-express-5.0.1.tgz",
++      "integrity": "sha512-SrNU3RiBGTLLmFU8GIJdOdanJTl4TOmT27tt3bWWHppqYmAZ6IDuEuBvMU6nZq0zLEe6b/1rACXCgLZqO6ZfrA==",
++      "license": "MIT",
++      "dependencies": {
++        "swagger-ui-dist": ">=5.0.0"
++      },
++      "engines": {
++        "node": ">= v0.10.32"
++      },
++      "peerDependencies": {
++        "express": ">=4.0.0 || >=5.0.0-beta"
++      }
++    },
+     "node_modules/synckit": {
+       "version": "0.11.13",
+       "resolved": "https://registry.npmjs.org/synckit/-/synckit-0.11.13.tgz",
+@@ -8122,7 +8466,6 @@
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/which/-/which-2.0.2.tgz",
+       "integrity": "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==",
+-      "dev": true,
+       "license": "ISC",
+       "dependencies": {
+         "isexe": "^2.0.0"
+@@ -8246,6 +8589,15 @@
+       "integrity": "sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==",
+       "license": "ISC"
+     },
++    "node_modules/yaml": {
++      "version": "2.0.0-1",
++      "resolved": "https://registry.npmjs.org/yaml/-/yaml-2.0.0-1.tgz",
++      "integrity": "sha512-W7h5dEhywMKenDJh2iX/LABkbFnBxasD27oyXWDS/feDsxiw0dD5ncXdYXgkvAsXIY2MpW/ZKkr9IU30DBdMNQ==",
++      "license": "ISC",
++      "engines": {
++        "node": ">= 6"
++      }
++    },
+     "node_modules/yargs": {
+       "version": "17.7.3",
+       "resolved": "https://registry.npmjs.org/yargs/-/yargs-17.7.3.tgz",
+diff --git a/backend/package.json b/backend/package.json
+index fea7af5..61fbffa 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -18,43 +18,46 @@
+     "migrate-coupon:dev": "ts-node src/database/migrate-coupon.ts"
+   },
+   "dependencies": {
+-    "express": "^4.18.2",
++    "@elastic/elasticsearch": "^8.11.0",
++    "amqplib": "^0.10.3",
++    "bcryptjs": "^2.4.3",
++    "compression": "^1.7.4",
+     "cors": "^2.8.5",
+     "dotenv": "^16.3.1",
+-    "mysql2": "^3.6.5",
+-    "redis": "^4.6.11",
++    "express": "^4.18.2",
++    "express-rate-limit": "^7.1.5",
++    "helmet": "^7.1.0",
+     "ioredis": "^5.3.2",
+-    "bcryptjs": "^2.4.3",
+-    "jsonwebtoken": "^9.0.2",
+     "joi": "^17.11.0",
++    "jsonwebtoken": "^9.0.2",
+     "mongoose": "^8.0.3",
+-    "@elastic/elasticsearch": "^8.11.0",
+-    "amqplib": "^0.10.3",
+-    "uuid": "^9.0.1",
+     "multer": "^1.4.5-lts.1",
+-    "compression": "^1.7.4",
+-    "helmet": "^7.1.0",
+-    "express-rate-limit": "^7.1.5",
+-    "pino": "^10.3.1"
++    "mysql2": "^3.6.5",
++    "pino": "^10.3.1",
++    "redis": "^4.6.11",
++    "swagger-jsdoc": "^6.3.0",
++    "swagger-ui-express": "^5.0.1",
++    "uuid": "^9.0.1"
+   },
+   "devDependencies": {
+-    "@types/express": "^4.17.21",
+-    "@types/node": "^20.10.5",
+-    "@types/cors": "^2.8.17",
++    "@types/amqplib": "^0.10.4",
+     "@types/bcryptjs": "^2.4.6",
++    "@types/compression": "^1.7.5",
++    "@types/cors": "^2.8.17",
++    "@types/express": "^4.17.21",
++    "@types/jest": "^30.0.0",
+     "@types/jsonwebtoken": "^9.0.5",
+     "@types/multer": "^1.4.11",
+-    "@types/compression": "^1.7.5",
+-    "@types/amqplib": "^0.10.4",
+-    "typescript": "^5.3.3",
+-    "ts-node": "^10.9.2",
++    "@types/node": "^20.10.5",
++    "@types/supertest": "^7.2.1",
++    "@types/swagger-jsdoc": "^6.0.4",
++    "@types/swagger-ui-express": "^4.1.8",
++    "jest": "^30.5.2",
+     "nodemon": "^3.0.2",
+     "pino-pretty": "^13.1.3",
+-    "jest": "^30.5.2",
+-    "ts-jest": "^29.4.13",
+-    "@types/jest": "^30.0.0",
+     "supertest": "^7.3.0",
+-    "@types/supertest": "^7.2.1"
++    "ts-jest": "^29.4.13",
++    "ts-node": "^10.9.2",
++    "typescript": "^5.3.3"
+   }
+ }
+-
+diff --git a/backend/src/__tests__/utils/swagger.test.ts b/backend/src/__tests__/utils/swagger.test.ts
+new file mode 100644
+index 0000000..899b858
+--- /dev/null
++++ b/backend/src/__tests__/utils/swagger.test.ts
+@@ -0,0 +1,92 @@
++/**
++ * Swagger 文档回归测试
++ * - spec 能正常生成，无重复的 path+method
++ * - 关键接口存在且带 summary
++ * - admin-product 的 /batch/status 注册顺序在 /:productId/status 之前（影子路由修复）
++ */
++import { swaggerSpec } from '../../utils/swagger';
++
++jest.mock('../../controllers/admin-product.controller', () => ({
++  getAdminProducts: jest.fn(),
++  updateProductStatus: jest.fn(),
++  batchUpdateProductStatus: jest.fn(),
++  createProduct: jest.fn(),
++  updateProduct: jest.fn(),
++  deleteProduct: jest.fn(),
++  getProductSKUs: jest.fn(),
++  createSKU: jest.fn(),
++  batchCreateSKUs: jest.fn(),
++  updateSKU: jest.fn(),
++  deleteSKU: jest.fn(),
++}));
++
++jest.mock('../../middleware/admin-auth', () => ({
++  authenticateAdmin: jest.fn((_req: any, _res: any, next: any) => next()),
++  requirePermission: jest.fn(() => (_req: any, _res: any, next: any) => next()),
++}));
++
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const adminProductRoutes = require('../../routes/admin-product.routes').default;
++
++describe('swagger spec', () => {
++  test('生成成功且接口数量符合预期', () => {
++    const paths = (swaggerSpec as any).paths || {};
++    let operations = 0;
++    for (const p of Object.keys(paths)) operations += Object.keys(paths[p]).length;
++    // 83 个路由接口 + /health
++    expect(operations).toBeGreaterThanOrEqual(84);
++  });
++
++  test('无重复的 path+method 定义', () => {
++    const seen = new Set<string>();
++    const dupes: string[] = [];
++    const paths = (swaggerSpec as any).paths;
++    for (const p of Object.keys(paths)) {
++      for (const m of Object.keys(paths[p])) {
++        const key = `${m} ${p}`;
++        if (seen.has(key)) dupes.push(key);
++        seen.add(key);
++      }
++    }
++    expect(dupes).toEqual([]);
++  });
++
++  test('关键接口存在', () => {
++    const paths = (swaggerSpec as any).paths;
++    expect(paths['/api/users/login'].post).toBeDefined();
++    expect(paths['/api/orders'].post).toBeDefined();
++    expect(paths['/api/admin/products/batch/status'].put).toBeDefined();
++    expect(paths['/api/admin/coupons'].post).toBeDefined();
++    expect(paths['/health'].get).toBeDefined();
++    expect(paths['/api/search/es'].get).toBeDefined();
++  });
++
++  test('每个 operation 都有 summary 且 path 参数都标记 required', () => {
++    const paths = (swaggerSpec as any).paths;
++    for (const p of Object.keys(paths)) {
++      for (const m of Object.keys(paths[p])) {
++        const op = paths[p][m];
++        expect(op.summary).toBeTruthy();
++        for (const param of op.parameters || []) {
++          const resolved = param.$ref ? param : param;
++          if (resolved.in === 'path') {
++            expect(resolved.required).toBe(true);
++          }
++        }
++      }
++    }
++  });
++});
++
++describe('admin-product 路由顺序', () => {
++  test('/batch/status 在 /:productId/status 之前注册', () => {
++    const putPaths: string[] = (adminProductRoutes.stack as any[])
++      .filter((l: any) => l.route && l.route.methods.put)
++      .map((l: any) => l.route.path);
++    expect(putPaths).toContain('/batch/status');
++    expect(putPaths).toContain('/:productId/status');
++    expect(putPaths.indexOf('/batch/status')).toBeLessThan(
++      putPaths.indexOf('/:productId/status')
++    );
++  });
++});
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index 66094b9..c8d9c70 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -13,6 +13,8 @@ import { startMessageQueueConsumers } from './services/message-queue.service';
+ import { apiLimiter } from './middleware/rate-limit';
+ import { requestLogger } from './middleware/request-logger';
+ import { getHealthReport } from './utils/health';
++import swaggerUi from 'swagger-ui-express';
++import { swaggerSpec } from './utils/swagger';
+ import { getPool } from './database/mysql';
+ import { getRedisClient } from './database/redis';
+ import mongoose from './database/mongodb';
+@@ -69,11 +71,27 @@ app.use('/uploads', express.static('uploads'));
+ app.use(requestLogger);
+ 
+ // 健康检查（不计入限流）：依赖异常时返回 503
++/**
++ * @openapi
++ * /health:
++ *   get:
++ *     tags: [运维]
++ *     summary: 健康检查
++ *     description: 返回 MySQL / Redis / MongoDB / RabbitMQ 的连通状态；任一依赖异常时返回 503
++ *     responses:
++ *       200:
++ *         description: 所有依赖正常
++ *       503:
++ *         description: 存在异常依赖
++ */
+ app.get('/health', async (req: Request, res: Response) => {
+   const report = await getHealthReport();
+   res.status(report.status === 'ok' ? 200 : 503).json(report);
+ });
+ 
++// API 文档
++app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
++
+ // API 通用限流
+ app.use('/api', apiLimiter);
+ 
+diff --git a/backend/src/routes/admin-coupon.routes.ts b/backend/src/routes/admin-coupon.routes.ts
+index abcfcd2..67f8d77 100644
+--- a/backend/src/routes/admin-coupon.routes.ts
++++ b/backend/src/routes/admin-coupon.routes.ts
+@@ -10,17 +10,130 @@ const router = express.Router();
+ // 所有路由都需要管理员权限
+ router.use(adminAuthMiddleware);
+ 
+-// 创建优惠券
++/**
++ * @openapi
++ * /api/admin/coupons:
++ *   post:
++ *     tags: [管理后台-优惠券]
++ *     summary: 创建优惠券
++ *     description: 操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [code, name, type, discount_value, total_quantity, start_time, end_time]
++ *             properties:
++ *               code: { type: string, description: 优惠券代码（唯一） }
++ *               name: { type: string }
++ *               description: { type: string }
++ *               type: { type: integer, description: '1 满减，2 折扣，3 无门槛' }
++ *               discount_value: { type: number, description: 满减金额或折扣率 }
++ *               min_amount: { type: number, description: 最低消费金额 }
++ *               max_discount: { type: number, description: 最大优惠金额（折扣券） }
++ *               total_quantity: { type: integer, description: 发行总量 }
++ *               per_user_limit: { type: integer, description: 每人限领，默认 1 }
++ *               start_time: { type: string, format: date-time }
++ *               end_time: { type: string, format: date-time }
++ *     responses:
++ *       200:
++ *         description: 创建成功，返回 coupon_id
++ *       400:
++ *         description: 参数不完整 / 类型无效 / 代码已存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/', AdminCouponController.createCoupon);
+ 
+-// 获取优惠券列表
++/**
++ * @openapi
++ * /api/admin/coupons:
++ *   get:
++ *     tags: [管理后台-优惠券]
++ *     summary: 获取优惠券列表
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: page
++ *         in: query
++ *         schema: { type: integer, default: 1 }
++ *       - name: page_size
++ *         in: query
++ *         schema: { type: integer, default: 20 }
++ *       - name: status
++ *         in: query
++ *         schema: { type: integer }
++ *         description: 按状态筛选
++ *     responses:
++ *       200:
++ *         description: 优惠券列表（分页）
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Coupon' }
++ */
+ router.get('/', AdminCouponController.getCouponList);
+ 
+-// 获取优惠券详情
++/**
++ * @openapi
++ * /api/admin/coupons/{id}:
++ *   get:
++ *     tags: [管理后台-优惠券]
++ *     summary: 获取优惠券详情
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 优惠券详情
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Coupon' }
++ *       404:
++ *         description: 优惠券不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/:id', AdminCouponController.getCouponDetail);
+ 
+-// 更新优惠券状态
++/**
++ * @openapi
++ * /api/admin/coupons/{id}/status:
++ *   put:
++ *     tags: [管理后台-优惠券]
++ *     summary: 更新优惠券状态
++ *     description: 操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [status]
++ *             properties:
++ *               status: { type: integer, description: '1 启用，0 停用' }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ *       404:
++ *         description: 优惠券不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.put('/:id/status', AdminCouponController.updateCouponStatus);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/admin-order.routes.ts b/backend/src/routes/admin-order.routes.ts
+index 4f3c5ad..bd6410e 100644
+--- a/backend/src/routes/admin-order.routes.ts
++++ b/backend/src/routes/admin-order.routes.ts
+@@ -12,17 +12,111 @@ const router = express.Router();
+ // 所有路由都需要管理员认证
+ router.use(authenticateAdmin);
+ 
+-// 获取订单列表
++/**
++ * @openapi
++ * /api/admin/orders:
++ *   get:
++ *     tags: [管理后台-订单]
++ *     summary: 获取订单列表
++ *     description: 需要 order:view 权限，支持多条件筛选
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *       - name: orderNo
++ *         in: query
++ *         schema: { type: string }
++ *         description: 按订单号模糊搜索
++ *       - name: userId
++ *         in: query
++ *         schema: { type: integer }
++ *       - name: status
++ *         in: query
++ *         schema: { type: integer }
++ *         description: 按订单状态筛选
++ *       - name: startDate
++ *         in: query
++ *         schema: { type: string, format: date }
++ *       - name: endDate
++ *         in: query
++ *         schema: { type: string, format: date }
++ *     responses:
++ *       200:
++ *         description: 订单列表（分页）
++ */
+ router.get('/', requirePermission('order:view'), getAdminOrders);
+ 
+-// 获取订单详情
++/**
++ * @openapi
++ * /api/admin/orders/stats/overview:
++ *   get:
++ *     tags: [管理后台-订单]
++ *     summary: 获取订单统计
++ *     description: 需要 statistics:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: startDate
++ *         in: query
++ *         schema: { type: string, format: date }
++ *       - name: endDate
++ *         in: query
++ *         schema: { type: string, format: date }
++ *     responses:
++ *       200:
++ *         description: 订单统计数据
++ */
++router.get('/stats/overview', requirePermission('statistics:view'), getOrderStatistics);
++
++/**
++ * @openapi
++ * /api/admin/orders/{orderId}:
++ *   get:
++ *     tags: [管理后台-订单]
++ *     summary: 获取订单详情
++ *     description: 需要 order:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: orderId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 订单详情（含订单项）
++ *       404:
++ *         description: 订单不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/:orderId', requirePermission('order:view'), getAdminOrderDetail);
+ 
+-// 更新订单状态
++/**
++ * @openapi
++ * /api/admin/orders/{orderId}/status:
++ *   put:
++ *     tags: [管理后台-订单]
++ *     summary: 更新订单状态
++ *     description: 需要 order:edit 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: orderId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [status]
++ *             properties:
++ *               status: { type: integer, description: 目标订单状态 }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/:orderId/status', requirePermission('order:edit'), updateOrderStatus);
+ 
+-// 获取订单统计
+-router.get('/stats/overview', requirePermission('statistics:view'), getOrderStatistics);
+-
+ export default router;
+-
+diff --git a/backend/src/routes/admin-product.routes.ts b/backend/src/routes/admin-product.routes.ts
+index 6fd43d2..44cfe4a 100644
+--- a/backend/src/routes/admin-product.routes.ts
++++ b/backend/src/routes/admin-product.routes.ts
+@@ -19,40 +19,307 @@ const router = express.Router();
+ // 所有路由都需要管理员认证
+ router.use(authenticateAdmin);
+ 
+-// 获取商品列表
++/**
++ * @openapi
++ * /api/admin/products:
++ *   get:
++ *     tags: [管理后台-商品]
++ *     summary: 获取商品列表
++ *     description: 需要 product:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 商品列表（分页）
++ */
+ router.get('/', requirePermission('product:view'), getAdminProducts);
+ 
+-// 创建商品
++/**
++ * @openapi
++ * /api/admin/products:
++ *   post:
++ *     tags: [管理后台-商品]
++ *     summary: 创建商品
++ *     description: 需要 product:create 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [title, price]
++ *             properties:
++ *               title: { type: string }
++ *               description: { type: string }
++ *               price: { type: number }
++ *               stock: { type: integer }
++ *               category_id: { type: integer }
++ *               image_url: { type: string }
++ *               brand: { type: string }
++ *               status: { type: integer, description: '1 上架，0 下架' }
++ *     responses:
++ *       200:
++ *         description: 创建成功
++ */
+ router.post('/', requirePermission('product:create'), createProduct);
+ 
+-// 更新商品信息
++/**
++ * @openapi
++ * /api/admin/products/batch/status:
++ *   put:
++ *     tags: [管理后台-商品]
++ *     summary: 批量更新商品状态
++ *     description: 需要 product:edit 权限；注意注册顺序必须在 /{productId}/status 之前，否则会被影子路由吞掉
++ *     security: [{ adminAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [productIds, status]
++ *             properties:
++ *               productIds:
++ *                 type: array
++ *                 items: { type: integer }
++ *               status: { type: integer, description: '1 上架，0 下架' }
++ *     responses:
++ *       200:
++ *         description: 批量更新成功
++ */
++router.put('/batch/status', requirePermission('product:edit'), batchUpdateProductStatus);
++
++/**
++ * @openapi
++ * /api/admin/products/{productId}:
++ *   put:
++ *     tags: [管理后台-商品]
++ *     summary: 更新商品信息
++ *     description: 需要 product:edit 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             properties:
++ *               title: { type: string }
++ *               description: { type: string }
++ *               price: { type: number }
++ *               stock: { type: integer }
++ *               category_id: { type: integer }
++ *               image_url: { type: string }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/:productId', requirePermission('product:edit'), updateProduct);
+ 
+-// 更新商品状态
++/**
++ * @openapi
++ * /api/admin/products/{productId}/status:
++ *   put:
++ *     tags: [管理后台-商品]
++ *     summary: 更新商品上下架状态
++ *     description: 需要 product:edit 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [status]
++ *             properties:
++ *               status: { type: integer, description: '1 上架，0 下架' }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/:productId/status', requirePermission('product:edit'), updateProductStatus);
+ 
+-// 批量更新商品状态
+-router.put('/batch/status', requirePermission('product:edit'), batchUpdateProductStatus);
+-
+-// 删除商品
++/**
++ * @openapi
++ * /api/admin/products/{productId}:
++ *   delete:
++ *     tags: [管理后台-商品]
++ *     summary: 删除商品
++ *     description: 需要 product:delete 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 删除成功
++ */
+ router.delete('/:productId', requirePermission('product:delete'), deleteProduct);
+ 
+ // ==================== SKU 管理路由 ====================
+ 
+-// 获取商品的所有SKU
++/**
++ * @openapi
++ * /api/admin/products/{productId}/skus:
++ *   get:
++ *     tags: [管理后台-商品]
++ *     summary: 获取商品的所有 SKU
++ *     description: 需要 product:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: SKU 列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Sku' }
++ */
+ router.get('/:productId/skus', requirePermission('product:view'), getProductSKUs);
+ 
+-// 创建SKU
++/**
++ * @openapi
++ * /api/admin/products/{productId}/skus:
++ *   post:
++ *     tags: [管理后台-商品]
++ *     summary: 创建 SKU
++ *     description: 需要 product:create 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [sku_code, price, stock]
++ *             properties:
++ *               sku_code: { type: string }
++ *               specs:
++ *                 type: object
++ *                 example: { 颜色: 红, 尺码: M }
++ *               price: { type: number }
++ *               original_price: { type: number }
++ *               stock: { type: integer }
++ *               image: { type: string }
++ *     responses:
++ *       200:
++ *         description: 创建成功
++ */
+ router.post('/:productId/skus', requirePermission('product:create'), createSKU);
+ 
+-// 批量创建SKU
++/**
++ * @openapi
++ * /api/admin/products/{productId}/skus/batch:
++ *   post:
++ *     tags: [管理后台-商品]
++ *     summary: 批量创建 SKU
++ *     description: 需要 product:create 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [skus]
++ *             properties:
++ *               skus:
++ *                 type: array
++ *                 items:
++ *                   type: object
++ *                   required: [sku_code, price, stock]
++ *                   properties:
++ *                     sku_code: { type: string }
++ *                     specs: { type: object }
++ *                     price: { type: number }
++ *                     original_price: { type: number }
++ *                     stock: { type: integer }
++ *                     image: { type: string }
++ *     responses:
++ *       200:
++ *         description: 批量创建成功
++ */
+ router.post('/:productId/skus/batch', requirePermission('product:create'), batchCreateSKUs);
+ 
+-// 更新SKU
++/**
++ * @openapi
++ * /api/admin/products/skus/{skuId}:
++ *   put:
++ *     tags: [管理后台-商品]
++ *     summary: 更新 SKU
++ *     description: 需要 product:edit 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: skuId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             properties:
++ *               specs: { type: object }
++ *               price: { type: number }
++ *               original_price: { type: number }
++ *               stock: { type: integer }
++ *               image: { type: string }
++ *               status: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/skus/:skuId', requirePermission('product:edit'), updateSKU);
+ 
+-// 删除SKU
++/**
++ * @openapi
++ * /api/admin/products/skus/{skuId}:
++ *   delete:
++ *     tags: [管理后台-商品]
++ *     summary: 删除 SKU
++ *     description: 需要 product:delete 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: skuId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 删除成功
++ */
+ router.delete('/skus/:skuId', requirePermission('product:delete'), deleteSKU);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/admin-user.routes.ts b/backend/src/routes/admin-user.routes.ts
+index 1a04c76..f340ec5 100644
+--- a/backend/src/routes/admin-user.routes.ts
++++ b/backend/src/routes/admin-user.routes.ts
+@@ -13,20 +13,116 @@ const router = express.Router();
+ // 所有路由都需要管理员认证
+ router.use(authenticateAdmin);
+ 
+-// 获取用户列表
++/**
++ * @openapi
++ * /api/admin/users:
++ *   get:
++ *     tags: [管理后台-用户]
++ *     summary: 获取用户列表
++ *     description: 需要 user:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 用户列表（分页）
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/User' }
++ */
+ router.get('/', requirePermission('user:view'), getAdminUsers);
+ 
+-// 获取用户统计
++/**
++ * @openapi
++ * /api/admin/users/stats/overview:
++ *   get:
++ *     tags: [管理后台-用户]
++ *     summary: 获取用户统计
++ *     description: 需要 user:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 用户统计数据
++ */
+ router.get('/stats/overview', requirePermission('user:view'), getUserStatistics);
+ 
+-// 获取用户详情
++/**
++ * @openapi
++ * /api/admin/users/{userId}:
++ *   get:
++ *     tags: [管理后台-用户]
++ *     summary: 获取用户详情
++ *     description: 需要 user:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: userId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 用户详情
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/User' }
++ *       404:
++ *         description: 用户不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/:userId', requirePermission('user:view'), getAdminUserDetail);
+ 
+-// 获取用户订单
++/**
++ * @openapi
++ * /api/admin/users/{userId}/orders:
++ *   get:
++ *     tags: [管理后台-用户]
++ *     summary: 获取用户订单
++ *     description: 需要 user:view 权限
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: userId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 用户订单列表（分页）
++ */
+ router.get('/:userId/orders', requirePermission('user:view'), getUserOrders);
+ 
+-// 更新用户状态
++/**
++ * @openapi
++ * /api/admin/users/{userId}/status:
++ *   put:
++ *     tags: [管理后台-用户]
++ *     summary: 更新用户状态
++ *     description: 需要 user:edit 权限，操作记审计日志
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: userId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [status]
++ *             properties:
++ *               status: { type: integer, description: '1 正常，0 禁用' }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/:userId/status', requirePermission('user:edit'), updateUserStatus);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/admin.routes.ts b/backend/src/routes/admin.routes.ts
+index 5aa1046..25fc10d 100644
+--- a/backend/src/routes/admin.routes.ts
++++ b/backend/src/routes/admin.routes.ts
+@@ -13,23 +13,166 @@ import { authLimiter } from '../middleware/rate-limit';
+ 
+ const router = express.Router();
+ 
+-// 公开路由（防暴力破解）
++/**
++ * @openapi
++ * /api/admin/login:
++ *   post:
++ *     tags: [管理后台]
++ *     summary: 管理员登录
++ *     description: 登录接口带防暴力破解限流，返回管理员 Token
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [username, password]
++ *             properties:
++ *               username: { type: string }
++ *               password: { type: string, format: password }
++ *     responses:
++ *       200:
++ *         description: 登录成功，返回管理员信息与 Token
++ *       401:
++ *         description: 用户名或密码错误 / 账号被禁用
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ *       429:
++ *         description: 触发登录防爆破限流
++ */
+ router.post('/login', authLimiter, adminLogin);
+ 
+ // 需要认证的路由
+ router.use(authenticateAdmin);
+ 
+-// 管理员信息
++/**
++ * @openapi
++ * /api/admin/profile:
++ *   get:
++ *     tags: [管理后台]
++ *     summary: 获取管理员信息
++ *     security: [{ adminAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 当前管理员信息（含角色权限）
++ *       401:
++ *         description: 未登录或 Token 无效
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/profile', getAdminProfile);
+ 
+-// 仪表盘数据
++/**
++ * @openapi
++ * /api/admin/dashboard/stats:
++ *   get:
++ *     tags: [管理后台]
++ *     summary: 仪表盘核心指标
++ *     description: 今日销售额、订单数、用户数、商品数等
++ *     security: [{ adminAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 统计指标
++ */
+ router.get('/dashboard/stats', getDashboardStats);
++
++/**
++ * @openapi
++ * /api/admin/dashboard/recent-orders:
++ *   get:
++ *     tags: [管理后台]
++ *     summary: 仪表盘最新订单
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 最新订单列表
++ */
+ router.get('/dashboard/recent-orders', getRecentOrders);
++
++/**
++ * @openapi
++ * /api/admin/dashboard/top-products:
++ *   get:
++ *     tags: [管理后台]
++ *     summary: 仪表盘热销商品 Top
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: days
++ *         in: query
++ *         schema: { type: integer, default: 7 }
++ *         description: 统计最近 N 天
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 热销商品排行
++ */
+ router.get('/dashboard/top-products', getTopProducts);
++
++/**
++ * @openapi
++ * /api/admin/dashboard/sales-trend:
++ *   get:
++ *     tags: [管理后台]
++ *     summary: 仪表盘销售趋势
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - name: days
++ *         in: query
++ *         schema: { type: integer, default: 7 }
++ *         description: 最近 N 天
++ *     responses:
++ *       200:
++ *         description: 每日销售额趋势
++ */
+ router.get('/dashboard/sales-trend', getSalesTrend);
+ 
+-// 操作日志
++/**
++ * @openapi
++ * /api/admin/logs:
++ *   get:
++ *     tags: [管理后台]
++ *     summary: 获取操作日志
++ *     description: 需要 log:view 权限，支持按操作类型、管理员、时间范围筛选
++ *     security: [{ adminAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *       - name: action
++ *         in: query
++ *         schema: { type: string }
++ *         description: 操作类型，如 CREATE_PRODUCT
++ *       - name: adminId
++ *         in: query
++ *         schema: { type: integer }
++ *         description: 按管理员筛选
++ *       - name: startDate
++ *         in: query
++ *         schema: { type: string, format: date }
++ *       - name: endDate
++ *         in: query
++ *         schema: { type: string, format: date }
++ *     responses:
++ *       200:
++ *         description: 操作日志列表（分页）
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/AdminLog' }
++ *       403:
++ *         description: 无 log:view 权限
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/logs', requirePermission('log:view'), getAdminLogs);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/browse.routes.ts b/backend/src/routes/browse.routes.ts
+index 8fcc889..3ffb84d 100644
+--- a/backend/src/routes/browse.routes.ts
++++ b/backend/src/routes/browse.routes.ts
+@@ -12,17 +12,73 @@ const router = express.Router();
+ // 所有浏览历史路由都需要认证
+ router.use(authMiddleware);
+ 
+-// 记录浏览
++/**
++ * @openapi
++ * /api/browse/record:
++ *   post:
++ *     tags: [浏览历史]
++ *     summary: 记录浏览
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_id]
++ *             properties:
++ *               product_id: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 记录成功
++ */
+ router.post('/record', recordBrowse);
+ 
+-// 获取浏览历史
++/**
++ * @openapi
++ * /api/browse/history:
++ *   get:
++ *     tags: [浏览历史]
++ *     summary: 获取浏览历史
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 浏览历史列表（分页）
++ */
+ router.get('/history', getUserBrowseHistory);
+ 
+-// 清除浏览历史
++/**
++ * @openapi
++ * /api/browse/history:
++ *   delete:
++ *     tags: [浏览历史]
++ *     summary: 清除浏览历史
++ *     security: [{ bearerAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 清除成功
++ */
+ router.delete('/history', clearBrowseHistory);
+ 
+-// 删除单条浏览记录
++/**
++ * @openapi
++ * /api/browse/history/{product_id}:
++ *   delete:
++ *     tags: [浏览历史]
++ *     summary: 删除单条浏览记录
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: product_id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 删除成功
++ */
+ router.delete('/history/:product_id', deleteBrowseRecord);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/cart.routes.ts b/backend/src/routes/cart.routes.ts
+index 562415a..12fea2f 100644
+--- a/backend/src/routes/cart.routes.ts
++++ b/backend/src/routes/cart.routes.ts
+@@ -7,20 +7,110 @@ const router = Router();
+ // 所有购物车接口都需要登录
+ router.use(authMiddleware);
+ 
+-// 获取购物车列表
++/**
++ * @openapi
++ * /api/cart:
++ *   get:
++ *     tags: [购物车]
++ *     summary: 获取购物车列表
++ *     security: [{ bearerAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 购物车商品列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/CartItem' }
++ *       401:
++ *         description: 未登录
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/', CartController.list);
+ 
+-// 添加到购物车
++/**
++ * @openapi
++ * /api/cart:
++ *   post:
++ *     tags: [购物车]
++ *     summary: 添加到购物车
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_id, quantity]
++ *             properties:
++ *               product_id: { type: integer }
++ *               quantity: { type: integer, minimum: 1 }
++ *     responses:
++ *       200:
++ *         description: 添加成功
++ *       400:
++ *         description: 参数错误 / 库存不足
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/', CartController.add);
+ 
+-// 更新数量
++/**
++ * @openapi
++ * /api/cart:
++ *   put:
++ *     tags: [购物车]
++ *     summary: 更新购物车商品数量
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_id, quantity]
++ *             properties:
++ *               product_id: { type: integer }
++ *               quantity: { type: integer, minimum: 1 }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/', CartController.updateQuantity);
+ 
+-// 删除商品
++/**
++ * @openapi
++ * /api/cart/{id}:
++ *   delete:
++ *     tags: [购物车]
++ *     summary: 删除购物车商品
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *         description: 商品 ID
++ *     responses:
++ *       200:
++ *         description: 删除成功
++ */
+ router.delete('/:id', CartController.remove);
+ 
+-// 清空购物车
++/**
++ * @openapi
++ * /api/cart:
++ *   delete:
++ *     tags: [购物车]
++ *     summary: 清空购物车
++ *     security: [{ bearerAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 清空成功
++ */
+ router.delete('/', CartController.clear);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/coupon.routes.ts b/backend/src/routes/coupon.routes.ts
+index 6d21e78..54b339b 100644
+--- a/backend/src/routes/coupon.routes.ts
++++ b/backend/src/routes/coupon.routes.ts
+@@ -7,23 +7,143 @@ import { authMiddleware } from '../middleware/auth';
+ 
+ const router = express.Router();
+ 
+-// 获取可领取的优惠券列表（需要登录）
++/**
++ * @openapi
++ * /api/coupons/available:
++ *   get:
++ *     tags: [优惠券]
++ *     summary: 获取可领取的优惠券列表
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: page
++ *         in: query
++ *         schema: { type: integer, default: 1 }
++ *       - name: page_size
++ *         in: query
++ *         schema: { type: integer, default: 20 }
++ *     responses:
++ *       200:
++ *         description: 可领取优惠券列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Coupon' }
++ */
+ router.get('/available', authMiddleware, CouponController.getAvailableCoupons);
+ 
+-// 获取优惠券详情（需要登录）
++/**
++ * @openapi
++ * /api/coupons/{id}:
++ *   get:
++ *     tags: [优惠券]
++ *     summary: 获取优惠券详情
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 优惠券详情
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Coupon' }
++ *       404:
++ *         description: 优惠券不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/:id', authMiddleware, CouponController.getCouponDetail);
+ 
+-// 领取优惠券（需要登录）
++/**
++ * @openapi
++ * /api/coupons/receive:
++ *   post:
++ *     tags: [优惠券]
++ *     summary: 领取优惠券
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             properties:
++ *               coupon_id: { type: integer, description: 优惠券 ID（与 code 二选一） }
++ *               code: { type: string, description: 优惠券代码（与 coupon_id 二选一） }
++ *     responses:
++ *       200:
++ *         description: 领取成功
++ *       400:
++ *         description: 已领取 / 已领完 / 不在领取时间
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/receive', authMiddleware, CouponController.receiveCoupon);
+ 
+-// 获取用户的优惠券列表（需要登录）
++/**
++ * @openapi
++ * /api/coupons/my/list:
++ *   get:
++ *     tags: [优惠券]
++ *     summary: 获取用户的优惠券列表
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: status
++ *         in: query
++ *         schema: { type: integer }
++ *         description: 按使用状态筛选（未使用/已使用/已过期）
++ *     responses:
++ *       200:
++ *         description: 用户优惠券列表
++ */
+ router.get('/my/list', authMiddleware, CouponController.getUserCoupons);
+ 
+-// 获取可用于订单的优惠券（需要登录）
++/**
++ * @openapi
++ * /api/coupons/my/available-for-order:
++ *   get:
++ *     tags: [优惠券]
++ *     summary: 获取可用于订单的优惠券
++ *     description: 下单页根据订单金额筛选可用券
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: amount
++ *         in: query
++ *         required: true
++ *         schema: { type: number }
++ *         description: 订单金额
++ *     responses:
++ *       200:
++ *         description: 可用优惠券列表
++ */
+ router.get('/my/available-for-order', authMiddleware, CouponController.getAvailableForOrder);
+ 
+-// 计算优惠金额（需要登录）
++/**
++ * @openapi
++ * /api/coupons/calculate:
++ *   post:
++ *     tags: [优惠券]
++ *     summary: 计算优惠金额
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [order_amount, user_coupon_id]
++ *             properties:
++ *               order_amount: { type: number }
++ *               user_coupon_id: { type: integer, description: 用户领取的优惠券 ID }
++ *     responses:
++ *       200:
++ *         description: 返回优惠金额与实付金额
++ */
+ router.post('/calculate', authMiddleware, CouponController.calculateDiscount);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/favorite.routes.ts b/backend/src/routes/favorite.routes.ts
+index 6afd242..cf939d8 100644
+--- a/backend/src/routes/favorite.routes.ts
++++ b/backend/src/routes/favorite.routes.ts
+@@ -15,26 +15,138 @@ const router = express.Router();
+ // 所有收藏路由都需要认证
+ router.use(authMiddleware);
+ 
+-// 添加收藏
++/**
++ * @openapi
++ * /api/favorites:
++ *   post:
++ *     tags: [收藏]
++ *     summary: 添加收藏
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_id]
++ *             properties:
++ *               product_id: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 收藏成功
++ */
+ router.post('/', addFavorite);
+ 
+-// 切换收藏状态
++/**
++ * @openapi
++ * /api/favorites/toggle:
++ *   post:
++ *     tags: [收藏]
++ *     summary: 切换收藏状态
++ *     description: 已收藏则取消，未收藏则添加
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_id]
++ *             properties:
++ *               product_id: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 返回切换后的收藏状态
++ */
+ router.post('/toggle', toggleFavorite);
+ 
+-// 取消收藏
++/**
++ * @openapi
++ * /api/favorites/{product_id}:
++ *   delete:
++ *     tags: [收藏]
++ *     summary: 取消收藏
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: product_id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 取消成功
++ */
+ router.delete('/:product_id', removeFavorite);
+ 
+-// 检查单个商品收藏状态
++/**
++ * @openapi
++ * /api/favorites/check/{product_id}:
++ *   get:
++ *     tags: [收藏]
++ *     summary: 检查单个商品收藏状态
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: product_id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 返回是否已收藏
++ */
+ router.get('/check/:product_id', checkFavorite);
+ 
+-// 批量检查收藏状态
++/**
++ * @openapi
++ * /api/favorites/check-multiple:
++ *   post:
++ *     tags: [收藏]
++ *     summary: 批量检查收藏状态
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_ids]
++ *             properties:
++ *               product_ids:
++ *                 type: array
++ *                 items: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 每个商品的收藏状态映射
++ */
+ router.post('/check-multiple', checkMultipleFavorites);
+ 
+-// 获取用户收藏列表
++/**
++ * @openapi
++ * /api/favorites/my:
++ *   get:
++ *     tags: [收藏]
++ *     summary: 获取用户收藏列表
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 收藏列表（分页）
++ */
+ router.get('/my', getUserFavorites);
+ 
+-// 获取收藏数量
++/**
++ * @openapi
++ * /api/favorites/count:
++ *   get:
++ *     tags: [收藏]
++ *     summary: 获取收藏数量
++ *     security: [{ bearerAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 收藏总数
++ */
+ router.get('/count', getFavoriteCount);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/order.routes.ts b/backend/src/routes/order.routes.ts
+index d48107c..550d1bb 100644
+--- a/backend/src/routes/order.routes.ts
++++ b/backend/src/routes/order.routes.ts
+@@ -7,26 +7,175 @@ const router = Router();
+ // 所有订单接口都需要登录
+ router.use(authMiddleware);
+ 
+-// 创建订单
++/**
++ * @openapi
++ * /api/orders:
++ *   post:
++ *     tags: [订单]
++ *     summary: 创建订单
++ *     description: 下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [items]
++ *             properties:
++ *               items:
++ *                 type: array
++ *                 items:
++ *                   type: object
++ *                   required: [product_id, quantity]
++ *                   properties:
++ *                     product_id: { type: integer }
++ *                     quantity: { type: integer, minimum: 1 }
++ *               shipping_address_id: { type: integer, description: 收货地址 ID }
++ *               remark: { type: string, description: 订单备注 }
++ *     responses:
++ *       200:
++ *         description: 创建成功，返回订单 ID
++ *       400:
++ *         description: 商品不存在 / 库存不足
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/', OrderController.create);
+ 
+-// 获取订单列表
++/**
++ * @openapi
++ * /api/orders:
++ *   get:
++ *     tags: [订单]
++ *     summary: 获取订单列表
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *       - name: status
++ *         in: query
++ *         schema: { type: integer }
++ *         description: 按订单状态筛选
++ *     responses:
++ *       200:
++ *         description: 订单列表（分页）
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Order' }
++ */
+ router.get('/', OrderController.list);
+ 
+-// 获取订单详情
++/**
++ * @openapi
++ * /api/orders/{id}:
++ *   get:
++ *     tags: [订单]
++ *     summary: 获取订单详情
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 订单详情（含订单项）
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Order' }
++ *       404:
++ *         description: 订单不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/:id', OrderController.getDetail);
+ 
+-// 取消订单
++/**
++ * @openapi
++ * /api/orders/{id}/cancel:
++ *   post:
++ *     tags: [订单]
++ *     summary: 取消订单
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 取消成功
++ *       400:
++ *         description: 订单状态不允许取消
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/:id/cancel', OrderController.cancel);
+ 
+-// 支付订单
++/**
++ * @openapi
++ * /api/orders/{id}/pay:
++ *   post:
++ *     tags: [订单]
++ *     summary: 支付订单
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 支付成功
++ *       400:
++ *         description: 订单已超时取消 / 状态不允许支付
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/:id/pay', OrderController.pay);
+ 
+-// 确认收货
++/**
++ * @openapi
++ * /api/orders/{id}/confirm:
++ *   post:
++ *     tags: [订单]
++ *     summary: 确认收货
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 确认成功
++ */
+ router.post('/:id/confirm', OrderController.confirm);
+ 
+-// 获取订单剩余支付时间
++/**
++ * @openapi
++ * /api/orders/{id}/remaining-time:
++ *   get:
++ *     tags: [订单]
++ *     summary: 获取订单剩余支付时间
++ *     description: 返回待支付订单距离 30 分钟超时还剩多少秒
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 剩余秒数
++ */
+ router.get('/:id/remaining-time', OrderController.getRemainingTime);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/product.routes.ts b/backend/src/routes/product.routes.ts
+index 69e51d6..0891d87 100644
+--- a/backend/src/routes/product.routes.ts
++++ b/backend/src/routes/product.routes.ts
+@@ -3,23 +3,135 @@ import { ProductController } from '../controllers/product.controller';
+ 
+ const router = Router();
+ 
++/**
++ * @openapi
++ * /api/products/categories:
++ *   get:
++ *     tags: [商品]
++ *     summary: 获取分类列表
++ *     responses:
++ *       200:
++ *         description: 分类列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Category' }
++ */
+ // 获取分类列表（必须在 /:id 之前）
+ router.get('/categories', ProductController.getCategories);
+ 
++/**
++ * @openapi
++ * /api/products/hot:
++ *   get:
++ *     tags: [商品]
++ *     summary: 获取热门商品
++ *     parameters:
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *         description: 返回数量
++ *     responses:
++ *       200:
++ *         description: 热门商品列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Product' }
++ */
+ // 获取热门商品（必须在 /:id 之前）
+ router.get('/hot', ProductController.getHotProducts);
+ 
+-// 获取商品列表
++/**
++ * @openapi
++ * /api/products:
++ *   get:
++ *     tags: [商品]
++ *     summary: 获取商品列表
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *       - name: category_id
++ *         in: query
++ *         schema: { type: integer }
++ *         description: 按分类筛选
++ *       - name: keyword
++ *         in: query
++ *         schema: { type: string }
++ *       - name: min_price
++ *         in: query
++ *         schema: { type: number }
++ *       - name: max_price
++ *         in: query
++ *         schema: { type: number }
++ *       - name: sort
++ *         in: query
++ *         schema: { type: string }
++ *         description: 排序字段，如 price / sales
++ *     responses:
++ *       200:
++ *         description: 商品列表（分页）
++ */
+ router.get('/', ProductController.list);
+ 
+-// 获取商品详情
++/**
++ * @openapi
++ * /api/products/{id}:
++ *   get:
++ *     tags: [商品]
++ *     summary: 获取商品详情
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 商品详情
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Product' }
++ *       404:
++ *         description: 商品不存在
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/:id', ProductController.getDetail);
+ 
+-// 创建商品（管理员）
++/**
++ * @openapi
++ * /api/products:
++ *   post:
++ *     tags: [商品]
++ *     summary: 创建商品（管理员）
++ *     deprecated: true
++ *     description: 历史遗留接口，请使用管理后台接口 POST /api/admin/products
++ *     responses:
++ *       200:
++ *         description: 创建成功
++ */
+ router.post('/', ProductController.create);
+ 
+-// 更新商品（管理员）
++/**
++ * @openapi
++ * /api/products/{id}:
++ *   put:
++ *     tags: [商品]
++ *     summary: 更新商品（管理员）
++ *     deprecated: true
++ *     description: 历史遗留接口，请使用管理后台接口 PUT /api/admin/products/{productId}
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ */
+ router.put('/:id', ProductController.update);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/recommendation.routes.ts b/backend/src/routes/recommendation.routes.ts
+index 68108a7..b20e34e 100644
+--- a/backend/src/routes/recommendation.routes.ts
++++ b/backend/src/routes/recommendation.routes.ts
+@@ -4,15 +4,75 @@ import { authMiddleware, optionalAuth } from '../middleware/auth';
+ 
+ const router = Router();
+ 
+-// 个性化推荐（需要登录）
++/**
++ * @openapi
++ * /api/recommendations/personalized:
++ *   get:
++ *     tags: [推荐]
++ *     summary: 个性化推荐
++ *     description: 基于用户浏览 / 购买行为的个性化推荐，需登录
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 推荐商品列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Product' }
++ */
+ router.get('/personalized', authMiddleware, RecommendationController.getPersonalized);
+ 
+-// 相关商品推荐（可选登录）
++/**
++ * @openapi
++ * /api/recommendations/related/{productId}:
++ *   get:
++ *     tags: [推荐]
++ *     summary: 相关商品推荐
++ *     description: 可选登录，登录后推荐更精准
++ *     parameters:
++ *       - name: productId
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 相关商品列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Product' }
++ */
+ router.get('/related/:productId', optionalAuth, RecommendationController.getRelated);
+ 
+-// 猜你喜欢（可选登录）
++/**
++ * @openapi
++ * /api/recommendations/guess-you-like:
++ *   get:
++ *     tags: [推荐]
++ *     summary: 猜你喜欢
++ *     description: 可选登录，首页推荐位使用
++ *     parameters:
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 推荐商品列表
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Product' }
++ */
+ router.get('/guess-you-like', optionalAuth, RecommendationController.getGuessYouLike);
+ 
+ export default router;
+-
+-
+diff --git a/backend/src/routes/review.routes.ts b/backend/src/routes/review.routes.ts
+index 40d9f45..fbfad1c 100644
+--- a/backend/src/routes/review.routes.ts
++++ b/backend/src/routes/review.routes.ts
+@@ -4,17 +4,82 @@ import { authMiddleware } from '../middleware/auth';
+ 
+ const router = Router();
+ 
+-// 获取商品评论列表（无需登录）
++/**
++ * @openapi
++ * /api/reviews/product/{id}:
++ *   get:
++ *     tags: [评论]
++ *     summary: 获取商品评论列表
++ *     description: 公开接口，无需登录
++ *     parameters:
++ *       - name: id
++ *         in: path
++ *         required: true
++ *         schema: { type: integer }
++ *         description: 商品 ID
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 评论列表（分页）
++ *         content:
++ *           application/json:
++ *             schema:
++ *               type: array
++ *               items: { $ref: '#/components/schemas/Review' }
++ */
+ router.get('/product/:id', ReviewController.listByProduct);
+ 
+ // 以下接口需要登录
+ router.use(authMiddleware);
+ 
+-// 创建评论
++/**
++ * @openapi
++ * /api/reviews:
++ *   post:
++ *     tags: [评论]
++ *     summary: 创建评论
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [product_id, order_id, rating, content]
++ *             properties:
++ *               product_id: { type: integer }
++ *               order_id: { type: integer, description: 关联订单 ID（需已完成） }
++ *               rating: { type: integer, minimum: 1, maximum: 5 }
++ *               content: { type: string }
++ *               images:
++ *                 type: array
++ *                 items: { type: string }
++ *     responses:
++ *       200:
++ *         description: 评论成功
++ *       400:
++ *         description: 参数错误 / 订单状态不允许评论
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.post('/', ReviewController.create);
+ 
+-// 获取我的评论列表
++/**
++ * @openapi
++ * /api/reviews/my:
++ *   get:
++ *     tags: [评论]
++ *     summary: 获取我的评论列表
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - $ref: '#/components/parameters/PageParam'
++ *       - $ref: '#/components/parameters/LimitParam'
++ *     responses:
++ *       200:
++ *         description: 我的评论列表（分页）
++ */
+ router.get('/my', ReviewController.listByUser);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/search.routes.ts b/backend/src/routes/search.routes.ts
+index 966ff58..db8493f 100644
+--- a/backend/src/routes/search.routes.ts
++++ b/backend/src/routes/search.routes.ts
+@@ -12,29 +12,162 @@ import { authMiddleware } from '../middleware/auth';
+ 
+ const router = express.Router();
+ 
+-// Elasticsearch 高级搜索（公开）
++/**
++ * @openapi
++ * /api/search/es:
++ *   get:
++ *     tags: [搜索]
++ *     summary: Elasticsearch 高级搜索
++ *     description: 公开接口，支持关键词、分类、价格区间、品牌筛选与排序
++ *     parameters:
++ *       - name: keyword
++ *         in: query
++ *         required: true
++ *         schema: { type: string }
++ *       - name: category_id
++ *         in: query
++ *         schema: { type: integer }
++ *       - name: min_price
++ *         in: query
++ *         schema: { type: number }
++ *       - name: max_price
++ *         in: query
++ *         schema: { type: number }
++ *       - name: brand
++ *         in: query
++ *         schema: { type: string }
++ *       - name: sort_by
++ *         in: query
++ *         schema: { type: string, enum: [price, sales, created_at], default: sales }
++ *       - name: sort_order
++ *         in: query
++ *         schema: { type: string, enum: [asc, desc], default: desc }
++ *       - name: page
++ *         in: query
++ *         schema: { type: integer, default: 1 }
++ *       - name: page_size
++ *         in: query
++ *         schema: { type: integer, default: 20 }
++ *     responses:
++ *       200:
++ *         description: 搜索结果（分页）
++ */
+ router.get('/es', elasticsearchSearch);
+ 
+-// 获取热搜关键词（公开）
++/**
++ * @openapi
++ * /api/search/hot:
++ *   get:
++ *     tags: [搜索]
++ *     summary: 获取热搜关键词
++ *     description: 公开接口
++ *     parameters:
++ *       - name: days
++ *         in: query
++ *         schema: { type: integer, default: 7 }
++ *         description: 统计最近 N 天
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 热搜关键词列表
++ */
+ router.get('/hot', getHotKeywords);
+ 
+-// 获取搜索建议（公开）
++/**
++ * @openapi
++ * /api/search/suggestions:
++ *   get:
++ *     tags: [搜索]
++ *     summary: 获取搜索建议
++ *     description: 公开接口，输入前缀返回补全建议
++ *     parameters:
++ *       - name: keyword
++ *         in: query
++ *         required: true
++ *         schema: { type: string }
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 5 }
++ *     responses:
++ *       200:
++ *         description: 建议关键词列表
++ */
+ router.get('/suggestions', getSearchSuggestions);
+ 
+ // 以下需要登录
+ router.use(authMiddleware);
+ 
+-// 记录搜索
++/**
++ * @openapi
++ * /api/search/record:
++ *   post:
++ *     tags: [搜索]
++ *     summary: 记录搜索
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [keyword]
++ *             properties:
++ *               keyword: { type: string }
++ *               result_count: { type: integer, description: 搜索结果数 }
++ *     responses:
++ *       200:
++ *         description: 记录成功
++ */
+ router.post('/record', recordSearch);
+ 
+-// 获取用户搜索历史
++/**
++ * @openapi
++ * /api/search/history:
++ *   get:
++ *     tags: [搜索]
++ *     summary: 获取用户搜索历史
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: limit
++ *         in: query
++ *         schema: { type: integer, default: 10 }
++ *     responses:
++ *       200:
++ *         description: 搜索历史列表
++ */
+ router.get('/history', getUserSearchHistory);
+ 
+-// 清除搜索历史
++/**
++ * @openapi
++ * /api/search/history:
++ *   delete:
++ *     tags: [搜索]
++ *     summary: 清除搜索历史
++ *     security: [{ bearerAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 清除成功
++ */
+ router.delete('/history', clearSearchHistory);
+ 
+-// 删除单条搜索记录
++/**
++ * @openapi
++ * /api/search/history/{keyword}:
++ *   delete:
++ *     tags: [搜索]
++ *     summary: 删除单条搜索记录
++ *     security: [{ bearerAuth: [] }]
++ *     parameters:
++ *       - name: keyword
++ *         in: path
++ *         required: true
++ *         schema: { type: string }
++ *     responses:
++ *       200:
++ *         description: 删除成功
++ */
+ router.delete('/history/:keyword', deleteSearchKeyword);
+ 
+ export default router;
+-
+diff --git a/backend/src/routes/user.routes.ts b/backend/src/routes/user.routes.ts
+index 83a2411..6339e3d 100644
+--- a/backend/src/routes/user.routes.ts
++++ b/backend/src/routes/user.routes.ts
+@@ -5,17 +5,114 @@ import { authLimiter } from '../middleware/rate-limit';
+ 
+ const router = Router();
+ 
+-// 注册（防刷）
++/**
++ * @openapi
++ * /api/users/register:
++ *   post:
++ *     tags: [用户]
++ *     summary: 用户注册
++ *     description: 注册接口带防刷限流
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [username, email, password]
++ *             properties:
++ *               username: { type: string, example: zhangsan }
++ *               email: { type: string, format: email, example: zhangsan@example.com }
++ *               password: { type: string, format: password }
++ *     responses:
++ *       200:
++ *         description: 注册成功，返回用户信息与 Token
++ *       400:
++ *         description: 参数错误 / 邮箱已注册
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ *       429:
++ *         description: 触发注册防刷限流
++ */
+ router.post('/register', authLimiter, UserController.register);
+ 
+-// 登录（防暴力破解）
++/**
++ * @openapi
++ * /api/users/login:
++ *   post:
++ *     tags: [用户]
++ *     summary: 用户登录
++ *     description: 登录接口带防暴力破解限流
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             required: [email, password]
++ *             properties:
++ *               email: { type: string, format: email }
++ *               password: { type: string, format: password }
++ *     responses:
++ *       200:
++ *         description: 登录成功，返回用户信息与 Token
++ *       401:
++ *         description: 邮箱或密码错误
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ *       429:
++ *         description: 触发登录防爆破限流
++ */
+ router.post('/login', authLimiter, UserController.login);
+ 
+-// 获取个人信息（需要登录）
++/**
++ * @openapi
++ * /api/users/profile:
++ *   get:
++ *     tags: [用户]
++ *     summary: 获取个人信息
++ *     security: [{ bearerAuth: [] }]
++ *     responses:
++ *       200:
++ *         description: 当前登录用户信息
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/User' }
++ *       401:
++ *         description: 未登录或 Token 无效
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.get('/profile', authMiddleware, UserController.getProfile);
+ 
+-// 更新个人信息（需要登录）
++/**
++ * @openapi
++ * /api/users/profile:
++ *   put:
++ *     tags: [用户]
++ *     summary: 更新个人信息
++ *     security: [{ bearerAuth: [] }]
++ *     requestBody:
++ *       required: true
++ *       content:
++ *         application/json:
++ *           schema:
++ *             type: object
++ *             properties:
++ *               username: { type: string }
++ *               phone: { type: string }
++ *               avatar_url: { type: string }
++ *     responses:
++ *       200:
++ *         description: 更新成功
++ *       401:
++ *         description: 未登录或 Token 无效
++ *         content:
++ *           application/json:
++ *             schema: { $ref: '#/components/schemas/Error' }
++ */
+ router.put('/profile', authMiddleware, UserController.updateProfile);
+ 
+ export default router;
+-
+diff --git a/backend/src/utils/swagger.ts b/backend/src/utils/swagger.ts
+new file mode 100644
+index 0000000..9a427e2
+--- /dev/null
++++ b/backend/src/utils/swagger.ts
+@@ -0,0 +1,202 @@
++/**
++ * Swagger / OpenAPI 文档配置
++ *
++ * 访问地址：/api-docs
++ * 各路由文件中使用 `@openapi` JSDoc 注解描述接口，
++ * 此处统一定义 tags、安全方案与通用 schema。
++ */
++import swaggerJSDoc from 'swagger-jsdoc';
++
++const options: swaggerJSDoc.Options = {
++  definition: {
++    openapi: '3.0.0',
++    info: {
++      title: 'E-commerce API',
++      version: '1.0.0',
++      description:
++        '电商平台后端接口文档。用户端接口使用 Bearer Token（登录后获取），管理后台接口使用管理员 Token。',
++    },
++    servers: [{ url: '/', description: '当前服务器' }],
++    tags: [
++      { name: '用户', description: '注册 / 登录 / 个人信息' },
++      { name: '商品', description: '商品列表 / 详情 / 分类（公开接口）' },
++      { name: '购物车', description: '需登录' },
++      { name: '订单', description: '需登录' },
++      { name: '评论', description: '商品评论' },
++      { name: '收藏', description: '需登录' },
++      { name: '搜索', description: '关键词搜索 / 热搜 / 搜索历史' },
++      { name: '浏览历史', description: '需登录' },
++      { name: '推荐', description: '个性化 / 相关商品推荐' },
++      { name: '优惠券', description: '需登录' },
++      { name: '管理后台', description: '登录 / 仪表盘 / 操作日志（需管理员 Token）' },
++      { name: '管理后台-商品', description: '需管理员 Token' },
++      { name: '管理后台-订单', description: '需管理员 Token' },
++      { name: '管理后台-用户', description: '需管理员 Token' },
++      { name: '管理后台-优惠券', description: '需管理员 Token' },
++      { name: '运维', description: '健康检查' },
++    ],
++    components: {
++      securitySchemes: {
++        bearerAuth: {
++          type: 'http',
++          scheme: 'bearer',
++          bearerFormat: 'JWT',
++          description: '用户登录 Token：Authorization: Bearer <token>',
++        },
++        adminAuth: {
++          type: 'http',
++          scheme: 'bearer',
++          bearerFormat: 'JWT',
++          description: '管理员 Token：Authorization: Bearer <admin_token>',
++        },
++      },
++      schemas: {
++        Error: {
++          type: 'object',
++          properties: {
++            success: { type: 'boolean', example: false },
++            message: { type: 'string', example: '参数错误' },
++            error: { type: 'string', example: '参数错误' },
++          },
++        },
++        Pagination: {
++          type: 'object',
++          properties: {
++            page: { type: 'integer', example: 1 },
++            page_size: { type: 'integer', example: 20 },
++            total: { type: 'integer', example: 100 },
++          },
++        },
++        Category: {
++          type: 'object',
++          properties: {
++            category_id: { type: 'integer' },
++            name: { type: 'string' },
++            parent_id: { type: 'integer', nullable: true },
++          },
++        },
++        Product: {
++          type: 'object',
++          properties: {
++            product_id: { type: 'integer' },
++            title: { type: 'string' },
++            price: { type: 'number' },
++            original_price: { type: 'number', nullable: true },
++            main_image: { type: 'string', nullable: true },
++            stock: { type: 'integer' },
++            sales: { type: 'integer' },
++            status: { type: 'integer', description: '1 上架，0 下架' },
++            category_id: { type: 'integer' },
++          },
++        },
++        Sku: {
++          type: 'object',
++          properties: {
++            sku_id: { type: 'integer' },
++            product_id: { type: 'integer' },
++            sku_code: { type: 'string' },
++            specs: { type: 'object', description: '规格键值对，如 {颜色:"红",尺码:"M"}' },
++            price: { type: 'number' },
++            original_price: { type: 'number', nullable: true },
++            stock: { type: 'integer' },
++            image: { type: 'string', nullable: true },
++            status: { type: 'integer' },
++          },
++        },
++        CartItem: {
++          type: 'object',
++          properties: {
++            product_id: { type: 'integer' },
++            quantity: { type: 'integer' },
++            product_name: { type: 'string' },
++            price: { type: 'number' },
++            product_image: { type: 'string', nullable: true },
++          },
++        },
++        Order: {
++          type: 'object',
++          properties: {
++            order_id: { type: 'integer' },
++            order_no: { type: 'string' },
++            user_id: { type: 'integer' },
++            total_amount: { type: 'number' },
++            status: { type: 'integer', description: '待支付/已支付/已发货/已完成/已取消等' },
++            created_at: { type: 'string', format: 'date-time' },
++          },
++        },
++        Coupon: {
++          type: 'object',
++          properties: {
++            coupon_id: { type: 'integer' },
++            code: { type: 'string' },
++            name: { type: 'string' },
++            type: { type: 'integer', description: '1 满减，2 折扣，3 无门槛' },
++            discount_value: { type: 'number' },
++            min_amount: { type: 'number' },
++            max_discount: { type: 'number', nullable: true },
++            total_quantity: { type: 'integer' },
++            remain_quantity: { type: 'integer' },
++            status: { type: 'integer', description: '1 启用，0 停用' },
++            start_time: { type: 'string', format: 'date-time' },
++            end_time: { type: 'string', format: 'date-time' },
++          },
++        },
++        Review: {
++          type: 'object',
++          properties: {
++            review_id: { type: 'integer' },
++            product_id: { type: 'integer' },
++            user_id: { type: 'integer' },
++            rating: { type: 'integer', description: '1-5 星' },
++            content: { type: 'string' },
++            images: { type: 'array', items: { type: 'string' } },
++            created_at: { type: 'string', format: 'date-time' },
++          },
++        },
++        User: {
++          type: 'object',
++          properties: {
++            user_id: { type: 'integer' },
++            username: { type: 'string' },
++            email: { type: 'string' },
++            phone: { type: 'string', nullable: true },
++            avatar_url: { type: 'string', nullable: true },
++            status: { type: 'integer' },
++          },
++        },
++        AdminLog: {
++          type: 'object',
++          properties: {
++            log_id: { type: 'integer' },
++            admin_id: { type: 'integer' },
++            username: { type: 'string' },
++            action: { type: 'string', example: 'CREATE_PRODUCT' },
++            resource_type: { type: 'string', example: 'product' },
++            resource_id: { type: 'string', nullable: true },
++            description: { type: 'string' },
++            ip_address: { type: 'string', nullable: true },
++            created_at: { type: 'string', format: 'date-time' },
++          },
++        },
++      },
++      parameters: {
++        PageParam: {
++          name: 'page',
++          in: 'query',
++          schema: { type: 'integer', default: 1 },
++          description: '页码',
++        },
++        LimitParam: {
++          name: 'limit',
++          in: 'query',
++          schema: { type: 'integer', default: 20 },
++          description: '每页数量',
++        },
++      },
++    },
++  },
++  // 扫描路由文件中的 @openapi 注解；同时收录运维接口（index.ts）
++  apis: ['./src/routes/*.ts', './src/index.ts'],
++};
++
++export const swaggerSpec = swaggerJSDoc(options);
