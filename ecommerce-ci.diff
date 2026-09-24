@@ -1,0 +1,66 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..1e6cbe5
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,60 @@
++name: CI
++
++on:
++  push:
++    branches: [main]
++  pull_request:
++    branches: [main]
++
++jobs:
++  backend:
++    name: 后端：编译 + 测试
++    runs-on: ubuntu-latest
++    defaults:
++      run:
++        working-directory: backend
++    steps:
++      - name: 拉取代码
++        uses: actions/checkout@v4
++
++      - name: 安装 Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version: 20
++          cache: npm
++          cache-dependency-path: backend/package-lock.json
++
++      - name: 安装依赖
++        run: npm ci
++
++      - name: TypeScript 编译
++        run: npm run build
++
++      - name: 运行测试
++        run: npm test
++
++  frontend:
++    name: 前端：构建
++    runs-on: ubuntu-latest
++    defaults:
++      run:
++        working-directory: frontend
++    steps:
++      - name: 拉取代码
++        uses: actions/checkout@v4
++
++      - name: 安装 Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version: 20
++          cache: npm
++          cache-dependency-path: frontend/package-lock.json
++
++      - name: 安装依赖
++        run: npm ci
++
++      - name: 准备构建环境变量
++        run: cp .env.local.example .env.local
++
++      - name: Next.js 构建
++        run: npm run build
