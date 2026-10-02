@@ -1,4 +1,5 @@
 import { query } from '../database/mysql';
+import { customerProducts } from './product.model';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export interface BrowseHistory {
@@ -45,6 +46,7 @@ export class BrowseHistoryModel {
         p.price,
         p.main_image,
         p.stock,
+        p.has_sku,
         p.status
       FROM (
         SELECT user_id, product_id, MAX(id) as id, MAX(browsed_at) as browsed_at
@@ -53,7 +55,7 @@ export class BrowseHistoryModel {
         GROUP BY product_id
       ) bh_latest
       JOIN browse_history bh ON bh.id = bh_latest.id
-      LEFT JOIN products p ON bh.product_id = p.product_id
+      LEFT JOIN (${customerProducts}) p ON bh.product_id = p.product_id
       ORDER BY bh.browsed_at DESC
       LIMIT ? OFFSET ?`,
       [userId, limit, offset]

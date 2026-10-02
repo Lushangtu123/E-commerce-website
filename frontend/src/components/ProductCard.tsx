@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { cartApi } from '@/lib/api';
-import { useCartStore } from '@/store/useCartStore';
+import { useState, useEffect, useRef } from 'react';
+import { quickAddToCart } from '@/lib/quick-cart';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { FiShoppingCart } from 'react-icons/fi';
@@ -14,9 +14,13 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const active = useRef(true);
+  const productContext = useRef(product.product_id);
+  productContext.current = product.product_id;
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [isAdding, setIsAdding] = useState(false);
   const { isAuthenticated } = useAuthStore();
-  const { addItem } = useCartStore();
+  const router = useRouter();
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -28,22 +32,14 @@ export default function ProductCard({ product }: ProductCardProps) {
 
     setIsAdding(true);
     try {
-      await cartApi.add({ product_id: product.product_id, quantity: 1 });
-      addItem({
-        cart_id: Date.now(),
-        product_id: product.product_id,
-        quantity: 1,
-        title: product.title,
-        price: product.price,
-        main_image: product.main_image,
-        stock: product.stock,
-      });
-      toast.success('已加入购物车');
+      const result = await quickAddToCart(product.product_id, () => active.current && productContext.current === product.product_id);
+      if (result === 'select') router.push(`/products/${product.product_id}`);
+      if (result === 'added') toast.success('已加入购物车');
     } catch (error: any) {
       logger.error('加入购物车失败:', error);
-      toast.error(error.response?.data?.error || '加入购物车失败');
+      toast.error(error.response?.data?.error || error.message || '加入购物车失败');
     } finally {
-      setIsAdding(false);
+      if (active.current) setIsAdding(false);
     }
   };
 
@@ -102,7 +98,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           >
             <FiShoppingCart />
             <span className="text-sm">
-              {product.stock === 0 ? '已售罄' : isAdding ? '加入中...' : '加入'}
+              {product.stock === 0 ? '已售罄' : isAdding ? '处理中...' : product.has_sku ? '选规格' : '加入'}
             </span>
           </button>
         </div>

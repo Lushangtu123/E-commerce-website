@@ -13,17 +13,29 @@ function amountRow(tree, label) {
     Array.isArray(element.props.children) && element.props.children[0]?.props?.children === label)[0];
 }
 
-function setupDetail(order) {
+function setupDetail(order, items = []) {
   return loadPage('src/app/orders/[id]/page.tsx', {
     globals: { setInterval: () => 1, clearInterval() {} },
     imports: { '@/lib/api': {
-      orderApi: { getDetail: async () => ({ order, items: [] }) },
+      orderApi: { getDetail: async () => ({ order, items }) },
       orderTimeoutApi: { getRemainingTime: async () => ({ remaining_minutes: 10 }) },
     } },
   });
 }
 
 const auth = { isHydrated: true, isAuthenticated: true, user: { user_id: 1 } };
+
+test('order detail shows the purchased SKU snapshot for each variant separately', async () => {
+  const runtime = setupDetail({ status: 3, total_amount: 50 }, [
+    { item_id: 1, product_name: 'Shirt', price: 20, quantity: 1, sku_id: 101, sku_code: 'OLD-RED', sku_specs: { Color: 'Red', Size: 'M' } },
+    { item_id: 2, product_name: 'Shirt', price: 30, quantity: 1, sku_id: 102, sku_code: 'OLD-BLUE', sku_specs: { Color: 'Blue', Size: 'L' } },
+  ]);
+  const tree = await runtime.flush(auth);
+  assert.ok(textContent(tree).includes('Color: Red / Size: M'));
+  assert.ok(textContent(tree).includes('Color: Blue / Size: L'));
+  assert.ok(textContent(tree).includes('OLD-RED'));
+  assert.ok(textContent(tree).includes('OLD-BLUE'));
+});
 
 test('order detail displays the original price, coupon reduction and charged total separately', async () => {
   const runtime = setupDetail({ status: 3, original_amount: '100.00', discount_amount: '20.00', total_amount: '80.00',

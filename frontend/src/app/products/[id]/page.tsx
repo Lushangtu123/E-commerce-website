@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -14,7 +14,7 @@ import { logger } from '@/lib/logger';
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const { addItem } = useCartStore();
   
   const [product, setProduct] = useState<any>(null);
@@ -27,124 +27,140 @@ export default function ProductDetailPage() {
   const [favoriting, setFavoriting] = useState(false);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
+  const [selectedSkuId, setSelectedSkuId] = useState<number | undefined>(undefined);
+  const [loadedContext, setLoadedContext] = useState<string | null>(null);
+  const mounted = useRef(true);
+  const addingRequest = useRef<string | null>(null);
   const productId = parseInt(params.id as string);
-
-  useEffect(() => {
-    if (productId) {
-      loadProduct();
-      loadReviews();
-      loadRelatedProducts();
-      if (isAuthenticated) {
-        checkFavoriteStatus();
-        recordBrowse();
-      }
-    }
-  }, [productId, isAuthenticated]);
-
-  const recordBrowse = async () => {
-    try {
-      await browseApi.record(productId);
-    } catch (error) {
-      // 静默失败，不影响用户体验
-      logger.error('记录浏览历史失败:', error);
-    }
+  const context = JSON.stringify([productId, token, user?.user_id, isAuthenticated]);
+  const currentContext = useRef(context);
+  currentContext.current = context;
+  const isCurrentContext = () => {
+    const auth = useAuthStore.getState();
+    return mounted.current && currentContext.current === context &&
+      auth.isAuthenticated === isAuthenticated && auth.token === token && auth.user?.user_id === user?.user_id &&
+      localStorage.getItem('token') === (token ?? null);
   };
 
-  const loadProduct = async () => {
-    try {
-      const data: any = await productApi.getDetail(productId);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated || !productId) return;
+    let active = true;
+    const isCurrentRequest = () => active && isCurrentContext();
+    setLoading(true);
+    setProduct(null);
+    setLoadedContext(null);
+    setReviews([]);
+    setRelatedProducts([]);
+    setQuantity(1);
+    setSelectedSkuId(undefined);
+    setAdding(false);
+    addingRequest.current = null;
+    setIsFavorited(false);
+    setFavoriting(false);
+    productApi.getDetail(productId).then((data: any) => {
+      if (!isCurrentRequest()) return;
       setProduct(data.product);
-    } catch (error: any) {
+      setLoadedContext(context);
+    }).catch((error: any) => {
+      if (!isCurrentRequest()) return;
       logger.error('加载商品失败:', error);
       toast.error('商品不存在');
       router.push('/products');
-    } finally {
-      setLoading(false);
+    }).finally(() => { if (isCurrentRequest()) setLoading(false); });
+    reviewApi.listByProduct(productId, { limit: 5 }).then((data: any) => {
+      if (isCurrentRequest()) setReviews(data.reviews || []);
+    }).catch((error: any) => { if (isCurrentRequest()) logger.error('加载评论失败:', error); });
+    setLoadingRecommendations(true);
+    recommendationApi.getRelated(productId, 4).then((data: any) => {
+      if (isCurrentRequest()) setRelatedProducts(data.related_products || []);
+    }).catch((error: any) => { if (isCurrentRequest()) logger.error('加载相关推荐失败:', error); })
+      .finally(() => { if (isCurrentRequest()) setLoadingRecommendations(false); });
+    if (isAuthenticated) {
+      favoriteApi.check(productId).then((data: any) => {
+        if (isCurrentRequest()) setIsFavorited(data.is_favorited);
+      }).catch((error: any) => { if (isCurrentRequest()) logger.error('检查收藏状态失败:', error); });
+      browseApi.record(productId).catch((error: any) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
-  };
+    return () => { active = false; };
+  }, [isHydrated, productId, isAuthenticated, token, user?.user_id, router]);
 
-  const loadReviews = async () => {
-    try {
-      const data: any = await reviewApi.listByProduct(productId, { limit: 5 });
-      setReviews(data.reviews || []);
-    } catch (error) {
-      logger.error('加载评论失败:', error);
-    }
-  };
+  const hasSku = !!product?.has_sku;
+  const skus: any[] = product?.skus || [];
+  const selectedSku = skus.find(sku => sku.sku_id === selectedSkuId);
+  const stock = Number(hasSku ? selectedSku?.stock ?? 0 : product?.stock ?? 0);
+  const price = selectedSku?.price ?? product?.price;
+  const image = selectedSku?.image || product?.main_image;
+  const canPurchase = !hasSku || !!selectedSku;
+  const soldOut = hasSku ? (selectedSku ? stock <= 0 : !skus.some(sku => Number(sku.stock) > 0)) : stock <= 0;
 
-  const loadRelatedProducts = async () => {
-    try {
-      setLoadingRecommendations(true);
-      const data: any = await recommendationApi.getRelated(productId, 4);
-      setRelatedProducts(data.related_products || []);
-    } catch (error) {
-      logger.error('加载相关推荐失败:', error);
-    } finally {
-      setLoadingRecommendations(false);
-    }
-  };
-
-  const handleAddToCart = async () => {
+  const handleAddToCart = async (): Promise<boolean> => {
+    if (!isHydrated || !isCurrentContext() || loadedContext !== context || addingRequest.current) return false;
     if (!isAuthenticated) {
       toast.error('请先登录');
       router.push('/login');
-      return;
+      return false;
     }
-
+    if (!canPurchase) {
+      toast.error('请选择商品规格');
+      return false;
+    }
+    if (quantity < 1 || quantity > stock) {
+      toast.error('商品库存不足');
+      return false;
+    }
+    addingRequest.current = context;
     setAdding(true);
     try {
-      await cartApi.add({ product_id: productId, quantity });
+      await cartApi.add({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) });
+      if (!isCurrentContext()) return false;
       addItem({
-        cart_id: Date.now(),
-        product_id: productId,
-        quantity,
-        title: product.title,
-        price: product.price,
-        main_image: product.main_image,
-        stock: product.stock,
+        cart_id: Date.now(), product_id: productId, quantity, title: product.title,
+        price: Number(price), main_image: image, stock,
+        ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs }),
       });
       toast.success('已加入购物车');
+      return true;
     } catch (error: any) {
-      toast.error(error.response?.data?.error || '加入购物车失败');
+      if (isCurrentContext()) toast.error(error.response?.data?.error || '加入购物车失败');
+      return false;
     } finally {
-      setAdding(false);
+      if (isCurrentContext()) {
+        addingRequest.current = null;
+        setAdding(false);
+      }
     }
   };
 
   const handleBuyNow = async () => {
-    await handleAddToCart();
-    router.push('/cart');
-  };
-
-  const checkFavoriteStatus = async () => {
-    try {
-      const data: any = await favoriteApi.check(productId);
-      setIsFavorited(data.is_favorited);
-    } catch (error) {
-      logger.error('检查收藏状态失败:', error);
-    }
+    if (await handleAddToCart() && isCurrentContext()) router.push('/cart');
   };
 
   const handleToggleFavorite = async () => {
+    if (!isHydrated || !isCurrentContext() || favoriting) return;
     if (!isAuthenticated) {
       toast.error('请先登录');
       router.push('/login');
       return;
     }
-
     setFavoriting(true);
     try {
       const data: any = await favoriteApi.toggle(productId);
+      if (!isCurrentContext()) return;
       setIsFavorited(data.is_favorited);
       toast.success(data.message);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || '操作失败');
+      if (isCurrentContext()) toast.error(error.response?.data?.message || '操作失败');
     } finally {
-      setFavoriting(false);
+      if (isCurrentContext()) setFavoriting(false);
     }
   };
 
-  if (loading) {
+  if (!isHydrated || loading || loadedContext !== context) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -174,9 +190,9 @@ export default function ProductDetailPage() {
           {/* 商品图片 */}
           <div className="card p-4">
             <div className="bg-gray-100 rounded-lg overflow-hidden">
-              {product.main_image ? (
+              {image ? (
                 <img
-                  src={product.main_image}
+                  src={image}
                   alt={product.title}
                   className="w-full h-96 object-contain"
                 />
@@ -201,15 +217,15 @@ export default function ProductDetailPage() {
                   <span>{product.rating} 分</span>
                 </div>
                 <div>已售 {product.sales_count} 件</div>
-                <div>库存 {product.stock} 件</div>
+                <div>库存 {hasSku && !selectedSku ? product.stock : stock} 件</div>
               </div>
 
               <div className="bg-primary-50 p-6 rounded-lg">
                 <div className="flex items-baseline space-x-3">
                   <span className="text-primary-600 text-4xl font-bold">
-                    ¥{product.price}
+                    ¥{price}
                   </span>
-                  {product.original_price && product.original_price > product.price && (
+                  {product.original_price && product.original_price > Number(price) && (
                     <span className="text-gray-400 text-xl line-through">
                       ¥{product.original_price}
                     </span>
@@ -218,12 +234,35 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
+            {hasSku && (
+              <div>
+                <label htmlFor="product-sku" className="block text-gray-700 mb-2">商品规格</label>
+                <select
+                  id="product-sku"
+                  value={selectedSkuId ?? ''}
+                  disabled={adding || skus.length === 0}
+                  onChange={event => { setSelectedSkuId(event.target.value ? Number(event.target.value) : undefined); setQuantity(1); }}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="">{skus.length === 0 ? '暂无可用规格' : '请选择规格'}</option>
+                  {skus.map(sku => (
+                    <option key={sku.sku_id} value={sku.sku_id} disabled={Number(sku.stock) <= 0}>
+                      {Object.entries(sku.specs || {}).map(([name, value]) => `${name}: ${value}`).join(' / ') || sku.sku_code}
+                      {` — ¥${sku.price}（库存 ${sku.stock}）`}
+                    </option>
+                  ))}
+                </select>
+                {selectedSku && <p className="text-sm text-gray-500 mt-2">规格编号：{selectedSku.sku_code}</p>}
+              </div>
+            )}
+
             {/* 数量选择 */}
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">数量:</span>
               <div className="flex items-center border border-gray-300 rounded">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={adding || !canPurchase || quantity <= 1}
                   className="px-4 py-2 hover:bg-gray-100"
                 >
                   -
@@ -231,13 +270,15 @@ export default function ProductDetailPage() {
                 <input
                   type="number"
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => setQuantity(Math.min(Math.max(1, stock), Math.max(1, parseInt(e.target.value) || 1)))}
+                  disabled={adding || !canPurchase || soldOut}
                   className="w-20 text-center border-x border-gray-300 py-2"
                   min="1"
-                  max={product.stock}
+                  max={stock}
                 />
                 <button
-                  onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
+                  onClick={() => setQuantity(Math.min(stock, quantity + 1))}
+                  disabled={adding || !canPurchase || quantity >= stock}
                   className="px-4 py-2 hover:bg-gray-100"
                 >
                   +
@@ -262,18 +303,18 @@ export default function ProductDetailPage() {
               
               <button
                 onClick={handleAddToCart}
-                disabled={adding || product.stock === 0}
+                disabled={adding || !canPurchase || soldOut}
                 className="flex-1 btn btn-outline disabled:opacity-50"
               >
                 <FiShoppingCart className="inline mr-2" />
-                {product.stock === 0 ? '已售罄' : adding ? '加入中...' : '加入购物车'}
+                {soldOut ? '已售罄' : adding ? '加入中...' : '加入购物车'}
               </button>
               <button
                 onClick={handleBuyNow}
-                disabled={adding || product.stock === 0}
+                disabled={adding || !canPurchase || soldOut}
                 className="flex-1 btn btn-primary disabled:opacity-50"
               >
-                {product.stock === 0 ? '已售罄' : '立即购买'}
+                {soldOut ? '已售罄' : '立即购买'}
               </button>
             </div>
 

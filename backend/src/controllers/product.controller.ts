@@ -32,34 +32,31 @@ export class ProductController {
     try {
       const productId = positiveId(req.params.id);
       if (!productId) return res.status(400).json({ error: '商品ID无效' });
-      const redis = getRedisClient();
-
-      // 尝试从缓存获取
-      const cacheKey = `product:${productId}`;
-      const cached = await redis.get(cacheKey);
-
-      if (cached) {
-        return res.json({ product: JSON.parse(cached), fromCache: true });
-      }
-
-      // 从数据库获取
+      // Availability is checked before cached details so a disabled product cannot remain purchasable.
       const product = await ProductModel.findById(productId);
-
-      if (!product) {
-        return res.status(404).json({ error: '商品不存在' });
+      if (!product || product.status !== 1) return res.status(404).json({ error: '商品不存在' });
+      const cacheKey = `product:${productId}`;
+      try {
+        const cached = await getRedisClient().get(cacheKey);
+        if (cached) return res.json({ product: JSON.parse(cached), fromCache: true });
+      } catch (error) {
+        logger.warn({ err: error }, '商品缓存读取失败，改用数据库');
       }
-
-      // 获取SKU信息
-      const skus = await SKUModel.findByProductId(productId);
+      const allSKUs = await SKUModel.findByProductId(productId, true);
+      const skus = allSKUs.filter(sku => sku.status === 1);
+      const hasSKU = allSKUs.length > 0;
       const productWithSKU = {
         ...product,
-        skus: skus.length > 0 ? skus : undefined,
-        has_sku: skus.length > 0
+        skus: hasSKU ? skus : undefined,
+        has_sku: hasSKU,
+        stock: hasSKU ? skus.reduce((stock, sku) => stock + Number(sku.stock), 0) : product.stock,
+        price: skus.length > 0 ? Math.min(...skus.map(sku => Number(sku.price))) : product.price,
       };
-
-      // 缓存5分钟
-      await redis.setex(cacheKey, 300, JSON.stringify(productWithSKU));
-
+      try {
+        await getRedisClient().setex(cacheKey, 300, JSON.stringify(productWithSKU));
+      } catch (error) {
+        logger.warn({ err: error }, '商品缓存写入失败');
+      }
       res.json({ product: productWithSKU });
     } catch (error) {
       logger.error({ err: error }, '获取商品详情失败');

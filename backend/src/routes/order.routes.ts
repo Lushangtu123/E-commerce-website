@@ -31,6 +31,7 @@ router.use(authMiddleware);
  *                   required: [product_id, quantity]
  *                   properties:
  *                     product_id: { type: integer, minimum: 1 }
+ *                     sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *                     quantity: { type: integer, minimum: 1 }
  *               user_coupon_id: { type: integer, minimum: 1 }
  *     responses:
@@ -63,7 +64,8 @@ router.post('/preview', OrderController.preview);
  *                   type: object
  *                   required: [product_id, quantity]
  *                   properties:
- *                     product_id: { type: integer }
+ *                     product_id: { type: integer, minimum: 1 }
+ *                     sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *                     quantity: { type: integer, minimum: 1 }
  *               shipping_address_id: { type: integer, description: 收货地址 ID }
  *               remark: { type: string, description: 订单备注 }

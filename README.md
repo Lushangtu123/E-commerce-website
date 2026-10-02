@@ -308,14 +308,14 @@ E-commerce-website/
 - `DELETE /api/browse` - 清空浏览历史
 
 ### 购物车相关 (Cart APIs)
-- `GET /api/cart` - 获取购物车
-- `POST /api/cart` - 添加到购物车
-- `PUT /api/cart/:id` - 更新购物车商品
-- `DELETE /api/cart/:id` - 删除购物车商品
-- `POST /api/cart/checkout` - 结算购物车
+- `GET /api/cart` - 获取购物车，包含规格快照信息及 available/unavailable_reason
+- `POST /api/cart` - 添加商品，body 为 `{ product_id, quantity, sku_id? }`
+- `PUT /api/cart` - 更新数量，body 同上；quantity 为 0 时移除该规格
+- `DELETE /api/cart/:id?sku_id=规格ID` - 删除指定规格；省略 sku_id 只删除无规格行
+- `DELETE /api/cart` - 清空当前用户购物车
 
 ### 订单相关 (Order APIs)
-- `POST /api/orders/preview` - 按服务器商品价格预览金额与可用优惠券（只读）
+- `POST /api/orders/preview` - items 为 `{ product_id, quantity, sku_id? }[]`，按服务器商品/规格价格预览金额与可用优惠券（只读）
 - `POST /api/orders` - 创建订单，可携带 `user_coupon_id`，返回原价、优惠额和应付金额
 - `GET /api/orders` - 获取订单列表
 - `GET /api/orders/:id` - 获取订单详情
@@ -361,6 +361,8 @@ E-commerce-website/
 - `GET /api/admin/products/:id/skus` - 获取商品SKU
 - `POST /api/admin/products/:id/skus` - 创建SKU
 - `POST /api/admin/products/:id/skus/batch` - 批量创建SKU
+- `PUT /api/admin/products/skus/:skuId` - 更新SKU
+- `DELETE /api/admin/products/skus/:skuId` - 停用SKU，保留历史库存及订单关联
 
 **订单管理:**
 - `GET /api/admin/orders` - 获取订单列表

@@ -11,6 +11,7 @@ export interface Product {
   price: number;
   original_price?: number;
   stock: number;
+  has_sku?: boolean | number;
   sales_count: number;
   rating: number;
   main_image?: string;
@@ -30,6 +31,18 @@ export interface ProductQuery {
   page?: number;
   limit?: number;
 }
+
+// Customer prices and availability come from enabled variants; legacy parent stock remains independent.
+export const customerProducts = `SELECT p.product_id, p.title, p.description, p.category_id, p.brand,
+  CASE WHEN s.product_id IS NULL THEN p.price ELSE COALESCE(s.price, p.price) END AS price,
+  p.original_price, CASE WHEN s.product_id IS NULL THEN p.stock ELSE COALESCE(s.stock, 0) END AS stock,
+  p.sales_count, p.rating, p.main_image, p.images, p.specs, p.status, p.created_at, p.updated_at,
+  (s.product_id IS NOT NULL) AS has_sku
+  FROM products p LEFT JOIN (
+    SELECT product_id, MIN(CASE WHEN status = 1 THEN price END) AS price,
+      SUM(CASE WHEN status = 1 THEN stock ELSE 0 END) AS stock
+    FROM product_skus GROUP BY product_id
+  ) s ON p.product_id = s.product_id`;
 
 export class ProductModel {
   // 创建商品
@@ -82,14 +95,14 @@ export class ProductModel {
 
     // 获取总数
     const countResult = await query<RowDataPacket[]>(
-      `SELECT COUNT(*) as total FROM products WHERE ${whereClause}`,
+      `SELECT COUNT(*) as total FROM (${customerProducts}) AS products WHERE ${whereClause}`,
       queryParams
     );
     const total = countResult[0].total;
 
     // 获取商品列表
     const products = await query<(Product & RowDataPacket)[]>(
-      `SELECT * FROM products WHERE ${whereClause} ORDER BY ${sort} LIMIT ? OFFSET ?`,
+      `SELECT * FROM (${customerProducts}) AS products WHERE ${whereClause} ORDER BY ${sort} LIMIT ? OFFSET ?`,
       [...queryParams, limit, offset]
     );
 
@@ -141,7 +154,7 @@ export class ProductModel {
   // 获取热门商品
   static async getHotProducts(limit: number = 10): Promise<Product[]> {
     return await query<(Product & RowDataPacket)[]>(
-      'SELECT * FROM products WHERE status = 1 ORDER BY sales_count DESC LIMIT ?',
+      `SELECT * FROM (${customerProducts}) AS products WHERE status = 1 ORDER BY sales_count DESC LIMIT ?`,
       [limit]
     );
   }

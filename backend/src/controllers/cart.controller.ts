@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { CartModel } from '../models/cart.model';
 import logger from '../utils/logger';
 import { positiveId } from '../utils/product-validation';
+import { validSKUId } from '../utils/sku-validation';
+import { PurchaseError } from '../services/purchase-items.service';
 
 function validItem(productId: unknown, quantity: unknown, allowZero = false): boolean {
   return typeof productId === 'number' && Number.isSafeInteger(productId) && productId > 0 && productId <= 2147483647 &&
@@ -17,6 +19,7 @@ export class CartController {
       
       res.json({ items });
     } catch (error) {
+      if (error instanceof PurchaseError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '获取购物车失败');
       res.status(500).json({ error: '获取购物车失败' });
     }
@@ -25,13 +28,13 @@ export class CartController {
   // 添加到购物车
   static async add(req: AuthRequest, res: Response) {
     try {
-      const { product_id, quantity = 1 } = req.body;
+      const { product_id, quantity = 1, sku_id } = req.body;
 
-      if (!validItem(product_id, quantity)) {
+      if (!validItem(product_id, quantity) || (sku_id != null && !validSKUId(sku_id))) {
         return res.status(400).json({ error: '商品ID和数量必须为正整数' });
       }
 
-      const success = await CartModel.add(req.userId!, product_id, quantity);
+      const success = await CartModel.add(req.userId!, product_id, quantity, sku_id ?? undefined);
 
       if (success) {
         res.json({ message: '添加成功' });
@@ -39,6 +42,7 @@ export class CartController {
         res.status(400).json({ error: '添加失败' });
       }
     } catch (error) {
+      if (error instanceof PurchaseError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '添加购物车失败');
       res.status(500).json({ error: '添加购物车失败' });
     }
@@ -47,13 +51,13 @@ export class CartController {
   // 更新数量
   static async updateQuantity(req: AuthRequest, res: Response) {
     try {
-      const { product_id, quantity } = req.body;
+      const { product_id, quantity, sku_id } = req.body;
 
-      if (!validItem(product_id, quantity, true)) {
+      if (!validItem(product_id, quantity, true) || (sku_id != null && !validSKUId(sku_id))) {
         return res.status(400).json({ error: '参数错误' });
       }
 
-      const success = await CartModel.updateQuantity(req.userId!, product_id, quantity);
+      const success = await CartModel.updateQuantity(req.userId!, product_id, quantity, sku_id ?? undefined);
 
       if (success) {
         res.json({ message: '更新成功' });
@@ -61,6 +65,7 @@ export class CartController {
         res.status(400).json({ error: '更新失败' });
       }
     } catch (error) {
+      if (error instanceof PurchaseError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '更新购物车失败');
       res.status(500).json({ error: '更新购物车失败' });
     }
@@ -72,7 +77,9 @@ export class CartController {
       const productId = positiveId(req.params.id);
       if (!productId) return res.status(400).json({ error: '商品ID无效' });
 
-      const success = await CartModel.remove(req.userId!, productId);
+      const skuId = req.query.sku_id === undefined ? undefined : positiveId(req.query.sku_id);
+      if (req.query.sku_id !== undefined && !skuId) return res.status(400).json({ error: '规格ID无效' });
+      const success = await CartModel.remove(req.userId!, productId, skuId);
 
       if (success) {
         res.json({ message: '删除成功' });
@@ -80,6 +87,7 @@ export class CartController {
         res.status(400).json({ error: '删除失败' });
       }
     } catch (error) {
+      if (error instanceof PurchaseError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '删除购物车商品失败');
       res.status(500).json({ error: '删除购物车商品失败' });
     }
@@ -96,6 +104,7 @@ export class CartController {
         res.status(400).json({ error: '清空失败' });
       }
     } catch (error) {
+      if (error instanceof PurchaseError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '清空购物车失败');
       res.status(500).json({ error: '清空购物车失败' });
     }

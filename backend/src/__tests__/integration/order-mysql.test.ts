@@ -1,8 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
-import { getPool } from '../../database/mysql';
+import { getPool, query } from '../../database/mysql';
 import { createOrder, previewOrder, transitionOrder } from '../../services/order.service';
+import { ProductModel } from '../../models/product.model';
+import { FavoriteModel } from '../../models/favorite.model';
+import { BrowseHistoryModel } from '../../models/browse-history.model';
+import { SKUModel } from '../../models/sku.model';
 import { CouponModel, CouponType } from '../../models/coupon.model';
 import { cancelTimeoutOrder } from '../../services/order-timeout.service';
 import { OrderStatus } from '../../models/order.model';
@@ -12,6 +16,8 @@ import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import orderRoutes from '../../routes/order.routes';
+import cartRoutes from '../../routes/cart.routes';
+import { migrateSkuTables } from '../../database/migrate-sku';
 import { migrateCouponTables } from '../../database/migrate-coupon';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
@@ -41,13 +47,15 @@ integration('真实 MySQL 订单事务及并发', () => {
     databaseCreated = true;
     db = mysql.createPool({ ...connectionOptions, database });
     (getPool as jest.Mock).mockReturnValue(db);
+    (query as jest.Mock).mockImplementation(async (sql: string, values?: any[]) => (await db.query(sql, values))[0]);
     // Use the project's actual base schema, so stale SQL column names fail here.
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
-    const tables = new Set(['users', 'products', 'orders', 'order_items', 'cart', 'shipping_addresses']);
+    const tables = new Set(['users', 'products', 'product_skus', 'orders', 'order_items', 'cart', 'favorites', 'browse_history', 'shipping_addresses']);
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
       if (tables.has(match[2])) await db.query(match[1]);
     }
     await migrateCouponTables(db);
+    await migrateSkuTables(db);
   });
 
   afterAll(async () => {
@@ -59,7 +67,7 @@ integration('真实 MySQL 订单事务及并发', () => {
   });
 
   beforeEach(async () => {
-    for (const table of ['coupon_usage_logs', 'user_coupons', 'coupons', 'order_items', 'orders', 'cart', 'shipping_addresses', 'products', 'users']) {
+    for (const table of ['coupon_usage_logs', 'user_coupons', 'coupons', 'order_items', 'orders', 'cart', 'favorites', 'browse_history', 'shipping_addresses', 'product_skus', 'products', 'users']) {
       await db.query(`DELETE FROM ${table}`);
     }
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (1,'customer','customer@example.test','test')");
@@ -370,4 +378,251 @@ integration('真实 MySQL 订单事务及并发', () => {
     expect(definitions[0].remain_quantity).toBe(8);
     expect(received).toHaveLength(1);
   });
+
+  test('SKU下单采用所选规格的服务器价格与库存，保留规格快照', async () => {
+    await db.query(`INSERT INTO product_skus (sku_id,product_id,sku_code,specs,price,stock)
+      VALUES (1,1,'RED-M','{"颜色":"红色","尺寸":"M"}',15,3)`);
+    const result = await createOrder(1, [{ product_id: 1, sku_id: 1, quantity: 2, price: 0 }]);
+    expect(result).toMatchObject({ original_amount: 30, discount_amount: 0, total_amount: 30 });
+    const [stock] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus WHERE sku_id = 1');
+    const [items] = await db.query<RowDataPacket[]>('SELECT sku_id,sku_code,sku_specs,price,quantity FROM order_items WHERE order_id = ?', [result.orderId]);
+    expect(stock[0].stock).toBe(1);
+    expect(await product()).toMatchObject({ stock: 10 });
+    expect(items[0]).toMatchObject({ sku_id: 1, sku_code: 'RED-M', sku_specs: { 颜色: '红色', 尺寸: 'M' }, price: '15.00', quantity: 2 });
+  });
+
+  async function variants() {
+    await db.query(`INSERT INTO product_skus (sku_id,product_id,sku_code,specs,price,stock,image)
+      VALUES (1,1,'RED-M','{"颜色":"红色","尺寸":"M"}',15,3,'red.jpg'),
+             (2,1,'BLUE-L','{"颜色":"蓝色","尺寸":"L"}',25,2,'blue.jpg')`);
+  }
+
+  function cartApp() {
+    const app = express(); app.use(express.json()); app.use('/cart', cartRoutes);
+    return app;
+  }
+  const cartAuth = () => ({ Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` });
+
+  test('SKU购物车新增、更新、删除按规格隔离，累计数量不能超过库存', async () => {
+    await variants();
+    await db.query('UPDATE products SET stock = 0 WHERE product_id = 1');
+    const app = cartApp(); const auth = cartAuth();
+    await request(app).post('/cart').set(auth).send({ product_id: 1, sku_id: 1, quantity: 1 }).expect(200);
+    await request(app).post('/cart').set(auth).send({ product_id: 1, sku_id: 2, quantity: 1 }).expect(200);
+    const listed = await request(app).get('/cart').set(auth).expect(200);
+    expect(listed.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sku_id: 1, price: '15.00', stock: 3, available: true, main_image: 'red.jpg', sku_specs: { 颜色: '红色', 尺寸: 'M' } }),
+      expect.objectContaining({ sku_id: 2, price: '25.00', stock: 2, available: true }),
+    ]));
+    await request(app).put('/cart').set(auth).send({ product_id: 1, sku_id: 1, quantity: 2 }).expect(200);
+    await request(app).post('/cart').set(auth).send({ product_id: 1, sku_id: 1, quantity: 2 }).expect(400);
+    await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,7)');
+    await request(app).delete('/cart/1').set(auth).expect(200);
+    const [rows] = await db.query<RowDataPacket[]>('SELECT sku_id,quantity FROM cart ORDER BY sku_id');
+    expect(rows.map(row => [row.sku_id,row.quantity])).toEqual([[1,2],[2,1]]);
+    await request(app).delete('/cart/1?sku_id=1').set(auth).expect(200);
+    const [remaining] = await db.query<RowDataPacket[]>('SELECT sku_id FROM cart');
+    expect(remaining.map(row => row.sku_id)).toEqual([2]);
+  });
+
+  test('同SKU合并、不同SKU保持两明细，预览和用券按规格总价结算', async () => {
+    await variants(); await receivedCoupon();
+    await db.query('UPDATE products SET stock = 0 WHERE product_id = 1');
+    const items = [{ product_id: 1, sku_id: 2, quantity: 1 }, { product_id: 1, sku_id: 1, quantity: 1 }, { product_id: 1, sku_id: 1, quantity: 1 }];
+    expect(await previewOrder(1, items, 1)).toMatchObject({ original_amount: 55, discount_amount: 11, total_amount: 44 });
+    const result = await createOrder(1, items, undefined, undefined, 1);
+    expect(result).toMatchObject({ original_amount: 55, discount_amount: 11, total_amount: 44, productIds: [1] });
+    const [lines] = await db.query<RowDataPacket[]>('SELECT sku_id,quantity FROM order_items WHERE order_id = ? ORDER BY sku_id', [result.orderId]);
+    expect(lines.map(row => [row.sku_id,row.quantity])).toEqual([[1,2],[2,1]]);
+    expect(await product()).toMatchObject({ stock: 0 });
+  });
+
+  test('SKU下单只清所选规格，保留其他规格、旧base和其他用户购物车', async () => {
+    await variants();
+    await db.query('INSERT INTO cart (user_id,product_id,sku_id,quantity) VALUES (1,1,1,1),(1,1,2,1),(1,1,NULL,1),(2,1,1,1)');
+    await createOrder(1, [{ product_id: 1, sku_id: 1, quantity: 1 }]);
+    const [cart] = await db.query<RowDataPacket[]>('SELECT user_id,sku_id FROM cart ORDER BY user_id,sku_key');
+    expect(cart.map(row => [row.user_id,row.sku_id])).toEqual([[1,null],[1,2],[2,1]]);
+  });
+
+  test('SKU最后一件并发只成交一次，失败方不多占券且保留购物车', async () => {
+    await variants(); await receivedCoupon();
+    await db.query('UPDATE product_skus SET stock = 1 WHERE sku_id = 1');
+    await db.query('INSERT INTO cart (user_id,product_id,sku_id,quantity) VALUES (1,1,1,1),(2,1,1,1)');
+    const results = await Promise.allSettled([
+      createOrder(1, [{ product_id: 1, sku_id: 1, quantity: 1 }], undefined, undefined, 1),
+      createOrder(2, [{ product_id: 1, sku_id: 1, quantity: 1 }]),
+    ]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    const [orders] = await db.query<RowDataPacket[]>('SELECT user_id,order_id FROM orders');
+    const [stock] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus WHERE sku_id = 1');
+    const [cart] = await db.query<RowDataPacket[]>('SELECT user_id FROM cart');
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+    const [logs] = await db.query<RowDataPacket[]>('SELECT order_id FROM coupon_usage_logs');
+    expect(stock[0].stock).toBe(0);
+    expect(cart.map(row => row.user_id)).toEqual([orders[0].user_id === 1 ? 2 : 1]);
+    expect(coupons[0]).toMatchObject(orders[0].user_id === 1 ? { status: 2, order_id: orders[0].order_id } : { status: 1, order_id: null });
+    expect(logs).toHaveLength(orders[0].user_id === 1 ? 1 : 0);
+    expect(await product()).toMatchObject({ stock: 10 });
+  });
+
+  test('软删除规格订单取消只回原SKU一次并返券，历史base单仍回父库存', async () => {
+    const legacy = await createOrder(1, [{ product_id: 1, quantity: 2 }]);
+    await variants(); await receivedCoupon();
+    const variant = await createOrder(1, [{ product_id: 1, sku_id: 1, quantity: 2 }], undefined, undefined, 1);
+    await db.query('UPDATE product_skus SET status = 0, specs = JSON_OBJECT("颜色","已改名"), price = 99 WHERE sku_id = 1');
+    await db.query('UPDATE products SET status = -1 WHERE product_id = 1');
+    await db.query('UPDATE orders SET created_at = DATE_SUB(NOW(),INTERVAL 31 MINUTE) WHERE order_id = ?', [variant.orderId]);
+    await Promise.allSettled([transitionOrder(variant.orderId, OrderStatus.CANCELLED, { userId: 1 }), cancelTimeoutOrder(variant.orderId)]);
+    await transitionOrder(legacy.orderId, OrderStatus.CANCELLED, { userId: 1 });
+    const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus ORDER BY sku_id');
+    const [lines] = await db.query<RowDataPacket[]>('SELECT sku_specs,price FROM order_items WHERE order_id = ?', [variant.orderId]);
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+    expect(skus.map(row => row.stock)).toEqual([3,2]);
+    expect(await product()).toMatchObject({ stock: 10 });
+    expect(lines[0]).toMatchObject({ sku_specs: { 颜色: '红色', 尺寸: 'M' }, price: '15.00' });
+    expect(coupons[0]).toMatchObject({ status: 1, order_id: null });
+  });
+
+  test('SKU支付只累加一次商品销量，不再次扣规格库存', async () => {
+    await variants();
+    const { orderId } = await createOrder(1, [{ product_id: 1, sku_id: 1, quantity: 2 }, { product_id: 1, sku_id: 2, quantity: 1 }]);
+    const results = await Promise.allSettled([transitionOrder(orderId, OrderStatus.PAID, { userId: 1 }), transitionOrder(orderId, OrderStatus.PAID, { userId: 1 })]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus ORDER BY sku_id');
+    expect(skus.map(row => row.stock)).toEqual([1,1]);
+    expect(await product()).toMatchObject({ stock: 10, sales_count: 3 });
+  });
+
+  test.each([undefined, 0, -1, 1.5, '1', 999, 3])('SKU商品拒绝未选、非法或错属规格 %p', async sku_id => {
+    await variants();
+    await db.query(`INSERT INTO product_skus (sku_id,product_id,sku_code,specs,price,stock) VALUES (3,2,'OTHER','{"尺寸":"M"}',1,10)`);
+    const items = [{ product_id: 1, sku_id, quantity: 1 }];
+    await expect(previewOrder(1, items)).rejects.toThrow();
+    await expect(createOrder(1, items)).rejects.toThrow();
+    const [orders] = await db.query<RowDataPacket[]>('SELECT COUNT(*) AS count FROM orders');
+    expect(orders[0].count).toBe(0);
+    expect(await product()).toMatchObject({ stock: 10 });
+  });
+
+  test('停用SKU和旧base行仍显示不可用且可移除，不回退父库存', async () => {
+    await variants();
+    await db.query('INSERT INTO cart (user_id,product_id,sku_id,quantity) VALUES (1,1,1,1),(1,1,NULL,1)');
+    await db.query('UPDATE product_skus SET status = 0');
+    const app = cartApp(); const auth = cartAuth();
+    const listed = await request(app).get('/cart').set(auth).expect(200);
+    expect(listed.body.items).toHaveLength(2);
+    expect(listed.body.items.every((item: any) => item.available === false)).toBe(true);
+    await request(app).post('/cart').set(auth).send({ product_id: 1, quantity: 1 }).expect(400);
+    await request(app).put('/cart').set(auth).send({ product_id: 1, sku_id: 1, quantity: 2 }).expect(400);
+    await request(app).put('/cart').set(auth).send({ product_id: 1, sku_id: 1, quantity: 0 }).expect(200);
+    await request(app).delete('/cart/1').set(auth).expect(200);
+    const [rows] = await db.query<RowDataPacket[]>('SELECT * FROM cart'); expect(rows).toHaveLength(0);
+  });
+  test('客户商品列表、热门、收藏和历史展示SKU价格与库存，筛选按规格价执行', async () => {
+    await variants();
+    await db.query('UPDATE products SET stock = 0,price = 100 WHERE product_id = 1');
+    await db.query('INSERT INTO favorites (user_id,product_id) VALUES (1,1)');
+    await db.query('INSERT INTO browse_history (user_id,product_id) VALUES (1,1)');
+    const lists = [
+      (await ProductModel.list({ min_price: 14, max_price: 16 })).products,
+      await ProductModel.getHotProducts(),
+      (await FavoriteModel.getUserFavorites(1)).favorites,
+      (await BrowseHistoryModel.getUserHistory(1)).history,
+    ];
+    for (const list of lists) expect(list.find(item => item.product_id === 1)).toMatchObject({ price: '15.00', stock: '5', has_sku: 1 });
+    expect((await ProductModel.list({ min_price: 90 })).products).toHaveLength(0);
+    await db.query('UPDATE product_skus SET status = 0');
+    const inactive = (await ProductModel.list({})).products.find(item => item.product_id === 1);
+    expect(inactive).toMatchObject({ stock: '0', has_sku: 1 });
+    expect(await product()).toMatchObject({ stock: 0 });
+  });
+
+  test('用券SKU订单明细失败完整回滚规格库存、券与购物车', async () => {
+    await variants(); await receivedCoupon();
+    await db.query('INSERT INTO cart (user_id,product_id,sku_id,quantity) VALUES (1,1,1,2)');
+    await db.query("CREATE TRIGGER test_sku_failure BEFORE INSERT ON order_items FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'sku failure'");
+    try {
+      await expect(createOrder(1, [{ product_id: 1, sku_id: 1, quantity: 2 }], undefined, undefined, 1)).rejects.toThrow('sku failure');
+      const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus ORDER BY sku_id');
+      const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+      const [logs] = await db.query<RowDataPacket[]>('SELECT * FROM coupon_usage_logs');
+      const [orders] = await db.query<RowDataPacket[]>('SELECT * FROM orders');
+      const [cart] = await db.query<RowDataPacket[]>('SELECT sku_id,quantity FROM cart');
+      expect(skus.map(row => row.stock)).toEqual([3,2]);
+      expect(coupons[0]).toMatchObject({ status: 1, order_id: null });
+      expect(logs).toHaveLength(0); expect(orders).toHaveLength(0);
+      expect(cart[0]).toMatchObject({ sku_id: 1, quantity: 2 });
+    } finally { await db.query('DROP TRIGGER test_sku_failure'); }
+  });
+
+  test('SKU管理软删和重启保留可回补库存，批量重复编码回滚全部写入', async () => {
+    const skuId = await SKUModel.create({ product_id: 1, sku_code: 'ZERO', specs: { size: 'M' }, price: 0, stock: 1 });
+    const order = await createOrder(1, [{ product_id: 1, sku_id: skuId, quantity: 1 }]);
+    expect(order.total_amount).toBe(0);
+    await SKUModel.delete(skuId);
+    await transitionOrder(order.orderId, OrderStatus.CANCELLED, { userId: 1 });
+    const listed = await SKUModel.findByProductId(1, true);
+    expect(listed[0]).toMatchObject({ sku_id: skuId, stock: 1, status: 0 });
+    await SKUModel.update(skuId, { status: 1, price: 2 });
+    expect((await SKUModel.findByProductId(1))[0]).toMatchObject({ status: 1, price: '2.00' });
+    await expect(SKUModel.createBatch([
+      { product_id: 1, sku_code: 'TEMP', specs: { size: 'L' }, price: 1, stock: 1 },
+      { product_id: 1, sku_code: 'ZERO', specs: { size: 'XL' }, price: 1, stock: 1 },
+    ])).rejects.toMatchObject({ statusCode: 409 });
+    expect(await SKUModel.findByProductId(1, true)).toHaveLength(1);
+  });
+
+  test.each(['SKU先创建', '基础订单先创建'])('首个SKU与基础订单并发按父锁顺序处理：%s', async scenario => {
+    let notifyLocked!: () => void;
+    let releaseParent!: () => void;
+    const parentLocked = new Promise<void>(resolve => { notifyLocked = resolve; });
+    const continueFirst = new Promise<void>(resolve => { releaseParent = resolve; });
+    let paused = false;
+    (getPool as jest.Mock).mockReturnValue({
+      getConnection: async () => {
+        const connection = await db.getConnection();
+        return new Proxy(connection, {
+          get(target, property) {
+            if (property === 'execute') return async (sql: string, params: any[]) => {
+              const result = await target.execute(sql, params);
+              if (!paused && sql.includes('FROM products') && sql.includes('FOR UPDATE')) {
+                paused = true; notifyLocked(); await continueFirst;
+              }
+              return result;
+            };
+            const value = Reflect.get(target, property);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        });
+      },
+    });
+    const createSKU = () => SKUModel.create({ product_id: 1, sku_code: 'FIRST', specs: { size: 'M' }, price: 15, stock: 3 });
+    const createBase = () => createOrder(1, [{ product_id: 1, quantity: 2 }]);
+    try {
+      const first = scenario === 'SKU先创建' ? createSKU() : createBase();
+      await parentLocked;
+      const second = scenario === 'SKU先创建' ? createBase() : createSKU();
+      const resultsPromise = Promise.allSettled([first, second]);
+      releaseParent();
+      const results = await resultsPromise;
+      expect(results[0].status).toBe('fulfilled');
+      if (scenario === 'SKU先创建') {
+        expect(results[1]).toMatchObject({ status: 'rejected', reason: { message: expect.stringContaining('请选择') } });
+        expect(await product()).toMatchObject({ stock: 10 });
+      } else {
+        expect(results[1].status).toBe('fulfilled');
+        expect(await product()).toMatchObject({ stock: 8 });
+        const [orders] = await db.query<RowDataPacket[]>('SELECT order_id FROM orders');
+        (getPool as jest.Mock).mockReturnValue(db);
+        await transitionOrder(orders[0].order_id, OrderStatus.CANCELLED, { userId: 1 });
+        expect(await product()).toMatchObject({ stock: 10 });
+      }
+      const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus');
+      expect(skus[0].stock).toBe(3);
+    } finally {
+      releaseParent(); (getPool as jest.Mock).mockReturnValue(db);
+    }
+  });
+
 });

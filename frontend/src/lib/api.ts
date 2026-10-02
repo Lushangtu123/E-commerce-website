@@ -90,17 +90,24 @@ export const productApi = {
 };
 
 // 购物车相关API
+export interface CartInput {
+  product_id: number;
+  quantity: number;
+  sku_id?: number;
+}
+
 export const cartApi = {
   list: () => api.get('/cart'),
-  add: (data: { product_id: number; quantity: number }) => api.post('/cart', data),
-  updateQuantity: (data: { product_id: number; quantity: number }) => api.put('/cart', data),
-  remove: (productId: number) => api.delete(`/cart/${productId}`),
+  add: (data: CartInput) => api.post('/cart', data),
+  updateQuantity: (data: CartInput) => api.put('/cart', data),
+  remove: (productId: number, skuId?: number | null) =>
+    api.delete(`/cart/${productId}`, { params: skuId == null ? undefined : { sku_id: skuId } }),
   clear: () => api.delete('/cart'),
 };
 
 // 订单相关API
 export interface OrderInput {
-  items: { product_id: number; quantity: number }[];
+  items: CartInput[];
   user_coupon_id?: number;
 }
 

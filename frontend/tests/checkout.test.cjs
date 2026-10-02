@@ -43,7 +43,7 @@ function setupCheckout({ preview = async () => quote(), create = async () => ({ 
     globals: { ...stores },
     imports: {
       '@/store/useAuthStore': { useAuthStore: Object.assign(() => stores.useAuthStore.getState(), { getState: stores.useAuthStore.getState }) },
-      '@/store/useCartStore': { useCartStore: () => stores.useCartStore.getState() },
+      '@/store/useCartStore': { cartItemKey: stores.cartItemKey, useCartStore: () => stores.useCartStore.getState() },
       'react-hot-toast': { __esModule: true, default: toast, toast },
       '@/lib/api': {
         cartApi: { list: async () => ({ items: cartItems }), updateQuantity, remove },
@@ -69,6 +69,58 @@ test('checkout defaults to no coupon and displays the server product price and p
   assert.equal(textContent(amountRow(tree, '商品总价')), '商品总价¥90.00');
   assert.equal(textContent(amountRow(tree, '优惠券优惠')), '优惠券优惠-¥0.00');
   assert.equal(textContent(amountRow(tree, '应付金额')), '应付金额¥90.00');
+});
+
+test('two SKUs of one product stay independently selected, quoted, updated, removed and purchased', async () => {
+  const variants = [
+    { ...firstItem, sku_id: 101, sku_code: 'RED', sku_specs: { Color: 'Red' }, quantity: 1 },
+    { ...firstItem, cart_id: 2, sku_id: 102, sku_code: 'BLUE', sku_specs: { Color: 'Blue' }, quantity: 2 },
+  ];
+  const updates = [];
+  const removals = [];
+  const { runtime, previews, creates, useCartStore } = setupCheckout({
+    cartItems: variants, updateQuantity: async (input) => { updates.push(input); },
+    remove: async (...args) => { removals.push(args); },
+  });
+  let tree = await runtime.flush({});
+  assert.deepEqual(previews.at(-1).items, [{ product_id: 12, quantity: 1, sku_id: 101 }, { product_id: 12, quantity: 2, sku_id: 102 }]);
+  assert.ok(textContent(tree).includes('Color: Red'));
+  assert.ok(textContent(tree).includes('Color: Blue'));
+  await findElements(tree, element => element.type === 'button' && element.props.children === '+')[0].props.onClick();
+  tree = await runtime.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(updates)), [{ product_id: 12, quantity: 2, sku_id: 101 }]);
+  assert.deepEqual(Array.from(useCartStore.getState().items, item => item.quantity), [2, 2]);
+  findElements(tree, element => element.type === 'input' && element.props.type === 'checkbox')[2].props.onChange();
+  tree = await runtime.flush();
+  assert.deepEqual(previews.at(-1).items, [{ product_id: 12, quantity: 2, sku_id: 101 }]);
+  await checkoutButton(tree).props.onClick();
+  assert.deepEqual(creates.at(-1).items, [{ product_id: 12, quantity: 2, sku_id: 101 }]);
+  assert.deepEqual(Array.from(useCartStore.getState().items, item => item.sku_id), [102]);
+  tree = await runtime.flush();
+  await findElements(tree, element => element.type === 'button' && element.props.className?.includes('hover:text-red-500'))[0].props.onClick();
+  assert.deepEqual(removals, [[12, 102]]);
+  assert.equal(useCartStore.getState().items.length, 0);
+});
+
+test('unavailable rows cannot be selected or quoted and explain how to reselect a SKU', async () => {
+  const { runtime, previews } = setupCheckout({ cartItems: [
+    { ...firstItem, available: false, unavailable_reason: '请选择商品规格' },
+    { ...firstItem, cart_id: 2, sku_id: 102, available: 0, unavailable_reason: '规格已停用' },
+    { ...firstItem, cart_id: 3, product_id: 22, available: true },
+  ] });
+  let tree = await runtime.flush({});
+  assert.deepEqual(previews.at(-1).items, [{ product_id: 22, quantity: 3 }]);
+  const checkboxes = findElements(tree, element => element.type === 'input' && element.props.type === 'checkbox');
+  assert.equal(checkboxes[1].props.disabled, true);
+  assert.equal(checkboxes[2].props.disabled, true);
+  assert.ok(textContent(tree).includes('请选择商品规格'));
+  assert.ok(textContent(tree).includes('重新选规格'));
+  checkboxes[0].props.onChange();
+  tree = await runtime.flush();
+  assert.equal(checkoutButton(tree).props.disabled, true);
+  checkboxes[0].props.onChange();
+  tree = await runtime.flush();
+  assert.deepEqual(previews.at(-1).items, [{ product_id: 22, quantity: 3 }]);
 });
 
 test('selecting a coupon requotes the order and submits only its ID with selected product quantities', async () => {
@@ -315,4 +367,22 @@ test('checkout refuses a different browser tab token before the local auth store
   await checkoutButton(tree).props.onClick();
   assert.deepEqual(creates, []);
   assert.deepEqual(runtime.redirects, []);
+});
+
+test('a cart line with reduced stock can lower quantity to recover and be selected again', async () => {
+  const cartItems = [{ ...firstItem, sku_id: 101, quantity: 3, stock: 2, available: false, unavailable_reason: '库存不足' }];
+  const updates = [];
+  const context = setupCheckout({ cartItems, updateQuantity: async input => {
+    updates.push(input);
+    cartItems[0] = { ...cartItems[0], quantity: input.quantity, available: true, unavailable_reason: null };
+  } });
+  let tree = await context.runtime.flush({});
+  const decrease = findElements(tree, element => element.type === 'button' && textContent(element) === '-')[0];
+  assert.equal(decrease.props.disabled, false);
+  await decrease.props.onClick();
+  tree = await context.runtime.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(updates)), [{ product_id: 12, sku_id: 101, quantity: 2 }]);
+  assert.equal(context.useCartStore.getState().items[0].available, true);
+  const boxes = findElements(tree, element => element.type === 'input' && element.props.type === 'checkbox');
+  assert.ok(boxes.every(box => box.props.disabled === false));
 });

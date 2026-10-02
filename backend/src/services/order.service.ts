@@ -7,28 +7,8 @@ import logger from '../utils/logger';
 import { calculateDiscountCents } from '../utils/coupon-discount';
 import { CouponModel } from '../models/coupon.model';
 
-export class OrderError extends Error {
-  constructor(message: string, public readonly statusCode: number = 400) {
-    super(message);
-  }
-}
-
-interface OrderInputItem {
-  product_id: number;
-  quantity: number;
-}
-
-interface OrderProduct extends RowDataPacket {
-  product_id: number;
-  title: string;
-  price: string | number;
-  stock: number;
-  main_image: string | null;
-  status: number;
-}
-
-const MAX_QUANTITY = 2147483647;
-const MAX_AMOUNT_CENTS = 9999999999; // orders.total_amount DECIMAL(10,2)
+import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
+export { PurchaseError as OrderError } from './purchase-items.service';
 
 interface LockedCoupon extends RowDataPacket {
   coupon_id: number;
@@ -59,48 +39,6 @@ async function lockCouponDefinition(connection: PoolConnection, userId: number, 
      FROM coupons WHERE coupon_id = ? FOR UPDATE`, [received[0].coupon_id]
   );
   return definitions[0];
-}
-
-function normalizeItems(items: unknown): OrderInputItem[] {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new OrderError('订单商品不能为空');
-  }
-  const quantities = new Map<number, number>();
-  for (const item of items) {
-    if (!item || !Number.isSafeInteger(item.product_id) || item.product_id <= 0 ||
-        !Number.isSafeInteger(item.quantity) || item.quantity <= 0) {
-      throw new OrderError('商品ID和数量必须为正整数');
-    }
-    const quantity = (quantities.get(item.product_id) || 0) + item.quantity;
-    if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) {
-      throw new OrderError('商品数量超出范围');
-    }
-    quantities.set(item.product_id, quantity);
-  }
-  return [...quantities.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([product_id, quantity]) => ({ product_id, quantity }));
-}
-
-async function priceItems(connection: PoolConnection, items: OrderInputItem[], lock: boolean) {
-  const orderItems: Array<OrderInputItem & { product: OrderProduct; price: string }> = [];
-  let totalCents = 0;
-  // Normalization sorts products, so checkout takes inventory locks in a consistent order.
-  for (const item of items) {
-    const [products] = await connection.execute<OrderProduct[]>(
-      `SELECT product_id, title, price, stock, main_image, status FROM products WHERE product_id = ?${lock ? ' FOR UPDATE' : ''}`,
-      [item.product_id]
-    );
-    const product = products[0];
-    if (!product || product.status !== 1) throw new OrderError(`商品 ${item.product_id} 不存在或已下架`);
-    if (product.stock < item.quantity) throw new OrderError(`商品 ${product.title} 库存不足`);
-    const priceCents = Math.round(Number(product.price) * 100);
-    if (!Number.isSafeInteger(priceCents) || priceCents < 0) throw new Error('商品价格无效');
-    totalCents += priceCents * item.quantity;
-    if (!Number.isSafeInteger(totalCents) || totalCents > MAX_AMOUNT_CENTS) throw new OrderError('订单金额超出范围');
-    orderItems.push({ ...item, product, price: (priceCents / 100).toFixed(2) });
-  }
-  return { orderItems, totalCents };
 }
 
 /** Indicative server quote only; createOrder rechecks everything inside its transaction. */
@@ -193,20 +131,23 @@ export async function createOrder(
     }
     for (const item of orderItems) {
       const [deduction] = await connection.execute<ResultSetHeader>(
-        'UPDATE products SET stock = stock - ? WHERE product_id = ? AND stock >= ?',
-        [item.quantity, item.product_id, item.quantity]
+        item.sku
+          ? 'UPDATE product_skus SET stock = stock - ? WHERE sku_id = ? AND product_id = ? AND status = 1 AND stock >= ?'
+          : 'UPDATE products SET stock = stock - ? WHERE product_id = ? AND stock >= ?',
+        item.sku ? [item.quantity, item.sku.sku_id, item.product_id, item.quantity] : [item.quantity, item.product_id, item.quantity]
       );
       if (deduction.affectedRows !== 1) throw new OrderError(`商品 ${item.product.title} 库存不足`);
       await connection.execute(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_image, quantity, price)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.product_id, item.product.title, item.product.main_image ?? null, item.quantity, item.price]
+        `INSERT INTO order_items (order_id, product_id, product_name, product_image, sku_id, sku_code, sku_specs, quantity, price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, item.product_id, item.product.title, item.sku?.image || item.product.main_image || null,
+          item.sku?.sku_id ?? null, item.sku?.sku_code ?? null, item.sku ? JSON.stringify(item.sku.specs) : null, item.quantity, item.price]
       );
     }
-    const productIds = normalizedItems.map(item => item.product_id);
+    const productIds = [...new Set(normalizedItems.map(item => item.product_id))];
     await connection.execute(
-      `DELETE FROM cart WHERE user_id = ? AND product_id IN (${productIds.map(() => '?').join(',')})`,
-      [userId, ...productIds]
+      `DELETE FROM cart WHERE user_id = ? AND (${normalizedItems.map(() => '(product_id = ? AND sku_key = ?)').join(' OR ')})`,
+      [userId, ...normalizedItems.flatMap(item => [item.product_id, item.sku_id ?? 0])]
     );
     await connection.commit();
     return { orderId, productIds, original_amount: totalCents / 100, discount_amount: discountCents / 100, total_amount: (totalCents - discountCents) / 100 };
@@ -274,21 +215,39 @@ export async function transitionOrder(
     const productIds: number[] = [];
     if (targetStatus === OrderStatus.PAID || targetStatus === OrderStatus.CANCELLED) {
       const [items] = await connection.execute<RowDataPacket[]>(
-        'SELECT product_id, quantity FROM order_items WHERE order_id = ? ORDER BY product_id',
-        [orderId]
+        'SELECT product_id, sku_id, quantity FROM order_items WHERE order_id = ? ORDER BY product_id, sku_id', [orderId]
       );
-      const quantities = new Map<number, number>();
+      const productQuantities = new Map<number, number>();
+      const inventory = new Map<string, { productId: number; skuId: number | null; quantity: number }>();
       for (const item of items) {
         if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) throw new Error('订单商品数量无效');
-        quantities.set(item.product_id, (quantities.get(item.product_id) || 0) + item.quantity);
+        productQuantities.set(item.product_id, (productQuantities.get(item.product_id) || 0) + item.quantity);
+        const key = `${item.product_id}:${item.sku_id ?? 0}`;
+        inventory.set(key, { productId: item.product_id, skuId: item.sku_id ?? null, quantity: (inventory.get(key)?.quantity || 0) + item.quantity });
       }
-      for (const [productId, quantity] of [...quantities.entries()].sort(([left], [right]) => left - right)) {
-        const sql = targetStatus === OrderStatus.CANCELLED
-          ? 'UPDATE products SET stock = stock + ? WHERE product_id = ?'
-          : 'UPDATE products SET sales_count = sales_count + ? WHERE product_id = ?';
-        const [result] = await connection.execute<ResultSetHeader>(sql, [quantity, productId]);
-        if (result.affectedRows !== 1) throw new Error('订单商品不存在');
+      for (const [productId, quantity] of [...productQuantities.entries()].sort(([a], [b]) => a - b)) {
+        if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) throw new Error('订单商品数量无效');
+        const [parents] = await connection.execute<RowDataPacket[]>(
+          'SELECT product_id FROM products WHERE product_id = ? FOR UPDATE', [productId]
+        );
+        if (!parents[0]) throw new Error('订单商品不存在');
+        if (targetStatus === OrderStatus.PAID) {
+          await connection.execute('UPDATE products SET sales_count = sales_count + ? WHERE product_id = ?', [quantity, productId]);
+        }
         productIds.push(productId);
+      }
+      if (targetStatus === OrderStatus.CANCELLED) {
+        for (const item of [...inventory.values()].sort((a, b) => (a.skuId ?? 0) - (b.skuId ?? 0) || a.productId - b.productId)) {
+          const [result] = await connection.execute<ResultSetHeader>(
+            item.skuId === null
+              ? 'UPDATE products SET stock = stock + ? WHERE product_id = ? AND stock <= ?'
+              : 'UPDATE product_skus SET stock = stock + ? WHERE sku_id = ? AND product_id = ? AND stock <= ?',
+            item.skuId === null
+              ? [item.quantity, item.productId, MAX_QUANTITY - item.quantity]
+              : [item.quantity, item.skuId, item.productId, MAX_QUANTITY - item.quantity]
+          );
+          if (result.affectedRows !== 1) throw new Error('订单商品库存无法回补');
+        }
       }
     }
 

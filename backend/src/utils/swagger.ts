@@ -106,6 +106,11 @@ const options: swaggerJSDoc.Options = {
         CartItem: {
           type: 'object',
           properties: {
+            sku_id: { type: 'integer', nullable: true, description: '所选规格；null 为普通商品' },
+            sku_code: { type: 'string', nullable: true },
+            sku_specs: { type: 'object', nullable: true, additionalProperties: true },
+            available: { type: 'boolean', description: '是否可勾选结算' },
+            unavailable_reason: { type: 'string', nullable: true },
             product_id: { type: 'integer' },
             quantity: { type: 'integer' },
             product_name: { type: 'string' },

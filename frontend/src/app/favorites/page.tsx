@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { favoriteApi, cartApi } from '@/lib/api';
+import { favoriteApi } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 import { FaHeart, FaShoppingCart, FaTrash } from 'react-icons/fa';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useCartStore } from '@/store/useCartStore';
+import { quickAddToCart } from '@/lib/quick-cart';
 
 interface FavoriteProduct {
   favorite_id: number;
@@ -16,12 +16,15 @@ interface FavoriteProduct {
   original_price?: number;
   main_image?: string;
   stock: number;
+  has_sku?: boolean | number;
   status: number;
   created_at: string;
 }
 
 export default function FavoritesPage() {
   const router = useRouter();
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const { user, isHydrated } = useAuthStore();
   const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,17 +64,13 @@ export default function FavoritesPage() {
     }
   };
 
-  const handleAddToCart = async (productId: number, stock: number) => {
-    if (stock <= 0) {
-      toast.error('商品已售罄');
-      return;
-    }
-    
+  const handleAddToCart = async (productId: number) => {
     try {
-      await cartApi.add({ product_id: productId, quantity: 1 });
-      toast.success('已添加到购物车');
+      const result = await quickAddToCart(productId, () => active.current);
+      if (result === 'select') router.push(`/products/${productId}`);
+      if (result === 'added') toast.success('已添加到购物车');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || '添加失败');
+      toast.error(error.response?.data?.error || error.message || '添加失败');
     }
   };
 
@@ -134,7 +133,7 @@ export default function FavoritesPage() {
                         <span className="text-white text-xl font-bold">已售罄</span>
                       </div>
                     )}
-                    {item.status === 0 && (
+                    {item.status !== 1 && (
                       <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <span className="text-white text-xl font-bold">已下架</span>
                       </div>
@@ -162,12 +161,12 @@ export default function FavoritesPage() {
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleAddToCart(item.product_id, item.stock)}
-                        disabled={item.stock <= 0 || item.status === 0}
+                        onClick={() => handleAddToCart(item.product_id)}
+                        disabled={item.stock <= 0 || item.status !== 1}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <FaShoppingCart />
-                        加入购物车
+                        {item.has_sku ? '选择规格' : '加入购物车'}
                       </button>
                       <button
                         onClick={() => handleRemove(item.product_id)}

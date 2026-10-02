@@ -30,6 +30,7 @@ beforeEach(() => {
     rollback: jest.fn().mockResolvedValue(undefined),
     release: jest.fn(),
     execute: jest.fn(async (sql: string) => {
+      if (sql.includes('FROM product_skus')) return [[], []];
       if (sql.includes('FROM products')) return [products, []];
       if (sql.includes('FROM shipping_addresses')) return [[{ address_id: 3 }], []];
       if (sql.includes('INSERT INTO orders')) return [{ insertId: 1001, affectedRows: 1 }, []];

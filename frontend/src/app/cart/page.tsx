@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cartApi, orderApi, type OrderPreview } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useCartStore } from '@/store/useCartStore';
+import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
 import { FiTrash2, FiShoppingBag } from 'react-icons/fi';
 import { logger } from '@/lib/logger';
@@ -14,7 +14,7 @@ export default function CartPage() {
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const { items, setItems, updateQuantity, removeItem } = useCartStore();
   const [loading, setLoading] = useState(true);
-  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [selectedCouponId, setSelectedCouponId] = useState<number | undefined>(undefined);
   const [quoteResult, setQuoteResult] = useState<{ key: string; data: OrderPreview } | null>(null);
@@ -32,9 +32,12 @@ export default function CartPage() {
     }
   }, []);
 
-  const orderItems = items
-    .filter(item => selectedItems.includes(item.product_id))
-    .map(item => ({ product_id: item.product_id, quantity: item.quantity }));
+  const isAvailable = (item: CartItem) => item.available !== false && item.available !== 0;
+  const canReduce = (item: CartItem) => isAvailable(item) || (item.unavailable_reason === '库存不足' && item.stock > 0);
+  const availableItems = items.filter(isAvailable);
+  const orderItems = availableItems
+    .filter(item => selectedItems.includes(cartItemKey(item)))
+    .map(item => ({ product_id: item.product_id, quantity: item.quantity, ...(item.sku_id != null && { sku_id: item.sku_id }) }));
   const orderItemsKey = JSON.stringify(orderItems);
   const quoteKey = JSON.stringify([token, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
   const quote = quoteResult?.key === quoteKey ? quoteResult.data : null;
@@ -105,7 +108,7 @@ export default function CartPage() {
       const data: any = await cartApi.list();
       if (!isCurrentSession()) return;
       setItems(data.items || []);
-      setSelectedItems((data.items || []).map((item: any) => item.product_id));
+      setSelectedItems((data.items || []).filter(isAvailable).map(cartItemKey));
     } catch (error: any) {
       if (!isCurrentSession()) return;
       setItems([]);
@@ -117,25 +120,29 @@ export default function CartPage() {
     }
   };
 
-  const handleQuantityChange = async (productId: number, newQuantity: number) => {
-    if (newQuantity < 1 || submittingRequest.current || !isCurrentSession()) return;
+  const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
+    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || !isCurrentSession()) return;
 
     try {
-      await cartApi.updateQuantity({ product_id: productId, quantity: newQuantity });
+      await cartApi.updateQuantity({ product_id: item.product_id, quantity: newQuantity, ...(item.sku_id != null && { sku_id: item.sku_id }) });
       if (!isCurrentSession()) return;
-      updateQuantity(productId, newQuantity);
+      if (!isAvailable(item)) {
+        const refreshed: any = await cartApi.list();
+        if (!isCurrentSession()) return;
+        setItems(refreshed.items || []);
+      } else updateQuantity(item.product_id, newQuantity, item.sku_id);
     } catch (error: any) {
       if (isCurrentSession()) toast.error('更新失败');
     }
   };
 
-  const handleRemove = async (productId: number) => {
+  const handleRemove = async (item: CartItem) => {
     if (submittingRequest.current || !isCurrentSession()) return;
     try {
-      await cartApi.remove(productId);
+      await cartApi.remove(item.product_id, item.sku_id);
       if (!isCurrentSession()) return;
-      removeItem(productId);
-      setSelectedItems(selectedItems.filter(id => id !== productId));
+      removeItem(item.product_id, item.sku_id);
+      setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
       toast.success('已删除');
     } catch (error: any) {
       if (isCurrentSession()) toast.error('删除失败');
@@ -143,23 +150,21 @@ export default function CartPage() {
   };
 
   const handleSelectAll = () => {
-    if (selectedItems.length === items.length) {
+    if (orderItems.length === availableItems.length) {
       setSelectedItems([]);
     } else {
-      setSelectedItems(items.map(item => item.product_id));
+      setSelectedItems(availableItems.map(cartItemKey));
     }
   };
 
-  const handleToggleSelect = (productId: number) => {
-    if (selectedItems.includes(productId)) {
-      setSelectedItems(selectedItems.filter(id => id !== productId));
-    } else {
-      setSelectedItems([...selectedItems, productId]);
-    }
+  const handleToggleSelect = (item: CartItem) => {
+    if (!isAvailable(item) || submittingRequest.current) return;
+    const key = cartItemKey(item);
+    setSelectedItems(selected => selected.includes(key) ? selected.filter(id => id !== key) : [...selected, key]);
   };
 
   const handleCheckout = async () => {
-    if (selectedItems.length === 0) {
+    if (orderItems.length === 0) {
       toast.error('请选择要结算的商品');
       return;
     }
@@ -170,7 +175,7 @@ export default function CartPage() {
     try {
       const data: any = await orderApi.create({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
       if (!isCurrentSession()) return;
-      orderItems.forEach(item => removeItem(item.product_id));
+      orderItems.forEach(item => removeItem(item.product_id, item.sku_id));
       setSelectedItems([]);
       toast.success('订单创建成功');
       router.push(`/orders/${data.order_id}`);
@@ -228,8 +233,8 @@ export default function CartPage() {
             <div className="card p-4 flex items-center">
               <input
                 type="checkbox"
-                checked={selectedItems.length === items.length}
-                disabled={submitting}
+                checked={availableItems.length > 0 && orderItems.length === availableItems.length}
+                disabled={submitting || availableItems.length === 0}
                 onChange={handleSelectAll}
                 className="w-5 h-5 text-primary-600 rounded"
               />
@@ -238,13 +243,13 @@ export default function CartPage() {
 
             {/* 商品列表 */}
             {items.map((item) => (
-              <div key={item.cart_id} className="card p-4">
+              <div key={cartItemKey(item)} className="card p-4">
                 <div className="flex items-center space-x-4">
                   <input
                     type="checkbox"
-                    checked={selectedItems.includes(item.product_id)}
-                    disabled={submitting}
-                    onChange={() => handleToggleSelect(item.product_id)}
+                    checked={isAvailable(item) && selectedItems.includes(cartItemKey(item))}
+                    disabled={submitting || !isAvailable(item)}
+                    onChange={() => handleToggleSelect(item)}
                     className="w-5 h-5 text-primary-600 rounded"
                   />
 
@@ -264,6 +269,14 @@ export default function CartPage() {
 
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-gray-900 truncate">{item.title}</h3>
+                    {item.sku_specs && <p className="text-sm text-gray-600 mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
+                    {item.sku_code && <p className="text-xs text-gray-500 mt-1">规格编号：{item.sku_code}</p>}
+                    {!isAvailable(item) && (
+                      <div className="text-sm text-red-600 mt-1">
+                        <p>{item.unavailable_reason || '商品当前不可用'}</p>
+                        <button onClick={() => router.push(`/products/${item.product_id}`)} className="underline">重新选规格</button>
+                      </div>
+                    )}
                     <p className="text-primary-600 font-medium mt-1">¥{item.price}</p>
                     {item.stock < 10 && (
                       <p className="text-orange-500 text-sm mt-1">仅剩 {item.stock} 件</p>
@@ -272,8 +285,8 @@ export default function CartPage() {
 
                   <div className="flex items-center border border-gray-300 rounded">
                     <button
-                      onClick={() => handleQuantityChange(item.product_id, item.quantity - 1)}
-                      disabled={submitting || item.quantity <= 1}
+                      onClick={() => handleQuantityChange(item, Math.min(item.quantity - 1, item.stock))}
+                      disabled={submitting || !canReduce(item) || item.quantity <= 1}
                       className="px-3 py-1 hover:bg-gray-100"
                     >
                       -
@@ -282,8 +295,8 @@ export default function CartPage() {
                       {item.quantity}
                     </span>
                     <button
-                      onClick={() => handleQuantityChange(item.product_id, item.quantity + 1)}
-                      disabled={submitting || item.quantity >= item.stock}
+                      onClick={() => handleQuantityChange(item, item.quantity + 1)}
+                      disabled={submitting || !isAvailable(item) || item.quantity >= item.stock}
                       className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50"
                     >
                       +
@@ -295,7 +308,7 @@ export default function CartPage() {
                   </div>
 
                   <button
-                    onClick={() => handleRemove(item.product_id)}
+                    onClick={() => handleRemove(item)}
                     disabled={submitting}
                     className="text-gray-400 hover:text-red-500 p-2"
                   >
@@ -314,7 +327,7 @@ export default function CartPage() {
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-gray-600">
                   <span>商品数量</span>
-                  <span>{selectedItems.length} 件</span>
+                  <span>{orderItems.length} 件</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>商品总价</span>
@@ -361,11 +374,11 @@ export default function CartPage() {
 
               <button
                 onClick={handleCheckout}
-                disabled={selectedItems.length === 0 || submitting || !quote || quoteLoading || !!quoteError}
+                disabled={orderItems.length === 0 || submitting || !quote || quoteLoading || !!quoteError}
                 className="w-full btn btn-primary disabled:opacity-50"
               >
                 <FiShoppingBag className="inline mr-2" />
-                {submitting ? '提交中...' : `结算 (${selectedItems.length})`}
+                {submitting ? '提交中...' : `结算 (${orderItems.length})`}
               </button>
             </div>
           </div>

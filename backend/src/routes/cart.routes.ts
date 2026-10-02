@@ -45,7 +45,8 @@ router.get('/', CartController.list);
  *             type: object
  *             required: [product_id, quantity]
  *             properties:
- *               product_id: { type: integer }
+ *               product_id: { type: integer, minimum: 1 }
+ *               sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *               quantity: { type: integer, minimum: 1 }
  *     responses:
  *       200:
@@ -73,8 +74,9 @@ router.post('/', CartController.add);
  *             type: object
  *             required: [product_id, quantity]
  *             properties:
- *               product_id: { type: integer }
- *               quantity: { type: integer, minimum: 1 }
+ *               product_id: { type: integer, minimum: 1 }
+ *               sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
+ *               quantity: { type: integer, minimum: 0, description: 数量为0时移除该规格 }
  *     responses:
  *       200:
  *         description: 更新成功
@@ -86,7 +88,7 @@ router.put('/', CartController.updateQuantity);
  * /api/cart/{id}:
  *   delete:
  *     tags: [购物车]
- *     summary: 删除购物车商品
+ *     summary: 删除购物车商品（省略sku_id仅删除无规格行）
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - name: id
@@ -94,6 +96,10 @@ router.put('/', CartController.updateQuantity);
  *         required: true
  *         schema: { type: integer }
  *         description: 商品 ID
+ *       - name: sku_id
+ *         in: query
+ *         schema: { type: integer, minimum: 1 }
+ *         description: 指定要删除的规格
  *     responses:
  *       200:
  *         description: 删除成功

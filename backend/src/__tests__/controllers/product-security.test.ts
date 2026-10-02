@@ -89,9 +89,18 @@ test.each([-1, 0, 1.5, '2', null])('购物车添加拒绝非法数量 %j', async
 });
 
 test('购物车保留数量为零时删除及正常添加', async () => {
+  const connection = {
+    beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
+    execute: jest.fn(async (statement: string) => {
+      if (statement.includes('FROM products')) return [[{ product_id: 1, title: '商品', price: '5.00', stock: 10, status: 1 }], []];
+      if (statement.includes('SELECT')) return [[], []];
+      return [{ affectedRows: 1 }, []];
+    }),
+  };
+  (getPool as jest.Mock).mockReturnValue({ getConnection: async () => connection });
   await request(app).post('/cart').set('Authorization', `Bearer ${userToken}`).send({ product_id: 1, quantity: 2 }).expect(200);
   await request(app).put('/cart').set('Authorization', `Bearer ${userToken}`).send({ product_id: 1, quantity: 0 }).expect(200);
-  expect(query).toHaveBeenLastCalledWith('DELETE FROM cart WHERE user_id = ? AND product_id = ?', [1, 1]);
+  expect(query).toHaveBeenLastCalledWith('DELETE FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ?', [1, 1, 0]);
 });
 
 test.each([{ price: -1 }, { stock: -2 }, { stock: 1.5 }, { price: '5' }])('后台商品创建也拒绝非法输入 %j', async fields => {

@@ -2,6 +2,7 @@ import { getPool } from './mysql';
 import { connectDatabase } from './mysql';
 import logger from '../utils/logger';
 import { migrateCouponTables } from './migrate-coupon';
+import { migrateSkuTables } from './migrate-sku';
 
 const migrations = [
   // 用户表
@@ -85,6 +86,9 @@ const migrations = [
     product_id BIGINT NOT NULL,
     product_name VARCHAR(200),
     product_image VARCHAR(255),
+    sku_id BIGINT DEFAULT NULL,
+    sku_code VARCHAR(50) DEFAULT NULL,
+    sku_specs JSON DEFAULT NULL,
     quantity INT NOT NULL,
     price DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
@@ -97,10 +101,12 @@ const migrations = [
     cart_id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
     product_id BIGINT NOT NULL,
+    sku_id BIGINT DEFAULT NULL,
+    sku_key BIGINT GENERATED ALWAYS AS (COALESCE(sku_id, 0)) STORED,
     quantity INT DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_product (user_id, product_id),
+    UNIQUE KEY uk_user_product_sku (user_id, product_id, sku_key),
     INDEX idx_user (user_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
@@ -198,6 +204,7 @@ async function runMigrations() {
     }
 
     await migrateCouponTables(pool);
+    await migrateSkuTables(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

@@ -2,6 +2,18 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadApi } = require('./runtime.cjs');
 
+test('cart variant deletion targets its SKU while absent SKU still targets only the base row', async () => {
+  const { cartApi, requests } = loadApi({ token: 'customer-session' });
+  await cartApi.remove(12, 101);
+  await cartApi.remove(12);
+  assert.equal(requests[0].params?.sku_id, 101);
+  assert.equal(requests[1].params?.sku_id, undefined);
+  await cartApi.add({ product_id: 12, quantity: 2, sku_id: 101 });
+  await cartApi.updateQuantity({ product_id: 12, quantity: 3, sku_id: 102 });
+  assert.deepEqual(JSON.parse(requests[2].data), { product_id: 12, quantity: 2, sku_id: 101 });
+  assert.deepEqual(JSON.parse(requests[3].data), { product_id: 12, quantity: 3, sku_id: 102 });
+});
+
 test('admin coupon requests use the admin token when both identities are logged in', async () => {
   const { adminCouponApi, requests } = loadApi({ token: 'customer-session', admin_token: 'admin-session' });
 

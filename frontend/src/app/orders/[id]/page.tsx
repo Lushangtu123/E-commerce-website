@@ -214,6 +214,8 @@ export default function OrderDetailPage() {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-medium">{item.product_name}</h3>
+                  {item.sku_specs && <p className="text-gray-600 text-sm mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
+                  {item.sku_code && <p className="text-gray-500 text-xs mt-1">规格编号：{item.sku_code}</p>}
                   <p className="text-gray-600 text-sm mt-1">¥{item.price} × {item.quantity}</p>
                 </div>
                 <div className="text-right">

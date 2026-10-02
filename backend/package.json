@@ -15,7 +15,9 @@
     "sync-es": "node dist/database/sync-es.js",
     "sync-es:dev": "ts-node src/database/sync-es.ts",
     "migrate-coupon": "node dist/database/migrate-coupon.js",
-    "migrate-coupon:dev": "ts-node src/database/migrate-coupon.ts"
+    "migrate-coupon:dev": "ts-node src/database/migrate-coupon.ts",
+    "migrate-sku": "node dist/database/migrate-sku.js",
+    "migrate-sku:dev": "ts-node src/database/migrate-sku.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.0",

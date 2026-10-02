@@ -13,7 +13,7 @@ function setupCart(list) {
     globals: stores,
     imports: {
       '@/store/useAuthStore': { useAuthStore: Object.assign(() => stores.useAuthStore.getState(), { getState: stores.useAuthStore.getState }) },
-      '@/store/useCartStore': { useCartStore: () => stores.useCartStore.getState() },
+      '@/store/useCartStore': { cartItemKey: stores.cartItemKey, useCartStore: () => stores.useCartStore.getState() },
       '@/lib/api': { cartApi: { list } },
     },
   });

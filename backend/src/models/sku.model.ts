@@ -1,5 +1,58 @@
-import { query } from '../database/mysql';
+import { getPool, query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { PoolConnection } from 'mysql2/promise';
+import { skuCreateSchema, skuUpdateSchema, validSKUId } from '../utils/sku-validation';
+
+export class SKUError extends Error {
+  constructor(message: string, public readonly statusCode: number = 400) { super(message); }
+}
+
+function checkId(id: unknown): asserts id is number {
+  if (!validSKUId(id)) throw new SKUError('商品或SKU ID无效');
+}
+
+function validateCreate(data: any) {
+  const { product_id, ...fields } = data || {};
+  checkId(product_id);
+  const { error, value } = skuCreateSchema.validate(fields);
+  if (error) throw new SKUError('SKU字段或值无效');
+  return { product_id, ...value };
+}
+
+async function lockProductSKUs(connection: PoolConnection, productId: number): Promise<ProductSKU[]> {
+  const [products] = await connection.execute<RowDataPacket[]>(
+    'SELECT product_id, status FROM products WHERE product_id = ? FOR UPDATE', [productId]
+  );
+  if (products.length === 0 || products[0].status === -1) throw new SKUError('商品不存在', 404);
+  const [skus] = await connection.execute<(ProductSKU & RowDataPacket)[]>(
+    'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sku_id FOR UPDATE', [productId]
+  );
+  return skus;
+}
+
+async function skuTransaction<T>(work: (connection: PoolConnection) => Promise<T>): Promise<T> {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await work(connection);
+    await connection.commit();
+    return result;
+  } catch (error: any) {
+    await connection.rollback();
+    if (error.code === 'ER_DUP_ENTRY') throw new SKUError('SKU编码已存在', 409);
+    throw error;
+  } finally { connection.release(); }
+}
+
+async function resolveParentId(skuId: number, productId?: number): Promise<number | undefined> {
+  checkId(skuId);
+  if (productId !== undefined) { checkId(productId); return productId; }
+  // A nonlocking lookup only locates the parent; membership is checked again after parent/SKU locks.
+  const [skus] = await getPool().execute<RowDataPacket[]>(
+    'SELECT product_id FROM product_skus WHERE sku_id = ?', [skuId]
+  );
+  return skus[0]?.product_id;
+}
 
 export interface ProductSKU {
   sku_id: number;
@@ -25,45 +78,39 @@ export class SKUModel {
     original_price?: number;
     stock: number;
     image?: string;
+    status?: number;
   }): Promise<number> {
-    const result = await query<ResultSetHeader>(
-      `INSERT INTO product_skus (product_id, sku_code, specs, price, original_price, stock, image)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.product_id,
-        data.sku_code,
-        JSON.stringify(data.specs),
-        data.price,
-        data.original_price || null,
-        data.stock,
-        data.image || null
-      ]
-    );
-    return result.insertId;
+    const fields = validateCreate(data);
+    return skuTransaction(async connection => {
+      await lockProductSKUs(connection, fields.product_id);
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO product_skus (product_id, sku_code, specs, price, original_price, stock, image, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [fields.product_id, fields.sku_code, JSON.stringify(fields.specs), fields.price,
+          fields.original_price ?? null, fields.stock, fields.image ?? null, fields.status]
+      );
+      return result.insertId;
+    });
   }
 
   // 批量创建SKU
   static async createBatch(skus: any[]): Promise<void> {
-    if (skus.length === 0) return;
-
-    const values = skus.map(sku => [
-      sku.product_id,
-      sku.sku_code,
-      JSON.stringify(sku.specs),
-      sku.price,
-      sku.original_price || null,
-      sku.stock,
-      sku.image || null
-    ]);
-
-    const placeholders = skus.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
-    const flatValues = values.flat();
-
-    await query(
-      `INSERT INTO product_skus (product_id, sku_code, specs, price, original_price, stock, image)
-       VALUES ${placeholders}`,
-      flatValues
-    );
+    if (!Array.isArray(skus) || skus.length === 0 || skus.length > 100) throw new SKUError('SKU列表无效');
+    const fields = skus.map(validateCreate);
+    const codes = new Set(fields.map(sku => sku.sku_code));
+    if (codes.size !== fields.length) throw new SKUError('SKU编码重复', 409);
+    const productIds: number[] = [...new Set<number>(fields.map(sku => sku.product_id))].sort((left, right) => left - right);
+    await skuTransaction(async connection => {
+      for (const productId of productIds) await lockProductSKUs(connection, productId);
+      for (const sku of fields) {
+        await connection.execute(
+          `INSERT INTO product_skus (product_id, sku_code, specs, price, original_price, stock, image, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [sku.product_id, sku.sku_code, JSON.stringify(sku.specs), sku.price,
+            sku.original_price ?? null, sku.stock, sku.image ?? null, sku.status]
+        );
+      }
+    });
   }
 
   // 根据ID获取SKU
@@ -95,9 +142,10 @@ export class SKUModel {
   }
 
   // 获取商品的所有SKU
-  static async findByProductId(productId: number): Promise<ProductSKU[]> {
+  static async findByProductId(productId: number, includeDisabled: boolean = false): Promise<ProductSKU[]> {
+    checkId(productId);
     const results = await query<(ProductSKU & RowDataPacket)[]>(
-      'SELECT * FROM product_skus WHERE product_id = ? AND status = 1 ORDER BY sku_id',
+      `SELECT * FROM product_skus WHERE product_id = ?${includeDisabled ? '' : ' AND status = 1'} ORDER BY sku_id`,
       [productId]
     );
     
@@ -108,45 +156,24 @@ export class SKUModel {
   }
 
   // 更新SKU
-  static async update(skuId: number, data: Partial<ProductSKU>): Promise<boolean> {
-    const updates: string[] = [];
-    const values: any[] = [];
-
-    if (data.specs !== undefined) {
-      updates.push('specs = ?');
-      values.push(JSON.stringify(data.specs));
-    }
-    if (data.price !== undefined) {
-      updates.push('price = ?');
-      values.push(data.price);
-    }
-    if (data.original_price !== undefined) {
-      updates.push('original_price = ?');
-      values.push(data.original_price);
-    }
-    if (data.stock !== undefined) {
-      updates.push('stock = ?');
-      values.push(data.stock);
-    }
-    if (data.image !== undefined) {
-      updates.push('image = ?');
-      values.push(data.image);
-    }
-    if (data.status !== undefined) {
-      updates.push('status = ?');
-      values.push(data.status);
-    }
-
-    if (updates.length === 0) return false;
-
-    values.push(skuId);
-
-    const result = await query<ResultSetHeader>(
-      `UPDATE product_skus SET ${updates.join(', ')} WHERE sku_id = ?`,
-      values
-    );
-
-    return result.affectedRows > 0;
+  static async update(skuId: number, data: Partial<ProductSKU>, productId?: number): Promise<boolean> {
+    const { error, value } = skuUpdateSchema.validate(data);
+    if (error) throw new SKUError('SKU字段或值无效');
+    const parentId = await resolveParentId(skuId, productId);
+    if (parentId === undefined) return false;
+    return skuTransaction(async connection => {
+      const skus = await lockProductSKUs(connection, parentId);
+      if (!skus.some(sku => sku.sku_id === skuId)) {
+        if (productId !== undefined) throw new SKUError('SKU不属于该商品', 404);
+        return false;
+      }
+      const keys = Object.keys(value);
+      const [result] = await connection.execute<ResultSetHeader>(
+        `UPDATE product_skus SET ${keys.map(key => `${key} = ?`).join(', ')} WHERE sku_id = ? AND product_id = ?`,
+        [...keys.map(key => key === 'specs' ? JSON.stringify(value[key]) : value[key]), skuId, parentId]
+      );
+      return result.affectedRows > 0;
+    });
   }
 
   // 更新库存
@@ -168,21 +195,32 @@ export class SKUModel {
   }
 
   // 删除SKU
-  static async delete(skuId: number): Promise<boolean> {
-    const result = await query<ResultSetHeader>(
-      'DELETE FROM product_skus WHERE sku_id = ?',
-      [skuId]
-    );
-    return result.affectedRows > 0;
+  static async delete(skuId: number, productId?: number): Promise<boolean> {
+    const parentId = await resolveParentId(skuId, productId);
+    if (parentId === undefined) return false;
+    return skuTransaction(async connection => {
+      const skus = await lockProductSKUs(connection, parentId);
+      if (!skus.some(sku => sku.sku_id === skuId)) {
+        if (productId !== undefined) throw new SKUError('SKU不属于该商品', 404);
+        return false;
+      }
+      const [result] = await connection.execute<ResultSetHeader>(
+        'UPDATE product_skus SET status = 0 WHERE sku_id = ? AND product_id = ?', [skuId, parentId]
+      );
+      return result.affectedRows > 0;
+    });
   }
 
   // 删除商品的所有SKU
   static async deleteByProductId(productId: number): Promise<boolean> {
-    const result = await query<ResultSetHeader>(
-      'DELETE FROM product_skus WHERE product_id = ?',
-      [productId]
-    );
-    return result.affectedRows > 0;
+    checkId(productId);
+    return skuTransaction(async connection => {
+      await lockProductSKUs(connection, productId);
+      const [result] = await connection.execute<ResultSetHeader>(
+        'UPDATE product_skus SET status = 0 WHERE product_id = ?', [productId]
+      );
+      return result.affectedRows > 0;
+    });
   }
 
   // 获取最低价格的SKU
@@ -211,4 +249,3 @@ export class SKUModel {
     return result.total || 0;
   }
 }
-

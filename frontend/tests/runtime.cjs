@@ -31,7 +31,7 @@ function loadSource(relativePath, globals = {}, imports = {}) {
   vm.runInNewContext(output, {
     module,
     exports: module.exports,
-    require: (name) => Object.hasOwn(imports, name) ? imports[name] : require(name),
+    require: (name) => Object.hasOwn(imports, name) ? imports[name] : name.startsWith('@/') ? loadSource(`src/${name.slice(2)}.ts`, globals, imports) : require(name),
     process: { env: { NEXT_PUBLIC_API_URL: 'http://localhost:3001/api' } },
     console,
     URL,
@@ -123,7 +123,7 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} 
     },
     'next/link': () => null,
     '@/store/useAuthStore': { useAuthStore: Object.assign((selector) => selector ? selector(auth) : auth, { getState: () => auth }) },
-    '@/store/useCartStore': { useCartStore: () => ({ items: [], setItems() {}, updateQuantity() {}, removeItem() {}, clearCart() {}, getTotalPrice() {} }) },
+    '@/store/useCartStore': { cartItemKey: loadSource('src/store/useCartStore.ts').cartItemKey, useCartStore: () => ({ items: [], setItems() {}, updateQuantity() {}, removeItem() {}, clearCart() {}, getTotalPrice() {} }) },
     '@/lib/api': api,
     '@/lib/logger': { logger: { error() {} } },
     'react-hot-toast': { __esModule: true, default: toast, toast },

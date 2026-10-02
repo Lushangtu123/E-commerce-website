@@ -1,4 +1,5 @@
 import { query } from '../database/mysql';
+import { customerProducts } from './product.model';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export interface Favorite {
@@ -73,9 +74,10 @@ export class FavoriteModel {
         p.original_price,
         p.main_image,
         p.stock,
+        p.has_sku,
         p.status
       FROM favorites f
-      LEFT JOIN products p ON f.product_id = p.product_id
+      LEFT JOIN (${customerProducts}) p ON f.product_id = p.product_id
       WHERE f.user_id = ?
       ORDER BY f.created_at DESC
       LIMIT ? OFFSET ?`,

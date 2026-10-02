@@ -50,11 +50,11 @@ beforeEach(() => {
     release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[] = []) => {
       if (failSql && sql.includes(failSql)) throw new Error('database failure');
+      if (sql.includes('FROM product_skus')) return [[], []];
       if (sql.includes('FROM products')) return [productMissing ? [] : [{ ...PRODUCT, product_id: params[0] }], []];
       if (sql.includes('FROM shipping_addresses')) return [addressOwned ? [{ address_id: 3 }] : [], []];
       if (sql.includes('FROM order_items')) {
-        if (sql.includes('sku_id')) throw new Error('Unknown column sku_id');
-        return [[{ item_id: 1, order_id: 1001, product_id: 1, quantity: 2 }], []];
+        return [[{ item_id: 1, order_id: 1001, product_id: 1, sku_id: null, quantity: 2 }], []];
       }
       if (sql.includes('FROM orders')) return [[{ ...order }], []];
       if (sql.includes('INSERT INTO orders')) return [{ insertId: 1001, affectedRows: 1 }, []];
@@ -156,7 +156,7 @@ describe('订单状态迁移', () => {
     await OrderController.cancel(request(), first);
     expect(first.json).toHaveBeenCalledWith({ message: '订单已取消' });
     expect(matching('FROM orders')[0][0]).toContain('FOR UPDATE');
-    expect(matching('stock = stock +')[0][1]).toEqual([2, 1]);
+    expect(matching('stock = stock +')[0][1]).toEqual([2, 1, 2147483645]);
     expect(order.status).toBe(4);
 
     const second = response();
@@ -227,11 +227,11 @@ describe('超时和后台 schema 兼容', () => {
     expect(connection.commit).not.toHaveBeenCalled();
   });
 
-  test('到期取消兼容无 sku_id 的基线结构，重复执行不回补', async () => {
+  test('到期取消兼容迁移后的无规格历史明细，重复执行不回补', async () => {
     expect(await cancelTimeoutOrder(1001)).toBe(true);
     expect(await cancelTimeoutOrder(1001)).toBe(false);
     expect(matching('stock = stock +')).toHaveLength(1);
-    expect(matching('FROM order_items')[0][0]).not.toContain('sku_id');
+    expect(matching('FROM order_items')[0][0]).toContain('sku_id');
   });
 
   test('定时任务使用准确的 30 分钟边界', async () => {

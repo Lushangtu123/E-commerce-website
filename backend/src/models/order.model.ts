@@ -27,6 +27,9 @@ export interface OrderItem {
   product_id: number;
   product_name: string;
   product_image?: string;
+  sku_id?: number | null;
+  sku_code?: string | null;
+  sku_specs?: Record<string, unknown> | null;
   quantity: number;
   price: number;
 }
