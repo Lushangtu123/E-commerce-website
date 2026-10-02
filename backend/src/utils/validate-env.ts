@@ -5,6 +5,9 @@ const WEAK_SECRETS = new Set([
   'secret',
   'your-secret-key',
   'your-super-secret-jwt-key-change-in-production',
+  'your_production_jwt_secret_key',
+  'your_super_secret_jwt_key_change_this_in_production',
+  'your-admin-secret-key',
 ]);
 
 /**

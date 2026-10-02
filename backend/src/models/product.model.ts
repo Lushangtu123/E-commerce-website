@@ -1,5 +1,6 @@
 import { query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { PRODUCT_SORTS, productCreateSchema, productQuerySchema, productUpdateSchema } from '../utils/product-validation';
 
 export interface Product {
   product_id: number;
@@ -33,19 +34,25 @@ export interface ProductQuery {
 export class ProductModel {
   // 创建商品
   static async create(product: Partial<Product>): Promise<number> {
-    const { title, description, category_id, brand, price, original_price, stock, main_image, images, specs } = product;
+    const { error, value } = productCreateSchema.validate(product);
+    if (error) throw error;
+    const { title, description, category_id, brand, price, original_price, stock, main_image, images, specs, status } = value;
     
     const result = await query<ResultSetHeader>(
-      `INSERT INTO products (title, description, category_id, brand, price, original_price, stock, main_image, images, specs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, description, category_id, brand, price, original_price, stock, main_image, JSON.stringify(images), JSON.stringify(specs)]
+      `INSERT INTO products (title, description, category_id, brand, price, original_price, stock, main_image, images, specs, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [title, description ?? null, category_id ?? null, brand ?? null, price, original_price ?? null, stock, main_image ?? null,
+        images == null ? null : JSON.stringify(images), specs == null ? null : JSON.stringify(specs), status]
     );
     return result.insertId;
   }
 
   // 获取商品列表
   static async list(params: ProductQuery): Promise<{ products: Product[], total: number }> {
-    const { category_id, keyword, min_price, max_price, sort = 'created_at DESC', page = 1, limit = 20 } = params;
+    const { error, value } = productQuerySchema.validate(params);
+    if (error) throw error;
+    const { category_id, keyword, min_price, max_price, page, limit } = value;
+    const sort = PRODUCT_SORTS[value.sort];
     
     let whereClauses: string[] = ['status = 1'];
     let queryParams: any[] = [];
@@ -100,8 +107,11 @@ export class ProductModel {
 
   // 更新商品
   static async update(productId: number, updates: Partial<Product>): Promise<boolean> {
-    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(updates), productId];
+    const { error, value } = productUpdateSchema.validate(updates);
+    if (error) throw error;
+    const keys = Object.keys(value);
+    const fields = keys.map(key => `${key} = ?`).join(', ');
+    const values = [...keys.map(key => ['images', 'specs'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), productId];
     
     const result = await query<ResultSetHeader>(
       `UPDATE products SET ${fields} WHERE product_id = ?`,
@@ -136,4 +146,3 @@ export class ProductModel {
     );
   }
 }
-

@@ -1,7 +1,7 @@
 # 电商平台系统
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/Node.js-24_LTS-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
 
@@ -84,7 +84,7 @@
 - **通知**: React Hot Toast
 
 ### 后端
-- **运行时**: Node.js 18+
+- **运行时**: Node.js 24 LTS
 - **框架**: Express
 - **语言**: TypeScript
 - **数据库**: MySQL 8.0
@@ -152,7 +152,7 @@
 ## 🚀 快速开始
 
 ### 环境要求
-- Node.js 18+
+- Node.js 24 LTS（项目根目录提供 `.nvmrc`）
 - Docker & Docker Compose
 - MySQL 8.0+
 - Redis 7+
@@ -166,10 +166,14 @@ git clone <repository-url>
 cd E-commerce-website
 ```
 
-2. **启动所有服务**
+2. **配置并启动所有服务**
 ```bash
+cp .env.example .env
+# 编辑根目录 .env，将 openssl rand -hex 32 的结果填入 JWT_SECRET
 docker-compose up -d
 ```
+
+部署到其他域名时，同时设置 `CORS_ORIGIN` 和 `NEXT_PUBLIC_API_URL`，然后重新构建前端。
 
 3. **等待服务启动完成**
 ```bash
@@ -205,7 +209,7 @@ cp .env.example .env
 
 3. **运行数据库迁移**
 ```bash
-npm run migrate
+npm run migrate:dev
 ```
 
 4. **启动开发服务器**
@@ -618,4 +622,3 @@ MIT License
 - 新增 API：15+ 个
 - 新增数据库表：4 个
 - 更新文档：3,365 行
-

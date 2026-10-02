@@ -3,8 +3,6 @@
  * 处理订单、库存等异步任务
  */
 import { publishMessage, publishOrderTimeoutCheck, consumeQueue, QUEUES } from '../database/rabbitmq';
-import { pool } from '../database/mysql';
-import { RowDataPacket } from 'mysql2';
 import { cancelTimeoutOrder } from './order-timeout.service';
 import logger from '../utils/logger';
 
@@ -12,20 +10,12 @@ import logger from '../utils/logger';
  * 订单创建消息处理器
  */
 export async function handleOrderCreated(message: any) {
-  const { order_id, user_id, items } = message;
+  const { order_id, user_id } = message;
   
   logger.info(`📦 处理订单创建消息: order_id=${order_id}`);
 
   try {
-    // 发送库存扣减消息
-    for (const item of items) {
-      await publishMessage(QUEUES.STOCK_DEDUCTION, {
-        order_id,
-        sku_id: item.sku_id,
-        quantity: item.quantity,
-      });
-    }
-
+    // Inventory was committed with the order. Redelivery only repeats the notification.
     // 发送邮件通知消息（模拟）
     await publishMessage(QUEUES.EMAIL_NOTIFICATION, {
       type: 'order_created',
@@ -51,24 +41,7 @@ export async function handleOrderPaid(message: any) {
   logger.info(`💰 处理订单支付消息: order_id=${order_id}`);
 
   try {
-    // 更新商品销量
-    const [orderItems] = await pool.execute<RowDataPacket[]>(
-      `SELECT sku_id, quantity 
-       FROM order_items 
-       WHERE order_id = ?`,
-      [order_id]
-    );
-
-    for (const item of orderItems) {
-      await pool.execute(
-        `UPDATE products p
-         INNER JOIN product_skus s ON p.product_id = s.product_id
-         SET p.sales_count = p.sales_count + ?
-         WHERE s.sku_id = ?`,
-        [item.quantity, item.sku_id]
-      );
-    }
-
+    // Sales were committed with payment; the queue must never count them again.
     // 发送邮件通知
     await publishMessage(QUEUES.EMAIL_NOTIFICATION, {
       type: 'order_paid',
@@ -89,20 +62,12 @@ export async function handleOrderPaid(message: any) {
  * 订单取消消息处理器
  */
 export async function handleOrderCancelled(message: any) {
-  const { order_id, user_id, items } = message;
+  const { order_id, user_id } = message;
   
   logger.info(`❌ 处理订单取消消息: order_id=${order_id}`);
 
   try {
-    // 发送库存恢复消息
-    for (const item of items) {
-      await publishMessage(QUEUES.STOCK_RECOVERY, {
-        order_id,
-        sku_id: item.sku_id,
-        quantity: item.quantity,
-      });
-    }
-
+    // Stock recovery belongs to the cancellation transaction.
     // 发送邮件通知
     await publishMessage(QUEUES.EMAIL_NOTIFICATION, {
       type: 'order_cancelled',
@@ -123,65 +88,15 @@ export async function handleOrderCancelled(message: any) {
  * 库存扣减消息处理器
  */
 export async function handleStockDeduction(message: any) {
-  const { order_id, sku_id, quantity } = message;
-  
-  logger.info(`📉 处理库存扣减: sku_id=${sku_id}, quantity=${quantity}`);
-
-  try {
-    const connection = await pool.getConnection();
-    
-    try {
-      await connection.beginTransaction();
-
-      // 扣减库存
-      const [result] = await connection.execute(
-        `UPDATE product_skus 
-         SET stock = stock - ? 
-         WHERE sku_id = ? AND stock >= ?`,
-        [quantity, sku_id, quantity]
-      );
-
-      const affectedRows = (result as any).affectedRows;
-
-      if (affectedRows === 0) {
-        throw new Error(`库存不足: sku_id=${sku_id}`);
-      }
-
-      await connection.commit();
-      logger.info(`✅ 库存扣减成功: sku_id=${sku_id}, quantity=${quantity}`);
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
-  } catch (error) {
-    logger.error({ err: error }, '❌ 库存扣减失败');
-    throw error;
-  }
+  // Drain obsolete messages safely during upgrades. The order transaction owns inventory.
+  logger.warn({ order_id: message.order_id }, '忽略历史库存扣减消息：库存已由订单事务处理');
 }
 
 /**
  * 库存恢复消息处理器
  */
 export async function handleStockRecovery(message: any) {
-  const { order_id, sku_id, quantity } = message;
-  
-  logger.info(`📈 处理库存恢复: sku_id=${sku_id}, quantity=${quantity}`);
-
-  try {
-    await pool.execute(
-      `UPDATE product_skus 
-       SET stock = stock + ? 
-       WHERE sku_id = ?`,
-      [quantity, sku_id]
-    );
-
-    logger.info(`✅ 库存恢复成功: sku_id=${sku_id}, quantity=${quantity}`);
-  } catch (error) {
-    logger.error({ err: error }, '❌ 库存恢复失败');
-    throw error;
-  }
+  logger.warn({ order_id: message.order_id }, '忽略历史库存恢复消息：库存已由订单事务处理');
 }
 
 /**
@@ -307,4 +222,3 @@ export async function sendOrderCancelledMessage(orderId: number, userId: number,
     timestamp: new Date().toISOString(),
   });
 }
-

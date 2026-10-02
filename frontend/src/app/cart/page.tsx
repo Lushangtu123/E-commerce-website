@@ -11,31 +11,40 @@ import { logger } from '@/lib/logger';
 
 export default function CartPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const { items, setItems, updateQuantity, removeItem, clearCart, getTotalPrice } = useCartStore();
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
     loadCart();
-  }, [isAuthenticated]);
+  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
 
   const loadCart = async () => {
+    const isCurrentSession = () => {
+      const currentAuth = useAuthStore.getState();
+      return currentAuth.isAuthenticated && currentAuth.token === token && currentAuth.user?.user_id === user?.user_id;
+    };
     try {
       setLoading(true);
       const data: any = await cartApi.list();
+      if (!isCurrentSession()) return;
       setItems(data.items || []);
       setSelectedItems((data.items || []).map((item: any) => item.product_id));
     } catch (error: any) {
+      if (!isCurrentSession()) return;
+      setItems([]);
+      setSelectedItems([]);
       logger.error('加载购物车失败:', error);
       toast.error('加载购物车失败');
     } finally {
-      setLoading(false);
+      if (isCurrentSession()) setLoading(false);
     }
   };
 
@@ -108,7 +117,7 @@ export default function CartPage() {
     }
   };
 
-  if (loading) {
+  if (!isHydrated || !isAuthenticated || loading) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -264,4 +273,3 @@ export default function CartPage() {
     </div>
   );
 }
-

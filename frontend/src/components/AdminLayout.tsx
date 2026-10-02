@@ -62,6 +62,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       path: '/admin/orders'
     },
     {
+      name: '优惠券管理',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16v4a2 2 0 000 4v4H4v-4a2 2 0 000-4V7zm10 0v2m0 4v2m0 2v2" />
+        </svg>
+      ),
+      path: '/admin/coupons'
+    },
+    {
       name: '用户管理',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,4 +187,3 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     </div>
   );
 }
-

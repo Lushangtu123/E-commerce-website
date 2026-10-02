@@ -18,18 +18,19 @@ const ORDER_STATUS = {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isHydrated } = useAuthStore();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<number | undefined>(undefined);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
     loadOrders();
-  }, [isAuthenticated, activeTab]);
+  }, [isHydrated, isAuthenticated, activeTab, router]);
 
   const loadOrders = async () => {
     try {
@@ -75,6 +76,10 @@ export default function OrdersPage() {
       toast.error(error.response?.data?.error || '确认收货失败');
     }
   };
+
+  if (!isHydrated || !isAuthenticated) {
+    return <div className="py-8 text-center text-gray-600">加载中...</div>;
+  }
 
   return (
     <div className="py-8">
@@ -213,4 +218,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-

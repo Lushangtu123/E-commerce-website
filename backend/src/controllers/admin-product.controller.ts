@@ -3,6 +3,13 @@ import { getPool } from '../database/mysql';
 import { SKUModel } from '../models/sku.model';
 import { logAdminAction } from './admin.controller';
 import logger from '../utils/logger';
+import { ProductModel } from '../models/product.model';
+import { productCreateSchema, productUpdateSchema, positiveId } from '../utils/product-validation';
+
+function normalizedProductBody(body: any) {
+  const { image_url, ...fields } = body;
+  return image_url === undefined ? fields : { ...fields, main_image: image_url };
+}
 
 // 获取商品列表（管理员）
 export const getAdminProducts = async (req: Request, res: Response) => {
@@ -154,30 +161,10 @@ export const batchUpdateProductStatus = async (req: Request, res: Response) => {
 // 创建商品
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const pool = getPool();
-    const {
-      title,
-      description,
-      price,
-      stock,
-      category_id,
-      brand,
-      image_url,
-      status = 1
-    } = req.body;
-
-    if (!title || !price || !category_id) {
-      return res.status(400).json({ error: '标题、价格和分类不能为空' });
-    }
-
-    const [result] = await pool.query(
-      `INSERT INTO products 
-       (title, description, price, stock, category_id, brand, main_image, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [title, description, price, stock || 0, category_id, brand, image_url, status]
-    );
-
-    const productId = (result as any).insertId;
+    const { error, value: product } = productCreateSchema.validate(normalizedProductBody(req.body));
+    if (error || !product.category_id) return res.status(400).json({ error: '商品字段或值无效，标题、价格和分类必填' });
+    const { title } = product;
+    const productId = await ProductModel.create(product);
 
     // 记录操作日志
     await logAdminAction(
@@ -203,16 +190,10 @@ export const createProduct = async (req: Request, res: Response) => {
 // 更新商品信息
 export const updateProduct = async (req: Request, res: Response) => {
   try {
+    const productId = positiveId(req.params.productId);
+    const { error, value: fields } = productUpdateSchema.validate(normalizedProductBody(req.body));
+    if (!productId || error) return res.status(400).json({ error: '商品ID、字段或值无效' });
     const pool = getPool();
-    const { productId } = req.params;
-    const {
-      title,
-      description,
-      price,
-      stock,
-      category_id,
-      image_url
-    } = req.body;
 
     // 检查商品是否存在
     const [products] = await pool.query(
@@ -224,54 +205,15 @@ export const updateProduct = async (req: Request, res: Response) => {
       return res.status(404).json({ error: '商品不存在' });
     }
 
-    // 构建更新字段
-    const updates: string[] = [];
-    const values: any[] = [];
-
-    if (title !== undefined) {
-      updates.push('title = ?');
-      values.push(title);
-    }
-    if (description !== undefined) {
-      updates.push('description = ?');
-      values.push(description);
-    }
-    if (price !== undefined) {
-      updates.push('price = ?');
-      values.push(price);
-    }
-    if (stock !== undefined) {
-      updates.push('stock = ?');
-      values.push(stock);
-    }
-    if (category_id !== undefined) {
-      updates.push('category_id = ?');
-      values.push(category_id);
-    }
-    if (image_url !== undefined) {
-      updates.push('main_image = ?');
-      values.push(image_url);
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({ error: '没有要更新的字段' });
-    }
-
-    updates.push('updated_at = NOW()');
-    values.push(productId);
-
-    await pool.query(
-      `UPDATE products SET ${updates.join(', ')} WHERE product_id = ?`,
-      values
-    );
+    await ProductModel.update(productId, fields);
 
     // 记录操作日志
     await logAdminAction(
       (req as any).admin.adminId,
       'UPDATE_PRODUCT',
       'product',
-      productId,
-      `更新商品: ${title || ''}`,
+      productId.toString(),
+      `更新商品: ${fields.title || ''}`,
       req.ip,
       req.get('user-agent')
     );
@@ -493,4 +435,3 @@ export const deleteSKU = async (req: Request, res: Response) => {
     res.status(500).json({ error: '删除SKU失败' });
   }
 };
-

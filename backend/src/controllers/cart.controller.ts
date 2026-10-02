@@ -2,6 +2,12 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { CartModel } from '../models/cart.model';
 import logger from '../utils/logger';
+import { positiveId } from '../utils/product-validation';
+
+function validItem(productId: unknown, quantity: unknown, allowZero = false): boolean {
+  return typeof productId === 'number' && Number.isSafeInteger(productId) && productId > 0 && productId <= 2147483647 &&
+    typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity >= (allowZero ? 0 : 1) && quantity <= 2147483647;
+}
 
 export class CartController {
   // 获取购物车列表
@@ -21,8 +27,8 @@ export class CartController {
     try {
       const { product_id, quantity = 1 } = req.body;
 
-      if (!product_id) {
-        return res.status(400).json({ error: '缺少商品ID' });
+      if (!validItem(product_id, quantity)) {
+        return res.status(400).json({ error: '商品ID和数量必须为正整数' });
       }
 
       const success = await CartModel.add(req.userId!, product_id, quantity);
@@ -43,7 +49,7 @@ export class CartController {
     try {
       const { product_id, quantity } = req.body;
 
-      if (!product_id || quantity === undefined) {
+      if (!validItem(product_id, quantity, true)) {
         return res.status(400).json({ error: '参数错误' });
       }
 
@@ -63,7 +69,8 @@ export class CartController {
   // 删除商品
   static async remove(req: AuthRequest, res: Response) {
     try {
-      const productId = parseInt(req.params.id);
+      const productId = positiveId(req.params.id);
+      if (!productId) return res.status(400).json({ error: '商品ID无效' });
 
       const success = await CartModel.remove(req.userId!, productId);
 
@@ -94,4 +101,3 @@ export class CartController {
     }
   }
 }
-

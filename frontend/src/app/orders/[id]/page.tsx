@@ -18,7 +18,7 @@ const ORDER_STATUS = {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isHydrated } = useAuthStore();
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,20 +27,21 @@ export default function OrderDetailPage() {
   const orderId = parseInt(params.id as string);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
     loadOrder();
-  }, [isAuthenticated, orderId]);
+  }, [isHydrated, isAuthenticated, orderId, router]);
 
   useEffect(() => {
-    if (order && order.status === 0) {
+    if (isHydrated && isAuthenticated && order && order.status === 0) {
       loadRemainingTime();
       const interval = setInterval(loadRemainingTime, 60000); // 每分钟更新一次
       return () => clearInterval(interval);
     }
-  }, [order]);
+  }, [isHydrated, isAuthenticated, order]);
 
   const loadOrder = async () => {
     try {
@@ -103,7 +104,7 @@ export default function OrderDetailPage() {
     }
   };
 
-  if (loading) {
+  if (!isHydrated || !isAuthenticated || loading) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -261,4 +262,3 @@ export default function OrderDetailPage() {
     </div>
   );
 }
-

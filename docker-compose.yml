@@ -107,10 +107,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/ecommerce?authSource=admin
-      - ES_HOST=elasticsearch
-      - ES_PORT=9200
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
       - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
-      - JWT_SECRET=your_production_jwt_secret_key
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env before starting Compose}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     ports:
       - "3001:3001"
     depends_on:
@@ -133,9 +133,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
     container_name: ecommerce-frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
     ports:
       - "3000:3000"
     depends_on:
@@ -154,4 +156,3 @@ volumes:
 networks:
   ecommerce-network:
     driver: bridge
-

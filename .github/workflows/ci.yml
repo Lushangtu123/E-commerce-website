@@ -10,6 +10,23 @@ jobs:
   backend:
     name: 后端：编译 + 测试
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: order_test_password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -porder_test_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      MYSQL_TEST_HOST: 127.0.0.1
+      MYSQL_TEST_USER: root
+      MYSQL_TEST_PASSWORD: order_test_password
     defaults:
       run:
         working-directory: backend
@@ -20,7 +37,7 @@ jobs:
       - name: 安装 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -46,7 +63,7 @@ jobs:
       - name: 安装 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -55,6 +72,9 @@ jobs:
 
       - name: 准备构建环境变量
         run: cp .env.local.example .env.local
+
+      - name: 前端回归测试
+        run: npm test
 
       - name: Next.js 构建
         run: npm run build

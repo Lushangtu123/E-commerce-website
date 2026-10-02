@@ -5,6 +5,8 @@
 
 import { getPool } from '../database/mysql';
 import { RowDataPacket } from 'mysql2';
+import { OrderStatus } from '../models/order.model';
+import { transitionOrder, invalidateOrderProductCache } from './order.service';
 import logger from '../utils/logger';
 
 interface PendingOrder extends RowDataPacket {
@@ -12,13 +14,6 @@ interface PendingOrder extends RowDataPacket {
   order_no: string;
   user_id: number;
   created_at: Date;
-}
-
-interface OrderItem extends RowDataPacket {
-  item_id: number;
-  product_id: number;
-  sku_id: number | null;
-  quantity: number;
 }
 
 /**
@@ -31,65 +26,11 @@ const ORDER_TIMEOUT_MINUTES = 30;
  * 仅当订单仍为待支付（status = 0）时执行，否则返回 false
  */
 export async function cancelTimeoutOrder(orderId: number): Promise<boolean> {
-  const pool = getPool();
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-
-    // 1. 确认订单仍为待支付
-    const [orders] = await connection.execute<PendingOrder[]>(
-      'SELECT order_id, order_no, user_id, created_at FROM orders WHERE order_id = ? AND status = 0',
-      [orderId]
-    );
-
-    if (orders.length === 0) {
-      await connection.rollback();
-      return false;
-    }
-    const order = orders[0];
-
-    // 2. 获取订单商品信息
-    const [orderItems] = await connection.execute<OrderItem[]>(
-      'SELECT item_id, product_id, sku_id, quantity FROM order_items WHERE order_id = ?',
-      [order.order_id]
-    );
-
-    // 3. 恢复库存
-    for (const item of orderItems) {
-      if (item.sku_id) {
-        // 恢复 SKU 库存
-        await connection.execute(
-          'UPDATE product_skus SET stock = stock + ? WHERE sku_id = ?',
-          [item.quantity, item.sku_id]
-        );
-      } else {
-        // 恢复商品库存
-        await connection.execute(
-          'UPDATE products SET stock = stock + ? WHERE product_id = ?',
-          [item.quantity, item.product_id]
-        );
-      }
-    }
-
-    // 4. 更新订单状态为已取消
-    await connection.execute(
-      `UPDATE orders 
-       SET status = 4
-       WHERE order_id = ?`,
-      [order.order_id]
-    );
-
-    await connection.commit();
-    logger.info(`[订单超时] 订单 ${order.order_no} 已自动取消，库存已恢复`);
-    return true;
-  } catch (error) {
-    await connection.rollback();
-    logger.error({ err: error }, `[订单超时] 取消订单 ${orderId} 失败`);
-    throw error;
-  } finally {
-    connection.release();
-  }
+  const result = await transitionOrder(orderId, OrderStatus.CANCELLED, { timeoutOnly: true });
+  if (!result.changed) return false;
+  await invalidateOrderProductCache(result.productIds);
+  logger.info(`[订单超时] 订单 ${result.orderNo} 已自动取消，库存已恢复`);
+  return true;
 }
 
 /**
@@ -104,8 +45,7 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
       `SELECT order_id, order_no, user_id, created_at 
        FROM orders 
        WHERE status = 0 
-       AND TIMESTAMPDIFF(MINUTE, created_at, NOW()) > ?`,
-      [ORDER_TIMEOUT_MINUTES]
+       AND created_at <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)`
     );
 
     logger.info(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
@@ -180,4 +120,3 @@ export async function getOrderRemainingTime(orderId: number): Promise<number> {
   
   return Math.max(0, remainingMinutes);
 }
-

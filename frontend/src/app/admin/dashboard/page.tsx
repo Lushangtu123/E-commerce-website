@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import api from '@/lib/api';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { logger } from '@/lib/logger';
 
@@ -23,24 +24,13 @@ export default function AdminDashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const token = localStorage.getItem('admin_token');
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
-
       // 获取统计数据
-      const [statsRes, ordersRes, productsRes, trendRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard/stats`, { headers }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard/recent-orders?limit=5`, { headers }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard/top-products?days=7&limit=5`, { headers }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard/sales-trend?days=7`, { headers })
+      const [statsData, ordersData, productsData, trendData]: any[] = await Promise.all([
+        api.get('/admin/dashboard/stats'),
+        api.get('/admin/dashboard/recent-orders', { params: { limit: 5 } }),
+        api.get('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } }),
+        api.get('/admin/dashboard/sales-trend', { params: { days: 7 } })
       ]);
-
-      const statsData = await statsRes.json();
-      const ordersData = await ordersRes.json();
-      const productsData = await productsRes.json();
-      const trendData = await trendRes.json();
 
       setStats(statsData);
       setRecentOrders(Array.isArray(ordersData) ? ordersData : ordersData.orders || []);
@@ -79,10 +69,9 @@ export default function AdminDashboardPage() {
     const statusMap: any = {
       0: { text: '待支付', class: 'bg-yellow-100 text-yellow-700' },
       1: { text: '已支付', class: 'bg-blue-100 text-blue-700' },
-      2: { text: '待发货', class: 'bg-purple-100 text-purple-700' },
-      3: { text: '已发货', class: 'bg-indigo-100 text-indigo-700' },
-      4: { text: '已完成', class: 'bg-green-100 text-green-700' },
-      5: { text: '已取消', class: 'bg-gray-100 text-gray-700' }
+      2: { text: '已发货', class: 'bg-indigo-100 text-indigo-700' },
+      3: { text: '已完成', class: 'bg-green-100 text-green-700' },
+      4: { text: '已取消', class: 'bg-gray-100 text-gray-700' }
     };
     const s = statusMap[status] || statusMap[0];
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.class}`}>{s.text}</span>;
@@ -225,4 +214,3 @@ export default function AdminDashboardPage() {
     </AdminLayout>
   );
 }
-

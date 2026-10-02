@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 import { adminCouponApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
@@ -27,7 +27,6 @@ interface Coupon {
 }
 
 export default function AdminCouponsPage() {
-  const router = useRouter();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -130,6 +129,7 @@ export default function AdminCouponsPage() {
 
   if (loading) {
     return (
+      <AdminLayout>
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
@@ -138,10 +138,12 @@ export default function AdminCouponsPage() {
           </div>
         </div>
       </div>
+      </AdminLayout>
     );
   }
 
   return (
+    <AdminLayout>
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
@@ -411,6 +413,6 @@ export default function AdminCouponsPage() {
         </div>
       </div>
     </div>
+    </AdminLayout>
   );
 }
-

@@ -29,7 +29,7 @@ interface UserStats {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, isHydrated, logout } = useAuthStore();
   const [stats, setStats] = useState<UserStats>({
     totalOrders: 0,
     pendingOrders: 0,
@@ -40,12 +40,13 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
     loadUserStats();
-  }, [isAuthenticated, router]);
+  }, [isHydrated, isAuthenticated, router]);
 
   const loadUserStats = async () => {
     try {
@@ -125,7 +126,7 @@ export default function ProfilePage() {
     },
   ];
 
-  if (loading) {
+  if (!isHydrated || !isAuthenticated || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -305,4 +306,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

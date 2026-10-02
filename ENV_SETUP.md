@@ -93,8 +93,7 @@ nano .env.local
 
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
-| `ES_HOST` | Elasticsearch 主机 | `localhost` | `localhost` |
-| `ES_PORT` | Elasticsearch 端口 | `9200` | `9200` |
+| `ELASTICSEARCH_URL` | Elasticsearch HTTP 地址 | `http://elasticsearch:9200` | `http://localhost:9200` |
 
 #### RabbitMQ 配置
 
@@ -148,8 +147,7 @@ MONGODB_URI=mongodb://admin:admin123@localhost:27017/ecommerce?authSource=admin
 JWT_SECRET=dev_jwt_secret_key_for_development_only
 
 # Elasticsearch
-ES_HOST=localhost
-ES_PORT=9200
+ELASTICSEARCH_URL=http://localhost:9200
 
 # RabbitMQ
 RABBITMQ_URL=amqp://admin:admin123@localhost:5672
@@ -241,7 +239,7 @@ NEXT_PUBLIC_DEBUG=true
 
 ## 🐳 Docker 环境变量
 
-使用 Docker Compose 时，环境变量在 `docker-compose.yml` 中配置：
+使用 Docker Compose 时，先复制根目录 `.env.example` 为 `.env`，填写生成的 `JWT_SECRET`，并配置前端域名及 API 地址。Compose 将这些值传入容器；`NEXT_PUBLIC_API_URL` 同时作为前端构建参数传入：
 
 ```yaml
 services:
@@ -257,11 +255,17 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/ecommerce?authSource=admin
-      - JWT_SECRET=your_production_jwt_secret_key
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
       
   frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
 ```
 
 **注意**: 在 Docker 网络中，服务名可以直接作为主机名使用（如 `mysql`、`redis`、`mongodb`）。
@@ -375,7 +379,7 @@ NEXT_PUBLIC_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 ### 4. JWT 认证失败？
 
 **检查:**
-1. `JWT_SECRET` 是否在前后端保持一致
+1. 后端 `JWT_SECRET` 是否稳定，管理员和用户都使用该密钥签名，但使用不同身份令牌；前端不配置密钥
 2. Token 是否已过期
 3. Token 格式是否正确（`Bearer <token>`）
 
@@ -450,7 +454,6 @@ curl http://localhost:3001/api/products
 
 **更新日期**: 2025年10月31日  
 **版本**: 2.0.0
-
 
 
 

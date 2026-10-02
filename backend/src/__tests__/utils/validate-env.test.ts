@@ -65,9 +65,9 @@ describe('validateEnv', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
-  test('生产环境使用弱密钥：拒绝启动', () => {
+  test.each(['secret', 'your_production_jwt_secret_key', 'your_super_secret_jwt_key_change_this_in_production'])('生产环境使用占位密钥 %s：拒绝启动', secret => {
     process.env.NODE_ENV = 'production';
-    process.env.JWT_SECRET = 'secret';
+    process.env.JWT_SECRET = secret;
     process.env.CORS_ORIGIN = 'https://a.com';
     validateEnv();
     expect(exitSpy).toHaveBeenCalledWith(1);

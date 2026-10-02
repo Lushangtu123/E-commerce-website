@@ -2,8 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+
+const NEXT_STATUS: Record<number, { status: number; text: string }> = {
+  0: { status: 4, text: '取消订单' },
+  1: { status: 2, text: '发货' },
+  2: { status: 3, text: '完成订单' },
+};
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -14,6 +21,7 @@ export default function AdminOrdersPage() {
     orderNo: '',
     status: ''
   });
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -22,37 +30,35 @@ export default function AdminOrdersPage() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('admin_token');
-      
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+      const params = {
+        page,
+        limit: 20,
         ...(filters.orderNo && { orderNo: filters.orderNo }),
         ...(filters.status !== '' && { status: filters.status })
-      });
+      };
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/orders?${params}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setOrders(data.orders);
-        setTotal(data.pagination.total);
-      } else {
-        toast.error(data.error || '获取订单列表失败');
-      }
-    } catch (error) {
+      const data: any = await api.get('/admin/orders', { params });
+      setOrders(data.orders || []);
+      setTotal(data.pagination?.total || 0);
+    } catch (error: any) {
       logger.error('获取订单列表失败:', error);
-      toast.error('获取订单列表失败');
+      toast.error(error.response?.data?.error || '获取订单列表失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (orderId: number, status: number) => {
+    if (status === 4 && !confirm('确定要取消订单吗？')) return;
+    try {
+      setUpdatingOrderId(orderId);
+      await api.put(`/admin/orders/${orderId}/status`, { status });
+      toast.success('订单状态已更新');
+      await fetchOrders();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || '更新订单状态失败');
+    } finally {
+      setUpdatingOrderId(null);
     }
   };
 
@@ -60,10 +66,9 @@ export default function AdminOrdersPage() {
     const statusMap: any = {
       0: { text: '待支付', class: 'bg-yellow-100 text-yellow-700' },
       1: { text: '已支付', class: 'bg-blue-100 text-blue-700' },
-      2: { text: '待发货', class: 'bg-purple-100 text-purple-700' },
-      3: { text: '已发货', class: 'bg-indigo-100 text-indigo-700' },
-      4: { text: '已完成', class: 'bg-green-100 text-green-700' },
-      5: { text: '已取消', class: 'bg-gray-100 text-gray-700' }
+      2: { text: '已发货', class: 'bg-indigo-100 text-indigo-700' },
+      3: { text: '已完成', class: 'bg-green-100 text-green-700' },
+      4: { text: '已取消', class: 'bg-gray-100 text-gray-700' }
     };
     const s = statusMap[status] || statusMap[0];
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.class}`}>{s.text}</span>;
@@ -96,10 +101,9 @@ export default function AdminOrdersPage() {
               <option value="">全部状态</option>
               <option value="0">待支付</option>
               <option value="1">已支付</option>
-              <option value="2">待发货</option>
-              <option value="3">已发货</option>
-              <option value="4">已完成</option>
-              <option value="5">已取消</option>
+              <option value="2">已发货</option>
+              <option value="3">已完成</option>
+              <option value="4">已取消</option>
             </select>
             <button
               onClick={fetchOrders}
@@ -161,9 +165,15 @@ export default function AdminOrdersPage() {
                         {new Date(order.created_at).toLocaleString('zh-CN')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button className="text-blue-600 hover:text-blue-900">
-                          查看详情
-                        </button>
+                        {NEXT_STATUS[order.status] && (
+                          <button
+                            onClick={() => handleUpdateStatus(order.order_id, NEXT_STATUS[order.status].status)}
+                            disabled={updatingOrderId !== null}
+                            className="text-blue-600 hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {NEXT_STATUS[order.status].text}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -202,4 +212,3 @@ export default function AdminOrdersPage() {
     </AdminLayout>
   );
 }
-

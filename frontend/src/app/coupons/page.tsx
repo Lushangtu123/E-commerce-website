@@ -26,19 +26,20 @@ interface Coupon {
 
 export default function CouponsPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isHydrated } = useAuthStore();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [receivingIds, setReceivingIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       toast.error('请先登录');
       router.push('/login');
       return;
     }
     loadCoupons();
-  }, [isAuthenticated, router]);
+  }, [isHydrated, isAuthenticated, router]);
 
   const loadCoupons = async () => {
     try {
@@ -130,7 +131,7 @@ export default function CouponsPage() {
     }
   };
 
-  if (loading) {
+  if (!isHydrated || !isAuthenticated || loading) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -237,4 +238,3 @@ export default function CouponsPage() {
     </div>
   );
 }
-

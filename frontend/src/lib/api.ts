@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -9,13 +9,27 @@ const api = axios.create({
   },
 });
 
+const getRequestIdentity = (config: AxiosRequestConfig) => {
+  const requestUrl = new URL(axios.getUri(config), window.location.origin);
+  const apiUrl = new URL(API_URL, window.location.origin);
+  if (requestUrl.origin !== apiUrl.origin) return null;
+
+  const pathname = requestUrl.pathname;
+  const apiPath = apiUrl.pathname.replace(/\/$/, '');
+  const path = pathname.startsWith(`${apiPath}/`) ? pathname.slice(apiPath.length) : pathname;
+  return path === '/admin' || path.startsWith('/admin/') ? 'admin' : 'customer';
+};
+
 // 请求拦截器 - 添加token
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
+      const identity = getRequestIdentity(config);
+      const token = identity ? localStorage.getItem(identity === 'admin' ? 'admin_token' : 'token') : null;
       if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        config.headers.delete('Authorization');
       }
     }
     return config;
@@ -32,9 +46,20 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // token过期或未登录
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        const config = error.config || error.response.config || {};
+        const identity = getRequestIdentity(config);
+        if (identity) {
+          const isAdmin = identity === 'admin';
+          const tokenKey = isAdmin ? 'admin_token' : 'token';
+          const currentToken = localStorage.getItem(tokenKey);
+          const requestAuthorization = axios.AxiosHeaders.from(config.headers).get('Authorization');
+          if (currentToken && requestAuthorization !== `Bearer ${currentToken}`) {
+            return Promise.reject(error);
+          }
+          localStorage.removeItem(tokenKey);
+          localStorage.removeItem(isAdmin ? 'admin_user' : 'user');
+          window.location.href = isAdmin ? '/admin/login' : '/login';
+        }
       }
     }
     return Promise.reject(error);
@@ -190,4 +215,3 @@ export const adminCouponApi = {
 };
 
 export default api;
-

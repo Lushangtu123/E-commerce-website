@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ProductController } from '../controllers/product.controller';
+import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
 
 const router = Router();
 
@@ -69,7 +70,7 @@ router.get('/hot', ProductController.getHotProducts);
  *       - name: sort
  *         in: query
  *         schema: { type: string }
- *         description: 排序字段，如 price / sales
+ *         description: 排序选项，如 price ASC / price DESC / sales_count DESC / created_at DESC
  *     responses:
  *       200:
  *         description: 商品列表（分页）
@@ -108,12 +109,13 @@ router.get('/:id', ProductController.getDetail);
  *     tags: [商品]
  *     summary: 创建商品（管理员）
  *     deprecated: true
+ *     security: [{ bearerAuth: [] }]
  *     description: 历史遗留接口，请使用管理后台接口 POST /api/admin/products
  *     responses:
  *       200:
  *         description: 创建成功
  */
-router.post('/', ProductController.create);
+router.post('/', authenticateAdmin, requirePermission('product:create'), ProductController.create);
 
 /**
  * @openapi
@@ -122,6 +124,7 @@ router.post('/', ProductController.create);
  *     tags: [商品]
  *     summary: 更新商品（管理员）
  *     deprecated: true
+ *     security: [{ bearerAuth: [] }]
  *     description: 历史遗留接口，请使用管理后台接口 PUT /api/admin/products/{productId}
  *     parameters:
  *       - name: id
@@ -132,6 +135,6 @@ router.post('/', ProductController.create);
  *       200:
  *         description: 更新成功
  */
-router.put('/:id', ProductController.update);
+router.put('/:id', authenticateAdmin, requirePermission('product:edit'), ProductController.update);
 
 export default router;

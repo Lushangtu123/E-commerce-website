@@ -1,9 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { OrderModel, OrderStatus } from '../models/order.model';
-import { ProductModel } from '../models/product.model';
-import { CartModel } from '../models/cart.model';
-import { getRedisClient } from '../database/redis';
+import { createOrder, transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
 import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
 import logger from '../utils/logger';
@@ -12,71 +10,19 @@ export class OrderController {
   // 创建订单
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { items, shipping_address_id, remark } = req.body;
-
-      if (!items || items.length === 0) {
-        return res.status(400).json({ error: '订单商品不能为空' });
-      }
-
-      const redis = getRedisClient();
-      let totalAmount = 0;
-      const orderItems: Array<{
-        product_id: number;
-        product_name: string;
-        product_image?: string;
-        quantity: number;
-        price: number;
-      }> = [];
-
-      // 验证商品库存和价格
-      for (const item of items) {
-        const product = await ProductModel.findById(item.product_id);
-        
-        if (!product) {
-          return res.status(400).json({ error: `商品 ${item.product_id} 不存在` });
-        }
-
-        if (product.stock < item.quantity) {
-          return res.status(400).json({ error: `商品 ${product.title} 库存不足` });
-        }
-
-        totalAmount += product.price * item.quantity;
-        
-        orderItems.push({
-          product_id: product.product_id,
-          product_name: product.title,
-          product_image: product.main_image,
-          quantity: item.quantity,
-          price: product.price
-        });
-      }
-
-      // 创建订单
-      const orderId = await OrderModel.create(
-        req.userId!,
-        orderItems,
-        totalAmount,
-        shipping_address_id,
-        remark
-      );
-
-      // 扣减库存
-      for (const item of orderItems) {
-        await ProductModel.decrStock(item.product_id, item.quantity);
-        
-        // 清除缓存
-        await redis.del(`product:${item.product_id}`);
-      }
-
-      // 从购物车删除已下单商品
-      const productIds = orderItems.map(item => item.product_id);
-      await CartModel.removeMultiple(req.userId!, productIds);
+      const { items, shipping_address_id, remark } = req.body || {};
+      const { orderId, productIds } = await createOrder(req.userId!, items, shipping_address_id, remark);
+      await invalidateOrderProductCache(productIds);
 
       // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）
       // MQ 不可用不影响订单创建，订单超时检查定时任务会兜底处理
-      const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
-      if (!timeoutMsgSent) {
-        logger.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
+      try {
+        const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
+        if (!timeoutMsgSent) {
+          logger.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');
+        }
+      } catch (error) {
+        logger.warn({ err: error }, '订单已创建，超时消息发送失败，将由定时任务兜底');
       }
 
       res.status(201).json({
@@ -84,6 +30,7 @@ export class OrderController {
         order_id: orderId
       });
     } catch (error) {
+      if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '创建订单失败');
       res.status(500).json({ error: '创建订单失败' });
     }
@@ -143,35 +90,12 @@ export class OrderController {
   // 取消订单
   static async cancel(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id);
-      
-      const order = await OrderModel.findById(orderId);
-      
-      if (!order) {
-        return res.status(404).json({ error: '订单不存在' });
-      }
-
-      if (order.user_id !== req.userId) {
-        return res.status(403).json({ error: '无权操作该订单' });
-      }
-
-      if (order.status !== OrderStatus.PENDING) {
-        return res.status(400).json({ error: '订单状态不允许取消' });
-      }
-
-      // 取消订单
-      await OrderModel.cancel(orderId);
-
-      // 恢复库存
-      const items = await OrderModel.getOrderItems(orderId);
-      for (const item of items) {
-        await ProductModel.update(item.product_id, {
-          stock: undefined // 需要增加库存，这里需要修改
-        } as any);
-      }
+      const result = await transitionOrder(Number(req.params.id), OrderStatus.CANCELLED, { userId: req.userId! });
+      await invalidateOrderProductCache(result.productIds);
 
       res.json({ message: '订单已取消' });
     } catch (error) {
+      if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '取消订单失败');
       res.status(500).json({ error: '取消订单失败' });
     }
@@ -180,33 +104,12 @@ export class OrderController {
   // 支付订单（模拟）
   static async pay(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id);
-      
-      const order = await OrderModel.findById(orderId);
-      
-      if (!order) {
-        return res.status(404).json({ error: '订单不存在' });
-      }
-
-      if (order.user_id !== req.userId) {
-        return res.status(403).json({ error: '无权操作该订单' });
-      }
-
-      if (order.status !== OrderStatus.PENDING) {
-        return res.status(400).json({ error: '订单状态不允许支付' });
-      }
-
-      // 更新订单状态为已支付
-      await OrderModel.updateStatus(orderId, OrderStatus.PAID);
-
-      // 增加销量
-      const items = await OrderModel.getOrderItems(orderId);
-      for (const item of items) {
-        await ProductModel.incrSales(item.product_id, item.quantity);
-      }
+      const result = await transitionOrder(Number(req.params.id), OrderStatus.PAID, { userId: req.userId! });
+      await invalidateOrderProductCache(result.productIds);
 
       res.json({ message: '支付成功' });
     } catch (error) {
+      if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '支付订单失败');
       res.status(500).json({ error: '支付订单失败' });
     }
@@ -215,27 +118,11 @@ export class OrderController {
   // 确认收货
   static async confirm(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id);
-      
-      const order = await OrderModel.findById(orderId);
-      
-      if (!order) {
-        return res.status(404).json({ error: '订单不存在' });
-      }
-
-      if (order.user_id !== req.userId) {
-        return res.status(403).json({ error: '无权操作该订单' });
-      }
-
-      if (order.status !== OrderStatus.SHIPPED) {
-        return res.status(400).json({ error: '订单状态不允许确认收货' });
-      }
-
-      // 更新订单状态为已完成
-      await OrderModel.updateStatus(orderId, OrderStatus.COMPLETED);
+      await transitionOrder(Number(req.params.id), OrderStatus.COMPLETED, { userId: req.userId! });
 
       res.json({ message: '确认收货成功' });
     } catch (error) {
+      if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '确认收货失败');
       res.status(500).json({ error: '确认收货失败' });
     }
@@ -275,4 +162,3 @@ export class OrderController {
     }
   }
 }
-

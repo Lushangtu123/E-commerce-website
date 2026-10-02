@@ -33,19 +33,20 @@ const STATUS_TABS = [
 
 export default function MyCouponsPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isHydrated } = useAuthStore();
   const [coupons, setCoupons] = useState<UserCoupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState(1);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       toast.error('请先登录');
       router.push('/login');
       return;
     }
     loadCoupons();
-  }, [isAuthenticated, activeStatus, router]);
+  }, [isHydrated, isAuthenticated, activeStatus, router]);
 
   const loadCoupons = async () => {
     try {
@@ -112,7 +113,7 @@ export default function MyCouponsPage() {
     toast.success('快去选购商品吧！');
   };
 
-  if (loading) {
+  if (!isHydrated || !isAuthenticated || loading) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -255,4 +256,3 @@ export default function MyCouponsPage() {
     </div>
   );
 }
-

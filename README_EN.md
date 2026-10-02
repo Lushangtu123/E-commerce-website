@@ -1,7 +1,7 @@
 # E-Commerce Platform System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/Node.js-24_LTS-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
 
@@ -85,7 +85,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - **Charts**: Recharts
 
 ### Backend
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 24 LTS
 - **Framework**: Express 4
 - **Language**: TypeScript 5
 - **Database**: MySQL 8.0
@@ -154,7 +154,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 24 LTS (see the root `.nvmrc`)
 - Docker & Docker Compose
 - MySQL 8.0+
 - Redis 7+
@@ -170,8 +170,12 @@ cd E-commerce-website
 
 2. **Start all services**
 ```bash
+cp .env.example .env
+# Set JWT_SECRET in the root .env using the output of openssl rand -hex 32
 docker-compose up -d
 ```
+
+For another domain, configure `CORS_ORIGIN` and `NEXT_PUBLIC_API_URL`, then rebuild the frontend.
 
 3. **Wait for services to be ready**
 ```bash
@@ -653,4 +657,3 @@ MIT License
 - New APIs: 15+
 - New Database Tables: 4
 - Documentation Updates: 3,365 lines
-

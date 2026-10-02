@@ -22,7 +22,7 @@ interface FavoriteProduct {
 
 export default function FavoritesPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, isHydrated } = useAuthStore();
   const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -30,12 +30,13 @@ export default function FavoritesPage() {
   const limit = 20;
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!user) {
       router.push('/login');
       return;
     }
     fetchFavorites();
-  }, [user, page]);
+  }, [isHydrated, user, page, router]);
 
   const fetchFavorites = async () => {
     try {
@@ -78,7 +79,7 @@ export default function FavoritesPage() {
     router.push(`/products/${productId}`);
   };
 
-  if (loading) {
+  if (!isHydrated || !user || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -209,4 +210,3 @@ export default function FavoritesPage() {
     </div>
   );
 }
-

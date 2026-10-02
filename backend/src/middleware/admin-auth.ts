@@ -35,7 +35,6 @@ export const authenticateAdmin = async (
   next: NextFunction
 ) => {
   try {
-    const pool = getPool();
     const token = req.headers.authorization?.replace('Bearer ', '');
 
     if (!token) {
@@ -46,11 +45,12 @@ export const authenticateAdmin = async (
     const decoded = jwt.verify(token, JWT_SECRET) as any;
 
     // 检查是否为管理员token
-    if (decoded.type !== 'admin') {
+    if (decoded.type !== 'admin' || !Number.isSafeInteger(decoded.adminId) || decoded.adminId <= 0) {
       return res.status(403).json({ error: '无效的管理员令牌' });
     }
 
     // 查询管理员信息
+    const pool = getPool();
     const [admins] = await pool.query(
       'SELECT admin_id, username, role_id, status FROM admins WHERE admin_id = ?',
       [decoded.adminId]
@@ -77,11 +77,11 @@ export const authenticateAdmin = async (
 
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({ error: '无效的令牌' });
-    }
     if (error instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ error: '令牌已过期' });
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: '无效的令牌' });
     }
     logger.error({ err: error }, '管理员认证失败');
     res.status(500).json({ error: '认证失败' });
@@ -130,4 +130,3 @@ export const requirePermission = (permissionCode: string) => {
 
 // 导出为 adminAuthMiddleware
 export const adminAuthMiddleware = authenticateAdmin;
-

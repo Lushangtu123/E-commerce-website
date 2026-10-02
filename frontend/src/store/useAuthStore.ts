@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
+import { useCartStore } from '@/store/useCartStore';
 
 interface User {
   user_id: number;
@@ -54,13 +55,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: (user, token) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
-    set({ user, token, isAuthenticated: true });
+    useCartStore.getState().clearCart();
+    set({ user, token, isAuthenticated: true, isHydrated: true });
   },
   
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    set({ user: null, token: null, isAuthenticated: false });
+    useCartStore.getState().clearCart();
+    set({ user: null, token: null, isAuthenticated: false, isHydrated: true });
   },
   
   updateUser: (userData) =>
@@ -68,4 +71,3 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: state.user ? { ...state.user, ...userData } : null,
     })),
 }));
-

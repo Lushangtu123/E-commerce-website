@@ -10,6 +10,31 @@
 - **Docker Compose** 2.0+ (通常包含在Docker Desktop中)
 - **Git** (用于克隆项目)
 
+本地开发和 CI 使用 Node.js 24 LTS。
+
+## 验证更新
+
+```bash
+cd backend
+npm ci
+npm run build
+npm test -- --runInBand
+cd ../frontend
+npm ci
+npm test
+npm run build
+```
+
+后端默认测试不连接外部服务，真实 MySQL 集成测试默认跳过。CI 会在 MySQL 8.0 上执行全部测试；本地可指定独立测试服务器运行并发、重复支付/取消和回滚验证：
+
+```bash
+cd backend
+MYSQL_TEST_HOST=127.0.0.1 MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD='填写测试数据库密码' \
+  npm test -- --runInBand src/__tests__/integration/order-mysql.test.ts
+```
+
+集成测试自动创建和删除 `ecommerce_order_test_<进程号>` 数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket。
+
 ## 5分钟快速启动
 
 ### 1. 克隆项目
@@ -22,9 +47,13 @@ cd E-commerce-website
 ### 2. 一键启动所有服务
 
 ```bash
+cp .env.example .env
+# 编辑根目录 .env，将 openssl rand -hex 32 的结果填入 JWT_SECRET
 # 启动所有服务（包括数据库、Redis、后端、前端等）
 docker-compose up -d
 ```
+
+前端 API 地址在构建时写入浏览器代码；修改 `NEXT_PUBLIC_API_URL` 后使用 `docker-compose up -d --build`。
 
 这个命令会自动完成以下操作：
 - ✅ 启动MySQL数据库
@@ -124,7 +153,7 @@ docker-compose down -v
 如果您想在本地开发而不使用Docker，请按以下步骤操作：
 
 ### 前置要求
-- Node.js 18+
+- Node.js 24 LTS（可在根目录执行 `nvm use`）
 - MySQL 8.0
 - Redis 7
 - MongoDB 7
@@ -149,7 +178,7 @@ cp .env.example .env
 
 4. **运行迁移**
 ```bash
-npm run migrate
+npm run migrate:dev
 ```
 
 5. **启动开发服务器**
@@ -282,4 +311,3 @@ docker-compose exec backend npm run seed
 欢迎提供反馈和建议！如果您在使用过程中遇到任何问题或有改进建议，请提交Issue或Pull Request。
 
 祝您使用愉快！ 🎉
-

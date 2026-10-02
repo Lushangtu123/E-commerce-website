@@ -17,6 +17,10 @@ function buildApp(mw: any) {
 }
 
 describe('authMiddleware', () => {
+  test.each([{ type: 'admin', adminId: 1 }, { userId: 0 }, { userId: '1' }, { userId: 1.5 }])('拒绝非用户身份 %j', async payload => {
+    const token = jwt.sign(payload, SECRET);
+    await request(buildApp(authMiddleware)).get('/protected').set('Authorization', `Bearer ${token}`).expect(401);
+  });
   test('无 token 返回 401', async () => {
     const res = await request(buildApp(authMiddleware)).get('/protected').expect(401);
     expect(res.body.error).toBe('未登录，请先登录');
@@ -49,6 +53,11 @@ describe('authMiddleware', () => {
 });
 
 describe('optionalAuth', () => {
+  test('管理员令牌不会注入普通用户身份', async () => {
+    const token = jwt.sign({ type: 'admin', adminId: 1, userId: 99 }, SECRET);
+    const res = await request(buildApp(optionalAuth)).get('/protected').set('Authorization', `Bearer ${token}`).expect(200);
+    expect(res.body.userId).toBeNull();
+  });
   test('无 token 直接放行', async () => {
     const res = await request(buildApp(optionalAuth)).get('/protected').expect(200);
     expect(res.body.userId).toBeNull();
