@@ -651,7 +651,7 @@ GET /api/products/search?keyword=手机&page=1&limit=12
 
 ### 1. 创建订单
 
-创建新订单。
+创建新订单。商品价格、优惠额和应付金额均由服务器计算，客户端只提交商品 ID、数量和可选的用户优惠券 ID。
 
 **接口**: `POST /api/orders`  
 **认证**: 需要
@@ -659,37 +659,52 @@ GET /api/products/search?keyword=手机&page=1&limit=12
 **请求体**:
 ```json
 {
-  "address_id": 1,
+  "shipping_address_id": 1,
   "items": [
     {
       "product_id": 1,
-      "sku_id": 1,
-      "quantity": 2,
-      "price": 99.99
+      "quantity": 2
     }
   ],
-  "remark": "请尽快发货"
+  "remark": "请尽快发货",
+  "user_coupon_id": 7
 }
 ```
 
-**响应**:
+**响应**（201）:
 ```json
 {
   "message": "订单创建成功",
-  "order": {
-    "id": 1,
-    "order_no": "ORD20251031001",
-    "user_id": 1,
-    "total_amount": 209.98,
-    "status": "pending_payment",
-    "created_at": "2025-10-31T10:00:00.000Z"
-  }
+  "order_id": 1,
+  "original_amount": 20.20,
+  "discount_amount": 4.04,
+  "total_amount": 16.16
 }
 ```
 
 **错误**:
-- `400`: 库存不足或地址无效
+- `400`: 商品/数量无效、库存不足、地址无效或优惠券不可用
 - `500`: 订单创建失败
+
+下单在同一事务内写入订单、明细、优惠券占用及日志，扣减库存并清理已下单商品的购物车。所选券必须属于当前用户、未使用、已生效且未过期；禁用或未满门槛会返回错误，不能静默按原价创建订单。每单最多使用一张券，`discount_value=20` 表示优惠20%（8折），折扣券上限 null/0 表示不封顶。
+
+### 结算预览
+
+**接口**：`POST /api/orders/preview`，需要用户登录。请求体同创建订单中的 `items` 和可选 `user_coupon_id`，忽略客户端价格/金额。
+
+```json
+{
+  "original_amount": 20.20,
+  "discount_amount": 4.04,
+  "total_amount": 16.16,
+  "coupon": { "user_coupon_id": 7, "name": "八折优惠", "code": "SAVE20" },
+  "available_coupons": [
+    { "user_coupon_id": 7, "name": "八折优惠", "code": "SAVE20", "discount_amount": 4.04 }
+  ]
+}
+```
+
+未选择券时 `coupon=null`、优惠额为0。预览不占用库存、购物车或券；实际下单重新读取价格并校验券。订单详情保留 `original_amount`、`discount_amount`、`coupon_name` 和 `coupon_code` 快照。待支付订单取消或超时后只返还仍绑定该订单的券，有效券恢复可用、过期券标记为过期；支付保留已用状态，取消不增加券发行余量。
 
 ---
 
@@ -1877,7 +1892,6 @@ const createOrder = async (orderData) => {
 **最后更新**: 2025年10月31日  
 **版本**: 2.0.0  
 **维护者**: Full-Stack Development Team
-
 
 
 

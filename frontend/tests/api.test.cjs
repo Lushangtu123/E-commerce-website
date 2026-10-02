@@ -142,3 +142,37 @@ test('a late 401 from an earlier session cannot clear a newly logged in identity
     assert.equal(browser.window.location.href, '/current');
   }
 });
+
+test('order previews send selected product quantities and optional coupon ID with customer credentials', async () => {
+  const { orderApi, requests } = loadApi({ token: 'customer-session', admin_token: 'admin-session' });
+
+  await orderApi.preview({ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7 });
+
+  assert.equal(requests[0].url, '/orders/preview');
+  assert.equal(requests[0].method, 'post');
+  assert.equal(requests[0].headers.get('Authorization'), 'Bearer customer-session');
+  assert.deepEqual(JSON.parse(requests[0].data), { items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7 });
+});
+
+test('an order request captures the invoking customer token before a different tab changes storage', async () => {
+  const browser = loadApi({ token: 'customer-A' });
+
+  const request = browser.orderApi.create({ items: [{ product_id: 12, quantity: 3 }] });
+  browser.localStorage.setItem('token', 'customer-B');
+  await request;
+
+  assert.equal(browser.requests[0].headers.get('Authorization'), 'Bearer customer-A');
+});
+
+test('a hydrated customer cannot send an order with another tab identity until storage is hydrated', async () => {
+  const browser = loadApi({ token: 'customer-A' });
+  browser.localStorage.setItem('token', 'customer-B');
+  browser.localStorage.setItem('user', '{"user_id":2,"username":"second","email":"second@example.test"}');
+
+  await assert.rejects(browser.orderApi.create({ items: [{ product_id: 12, quantity: 3 }] }), /登录状态已变化/);
+  assert.equal(browser.requests.length, 0);
+
+  browser.useAuthStore.getState().hydrate();
+  await browser.orderApi.create({ items: [{ product_id: 22, quantity: 1 }] });
+  assert.equal(browser.requests[0].headers.get('Authorization'), 'Bearer customer-B');
+});

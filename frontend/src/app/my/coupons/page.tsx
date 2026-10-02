@@ -20,9 +20,12 @@ interface UserCoupon {
   name: string;
   description: string;
   type: number;
-  discount_value: number;
-  min_amount: number;
-  max_discount?: number;
+  discount_value: number | string;
+  min_amount: number | string;
+  max_discount?: number | string | null;
+  coupon_status?: number;
+  start_time?: string;
+  end_time?: string;
 }
 
 const STATUS_TABS = [
@@ -33,33 +36,42 @@ const STATUS_TABS = [
 
 export default function MyCouponsPage() {
   const router = useRouter();
-  const { isAuthenticated, isHydrated } = useAuthStore();
+  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [coupons, setCoupons] = useState<UserCoupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState(1);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const requestKey = JSON.stringify([token, user?.user_id, activeStatus]);
+  const isCurrentSession = () => {
+    const current = useAuthStore.getState();
+    return current.isAuthenticated && current.token === token && current.user?.user_id === user?.user_id &&
+      localStorage.getItem('token') === (token ?? null);
+  };
 
   useEffect(() => {
+    setCoupons([]);
     if (!isHydrated) return;
     if (!isAuthenticated) {
       toast.error('请先登录');
       router.push('/login');
       return;
     }
-    loadCoupons();
-  }, [isHydrated, isAuthenticated, activeStatus, router]);
-
-  const loadCoupons = async () => {
-    try {
-      setLoading(true);
-      const response = await couponApi.getMyCoupons(activeStatus);
-      setCoupons(response.data || []);
-    } catch (error: any) {
+    let active = true;
+    setLoading(true);
+    couponApi.getMyCoupons(activeStatus).then(response => {
+      if (active && isCurrentSession()) setCoupons(response.data || []);
+    }).catch(error => {
+      if (!active || !isCurrentSession()) return;
       logger.error('加载优惠券失败:', error);
       toast.error(error.response?.data?.message || '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).finally(() => {
+      if (active && isCurrentSession()) {
+        setLoadedKey(requestKey);
+        setLoading(false);
+      }
+    });
+    return () => { active = false; };
+  }, [isHydrated, isAuthenticated, token, user?.user_id, activeStatus, router]);
 
   const getCouponTypeText = (type: number) => {
     switch (type) {
@@ -79,8 +91,8 @@ export default function MyCouponsPage() {
       case 1:
         return `满${coupon.min_amount}元减${coupon.discount_value}元`;
       case 2:
-        const discount = 100 - coupon.discount_value;
-        const maxText = coupon.max_discount
+        const discount = 100 - Number(coupon.discount_value);
+        const maxText = Number(coupon.max_discount) > 0
           ? `，最高优惠${coupon.max_discount}元`
           : '';
         return `${discount / 10}折优惠${maxText}`;
@@ -108,12 +120,23 @@ export default function MyCouponsPage() {
   };
 
   const handleUse = (coupon: UserCoupon) => {
-    // 跳转到商品列表或购物车
-    router.push('/products');
-    toast.success('快去选购商品吧！');
+    if (!isCurrentSession()) return;
+    if (!canUseCoupon(coupon)) {
+      toast.error('优惠券当前不可用');
+      return;
+    }
+    router.push(`/cart?user_coupon_id=${coupon.user_coupon_id}`);
   };
 
-  if (!isHydrated || !isAuthenticated || loading) {
+  const canUseCoupon = (coupon: UserCoupon) => {
+    const now = Date.now();
+    return coupon.status === 1 && coupon.coupon_status !== 0 &&
+      new Date(coupon.expired_at).getTime() > now &&
+      (!coupon.start_time || new Date(coupon.start_time).getTime() <= now) &&
+      (!coupon.end_time || new Date(coupon.end_time).getTime() > now);
+  };
+
+  if (!isHydrated || !isAuthenticated || loading || loadedKey !== requestKey) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -206,11 +229,11 @@ export default function MyCouponsPage() {
                     <div>
                       <div className="text-sm opacity-90">{getCouponTypeText(coupon.type)}</div>
                       <div className="text-3xl font-bold mt-1">
-                        {coupon.type === 2 ? `${100 - coupon.discount_value}折` : `¥${coupon.discount_value}`}
+                        {coupon.type === 2 ? `${(100 - Number(coupon.discount_value)) / 10}折` : `¥${coupon.discount_value}`}
                       </div>
                       <div className="text-sm opacity-90 mt-1">
                         {coupon.type === 1 && `满${coupon.min_amount}元可用`}
-                        {coupon.type === 2 && coupon.min_amount > 0 && `满${coupon.min_amount}元可用`}
+                        {coupon.type === 2 && Number(coupon.min_amount) > 0 && `满${coupon.min_amount}元可用`}
                         {coupon.type === 3 && '无门槛'}
                       </div>
                     </div>
@@ -242,9 +265,10 @@ export default function MyCouponsPage() {
                   {coupon.status === 1 && (
                     <button
                       onClick={() => handleUse(coupon)}
-                      className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      disabled={!canUseCoupon(coupon)}
+                      className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
                     >
-                      立即使用
+                      {canUseCoupon(coupon) ? '立即使用' : '暂不可用'}
                     </button>
                   )}
                 </div>

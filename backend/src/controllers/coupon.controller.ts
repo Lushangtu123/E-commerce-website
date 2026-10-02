@@ -4,6 +4,11 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { CouponModel, CouponStatus, UserCouponStatus } from '../models/coupon.model';
+import {
+  couponAmountQuerySchema, couponCalculateSchema, couponIdSchema,
+  couponListSchema, couponReceiveSchema, userCouponListSchema,
+} from '../utils/coupon-validation';
+import { couponMoneyToCents } from '../utils/coupon-discount';
 import logger from '../utils/logger';
 
 export class CouponController {
@@ -12,11 +17,13 @@ export class CouponController {
    */
   static async getAvailableCoupons(req: AuthRequest, res: Response) {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const page_size = parseInt(req.query.page_size as string) || 20;
+      const { error, value } = couponListSchema.validate(req.query);
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const { page, page_size } = value;
 
       const result = await CouponModel.getList({
         status: CouponStatus.ENABLED,
+        available_only: true,
         page,
         page_size,
       });
@@ -45,7 +52,9 @@ export class CouponController {
    */
   static async getCouponDetail(req: AuthRequest, res: Response) {
     try {
-      const couponId = parseInt(req.params.id);
+      const { error, value } = couponIdSchema.validate(req.params);
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const couponId = value.id;
       const coupon = await CouponModel.findById(couponId);
 
       if (!coupon) {
@@ -74,7 +83,9 @@ export class CouponController {
   static async receiveCoupon(req: AuthRequest, res: Response) {
     try {
       const userId = req.userId!;
-      const { coupon_id, code } = req.body;
+      const { error, value } = couponReceiveSchema.validate(req.body || {});
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const { coupon_id, code } = value;
 
       let couponId = coupon_id;
 
@@ -88,13 +99,6 @@ export class CouponController {
           });
         }
         couponId = coupon.coupon_id;
-      }
-
-      if (!couponId) {
-        return res.status(400).json({
-          success: false,
-          message: '请提供优惠券ID或代码',
-        });
       }
 
       const userCouponId = await CouponModel.receiveCoupon(userId, couponId);
@@ -119,9 +123,9 @@ export class CouponController {
   static async getUserCoupons(req: AuthRequest, res: Response) {
     try {
       const userId = req.userId!;
-      const status = req.query.status
-        ? parseInt(req.query.status as string)
-        : undefined;
+      const { error, value } = userCouponListSchema.validate(req.query);
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const { status } = value;
 
       const coupons = await CouponModel.getUserCoupons(userId, status);
 
@@ -144,47 +148,9 @@ export class CouponController {
   static async getAvailableForOrder(req: AuthRequest, res: Response) {
     try {
       const userId = req.userId!;
-      const orderAmount = parseFloat(req.query.amount as string);
-
-      if (!orderAmount || orderAmount <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: '订单金额无效',
-        });
-      }
-
-      // 获取用户未使用的优惠券
-      const userCoupons = await CouponModel.getUserCoupons(
-        userId,
-        UserCouponStatus.UNUSED
-      );
-
-      // 筛选可用的优惠券并计算优惠金额
-      const availableCoupons = userCoupons
-        .map((uc) => {
-          const coupon = {
-            coupon_id: uc.coupon_id,
-            type: uc.type,
-            discount_value: uc.discount_value,
-            min_amount: uc.min_amount,
-            max_discount: uc.max_discount,
-          } as any;
-
-          const discountAmount = CouponModel.calculateDiscount(
-            coupon,
-            orderAmount
-          );
-
-          return {
-            ...uc,
-            discount_amount: discountAmount,
-            can_use: discountAmount > 0,
-          };
-        })
-        .filter((uc) => uc.can_use);
-
-      // 按优惠金额降序排序
-      availableCoupons.sort((a, b) => b.discount_amount - a.discount_amount);
+      const { error, value } = couponAmountQuerySchema.validate(req.query);
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const availableCoupons = await CouponModel.getAvailableForOrder(userId, value.amount);
 
       res.json({
         success: true,
@@ -205,14 +171,9 @@ export class CouponController {
   static async calculateDiscount(req: AuthRequest, res: Response) {
     try {
       const userId = req.userId!;
-      const { user_coupon_id, order_amount } = req.body;
-
-      if (!user_coupon_id || !order_amount) {
-        return res.status(400).json({
-          success: false,
-          message: '参数不完整',
-        });
-      }
+      const { error, value } = couponCalculateSchema.validate(req.body || {});
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const { user_coupon_id, order_amount } = value;
 
       // 获取用户优惠券
       const userCoupons = await CouponModel.getUserCoupons(userId);
@@ -227,28 +188,22 @@ export class CouponController {
         });
       }
 
-      if (userCoupon.status !== UserCouponStatus.UNUSED) {
+      const availableCoupons = await CouponModel.getAvailableForOrder(userId, order_amount);
+      const availableCoupon = availableCoupons.find(uc => uc.user_coupon_id === user_coupon_id);
+      if (userCoupon.status !== UserCouponStatus.UNUSED || !availableCoupon) {
         return res.status(400).json({
           success: false,
           message: '优惠券不可用',
         });
       }
 
-      const coupon = {
-        coupon_id: userCoupon.coupon_id,
-        type: userCoupon.type,
-        discount_value: userCoupon.discount_value,
-        min_amount: userCoupon.min_amount,
-        max_discount: userCoupon.max_discount,
-      } as any;
-
-      const discountAmount = CouponModel.calculateDiscount(coupon, order_amount);
+      const discountAmount = availableCoupon.discount_amount;
 
       res.json({
         success: true,
         data: {
           discount_amount: discountAmount,
-          final_amount: Math.max(0, order_amount - discountAmount),
+          final_amount: (couponMoneyToCents(order_amount) - couponMoneyToCents(discountAmount)) / 100,
         },
       });
     } catch (error) {
@@ -260,4 +215,3 @@ export class CouponController {
     }
   }
 }
-

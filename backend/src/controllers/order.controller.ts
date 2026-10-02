@@ -1,17 +1,28 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { OrderModel, OrderStatus } from '../models/order.model';
-import { createOrder, transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
+import { createOrder, previewOrder, transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
 import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
 import logger from '../utils/logger';
 
 export class OrderController {
+  static async preview(req: AuthRequest, res: Response) {
+    try {
+      const { items, user_coupon_id } = req.body || {};
+      res.json(await previewOrder(req.userId!, items, user_coupon_id));
+    } catch (error) {
+      if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
+      logger.error({ err: error }, '预览订单失败');
+      res.status(500).json({ error: '预览订单失败' });
+    }
+  }
+
   // 创建订单
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { items, shipping_address_id, remark } = req.body || {};
-      const { orderId, productIds } = await createOrder(req.userId!, items, shipping_address_id, remark);
+      const { items, shipping_address_id, remark, user_coupon_id } = req.body || {};
+      const { orderId, productIds, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id);
       await invalidateOrderProductCache(productIds);
 
       // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）
@@ -27,7 +38,8 @@ export class OrderController {
 
       res.status(201).json({
         message: '订单创建成功',
-        order_id: orderId
+        order_id: orderId,
+        ...amounts,
       });
     } catch (error) {
       if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });

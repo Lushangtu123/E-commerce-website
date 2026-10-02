@@ -1,6 +1,7 @@
 import { getPool } from './mysql';
 import { connectDatabase } from './mysql';
 import logger from '../utils/logger';
+import { migrateCouponTables } from './migrate-coupon';
 
 const migrations = [
   // 用户表
@@ -58,6 +59,11 @@ const migrations = [
     order_no VARCHAR(32) UNIQUE NOT NULL,
     user_id BIGINT NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
+    original_amount DECIMAL(10,2) DEFAULT NULL,
+    discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    user_coupon_id INT DEFAULT NULL,
+    coupon_name VARCHAR(100) DEFAULT NULL,
+    coupon_code VARCHAR(50) DEFAULT NULL,
     status TINYINT DEFAULT 0 COMMENT '0:待支付 1:已支付 2:已发货 3:已完成 4:已取消',
     payment_method VARCHAR(20),
     shipping_address_id BIGINT,
@@ -191,6 +197,8 @@ async function runMigrations() {
       await pool.execute(migrations[i]);
     }
 
+    await migrateCouponTables(pool);
+
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);
   } catch (error) {
@@ -200,4 +208,3 @@ async function runMigrations() {
 }
 
 runMigrations();
-

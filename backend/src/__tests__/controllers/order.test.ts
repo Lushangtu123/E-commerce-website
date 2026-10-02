@@ -55,9 +55,9 @@ describe('create 创建订单', () => {
       items: [{ product_id: 1, quantity: 2 }], shipping_address_id: 3, remark: '尽快',
     } } as any, res);
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ message: '订单创建成功', order_id: 1001 });
+    expect(res.json).toHaveBeenCalledWith({ message: '订单创建成功', order_id: 1001, original_amount: 198, discount_amount: 0, total_amount: 198 });
     const orderInsert = connection.execute.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO orders'));
-    expect(orderInsert[1]).toEqual([expect.any(String), 7, '198.00', 3, '尽快', 0]);
+    expect(orderInsert[1]).toEqual([expect.any(String), 7, '198.00', 3, '尽快', 0, '198.00', '0.00', null, null, null]);
     expect(connection.commit).toHaveBeenCalledTimes(1);
     expect(sendOrderTimeoutCheckMessage).toHaveBeenCalledWith(1001, 7);
     expect(connection.commit.mock.invocationCallOrder[0]).toBeLessThan((sendOrderTimeoutCheckMessage as jest.Mock).mock.invocationCallOrder[0]);

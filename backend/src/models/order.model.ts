@@ -6,6 +6,11 @@ export interface Order {
   order_no: string;
   user_id: number;
   total_amount: number;
+  original_amount?: number | null;
+  discount_amount?: number;
+  user_coupon_id?: number | null;
+  coupon_name?: string | null;
+  coupon_code?: string | null;
   status: number;
   payment_method?: string;
   shipping_address_id?: number;
@@ -159,4 +164,3 @@ export class OrderModel {
     return await this.updateStatus(orderId, OrderStatus.CANCELLED);
   }
 }
-

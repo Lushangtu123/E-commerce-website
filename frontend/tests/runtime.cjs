@@ -11,7 +11,7 @@ function createBrowser(storage = {}) {
       setItem: (key, value) => values.set(key, String(value)),
       removeItem: (key) => values.delete(key),
     },
-    window: { location: { href: '/current', origin: 'http://localhost:3000' } },
+    window: { location: { href: '/current', origin: 'http://localhost:3000', search: '' } },
   };
 }
 
@@ -42,8 +42,13 @@ function loadSource(relativePath, globals = {}, imports = {}) {
 }
 
 function loadApi(storage, apiUrl = 'http://localhost:3001/api') {
-  const browser = createBrowser(storage);
-  const exports = loadSource('src/lib/api.ts', { ...browser, process: { env: { NEXT_PUBLIC_API_URL: apiUrl } } });
+  const stored = { ...storage };
+  if (stored.token && !Object.hasOwn(stored, 'user')) stored.user = '{"user_id":1,"username":"customer","email":"customer@example.test"}';
+  const browser = loadStores(stored);
+  browser.useAuthStore.getState().hydrate();
+  const exports = loadSource('src/lib/api.ts', { ...browser, process: { env: { NEXT_PUBLIC_API_URL: apiUrl } } }, {
+    '@/store/useAuthStore': { useAuthStore: browser.useAuthStore },
+  });
   const requests = [];
   exports.default.defaults.adapter = async (config) => {
     requests.push(config);
@@ -70,6 +75,7 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} 
   let hookIndex = 0;
   let pendingEffects = [];
   let auth;
+  let dirty = false;
   const api = new Proxy({}, {
     get: (_, name) => new Proxy({}, {
       get: (_, method) => async (...args) => {
@@ -79,7 +85,7 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} 
     }),
   });
   const toast = { error() {}, success() {} };
-  const Page = loadSource(relativePath, globals, {
+  const Page = loadSource(relativePath, { ...createBrowser(), ...globals }, {
     react: {
       ...React,
       useState(initial) {
@@ -88,16 +94,27 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} 
           hooks[index] = { value: Object.hasOwn(initialState, index) ? initialState[index] : typeof initial === 'function' ? initial() : initial };
         }
         return [hooks[index].value, (next) => {
-          hooks[index].value = typeof next === 'function' ? next(hooks[index].value) : next;
+          const value = typeof next === 'function' ? next(hooks[index].value) : next;
+          if (!Object.is(hooks[index].value, value)) dirty = true;
+          hooks[index].value = value;
         }];
+      },
+      useRef(initial) {
+        const index = hookIndex++;
+        if (!hooks[index]) hooks[index] = { current: initial };
+        return hooks[index];
       },
       useEffect(effect, dependencies) {
         const index = hookIndex++;
         const previous = hooks[index]?.dependencies;
-        if (!previous || dependencies.some((value, i) => !Object.is(value, previous[i]))) {
-          pendingEffects.push(effect);
+        if (!dependencies || !previous || dependencies.some((value, i) => !Object.is(value, previous[i]))) {
+          const cleanup = hooks[index]?.cleanup;
+          pendingEffects.push(() => {
+            if (typeof cleanup === 'function') cleanup();
+            hooks[index].cleanup = effect();
+          });
         }
-        hooks[index] = { dependencies };
+        hooks[index] = { ...hooks[index], dependencies };
       },
     },
     'next/navigation': {
@@ -116,14 +133,28 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} 
   return {
     requests,
     redirects,
-    async render(nextAuth) {
+    async render(nextAuth = auth) {
       auth = nextAuth;
+      dirty = false;
       hookIndex = 0;
       pendingEffects = [];
       const tree = Page({});
       pendingEffects.forEach((effect) => effect());
       await new Promise(setImmediate);
       return tree;
+    },
+    async flush(nextAuth = auth) {
+      let tree;
+      for (let count = 0; count < 20; count += 1) {
+        tree = await this.render(nextAuth);
+        if (!dirty) return tree;
+      }
+      throw new Error('Page did not settle after 20 renders');
+    },
+    unmount() {
+      hooks.forEach((hook) => {
+        if (typeof hook.cleanup === 'function') hook.cleanup();
+      });
     },
   };
 }

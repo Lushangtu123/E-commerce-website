@@ -40,7 +40,7 @@ const loadFromStorage = () => {
   return { user: null, token: null, isAuthenticated: false };
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   isAuthenticated: false,
@@ -49,6 +49,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   // 手动水合
   hydrate: () => {
     const state = loadFromStorage();
+    const previous = get();
+    if (previous.token !== state.token || previous.user?.user_id !== state.user?.user_id) {
+      useCartStore.getState().clearCart();
+    }
     set({ ...state, isHydrated: true });
   },
   

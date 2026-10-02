@@ -9,6 +9,40 @@ router.use(authMiddleware);
 
 /**
  * @openapi
+ * /api/orders/preview:
+ *   post:
+ *     tags: [订单]
+ *     summary: 预览服务器结算金额和可用优惠券
+ *     description: 不占用库存或优惠券，下单时重新校验价格与优惠券状态
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [items]
+ *             properties:
+ *               items:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required: [product_id, quantity]
+ *                   properties:
+ *                     product_id: { type: integer, minimum: 1 }
+ *                     quantity: { type: integer, minimum: 1 }
+ *               user_coupon_id: { type: integer, minimum: 1 }
+ *     responses:
+ *       200:
+ *         description: 原价、优惠额、应付金额、选中券和可用券列表
+ *       400:
+ *         description: 商品、数量或优惠券无效
+ */
+router.post('/preview', OrderController.preview);
+
+/**
+ * @openapi
  * /api/orders:
  *   post:
  *     tags: [订单]
@@ -33,9 +67,10 @@ router.use(authMiddleware);
  *                     quantity: { type: integer, minimum: 1 }
  *               shipping_address_id: { type: integer, description: 收货地址 ID }
  *               remark: { type: string, description: 订单备注 }
+ *               user_coupon_id: { type: integer, minimum: 1, description: 用户已领取的优惠券 ID }
  *     responses:
- *       200:
- *         description: 创建成功，返回订单 ID
+ *       201:
+ *         description: 创建成功，返回订单 ID、原价、优惠额和应付金额
  *       400:
  *         description: 商品不存在 / 库存不足
  *         content:

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { cartApi, orderApi } from '@/lib/api';
+import { cartApi, orderApi, type OrderPreview } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
@@ -12,10 +12,52 @@ import { logger } from '@/lib/logger';
 export default function CartPage() {
   const router = useRouter();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
-  const { items, setItems, updateQuantity, removeItem, clearCart, getTotalPrice } = useCartStore();
+  const { items, setItems, updateQuantity, removeItem } = useCartStore();
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedCouponId, setSelectedCouponId] = useState<number | undefined>(undefined);
+  const [quoteResult, setQuoteResult] = useState<{ key: string; data: OrderPreview } | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteFailure, setQuoteFailure] = useState<{ key: string; message: string } | null>(null);
+  const [quoteRevision, setQuoteRevision] = useState(0);
+  const linkedCouponId = useRef<number | undefined>(undefined);
+  const previousSession = useRef<string | null>(null);
+  const submittingRequest = useRef(false);
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get('user_coupon_id');
+    if (value && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0) {
+      linkedCouponId.current = Number(value);
+    }
+  }, []);
+
+  const orderItems = items
+    .filter(item => selectedItems.includes(item.product_id))
+    .map(item => ({ product_id: item.product_id, quantity: item.quantity }));
+  const orderItemsKey = JSON.stringify(orderItems);
+  const quoteKey = JSON.stringify([token, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
+  const quote = quoteResult?.key === quoteKey ? quoteResult.data : null;
+  const quoteError = quoteFailure?.key === quoteKey ? quoteFailure.message : null;
+  const isCurrentSession = () => {
+    const currentAuth = useAuthStore.getState();
+    return currentAuth.isAuthenticated && currentAuth.token === token && currentAuth.user?.user_id === user?.user_id &&
+      localStorage.getItem('token') === (token ?? null);
+  };
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    const session = JSON.stringify([token, user?.user_id]);
+    if (previousSession.current !== null && previousSession.current !== session) {
+      linkedCouponId.current = undefined;
+      setSelectedCouponId(undefined);
+      setQuoteResult(null);
+      setQuoteFailure(null);
+      setSubmitting(false);
+      submittingRequest.current = false;
+    }
+    previousSession.current = session;
+  }, [isHydrated, token, user?.user_id]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -26,11 +68,38 @@ export default function CartPage() {
     loadCart();
   }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
 
+  useEffect(() => {
+    if (!isHydrated || !isAuthenticated || loading || orderItems.length === 0) return;
+    let active = true;
+    const isCurrentRequest = () => active && isCurrentSession();
+    setQuoteResult(null);
+    setQuoteFailure(null);
+    setQuoteLoading(true);
+    orderApi.preview({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) })
+      .then((data) => {
+        if (!isCurrentRequest()) return;
+        setQuoteResult({ key: quoteKey, data });
+        if (linkedCouponId.current !== undefined) {
+          const carriedId = linkedCouponId.current;
+          linkedCouponId.current = undefined;
+          if (data.available_coupons.some(coupon => coupon.user_coupon_id === carriedId)) setSelectedCouponId(carriedId);
+          else toast.error('所选优惠券当前不可用，请重新选择');
+        }
+      })
+      .catch((error) => {
+        if (!isCurrentRequest()) return;
+        const message = error.response?.data?.error || error.response?.data?.message || '计算订单金额失败';
+        setQuoteFailure({ key: quoteKey, message });
+        if (selectedCouponId !== undefined) {
+          toast.error(message);
+          setSelectedCouponId(undefined);
+        }
+      })
+      .finally(() => { if (isCurrentRequest()) setQuoteLoading(false); });
+    return () => { active = false; };
+  }, [isHydrated, isAuthenticated, loading, token, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
+
   const loadCart = async () => {
-    const isCurrentSession = () => {
-      const currentAuth = useAuthStore.getState();
-      return currentAuth.isAuthenticated && currentAuth.token === token && currentAuth.user?.user_id === user?.user_id;
-    };
     try {
       setLoading(true);
       const data: any = await cartApi.list();
@@ -49,24 +118,27 @@ export default function CartPage() {
   };
 
   const handleQuantityChange = async (productId: number, newQuantity: number) => {
-    if (newQuantity < 1) return;
+    if (newQuantity < 1 || submittingRequest.current || !isCurrentSession()) return;
 
     try {
       await cartApi.updateQuantity({ product_id: productId, quantity: newQuantity });
+      if (!isCurrentSession()) return;
       updateQuantity(productId, newQuantity);
     } catch (error: any) {
-      toast.error('更新失败');
+      if (isCurrentSession()) toast.error('更新失败');
     }
   };
 
   const handleRemove = async (productId: number) => {
+    if (submittingRequest.current || !isCurrentSession()) return;
     try {
       await cartApi.remove(productId);
+      if (!isCurrentSession()) return;
       removeItem(productId);
       setSelectedItems(selectedItems.filter(id => id !== productId));
       toast.success('已删除');
     } catch (error: any) {
-      toast.error('删除失败');
+      if (isCurrentSession()) toast.error('删除失败');
     }
   };
 
@@ -86,34 +158,32 @@ export default function CartPage() {
     }
   };
 
-  const getSelectedTotal = () => {
-    return items
-      .filter(item => selectedItems.includes(item.product_id))
-      .reduce((total, item) => total + item.price * item.quantity, 0);
-  };
-
   const handleCheckout = async () => {
     if (selectedItems.length === 0) {
       toast.error('请选择要结算的商品');
       return;
     }
+    if (!quote || quoteLoading || quoteError || submittingRequest.current || !isCurrentSession()) return;
 
-    const orderItems = items
-      .filter(item => selectedItems.includes(item.product_id))
-      .map(item => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-      }));
-
+    submittingRequest.current = true;
     setSubmitting(true);
     try {
-      const data: any = await orderApi.create({ items: orderItems });
+      const data: any = await orderApi.create({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
+      if (!isCurrentSession()) return;
+      orderItems.forEach(item => removeItem(item.product_id));
+      setSelectedItems([]);
       toast.success('订单创建成功');
       router.push(`/orders/${data.order_id}`);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || '创建订单失败');
+      if (!isCurrentSession()) return;
+      toast.error(error.response?.data?.error || error.response?.data?.message || '创建订单失败');
+      setSelectedCouponId(undefined);
+      setQuoteRevision(value => value + 1);
     } finally {
-      setSubmitting(false);
+      if (isCurrentSession()) {
+        submittingRequest.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
@@ -159,6 +229,7 @@ export default function CartPage() {
               <input
                 type="checkbox"
                 checked={selectedItems.length === items.length}
+                disabled={submitting}
                 onChange={handleSelectAll}
                 className="w-5 h-5 text-primary-600 rounded"
               />
@@ -172,6 +243,7 @@ export default function CartPage() {
                   <input
                     type="checkbox"
                     checked={selectedItems.includes(item.product_id)}
+                    disabled={submitting}
                     onChange={() => handleToggleSelect(item.product_id)}
                     className="w-5 h-5 text-primary-600 rounded"
                   />
@@ -201,6 +273,7 @@ export default function CartPage() {
                   <div className="flex items-center border border-gray-300 rounded">
                     <button
                       onClick={() => handleQuantityChange(item.product_id, item.quantity - 1)}
+                      disabled={submitting || item.quantity <= 1}
                       className="px-3 py-1 hover:bg-gray-100"
                     >
                       -
@@ -210,7 +283,7 @@ export default function CartPage() {
                     </span>
                     <button
                       onClick={() => handleQuantityChange(item.product_id, item.quantity + 1)}
-                      disabled={item.quantity >= item.stock}
+                      disabled={submitting || item.quantity >= item.stock}
                       className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50"
                     >
                       +
@@ -223,6 +296,7 @@ export default function CartPage() {
 
                   <button
                     onClick={() => handleRemove(item.product_id)}
+                    disabled={submitting}
                     className="text-gray-400 hover:text-red-500 p-2"
                   >
                     <FiTrash2 size={20} />
@@ -244,23 +318,50 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>商品总价</span>
-                  <span>¥{getSelectedTotal().toFixed(2)}</span>
+                  <span>{quote ? `¥${quote.original_amount.toFixed(2)}` : '计算中...'}</span>
+                </div>
+                <div>
+                  <label htmlFor="checkout-coupon" className="block text-sm text-gray-600 mb-2">优惠券</label>
+                  <select
+                    id="checkout-coupon"
+                    value={selectedCouponId ?? ''}
+                    disabled={submitting || quoteLoading || !quote}
+                    onChange={(event) => setSelectedCouponId(event.target.value ? Number(event.target.value) : undefined)}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  >
+                    <option value="">不使用优惠券</option>
+                    {quote?.available_coupons.map(coupon => (
+                      <option key={coupon.user_coupon_id} value={coupon.user_coupon_id}>
+                        {coupon.name}（优惠¥{coupon.discount_amount.toFixed(2)}）
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>优惠券优惠</span>
+                  <span>{quote ? `-¥${quote.discount_amount.toFixed(2)}` : '计算中...'}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>运费</span>
                   <span className="text-green-600">免运费</span>
                 </div>
                 <div className="border-t pt-3 flex justify-between items-center">
-                  <span className="font-medium">合计</span>
+                  <span className="font-medium">应付金额</span>
                   <span className="text-2xl font-bold text-primary-600">
-                    ¥{getSelectedTotal().toFixed(2)}
+                    {quote ? `¥${quote.total_amount.toFixed(2)}` : '计算中...'}
                   </span>
                 </div>
+                {quoteError && (
+                  <div className="text-sm text-red-600" role="alert">
+                    <p>{quoteError}</p>
+                    <button onClick={() => setQuoteRevision(value => value + 1)} className="mt-2 underline">重新计算</button>
+                  </div>
+                )}
               </div>
 
               <button
                 onClick={handleCheckout}
-                disabled={selectedItems.length === 0 || submitting}
+                disabled={selectedItems.length === 0 || submitting || !quote || quoteLoading || !!quoteError}
                 className="w-full btn btn-primary disabled:opacity-50"
               >
                 <FiShoppingBag className="inline mr-2" />

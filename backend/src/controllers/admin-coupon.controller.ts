@@ -3,7 +3,8 @@
  */
 import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/admin-auth';
-import { CouponModel, CouponType, CouponStatus } from '../models/coupon.model';
+import { CouponModel, CouponStatus } from '../models/coupon.model';
+import { adminCouponListSchema, couponCreateSchema, couponIdSchema, couponStatusSchema } from '../utils/coupon-validation';
 import { logAdminAction } from './admin.controller';
 import logger from '../utils/logger';
 
@@ -13,6 +14,8 @@ export class AdminCouponController {
    */
   static async createCoupon(req: AdminAuthRequest, res: Response) {
     try {
+      const { error, value } = couponCreateSchema.validate(req.body || {});
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
       const {
         code,
         name,
@@ -25,31 +28,8 @@ export class AdminCouponController {
         per_user_limit,
         start_time,
         end_time,
-      } = req.body;
-
-      // 验证必填字段
-      if (
-        !code ||
-        !name ||
-        !type ||
-        !discount_value ||
-        !total_quantity ||
-        !start_time ||
-        !end_time
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: '参数不完整',
-        });
-      }
-
-      // 验证优惠券类型
-      if (![CouponType.FULL_REDUCTION, CouponType.DISCOUNT, CouponType.NO_THRESHOLD].includes(type)) {
-        return res.status(400).json({
-          success: false,
-          message: '优惠券类型无效',
-        });
-      }
+        status,
+      } = value;
 
       // 检查代码是否已存在
       const existingCoupon = await CouponModel.findByCode(code);
@@ -66,14 +46,14 @@ export class AdminCouponController {
         description,
         type,
         discount_value,
-        min_amount: min_amount || 0,
+        min_amount,
         max_discount,
         total_quantity,
         remain_quantity: total_quantity,
-        per_user_limit: per_user_limit || 1,
-        start_time: new Date(start_time),
-        end_time: new Date(end_time),
-        status: CouponStatus.ENABLED,
+        per_user_limit,
+        start_time,
+        end_time,
+        status,
       });
 
       res.json({
@@ -106,11 +86,9 @@ export class AdminCouponController {
    */
   static async getCouponList(req: AdminAuthRequest, res: Response) {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const page_size = parseInt(req.query.page_size as string) || 20;
-      const status = req.query.status
-        ? parseInt(req.query.status as string)
-        : undefined;
+      const { error, value } = adminCouponListSchema.validate(req.query);
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const { page, page_size, status } = value;
 
       const result = await CouponModel.getList({
         status,
@@ -142,7 +120,9 @@ export class AdminCouponController {
    */
   static async getCouponDetail(req: AdminAuthRequest, res: Response) {
     try {
-      const couponId = parseInt(req.params.id);
+      const { error, value } = couponIdSchema.validate(req.params);
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const couponId = value.id;
       const coupon = await CouponModel.findById(couponId);
 
       if (!coupon) {
@@ -170,15 +150,12 @@ export class AdminCouponController {
    */
   static async updateCouponStatus(req: AdminAuthRequest, res: Response) {
     try {
-      const couponId = parseInt(req.params.id);
-      const { status } = req.body;
-
-      if (![CouponStatus.DISABLED, CouponStatus.ENABLED].includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: '状态无效',
-        });
-      }
+      const idValidation = couponIdSchema.validate(req.params);
+      const statusValidation = couponStatusSchema.validate(req.body || {});
+      const error = idValidation.error || statusValidation.error;
+      if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+      const couponId = idValidation.value.id;
+      const { status } = statusValidation.value;
 
       const coupon = await CouponModel.findById(couponId);
       if (!coupon) {
@@ -214,4 +191,3 @@ export class AdminCouponController {
     }
   }
 }
-

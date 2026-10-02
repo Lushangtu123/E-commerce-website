@@ -228,7 +228,7 @@ export default function AdminCouponsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {formData.type === 2 ? '折扣值 (20表示8折) *' : '优惠值 (元) *'}
+                      {formData.type === 2 ? '减免比例 (%)，20表示8折 *' : '优惠值 (元) *'}
                     </label>
                     <input
                       type="number"
@@ -376,7 +376,7 @@ export default function AdminCouponsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-900">{getCouponTypeText(coupon.type)}</span>
                         <div className="text-xs text-gray-500">
-                          {coupon.type === 2 ? `${100 - coupon.discount_value}折` : `¥${coupon.discount_value}`}
+                          {coupon.type === 2 ? `${(100 - coupon.discount_value) / 10}折` : `¥${coupon.discount_value}`}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

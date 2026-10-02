@@ -60,3 +60,29 @@ test('switching customer login and logging out clear cart contents and the heade
   assert.equal(useCartStore.getState().getTotalCount(), 0);
   assert.equal(localStorage.getItem('admin_token'), 'admin-session');
 });
+
+test('rehydrating another tab\'s customer session clears the previous cart, while the same session preserves it', () => {
+  const browser = loadStore();
+  const { useAuthStore, useCartStore, localStorage } = browser;
+  const first = { user_id: 1, username: 'first', email: 'first@example.test' };
+  const second = { user_id: 2, username: 'second', email: 'second@example.test' };
+  const item = { cart_id: 1, product_id: 12, quantity: 3, title: 'Product', price: 10, stock: 5 };
+  useAuthStore.getState().login(first, 'first-session');
+  useCartStore.getState().setItems([item]);
+  useAuthStore.getState().hydrate();
+  assert.equal(useCartStore.getState().getTotalCount(), 3);
+
+  localStorage.setItem('token', 'second-session');
+  localStorage.setItem('user', JSON.stringify(second));
+  useAuthStore.getState().hydrate();
+  assert.equal(useAuthStore.getState().token, 'second-session');
+  assert.equal(useAuthStore.getState().user.user_id, 2);
+  assert.equal(useCartStore.getState().getTotalCount(), 0);
+
+  useCartStore.getState().setItems([item]);
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  useAuthStore.getState().hydrate();
+  assert.equal(useAuthStore.getState().isAuthenticated, false);
+  assert.equal(useCartStore.getState().getTotalCount(), 0);
+});

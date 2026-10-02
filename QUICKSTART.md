@@ -30,10 +30,25 @@ npm run build
 ```bash
 cd backend
 MYSQL_TEST_HOST=127.0.0.1 MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD='填写测试数据库密码' \
-  npm test -- --runInBand src/__tests__/integration/order-mysql.test.ts
+  npm test -- --runInBand src/__tests__/integration
 ```
 
-集成测试自动创建和删除 `ecommerce_order_test_<进程号>` 数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket。
+集成测试自动创建和删除 `ecommerce_order_test_<进程号>`、`ecommerce_coupon_migration_test_<进程号>` 数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。覆盖库存并发、优惠券占用/返还、失败回滚与旧库重复升级。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket；测试服务器使用 UTC 时区。
+
+## 更新已有数据库的优惠券结算
+
+部署此版后端前，先备份数据库并执行增量迁移：
+
+```bash
+cd backend
+npm run build
+npm run migrate-coupon
+# Docker 环境：docker-compose exec backend npm run migrate-coupon
+```
+
+迁移添加订单的原价、优惠额和优惠券快照字段，将优惠券绑定的订单 ID 升级为 BIGINT，保留已有订单、已用券和使用记录；可以重复执行。旧订单按原有实付金额回填原价，优惠额为 0。全新数据库运行 `npm run migrate` 会一起创建优惠券表。
+
+购物车通过服务器预览金额并选择已领取的有效券。`discount_value=20` 表示优惠 20%（8 折），`max_discount` 为 null 或 0 表示不封顶。待支付订单会占用券；手动或超时取消后，有效券恢复可用，已过期券不再可用。支付保留已用状态，取消不增加发行余量。
 
 ## 5分钟快速启动
 

@@ -315,7 +315,8 @@ E-commerce-website/
 - `POST /api/cart/checkout` - 结算购物车
 
 ### 订单相关 (Order APIs)
-- `POST /api/orders` - 创建订单
+- `POST /api/orders/preview` - 按服务器商品价格预览金额与可用优惠券（只读）
+- `POST /api/orders` - 创建订单，可携带 `user_coupon_id`，返回原价、优惠额和应付金额
 - `GET /api/orders` - 获取订单列表
 - `GET /api/orders/:id` - 获取订单详情
 - `POST /api/orders/:id/pay` - 支付订单
@@ -453,7 +454,7 @@ npm test
 ### 进行中 🚧
 - [ ] 实现Elasticsearch商品搜索
 - [ ] 实现RabbitMQ消息队列处理
-- [ ] 优惠券在订单结算中的应用
+- [x] 优惠券结算：服务器预览、事务占用、取消返券与订单金额快照（2026-10-02）
 
 ### 计划中 📋
 - [ ] 秒杀活动功能

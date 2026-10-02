@@ -10,6 +10,7 @@ function setupCart(list) {
   const stores = loadStores();
   stores.useAuthStore.getState().login(firstUser, 'first-session');
   const runtime = loadPage('src/app/cart/page.tsx', {
+    globals: stores,
     imports: {
       '@/store/useAuthStore': { useAuthStore: Object.assign(() => stores.useAuthStore.getState(), { getState: stores.useAuthStore.getState }) },
       '@/store/useCartStore': { useCartStore: () => stores.useCartStore.getState() },

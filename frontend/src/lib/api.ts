@@ -1,4 +1,5 @@
 import axios, { type AxiosRequestConfig } from 'axios';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -26,6 +27,10 @@ api.interceptors.request.use(
     if (typeof window !== 'undefined') {
       const identity = getRequestIdentity(config);
       const token = identity ? localStorage.getItem(identity === 'admin' ? 'admin_token' : 'token') : null;
+      if (identity === 'customer') {
+        const auth = useAuthStore.getState();
+        if (auth.isHydrated && auth.token !== token) throw new Error('登录状态已变化，请刷新后重试');
+      }
       if (token) {
         config.headers.set('Authorization', `Bearer ${token}`);
       } else {
@@ -35,8 +40,9 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    return Promise.reject(error);
-  }
+    throw error;
+  },
+  { synchronous: true }
 );
 
 // 响应拦截器 - 处理错误
@@ -93,7 +99,21 @@ export const cartApi = {
 };
 
 // 订单相关API
+export interface OrderInput {
+  items: { product_id: number; quantity: number }[];
+  user_coupon_id?: number;
+}
+
+export interface OrderPreview {
+  original_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  coupon: { user_coupon_id: number; name: string; code: string } | null;
+  available_coupons: { user_coupon_id: number; name: string; code: string; discount_amount: number }[];
+}
+
 export const orderApi = {
+  preview: (data: OrderInput) => api.post<any, OrderPreview>('/orders/preview', data),
   create: (data: any) => api.post('/orders', data),
   list: (params?: any) => api.get('/orders', { params }),
   getDetail: (id: number) => api.get(`/orders/${id}`),

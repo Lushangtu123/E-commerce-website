@@ -13,9 +13,9 @@ interface Coupon {
   name: string;
   description: string;
   type: number;
-  discount_value: number;
-  min_amount: number;
-  max_discount?: number;
+  discount_value: number | string;
+  min_amount: number | string;
+  max_discount?: number | string | null;
   total_quantity: number;
   remain_quantity: number;
   per_user_limit: number;
@@ -26,33 +26,43 @@ interface Coupon {
 
 export default function CouponsPage() {
   const router = useRouter();
-  const { isAuthenticated, isHydrated } = useAuthStore();
+  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [receivingIds, setReceivingIds] = useState<Set<number>>(new Set());
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const isCurrentSession = () => {
+    const current = useAuthStore.getState();
+    return current.isAuthenticated && current.token === token && current.user?.user_id === user?.user_id &&
+      localStorage.getItem('token') === (token ?? null);
+  };
 
   useEffect(() => {
+    setCoupons([]);
+    setReceivingIds(new Set());
     if (!isHydrated) return;
     if (!isAuthenticated) {
       toast.error('请先登录');
       router.push('/login');
       return;
     }
-    loadCoupons();
-  }, [isHydrated, isAuthenticated, router]);
-
-  const loadCoupons = async () => {
-    try {
-      setLoading(true);
-      const response = await couponApi.getAvailable(1, 50);
-      setCoupons(response.data || []);
-    } catch (error: any) {
+    let active = true;
+    setLoading(true);
+    couponApi.getAvailable(1, 50).then(response => {
+      if (active && isCurrentSession()) setCoupons(response.data || []);
+    }).catch(error => {
+      if (!active || !isCurrentSession()) return;
       logger.error('加载优惠券失败:', error);
       toast.error(error.response?.data?.message || '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).finally(() => {
+      if (active && isCurrentSession()) {
+        setLoadedKey(sessionKey);
+        setLoading(false);
+      }
+    });
+    return () => { active = false; };
+  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
 
   const handleReceive = async (coupon: Coupon) => {
     if (!isAuthenticated) {
@@ -60,11 +70,13 @@ export default function CouponsPage() {
       router.push('/login');
       return;
     }
+    if (!isCurrentSession()) return;
 
     setReceivingIds(prev => new Set(prev).add(coupon.coupon_id));
 
     try {
       await couponApi.receive(coupon.code);
+      if (!isCurrentSession()) return;
       toast.success('领取成功！');
       
       // 更新剩余数量
@@ -76,11 +88,12 @@ export default function CouponsPage() {
         )
       );
     } catch (error: any) {
+      if (!isCurrentSession()) return;
       logger.error('领取失败:', error);
       const message = error.response?.data?.message || '领取失败';
       toast.error(message);
     } finally {
-      setReceivingIds(prev => {
+      if (isCurrentSession()) setReceivingIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(coupon.coupon_id);
         return newSet;
@@ -106,8 +119,8 @@ export default function CouponsPage() {
       case 1:
         return `满${coupon.min_amount}元减${coupon.discount_value}元`;
       case 2:
-        const discount = 100 - coupon.discount_value;
-        const maxText = coupon.max_discount
+        const discount = 100 - Number(coupon.discount_value);
+        const maxText = Number(coupon.max_discount) > 0
           ? `，最高优惠${coupon.max_discount}元`
           : '';
         return `${discount / 10}折优惠${maxText}`;
@@ -131,7 +144,7 @@ export default function CouponsPage() {
     }
   };
 
-  if (!isHydrated || !isAuthenticated || loading) {
+  if (!isHydrated || !isAuthenticated || loading || loadedKey !== sessionKey) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -183,11 +196,11 @@ export default function CouponsPage() {
                     <div>
                       <div className="text-sm opacity-90">{getCouponTypeText(coupon.type)}</div>
                       <div className="text-3xl font-bold mt-1">
-                        {coupon.type === 2 ? `${100 - coupon.discount_value}折` : `¥${coupon.discount_value}`}
+                        {coupon.type === 2 ? `${(100 - Number(coupon.discount_value)) / 10}折` : `¥${coupon.discount_value}`}
                       </div>
                       <div className="text-sm opacity-90 mt-1">
                         {coupon.type === 1 && `满${coupon.min_amount}元可用`}
-                        {coupon.type === 2 && coupon.min_amount > 0 && `满${coupon.min_amount}元可用`}
+                        {coupon.type === 2 && Number(coupon.min_amount) > 0 && `满${coupon.min_amount}元可用`}
                         {coupon.type === 3 && '无门槛'}
                       </div>
                     </div>

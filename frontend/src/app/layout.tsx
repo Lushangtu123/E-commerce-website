@@ -22,6 +22,13 @@ export default function RootLayout({
   // 在客户端首次渲染时从localStorage加载状态
   useEffect(() => {
     hydrate();
+    const syncSession = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === null || event.key === 'token' || event.key === 'user')) {
+        hydrate();
+      }
+    };
+    window.addEventListener('storage', syncSession);
+    return () => window.removeEventListener('storage', syncSession);
   }, [hydrate]);
 
   return (
@@ -70,4 +77,3 @@ export default function RootLayout({
     </html>
   );
 }
-

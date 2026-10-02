@@ -1,8 +1,11 @@
 /**
  * 优惠券模型
  */
-import { pool } from '../database/mysql';
+import { getPool } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { PoolConnection } from 'mysql2/promise';
+import { calculateDiscountCents, couponMoneyToCents } from '../utils/coupon-discount';
+import logger from '../utils/logger';
 
 // 优惠券类型
 export enum CouponType {
@@ -59,7 +62,7 @@ export class CouponModel {
    * 创建优惠券
    */
   static async create(coupon: Partial<Coupon>): Promise<number> {
-    const [result] = await pool.execute<ResultSetHeader>(
+    const [result] = await getPool().execute<ResultSetHeader>(
       `INSERT INTO coupons 
        (code, name, description, type, discount_value, min_amount, max_discount,
         total_quantity, remain_quantity, per_user_limit, start_time, end_time, status)
@@ -67,17 +70,17 @@ export class CouponModel {
       [
         coupon.code,
         coupon.name,
-        coupon.description,
+        coupon.description ?? null,
         coupon.type,
         coupon.discount_value,
-        coupon.min_amount || 0,
-        coupon.max_discount,
+        coupon.min_amount ?? 0,
+        coupon.max_discount ?? null,
         coupon.total_quantity,
-        coupon.remain_quantity || coupon.total_quantity,
-        coupon.per_user_limit || 1,
+        coupon.remain_quantity ?? coupon.total_quantity,
+        coupon.per_user_limit ?? 1,
         coupon.start_time,
         coupon.end_time,
-        coupon.status || CouponStatus.ENABLED,
+        coupon.status ?? CouponStatus.ENABLED,
       ]
     );
     return result.insertId;
@@ -90,9 +93,15 @@ export class CouponModel {
     status?: CouponStatus;
     page?: number;
     page_size?: number;
+    available_only?: boolean;
   }): Promise<{ coupons: Coupon[]; total: number }> {
-    const { status, page = 1, page_size = 20 } = params;
+    const { status, page = 1, page_size = 20, available_only = false } = params;
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(page_size) || page_size < 1 || page_size > 100) {
+      throw new RangeError('分页参数无效');
+    }
+    if (status !== undefined && ![0, 1].includes(status)) throw new RangeError('优惠券状态无效');
     const offset = (page - 1) * page_size;
+    if (!Number.isSafeInteger(offset)) throw new RangeError('分页参数无效');
 
     let whereClause = 'WHERE 1=1';
     const queryParams: any[] = [];
@@ -101,20 +110,24 @@ export class CouponModel {
       whereClause += ' AND status = ?';
       queryParams.push(status);
     }
+    if (available_only) {
+      whereClause += ' AND status = 1 AND remain_quantity > 0 AND NOW() >= start_time AND NOW() < end_time';
+    }
 
     // 获取总数
-    const [countResult] = await pool.execute<RowDataPacket[]>(
+    const [countResult] = await getPool().execute<RowDataPacket[]>(
       `SELECT COUNT(*) as total FROM coupons ${whereClause}`,
       queryParams
     );
     const total = countResult[0].total;
 
     // 获取列表
-    const [coupons] = await pool.execute<RowDataPacket[]>(
+    // Use escaped query parameters: some MySQL versions reject execute's numeric LIMIT bindings.
+    const [coupons] = await getPool().query<RowDataPacket[]>(
       `SELECT * FROM coupons ${whereClause} 
        ORDER BY created_at DESC 
-       LIMIT ${page_size} OFFSET ${offset}`,
-      queryParams
+       LIMIT ? OFFSET ?`,
+      [...queryParams, page_size, offset]
     );
 
     return { coupons: coupons as Coupon[], total };
@@ -124,7 +137,7 @@ export class CouponModel {
    * 根据ID获取优惠券
    */
   static async findById(couponId: number): Promise<Coupon | null> {
-    const [rows] = await pool.execute<RowDataPacket[]>(
+    const [rows] = await getPool().execute<RowDataPacket[]>(
       'SELECT * FROM coupons WHERE coupon_id = ?',
       [couponId]
     );
@@ -135,7 +148,7 @@ export class CouponModel {
    * 根据代码获取优惠券
    */
   static async findByCode(code: string): Promise<Coupon | null> {
-    const [rows] = await pool.execute<RowDataPacket[]>(
+    const [rows] = await getPool().execute<RowDataPacket[]>(
       'SELECT * FROM coupons WHERE code = ?',
       [code]
     );
@@ -149,7 +162,10 @@ export class CouponModel {
     userId: number,
     couponId: number
   ): Promise<number> {
-    const connection = await pool.getConnection();
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(couponId) || couponId <= 0) {
+      throw new RangeError('优惠券ID无效');
+    }
+    const connection = await getPool().getConnection();
 
     try {
       await connection.beginTransaction();
@@ -158,7 +174,7 @@ export class CouponModel {
       const [couponRows] = await connection.execute<RowDataPacket[]>(
         `SELECT * FROM coupons 
          WHERE coupon_id = ? AND status = 1 
-         AND NOW() BETWEEN start_time AND end_time
+         AND NOW() >= start_time AND NOW() < end_time
          FOR UPDATE`,
         [couponId]
       );
@@ -186,10 +202,11 @@ export class CouponModel {
       }
 
       // 扣减剩余数量
-      await connection.execute(
-        'UPDATE coupons SET remain_quantity = remain_quantity - 1 WHERE coupon_id = ?',
+      const [deduction] = await connection.execute<ResultSetHeader>(
+        'UPDATE coupons SET remain_quantity = remain_quantity - 1 WHERE coupon_id = ? AND remain_quantity > 0',
         [couponId]
       );
+      if (deduction.affectedRows !== 1) throw new Error('优惠券已领完');
 
       // 创建用户优惠券
       const [result] = await connection.execute<ResultSetHeader>(
@@ -215,19 +232,22 @@ export class CouponModel {
     userId: number,
     status?: UserCouponStatus
   ): Promise<any[]> {
+    const effectiveStatus = 'CASE WHEN uc.status = 1 AND (uc.expired_at <= NOW() OR c.end_time <= NOW()) THEN 3 ELSE uc.status END';
     let whereClause = 'WHERE uc.user_id = ?';
     const queryParams: any[] = [userId];
 
     if (status !== undefined) {
-      whereClause += ' AND uc.status = ?';
+      whereClause += ` AND (${effectiveStatus}) = ?`;
       queryParams.push(status);
     }
 
-    const [rows] = await pool.execute<RowDataPacket[]>(
+    const [rows] = await getPool().execute<RowDataPacket[]>(
       `SELECT 
         uc.*,
+        ${effectiveStatus} AS status,
         c.code, c.name, c.description, c.type,
-        c.discount_value, c.min_amount, c.max_discount
+        c.discount_value, c.min_amount, c.max_discount,
+        c.status AS coupon_status, c.start_time, c.end_time
        FROM user_coupons uc
        INNER JOIN coupons c ON uc.coupon_id = c.coupon_id
        ${whereClause}
@@ -238,6 +258,40 @@ export class CouponModel {
     return rows;
   }
 
+  /** Read-only preview; callers may use their transaction connection for a consistent quote. */
+  static async getAvailableForOrder(
+    userId: number,
+    orderAmount: number,
+    connection?: PoolConnection
+  ): Promise<any[]> {
+    const orderCents = couponMoneyToCents(orderAmount);
+    const [rows] = await (connection ?? getPool()).execute<RowDataPacket[]>(
+      `SELECT uc.*, c.code, c.name, c.description, c.type,
+              c.discount_value, c.min_amount, c.max_discount,
+              c.status AS coupon_status, c.start_time, c.end_time
+       FROM user_coupons uc
+       INNER JOIN coupons c ON uc.coupon_id = c.coupon_id
+       WHERE uc.user_id = ? AND uc.status = 1 AND uc.expired_at > NOW()
+         AND c.status = 1 AND NOW() >= c.start_time AND NOW() < c.end_time
+       ORDER BY uc.user_coupon_id`,
+      [userId]
+    );
+    return rows.flatMap(coupon => {
+      try {
+        const discountAmount = calculateDiscountCents(coupon as any, orderCents) / 100;
+        if (discountAmount <= 0) return [];
+        return [{ ...coupon, user_coupon_id: Number(coupon.user_coupon_id), discount_amount: discountAmount, can_use: true }];
+      } catch (error) {
+        // Legacy invalid rules must not block other coupons in a read-only preview.
+        // The checkout transaction still validates a selected rule with the strict helper.
+        if (!(error instanceof RangeError)) throw error;
+        logger.warn({ err: error, coupon_id: coupon.coupon_id }, '跳过规则无效的优惠券');
+        return [];
+      }
+    })
+      .sort((left, right) => right.discount_amount - left.discount_amount || left.user_coupon_id - right.user_coupon_id);
+  }
+
   /**
    * 使用优惠券
    */
@@ -245,7 +299,7 @@ export class CouponModel {
     userCouponId: number,
     orderId: number
   ): Promise<void> {
-    const [result] = await pool.execute<ResultSetHeader>(
+    const [result] = await getPool().execute<ResultSetHeader>(
       `UPDATE user_coupons 
        SET status = ?, used_at = NOW(), order_id = ?
        WHERE user_coupon_id = ? AND status = ?`,
@@ -261,39 +315,14 @@ export class CouponModel {
    * 计算优惠金额
    */
   static calculateDiscount(coupon: Coupon, orderAmount: number): number {
-    // 检查最低使用金额
-    if (orderAmount < coupon.min_amount) {
-      return 0;
-    }
-
-    let discount = 0;
-
-    switch (coupon.type) {
-      case CouponType.FULL_REDUCTION: // 满减券
-        discount = coupon.discount_value;
-        break;
-
-      case CouponType.DISCOUNT: // 折扣券
-        discount = orderAmount * (1 - coupon.discount_value / 100);
-        if (coupon.max_discount && discount > coupon.max_discount) {
-          discount = coupon.max_discount;
-        }
-        break;
-
-      case CouponType.NO_THRESHOLD: // 无门槛券
-        discount = coupon.discount_value;
-        break;
-    }
-
-    // 优惠金额不能超过订单金额
-    return Math.min(discount, orderAmount);
+    return calculateDiscountCents(coupon, couponMoneyToCents(orderAmount)) / 100;
   }
 
   /**
    * 更新优惠券状态（启用/禁用）
    */
   static async updateStatus(couponId: number, status: CouponStatus): Promise<boolean> {
-    const [result] = await pool.execute<ResultSetHeader>(
+    const [result] = await getPool().execute<ResultSetHeader>(
       'UPDATE coupons SET status = ?, updated_at = NOW() WHERE coupon_id = ?',
       [status, couponId]
     );
@@ -304,7 +333,7 @@ export class CouponModel {
    * 更新过期的用户优惠券状态
    */
   static async updateExpiredCoupons(): Promise<number> {
-    const [result] = await pool.execute<ResultSetHeader>(
+    const [result] = await getPool().execute<ResultSetHeader>(
       `UPDATE user_coupons 
        SET status = ? 
        WHERE status = ? AND expired_at < NOW()`,
@@ -324,7 +353,7 @@ export class CouponModel {
     discountAmount: number,
     orderAmount: number
   ): Promise<void> {
-    await pool.execute(
+    await getPool().execute(
       `INSERT INTO coupon_usage_logs 
        (user_id, coupon_id, user_coupon_id, order_id, discount_amount, order_amount)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -332,4 +361,3 @@ export class CouponModel {
     );
   }
 }
-

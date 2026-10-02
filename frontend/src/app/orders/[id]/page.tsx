@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { orderApi, orderTimeoutApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -18,49 +18,77 @@ const ORDER_STATUS = {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { isAuthenticated, isHydrated } = useAuthStore();
+  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const detailRequest = useRef(0);
+  const mounted = useRef(true);
 
   const orderId = parseInt(params.id as string);
+  const sessionKey = JSON.stringify([token, user?.user_id, orderId]);
+  const currentSession = useRef(sessionKey);
+  currentSession.current = sessionKey;
+  const isCurrentSession = () => {
+    const current = useAuthStore.getState();
+    return mounted.current && currentSession.current === sessionKey && current.isAuthenticated &&
+      current.token === token && current.user?.user_id === user?.user_id && localStorage.getItem('token') === (token ?? null);
+  };
 
   useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; detailRequest.current++; };
+  }, []);
+
+  useEffect(() => {
+    setOrder(null);
+    setItems([]);
+    setRemainingTime(null);
     if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
     loadOrder();
-  }, [isHydrated, isAuthenticated, orderId, router]);
+  }, [isHydrated, isAuthenticated, token, user?.user_id, orderId, router]);
 
   useEffect(() => {
-    if (isHydrated && isAuthenticated && order && order.status === 0) {
-      loadRemainingTime();
-      const interval = setInterval(loadRemainingTime, 60000); // 每分钟更新一次
-      return () => clearInterval(interval);
+    if (isHydrated && isAuthenticated && loadedKey === sessionKey && order?.status === 0) {
+      let active = true;
+      const refresh = () => loadRemainingTime(() => active);
+      refresh();
+      const interval = setInterval(refresh, 60000);
+      return () => { active = false; clearInterval(interval); };
     }
-  }, [isHydrated, isAuthenticated, order]);
+  }, [isHydrated, isAuthenticated, token, user?.user_id, orderId, loadedKey, order?.status]);
 
   const loadOrder = async () => {
+    if (!isCurrentSession()) return;
+    const request = ++detailRequest.current;
     try {
       setLoading(true);
       const data: any = await orderApi.getDetail(orderId);
+      if (!isCurrentSession() || request !== detailRequest.current) return;
       setOrder(data.order);
       setItems(data.items || []);
+      setLoadedKey(sessionKey);
     } catch (error: any) {
+      if (!isCurrentSession() || request !== detailRequest.current) return;
       logger.error('加载订单失败:', error);
       toast.error('订单不存在');
       router.push('/orders');
     } finally {
-      setLoading(false);
+      if (isCurrentSession() && request === detailRequest.current) setLoading(false);
     }
   };
 
-  const loadRemainingTime = async () => {
+  const loadRemainingTime = async (isActive: () => boolean) => {
+    if (!isActive() || !isCurrentSession()) return;
     try {
       const data: any = await orderTimeoutApi.getRemainingTime(orderId);
+      if (!isActive() || !isCurrentSession()) return;
       setRemainingTime(data.remaining_minutes);
       
       // 如果剩余时间为0，刷新订单状态
@@ -68,43 +96,54 @@ export default function OrderDetailPage() {
         loadOrder();
       }
     } catch (error: any) {
+      if (!isActive() || !isCurrentSession()) return;
       logger.error('加载剩余时间失败:', error);
     }
   };
 
   const handlePay = async () => {
+    if (!isCurrentSession()) return;
     try {
       await orderApi.pay(orderId);
+      if (!isCurrentSession()) return;
       toast.success('支付成功');
       loadOrder();
     } catch (error: any) {
+      if (!isCurrentSession()) return;
       toast.error(error.response?.data?.error || '支付失败');
     }
   };
 
   const handleCancel = async () => {
+    if (!isCurrentSession()) return;
     if (!confirm('确定要取消订单吗？')) return;
+    if (!isCurrentSession()) return;
 
     try {
       await orderApi.cancel(orderId);
+      if (!isCurrentSession()) return;
       toast.success('订单已取消');
       loadOrder();
     } catch (error: any) {
+      if (!isCurrentSession()) return;
       toast.error(error.response?.data?.error || '取消失败');
     }
   };
 
   const handleConfirm = async () => {
+    if (!isCurrentSession()) return;
     try {
       await orderApi.confirm(orderId);
+      if (!isCurrentSession()) return;
       toast.success('确认收货成功');
       loadOrder();
     } catch (error: any) {
+      if (!isCurrentSession()) return;
       toast.error(error.response?.data?.error || '确认收货失败');
     }
   };
 
-  if (!isHydrated || !isAuthenticated || loading) {
+  if (!isHydrated || !isAuthenticated || loading || loadedKey !== sessionKey) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -191,16 +230,26 @@ export default function OrderDetailPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-gray-600">
               <span>商品总价</span>
-              <span>¥{order.total_amount}</span>
+              <span>¥{Number(order.original_amount ?? order.total_amount).toFixed(2)}</span>
+            </div>
+            {order.user_coupon_id && (
+              <div className="flex justify-between text-gray-600">
+                <span>优惠券</span>
+                <span>{order.coupon_name || '优惠券'}{order.coupon_code && ` (${order.coupon_code})`}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-gray-600">
+              <span>优惠券优惠</span>
+              <span>-¥{Number(order.discount_amount ?? 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
               <span>运费</span>
               <span className="text-green-600">免运费</span>
             </div>
             <div className="border-t pt-2 flex justify-between items-center">
-              <span className="font-medium">实付款</span>
+              <span className="font-medium">{order.status === 0 || order.status === 4 ? '应付金额' : '实付款'}</span>
               <span className="text-2xl font-bold text-primary-600">
-                ¥{order.total_amount}
+                ¥{Number(order.total_amount).toFixed(2)}
               </span>
             </div>
           </div>
