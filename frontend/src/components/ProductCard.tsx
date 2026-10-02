@@ -89,16 +89,16 @@ export default function ProductCard({ product }: ProductCardProps) {
           
           <button
             onClick={handleAddToCart}
-            disabled={isAdding || product.stock === 0}
+            disabled={isAdding || Number(product.stock) <= 0}
             className={`flex items-center space-x-1 px-3 py-1 rounded ${
-              product.stock === 0
+              Number(product.stock) <= 0
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
             }`}
           >
             <FiShoppingCart />
             <span className="text-sm">
-              {product.stock === 0 ? '已售罄' : isAdding ? '处理中...' : product.has_sku ? '选规格' : '加入'}
+              {Number(product.stock) <= 0 ? '已售罄' : isAdding ? '处理中...' : product.has_sku ? '选规格' : '加入'}
             </span>
           </button>
         </div>

@@ -67,7 +67,7 @@ function loadStores(storage) {
   return { ...browser, ...cartModule, ...authModule };
 }
 
-function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} } = {}) {
+function loadPage(relativePath, { initialState = {}, imports = {}, globals = {}, props = {} } = {}) {
   const React = require('react');
   const hooks = [];
   const requests = [];
@@ -138,7 +138,7 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {} 
       dirty = false;
       hookIndex = 0;
       pendingEffects = [];
-      const tree = Page({});
+      const tree = Page(props);
       pendingEffects.forEach((effect) => effect());
       await new Promise(setImmediate);
       return tree;
