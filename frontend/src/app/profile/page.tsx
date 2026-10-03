@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
-import { userApi, couponApi } from '@/lib/api';
+import { userApi, type UserStats } from '@/lib/api';
 import Link from 'next/link';
 import {
   FiUser, 
@@ -19,25 +19,26 @@ import {
 } from 'react-icons/fi';
 import { logger } from '@/lib/logger';
 
-interface UserStats {
-  totalOrders: number;
-  pendingOrders: number;
-  totalCoupons: number;
-  availableCoupons: number;
-  favoriteCount: number;
-}
-
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, isHydrated, logout } = useAuthStore();
-  const [stats, setStats] = useState<UserStats>({
-    totalOrders: 0,
-    pendingOrders: 0,
-    totalCoupons: 0,
-    availableCoupons: 0,
-    favoriteCount: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const { user, token, isAuthenticated, isHydrated, logout } = useAuthStore();
+  const [result, setResult] = useState<{ key: string; stats?: UserStats; error?: string } | null>(null);
+  const mounted = useRef(true);
+  const revision = useRef(0);
+  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const stats = result?.key === sessionKey ? result.stats : undefined;
+  const error = result?.key === sessionKey ? result.error : undefined;
+  const loading = result?.key !== sessionKey;
+  const isCurrent = () => {
+    const current = useAuthStore.getState();
+    return mounted.current && current.isAuthenticated && current.token === token && current.user?.user_id === user?.user_id &&
+      localStorage.getItem('token') === (token ?? null);
+  };
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; revision.current += 1; };
+  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -46,32 +47,26 @@ export default function ProfilePage() {
       return;
     }
     loadUserStats();
-  }, [isHydrated, isAuthenticated, router]);
+    return () => { revision.current += 1; };
+  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
 
   const loadUserStats = async () => {
+    if (!isCurrent()) return;
+    const request = ++revision.current;
+    setResult(null);
     try {
-      setLoading(true);
-      
-      // 加载优惠券统计
-      const couponData = await couponApi.getMyCoupons();
-      const allCoupons = couponData.data || [];
-      const availableCoupons = allCoupons.filter((c: any) => c.status === 1);
-      
-      setStats({
-        totalOrders: 0, // 可以从订单API获取
-        pendingOrders: 0,
-        totalCoupons: allCoupons.length,
-        availableCoupons: availableCoupons.length,
-        favoriteCount: 0, // 可以从收藏API获取
-      });
+      const data = await userApi.getStats();
+      if (!isCurrent() || revision.current !== request) return;
+      setResult({ key: sessionKey, stats: data.stats });
     } catch (error) {
+      if (!isCurrent() || revision.current !== request) return;
       logger.error('加载统计数据失败:', error);
-    } finally {
-      setLoading(false);
+      setResult({ key: sessionKey, error: '统计数据加载失败，请重试' });
     }
   };
 
   const handleLogout = () => {
+    if (!isCurrent()) return;
     logout();
     router.push('/');
   };
@@ -82,15 +77,15 @@ export default function ProfilePage() {
       title: '我的订单',
       description: '查看订单状态',
       link: '/orders',
-      count: stats.totalOrders,
+      count: stats?.totalOrders,
       color: 'text-blue-600 bg-blue-50',
     },
     {
       icon: <FiGift size={24} />,
       title: '我的优惠券',
-      description: `${stats.availableCoupons}张可用`,
+      description: stats ? `${stats.availableCoupons}张可用` : '查看我的优惠券',
       link: '/my/coupons',
-      count: stats.totalCoupons,
+      count: stats?.totalCoupons,
       color: 'text-orange-600 bg-orange-50',
       highlight: true,
     },
@@ -99,7 +94,7 @@ export default function ProfilePage() {
       title: '我的收藏',
       description: '收藏的商品',
       link: '/favorites',
-      count: stats.favoriteCount,
+      count: stats?.favoriteCount,
       color: 'text-red-600 bg-red-50',
     },
     {
@@ -165,23 +160,28 @@ export default function ProfilePage() {
           {/* 快速统计 */}
           <div className="grid grid-cols-4 gap-4 mt-8 pt-8 border-t border-white border-opacity-20">
             <div className="text-center">
-              <div className="text-3xl font-bold mb-1">{stats.totalOrders}</div>
+              <div className="text-3xl font-bold mb-1">{stats?.totalOrders ?? '—'}</div>
               <div className="text-sm text-blue-100">我的订单</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold mb-1">{stats.availableCoupons}</div>
+              <div className="text-3xl font-bold mb-1">{stats?.availableCoupons ?? '—'}</div>
               <div className="text-sm text-blue-100">可用优惠券</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold mb-1">{stats.favoriteCount}</div>
+              <div className="text-3xl font-bold mb-1">{stats?.favoriteCount ?? '—'}</div>
               <div className="text-sm text-blue-100">我的收藏</div>
             </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold mb-1">0</div>
-              <div className="text-sm text-blue-100">待处理</div>
-            </div>
+            <Link href="/orders?status=0" className="text-center rounded hover:bg-white/10">
+              <div className="text-3xl font-bold mb-1">{stats?.pendingOrders ?? '—'}</div>
+              <div className="text-sm text-blue-100">待支付</div>
+            </Link>
           </div>
         </div>
+
+        {error && <div role="alert" className="bg-white rounded-xl p-4 mb-6 text-red-600">
+          <p>{error}</p>
+          <button onClick={loadUserStats} className="underline mt-2">重新加载统计</button>
+        </div>}
 
         {/* 优惠券快捷入口 - 突出显示 */}
         <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl shadow-lg p-6 mb-8">
@@ -193,7 +193,7 @@ export default function ProfilePage() {
               <div>
                 <h2 className="text-2xl font-bold mb-1">🎁 优惠券中心</h2>
                 <p className="text-orange-100">
-                  您有 <span className="font-bold text-xl">{stats.availableCoupons}</span> 张可用优惠券
+                  {stats ? <>您有 <span className="font-bold text-xl">{stats.availableCoupons}</span> 张可用优惠券</> : '查看或领取优惠券'}
                 </p>
               </div>
             </div>

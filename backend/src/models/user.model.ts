@@ -12,7 +12,45 @@ export interface User {
   updated_at: Date;
 }
 
+export interface UserStats {
+  totalOrders: number;
+  pendingOrders: number;
+  totalCoupons: number;
+  availableCoupons: number;
+  favoriteCount: number;
+}
+
 export class UserModel {
+  /** One statement gives every scalar count the same read snapshot, without multiplying joined rows. */
+  static async getStats(userId: number): Promise<UserStats | null> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new RangeError('用户ID无效');
+    const rows = await query<RowDataPacket[]>(
+      `SELECT
+        (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) AS totalOrders,
+        (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id AND o.status = 0) AS pendingOrders,
+        (SELECT COUNT(*) FROM user_coupons uc WHERE uc.user_id = u.user_id) AS totalCoupons,
+        (SELECT COUNT(*) FROM user_coupons uc JOIN coupons c ON c.coupon_id = uc.coupon_id
+         WHERE uc.user_id = u.user_id AND uc.status = 1 AND uc.expired_at > NOW()
+           AND c.status = 1 AND c.start_time <= NOW() AND c.end_time > NOW()
+           AND c.type IN (1, 2, 3) AND c.discount_value > 0
+           AND (c.type <> 2 OR c.discount_value <= 100)
+           AND c.min_amount >= 0 AND (c.type <> 3 OR c.min_amount = 0)
+           AND (c.max_discount IS NULL OR c.max_discount >= 0)) AS availableCoupons,
+        (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.user_id) AS favoriteCount
+       FROM users u WHERE u.user_id = ?`, [userId]
+    );
+    if (!rows.length) return null;
+    // Only the five public counters leave this boundary; mysql COUNT values may arrive as strings.
+    const keys: Array<keyof UserStats> = ['totalOrders', 'pendingOrders', 'totalCoupons', 'availableCoupons', 'favoriteCount'];
+    const stats = {} as UserStats;
+    for (const key of keys) {
+      const count = Number(rows[0][key]);
+      if (!Number.isSafeInteger(count) || count < 0) throw new Error('统计计数无效');
+      stats[key] = count;
+    }
+    return stats;
+  }
+
   // 创建用户
   static async create(username: string, email: string, password_hash: string): Promise<number> {
     const result = await query<ResultSetHeader>(
@@ -61,4 +99,3 @@ export class UserModel {
     return result.affectedRows > 0;
   }
 }
-

@@ -33,7 +33,9 @@ MYSQL_TEST_HOST=127.0.0.1 MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD='填写测试
   npm test -- --runInBand src/__tests__/integration
 ```
 
-集成测试自动创建和删除以 `ecommerce_order_test_`、`ecommerce_coupon_migration_test_`、`ecommerce_sku_migration_test_`、`address_test_`、`ecom_address_migration_test_` 开头的独立数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。覆盖库存并发、优惠券占用/返还、地址归属和默认地址、订单收货快照、失败回滚与旧库重复升级。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket；测试服务器使用 UTC 时区。
+集成测试自动创建和删除以 `ecommerce_order_test_`、`ecommerce_coupon_migration_test_`、`ecommerce_sku_migration_test_`、`address_test_`、`ecom_address_migration_test_`、`profile_stats_test_` 开头的独立数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。覆盖库存并发、优惠券占用/返还、地址归属和默认地址、订单收货快照、个人统计与分页隔离、失败回滚与旧库重复升级。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket；测试服务器使用 UTC 时区。
+
+验证个人中心时，可对照订单、优惠券和收藏列表检查计数；「待支付」进入对应筛选。订单超过 10 条时可翻页，支持已取消筛选；取消最后一页的唯一待支付订单后，应自动返回有效页。统计接口为 `GET /api/users/stats`，只读取登录用户的数据。
 
 ## 更新已有数据库的优惠券结算
 

@@ -2,6 +2,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadApi } = require('./runtime.cjs');
 
+test('profile statistics use the authenticated customer and preserve the server counters', async () => {
+  const { userApi, default: api, requests } = loadApi({ token: 'customer-session', admin_token: 'admin-session' });
+  const stats = { totalOrders: 17, pendingOrders: 3, totalCoupons: 11, availableCoupons: 4, favoriteCount: 8 };
+  api.defaults.adapter = async config => {
+    requests.push(config);
+    return { data: { stats }, status: 200, statusText: 'OK', headers: {}, config };
+  };
+  assert.deepEqual(await userApi.getStats(), { stats });
+  assert.equal(requests[0].method, 'get'); assert.equal(requests[0].url, '/users/stats');
+  assert.equal(requests[0].params, undefined); assert.equal(requests[0].data, undefined);
+  assert.equal(requests[0].headers.get('Authorization'), 'Bearer customer-session');
+});
+
 test('address CRUD preserves full fields and uses customer credentials with separate resource IDs', async () => {
   const { addressApi, requests } = loadApi({ token: 'customer-session', admin_token: 'admin-session' });
   const body = { receiver_name: 'Receiver', phone: '+86 138-0013-8000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '文一路 1 号', is_default: true };

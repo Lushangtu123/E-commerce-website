@@ -1,5 +1,21 @@
 import { query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import Joi from 'joi';
+
+export class OrderListError extends Error {
+  readonly statusCode = 400;
+}
+
+const positiveQueryInteger = (maximum: number) => Joi.string().pattern(/^[1-9]\d*$/).custom((text: string, helpers) => {
+  const number = Number(text);
+  return Number.isSafeInteger(number) && number <= maximum ? number : helpers.error('any.invalid');
+});
+
+export const orderListQuerySchema = Joi.object({
+  status: Joi.string().pattern(/^[0-4]$/).custom(text => Number(text)),
+  page: positiveQueryInteger(2147483647).default(1),
+  limit: positiveQueryInteger(100).default(10),
+}).unknown(false).prefs({ convert: false });
 
 export interface Order {
   order_id: number;
@@ -118,6 +134,12 @@ export class OrderModel {
 
   // 获取用户订单列表
   static async listByUser(userId: number, status?: number, page: number = 1, limit: number = 10): Promise<{ orders: Order[], total: number }> {
+    if (!Number.isSafeInteger(userId) || userId <= 0 ||
+        (status !== undefined && (!Number.isInteger(status) || status < 0 || status > 4)) ||
+        !Number.isSafeInteger(page) || page < 1 || page > 2147483647 ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new OrderListError('订单查询参数无效');
+    }
     let whereClause = 'user_id = ?';
     let queryParams: any[] = [userId];
 
@@ -137,7 +159,7 @@ export class OrderModel {
 
     // 获取订单列表
     const orders = await query<(Order & RowDataPacket)[]>(
-      `SELECT * FROM orders WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM orders WHERE ${whereClause} ORDER BY created_at DESC, order_id DESC LIMIT ? OFFSET ?`,
       [...queryParams, limit, offset]
     );
 

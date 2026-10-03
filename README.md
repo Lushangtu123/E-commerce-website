@@ -278,6 +278,7 @@ E-commerce-website/
 - `POST /api/users/register` - 用户注册
 - `POST /api/users/login` - 用户登录
 - `GET /api/users/profile` - 获取个人信息
+- `GET /api/users/stats` - 获取本人订单总数、待支付订单数、已领券总数、当前有效可用券数和收藏数
 - `PUT /api/users/profile` - 更新个人信息
 
 ### 收货地址 (Address APIs)
@@ -323,10 +324,12 @@ E-commerce-website/
 ### 订单相关 (Order APIs)
 - `POST /api/orders/preview` - items 为 `{ product_id, quantity, sku_id? }[]`，按服务器商品/规格价格预览金额与可用优惠券（只读）
 - `POST /api/orders` - 创建订单，必填本人有效的 `shipping_address_id`，可携带 `user_coupon_id`，返回原价、优惠额和应付金额；收货信息由服务器保存快照，后续编辑或删除地址不改变订单
-- `GET /api/orders` - 获取订单列表
+- `GET /api/orders` - 获取本人订单列表；`page` 默认 1，`limit` 默认 10（最多 100），`status` 可选 0–4；返回 `orders`、`total`、`page`、`limit`、`totalPages`
 - `GET /api/orders/:id` - 获取订单详情
 - `POST /api/orders/:id/pay` - 支付订单
 - `POST /api/orders/:id/cancel` - 取消订单
+
+个人中心显示服务器统计，加载失败可重试；「待支付」入口直接筛选未付款订单。可用券数量排除已使用、过期、未生效、停用及规则无效的券，满减门槛由具体订单结算时校验。订单列表支持全部五种状态和前后翻页，按创建时间及订单 ID 倒序排列；支付或取消导致当前筛选页为空时自动回到有效页。
 - `POST /api/orders/:id/confirm` - 确认收货
 
 ### 评论相关 (Review APIs)

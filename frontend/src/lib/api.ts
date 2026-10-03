@@ -73,12 +73,21 @@ api.interceptors.response.use(
 );
 
 // 用户相关API
+export interface UserStats {
+  totalOrders: number;
+  pendingOrders: number;
+  totalCoupons: number;
+  availableCoupons: number;
+  favoriteCount: number;
+}
+
 export const userApi = {
   register: (data: { username: string; email: string; password: string }) =>
     api.post('/users/register', data),
   login: (data: { email: string; password: string }) =>
     api.post('/users/login', data),
   getProfile: () => api.get('/users/profile'),
+  getStats: () => api.get<any, { stats: UserStats }>('/users/stats'),
   updateProfile: (data: any) => api.put('/users/profile', data),
 };
 

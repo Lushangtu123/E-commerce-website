@@ -86,23 +86,37 @@ router.post('/', OrderController.create);
  * /api/orders:
  *   get:
  *     tags: [订单]
- *     summary: 获取订单列表
+ *     summary: 分页获取本人订单列表
  *     security: [{ bearerAuth: [] }]
  *     parameters:
- *       - $ref: '#/components/parameters/PageParam'
- *       - $ref: '#/components/parameters/LimitParam'
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 2147483647, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
  *       - name: status
  *         in: query
- *         schema: { type: integer }
- *         description: 按订单状态筛选
+ *         schema: { type: integer, enum: [0, 1, 2, 3, 4] }
+ *         description: 待支付、已支付、已发货、已完成、已取消；省略时返回全部
  *     responses:
  *       200:
- *         description: 订单列表（分页）
+ *         description: 按创建时间、订单 ID 倒序返回；空列表 totalPages 为 0
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items: { $ref: '#/components/schemas/Order' }
+ *               type: object
+ *               required: [orders, total, page, limit, totalPages]
+ *               properties:
+ *                 orders:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Order' }
+ *                 total: { type: integer, minimum: 0 }
+ *                 page: { type: integer, minimum: 1 }
+ *                 limit: { type: integer, minimum: 1, maximum: 100 }
+ *                 totalPages: { type: integer, minimum: 0 }
+ *       400:
+ *         description: 参数必须是上述范围内的整数字符串，不接受重复或未知参数
  */
 router.get('/', OrderController.list);
 

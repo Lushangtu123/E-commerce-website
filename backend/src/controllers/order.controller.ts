@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { OrderModel, OrderStatus } from '../models/order.model';
+import { OrderModel, OrderStatus, OrderListError, orderListQuerySchema } from '../models/order.model';
 import { createOrder, previewOrder, transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
 import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
@@ -80,9 +80,9 @@ export class OrderController {
   // 获取订单列表
   static async list(req: AuthRequest, res: Response) {
     try {
-      const status = req.query.status ? parseInt(req.query.status as string) : undefined;
-      const page = req.query.page ? parseInt(req.query.page as string) : 1;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { error, value } = orderListQuerySchema.validate(req.query);
+      if (error) return res.status(400).json({ error: '订单查询参数无效' });
+      const { status, page, limit } = value;
 
       const result = await OrderModel.listByUser(req.userId!, status, page, limit);
 
@@ -94,6 +94,7 @@ export class OrderController {
         totalPages: Math.ceil(result.total / limit)
       });
     } catch (error) {
+      if (error instanceof OrderListError) return res.status(400).json({ error: error.message });
       logger.error({ err: error }, '获取订单列表失败');
       res.status(500).json({ error: '获取订单列表失败' });
     }

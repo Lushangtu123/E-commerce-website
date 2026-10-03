@@ -7,6 +7,37 @@ const router = Router();
 
 /**
  * @openapi
+ * /api/users/stats:
+ *   get:
+ *     tags: [用户]
+ *     summary: 获取当前登录用户的个人统计
+ *     description: 可用券统计按状态与有效期、合法规则判断，不依赖订单金额门槛
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: 五项用户统计，不接受其他用户ID指定
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [stats]
+ *               properties:
+ *                 stats:
+ *                   type: object
+ *                   required: [totalOrders, pendingOrders, totalCoupons, availableCoupons, favoriteCount]
+ *                   properties:
+ *                     totalOrders: { type: integer, minimum: 0 }
+ *                     pendingOrders: { type: integer, minimum: 0 }
+ *                     totalCoupons: { type: integer, minimum: 0 }
+ *                     availableCoupons: { type: integer, minimum: 0 }
+ *                     favoriteCount: { type: integer, minimum: 0 }
+ *       401: { description: 未登录或用户Token无效 }
+ *       404: { description: 用户不存在 }
+ */
+router.get('/stats', authMiddleware, UserController.getStats);
+
+/**
+ * @openapi
  * /api/users/register:
  *   post:
  *     tags: [用户]

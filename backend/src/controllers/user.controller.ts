@@ -6,6 +6,17 @@ import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
 
 export class UserController {
+  static async getStats(req: AuthRequest, res: Response) {
+    try {
+      const stats = await UserModel.getStats(req.userId!);
+      if (!stats) return res.status(404).json({ error: '用户不存在' });
+      return res.json({ stats });
+    } catch (error) {
+      logger.error({ err: error }, '获取个人统计失败');
+      return res.status(500).json({ error: '获取个人统计失败' });
+    }
+  }
+
   // 注册
   static async register(req: AuthRequest, res: Response) {
     try {
@@ -137,4 +148,3 @@ export class UserController {
     }
   }
 }
-
