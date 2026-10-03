@@ -1,94 +1,57 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { browseApi } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 import { FiClock, FiShoppingCart, FiTrash } from 'react-icons/fi';
-import { useAuthStore } from '@/store/useAuthStore';
+import { canBuyActivityProduct, useCustomerActivity } from '@/hooks/use-customer-activity';
 import { quickAddToCart } from '@/lib/quick-cart';
 
 interface BrowseHistory {
   id: number;
   product_id: number;
-  title: string;
-  price: number;
-  main_image?: string;
-  stock: number;
+  title: string | null;
+  price: number | string | null;
+  main_image?: string | null;
+  stock: number | string | null;
   has_sku?: boolean | number;
-  status: number;
+  status: number | null;
   browsed_at: string;
 }
 
 export default function BrowseHistoryPage() {
   const router = useRouter();
-  const active = useRef(true);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const { user, isHydrated } = useAuthStore();
-  const [history, setHistory] = useState<BrowseHistory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const limit = 20;
+  const { user, isHydrated, rows: history, loading, page, total, totalPages, limit,
+    error: loadError, reload: fetchHistory, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation } =
+    useCustomerActivity<BrowseHistory>('history', browseApi.getHistory, '获取浏览历史失败');
 
-  useEffect(() => {
-    if (!isHydrated) return;
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    fetchHistory();
-  }, [isHydrated, user, page, router]);
+  const handleRemove = (productId: number) => runMutation(() => browseApi.deleteRecord(productId), {
+    productId, refresh: true,
+    onSuccess: () => toast.success('删除成功'),
+    onError: error => toast.error(error.response?.data?.message || '删除失败'),
+  });
 
-  const fetchHistory = async () => {
-    try {
-      setLoading(true);
-      const data: any = await browseApi.getHistory({ page, limit });
-      setHistory(data.history || []);
-      setTotal(data.pagination?.total || 0);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || '获取浏览历史失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemove = async (productId: number) => {
-    try {
-      await browseApi.deleteRecord(productId);
-      toast.success('删除成功');
-      fetchHistory();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || '删除失败');
-    }
-  };
-
-  const handleClearAll = async () => {
-    if (!confirm('确定要清空所有浏览历史吗？')) {
-      return;
-    }
-    
-    try {
-      await browseApi.clearHistory();
-      toast.success('已清空浏览历史');
-      fetchHistory();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || '清空失败');
-    }
-  };
+  const handleClearAll = () => runMutation(() => browseApi.clearHistory(), {
+    confirm: () => confirm('确定要清空所有浏览历史吗？'), refresh: true,
+    onSuccess: () => toast.success('已清空浏览历史'),
+    onError: error => toast.error(error.response?.data?.message || '清空失败'),
+  });
 
   const handleAddToCart = async (productId: number) => {
-    try {
-      const result = await quickAddToCart(productId, () => active.current);
-      if (result === 'select') router.push(`/products/${productId}`);
-      if (result === 'added') toast.success('已添加到购物车');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || error.message || '添加失败');
-    }
+    const product = history.find(item => item.product_id === productId);
+    if (!product || !canBuyActivityProduct(product)) return;
+    return runMutation(() => quickAddToCart(productId, isCurrentScope), {
+      productId,
+      onSuccess: result => {
+        if (result === 'select') router.push(`/products/${productId}`);
+        if (result === 'added') toast.success('已添加到购物车');
+      },
+      onError: error => toast.error(error.response?.data?.error || error.message || '添加失败'),
+    });
   };
 
   const handleProductClick = (productId: number) => {
-    router.push(`/products/${productId}`);
+    if (hasDisplayedRow(productId)) router.push(`/products/${productId}`);
   };
 
   if (!isHydrated || !user || loading) {
@@ -111,12 +74,13 @@ export default function BrowseHistoryPage() {
               <FiClock className="text-blue-600" />
               浏览历史
             </h1>
-            <p className="text-gray-600 mt-2">最近浏览了 {total} 个商品</p>
+            <p className="text-gray-600 mt-2">最近浏览了 {loadError ? '—' : total} 个商品</p>
           </div>
           
           {history.length > 0 && (
             <button
               onClick={handleClearAll}
+              disabled={busy}
               className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition flex items-center gap-2"
             >
               <FiTrash />
@@ -125,7 +89,12 @@ export default function BrowseHistoryPage() {
           )}
         </div>
 
-        {history.length === 0 ? (
+        {loadError ? (
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center" role="alert">
+            <p className="text-red-600">{loadError}</p>
+            <button onClick={fetchHistory} className="mt-4 px-4 py-2 border rounded-lg">重新加载</button>
+          </div>
+        ) : history.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
             <FiClock className="text-6xl text-gray-300 mx-auto mb-4" />
             <p className="text-xl text-gray-600 mb-4">暂无浏览记录</p>
@@ -148,12 +117,12 @@ export default function BrowseHistoryPage() {
                     className="relative cursor-pointer"
                     onClick={() => handleProductClick(item.product_id)}
                   >
-                    <img
-                      src={item.main_image || '/placeholder.png'}
-                      alt={item.title}
+                    {item.main_image ? <img
+                      src={item.main_image}
+                      alt={item.title || '商品已不存在'}
                       className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
-                    />
-                    {item.stock <= 0 && (
+                    /> : <div className="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400">暂无图片</div>}
+                    {Number(item.stock) <= 0 && (
                       <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <span className="text-white text-xl font-bold">已售罄</span>
                       </div>
@@ -170,12 +139,12 @@ export default function BrowseHistoryPage() {
                       className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-blue-600"
                       onClick={() => handleProductClick(item.product_id)}
                     >
-                      {item.title}
+                      {item.title || '商品已不存在'}
                     </h3>
 
                     <div className="flex items-baseline gap-2 mb-2">
                       <span className="text-2xl font-bold text-red-600">
-                        ¥{item.price}
+                        ¥{item.price ?? 0}
                       </span>
                     </div>
 
@@ -186,7 +155,7 @@ export default function BrowseHistoryPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleAddToCart(item.product_id)}
-                        disabled={item.stock <= 0 || item.status !== 1}
+                        disabled={busy || !canBuyActivityProduct(item)}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <FiShoppingCart />
@@ -194,6 +163,7 @@ export default function BrowseHistoryPage() {
                       </button>
                       <button
                         onClick={() => handleRemove(item.product_id)}
+                        disabled={busy}
                         className="p-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition"
                         title="删除记录"
                       >
@@ -209,18 +179,18 @@ export default function BrowseHistoryPage() {
             {total > limit && (
               <div className="mt-8 flex justify-center gap-2">
                 <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  onClick={() => goToPage(page - 1)}
                   disabled={page === 1}
                   className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   上一页
                 </button>
                 <span className="px-4 py-2 text-gray-600">
-                  {page} / {Math.ceil(total / limit)}
+                  {page} / {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage(p => p + 1)}
-                  disabled={page >= Math.ceil(total / limit)}
+                  onClick={() => goToPage(page + 1)}
+                  disabled={page >= totalPages}
                   className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   下一页

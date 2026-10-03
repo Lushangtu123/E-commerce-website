@@ -20,7 +20,7 @@ router.use(authMiddleware);
  * /api/favorites:
  *   post:
  *     tags: [收藏]
- *     summary: 添加收藏
+ *     summary: 收藏已上架的商品
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -29,11 +29,16 @@ router.use(authMiddleware);
  *           schema:
  *             type: object
  *             required: [product_id]
+ *             additionalProperties: false
  *             properties:
- *               product_id: { type: integer }
+ *               product_id: { type: integer, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 收藏成功
+ *       400:
+ *         description: 商品 ID 或请求体无效
+ *       404:
+ *         description: 商品不存在或未上架
  */
 router.post('/', addFavorite);
 
@@ -52,11 +57,16 @@ router.post('/', addFavorite);
  *           schema:
  *             type: object
  *             required: [product_id]
+ *             additionalProperties: false
  *             properties:
- *               product_id: { type: integer }
+ *               product_id: { type: integer, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 返回切换后的收藏状态
+ *       400:
+ *         description: 商品 ID 或请求体无效
+ *       404:
+ *         description: 新增收藏的商品不存在或未上架；已有失效收藏仍可取消
  */
 router.post('/toggle', toggleFavorite);
 
@@ -71,10 +81,14 @@ router.post('/toggle', toggleFavorite);
  *       - name: product_id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 取消成功
+ *       400:
+ *         description: 商品 ID 无效
+ *       404:
+ *         description: 本人收藏记录不存在
  */
 router.delete('/:product_id', removeFavorite);
 
@@ -89,10 +103,12 @@ router.delete('/:product_id', removeFavorite);
  *       - name: product_id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 返回是否已收藏
+ *       400:
+ *         description: 商品 ID 无效
  */
 router.get('/check/:product_id', checkFavorite);
 
@@ -110,13 +126,18 @@ router.get('/check/:product_id', checkFavorite);
  *           schema:
  *             type: object
  *             required: [product_ids]
+ *             additionalProperties: false
  *             properties:
  *               product_ids:
  *                 type: array
- *                 items: { type: integer }
+ *                 minItems: 1
+ *                 maxItems: 100
+ *                 items: { type: integer, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 每个商品的收藏状态映射
+ *       400:
+ *         description: 商品 ID 列表或请求体无效
  */
 router.post('/check-multiple', checkMultipleFavorites);
 
@@ -128,11 +149,17 @@ router.post('/check-multiple', checkMultipleFavorites);
  *     summary: 获取用户收藏列表
  *     security: [{ bearerAuth: [] }]
  *     parameters:
- *       - $ref: '#/components/parameters/PageParam'
- *       - $ref: '#/components/parameters/LimitParam'
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 2147483647, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
  *     responses:
  *       200:
- *         description: 收藏列表（分页）
+ *         description: 本人收藏及 pagination（page、limit、total、total_pages），时间并列时按收藏 ID 倒序；缺失商品返回不可购买、可取消的占位记录
+ *       400:
+ *         description: 分页参数必须是范围内的规范正整数字符串，不接受重复或未知参数
  */
 router.get('/my', getUserFavorites);
 

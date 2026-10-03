@@ -297,10 +297,13 @@ E-commerce-website/
 - `GET /api/products/search` - 搜索商品
 
 ### 收藏相关 (Favorites APIs) 🆕
-- `POST /api/favorites` - 添加收藏
-- `DELETE /api/favorites/:id` - 取消收藏
-- `GET /api/favorites` - 获取收藏列表
-- `GET /api/favorites/check/:productId` - 检查是否已收藏
+- `POST /api/favorites` - 添加收藏，body 为 `{ product_id }`，商品必须存在且上架
+- `POST /api/favorites/toggle` - 切换本人收藏状态，body 同上
+- `DELETE /api/favorites/:product_id` - 取消收藏，按商品 ID 删除
+- `GET /api/favorites/my` - 分页获取本人收藏列表
+- `GET /api/favorites/count` - 获取本人收藏总数
+- `GET /api/favorites/check/:product_id` - 检查是否已收藏
+- `POST /api/favorites/check-multiple` - 批量检查，body 为 `{ product_ids }`（1–100 个正整数）
 
 ### 搜索相关 (Search APIs) 🆕
 - `POST /api/search/history` - 记录搜索历史
@@ -309,10 +312,12 @@ E-commerce-website/
 - `GET /api/search/hot` - 获取热门搜索
 
 ### 浏览历史 (Browse History APIs) 🆕
-- `POST /api/browse` - 记录浏览历史
-- `GET /api/browse` - 获取浏览历史
-- `DELETE /api/browse/:id` - 删除浏览记录
-- `DELETE /api/browse` - 清空浏览历史
+- `POST /api/browse/record` - 记录浏览，body 为 `{ product_id }`，商品必须存在且上架
+- `GET /api/browse/history` - 按商品去重，分页返回本人最新浏览时间对应的记录
+- `DELETE /api/browse/history/:product_id` - 删除本人该商品的全部浏览记录
+- `DELETE /api/browse/history` - 清空本人浏览历史
+
+收藏和浏览历史分页默认 `page=1&limit=20`，`limit` 最多 100；查询仅接受规范的正整数字符串，不接受重复、未知或非法参数。商品 ID 支持 JavaScript 安全正整数。已失效的商品记录仍可删除，缺失商品显示「商品已不存在」。两页加载失败可重试，切换账号立即隐藏旧数据；删除最后一页的唯一记录后自动返回有效页。
 
 ### 购物车相关 (Cart APIs)
 - `GET /api/cart` - 获取购物车，包含规格快照信息及 available/unavailable_reason
