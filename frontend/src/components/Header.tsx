@@ -1,5 +1,8 @@
 'use client';
 
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { useI18n } from '@/lib/i18n';
+
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
@@ -11,6 +14,7 @@ import { searchApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
 export default function Header() {
+  const { t } = useI18n();
   const { isAuthenticated, user, logout } = useAuthStore();
   const { getTotalCount } = useCartStore();
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -101,18 +105,17 @@ export default function Header() {
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <div className="container-custom py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Logo */}
           <Link href="/" className="text-2xl font-bold text-primary-600">
-            电商平台
-          </Link>
+            {t("电商平台")}</Link>
 
           {/* 搜索框 */}
-          <form onSubmit={handleSearch} className="flex-1 max-w-xl mx-8">
+          <form onSubmit={handleSearch} className="order-last w-full md:order-none md:flex-1 md:w-auto md:max-w-xl md:min-w-32">
             <div className="relative" ref={searchRef}>
               <input
                 type="text"
-                placeholder="搜索商品..."
+                placeholder={t("搜索商品...")}
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
@@ -120,6 +123,7 @@ export default function Header() {
               />
               <button
                 type="submit"
+                aria-label={t('搜索')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-primary-600"
               >
                 <FiSearch size={20} />
@@ -134,8 +138,7 @@ export default function Header() {
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1">
                           <FiClock size={14} />
-                          搜索历史
-                        </h4>
+                          {t("搜索历史")}</h4>
                       </div>
                       <div className="space-y-1">
                         {searchHistory.slice(0, 5).map((item: any, index: number) => (
@@ -148,7 +151,7 @@ export default function Header() {
                             <button
                               onClick={(e) => handleDeleteHistory(item.keyword, e)}
                               className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded"
-                              title="删除"
+                              title={t("删除")}
                             >
                               <FiX size={14} className="text-gray-400" />
                             </button>
@@ -163,8 +166,7 @@ export default function Header() {
                     <div className="p-3">
                       <h4 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
                         <FiTrendingUp size={14} />
-                        热门搜索
-                      </h4>
+                        {t("热门搜索")}</h4>
                       <div className="space-y-1">
                         {hotKeywords.slice(0, 5).map((item: any, index: number) => (
                           <div
@@ -181,7 +183,7 @@ export default function Header() {
                               {index + 1}
                             </span>
                             <span className="text-sm text-gray-700">{item.keyword}</span>
-                            <span className="ml-auto text-xs text-gray-400">{item.search_count}次</span>
+                            <span className="ml-auto text-xs text-gray-400">{t('{count}次', { count: item.search_count })}</span>
                           </div>
                         ))}
                       </div>
@@ -192,12 +194,13 @@ export default function Header() {
             </div>
           </form>
           {/* 右侧菜单 */}
-          <div className="flex items-center space-x-6">
+          <div className="flex flex-wrap items-center gap-4">
+            <LanguageSwitcher />
             {/* 优惠券 - 始终显示 */}
             <Link
               href={isAuthenticated ? "/coupons" : "/login"}
               className="flex items-center text-gray-700 hover:text-orange-500 transition"
-              title={isAuthenticated ? "优惠券" : "登录领取优惠券"}
+              title={isAuthenticated ? t("优惠券") : t("登录领取优惠券")}
             >
               <FiGift size={22} />
             </Link>
@@ -207,7 +210,7 @@ export default function Header() {
               <Link
                 href="/favorites"
                 className="flex items-center text-gray-700 hover:text-red-500 transition"
-                title="我的收藏"
+                title={t("我的收藏")}
               >
                 <FaHeart size={22} />
               </Link>
@@ -216,6 +219,7 @@ export default function Header() {
             {/* 购物车 */}
             <Link
               href="/cart"
+              aria-label={t('购物车')}
               className="relative flex items-center space-x-1 text-gray-700 hover:text-primary-600"
             >
               <FiShoppingCart size={24} />
@@ -227,52 +231,47 @@ export default function Header() {
             </Link>
 
             {isAuthenticated ? (
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href="/profile"
                   className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
                   <FiUser size={18} />
-                  我的
-                </Link>
+                  {t("我的")}</Link>
                 <Link
                   href="/orders"
                   className="text-gray-700 hover:text-primary-600"
                 >
-                  订单
-                </Link>
+                  {t("订单")}</Link>
                 <Link
                   href="/history"
                   className="text-gray-700 hover:text-primary-600 flex items-center gap-1"
                 >
                   <FiClock size={16} />
-                  足迹
-                </Link>
+                  {t("足迹")}</Link>
                 <div className="flex items-center space-x-2 text-gray-700">
                   <span>{user?.username}</span>
                 </div>
                 <button
                   onClick={handleLogout}
                   className="text-gray-700 hover:text-primary-600"
-                  title="退出登录"
+                  title={t("退出登录")}
                 >
                   <FiLogOut size={20} />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href="/login"
                   className="text-gray-700 hover:text-primary-600"
                 >
-                  登录
-                </Link>
+                  {t("登录")}</Link>
                 <Link
                   href="/register"
                   className="btn btn-primary"
                 >
-                  注册
-                </Link>
+                  {t("注册")}</Link>
               </div>
             )}
           </div>

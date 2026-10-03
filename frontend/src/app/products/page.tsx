@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
@@ -11,6 +13,7 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
 function ProductsList() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +49,7 @@ function ProductsList() {
       });
     } catch (error: any) {
       logger.error('加载商品失败:', error);
-      toast.error('加载商品失败');
+      toast.error(t("加载商品失败"));
     } finally {
       setLoading(false);
     }
@@ -63,16 +66,15 @@ function ProductsList() {
         {/* 头部 */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold mb-4">
-            {keyword ? `搜索结果: ${keyword}` : '全部商品'}
+            {keyword ? t('搜索结果: {keyword}', { keyword }) : t("全部商品")}
           </h1>
           
           <div className="flex items-center justify-between">
             <div className="text-gray-600">
-              共找到 <span className="text-primary-600 font-medium">{pagination.total}</span> 件商品
-            </div>
+              {t('共找到 {count} 件商品', { count: pagination.total })}</div>
             
             <div className="flex items-center space-x-4">
-              <span className="text-gray-600">排序:</span>
+              <span className="text-gray-600">{t("排序:")}</span>
               <select
                 value={sort}
                 onChange={(e) => {
@@ -82,10 +84,10 @@ function ProductsList() {
                 }}
                 className="input w-auto"
               >
-                <option value="created_at DESC">最新</option>
-                <option value="sales_count DESC">最热</option>
-                <option value="price ASC">价格从低到高</option>
-                <option value="price DESC">价格从高到低</option>
+                <option value="created_at DESC">{t("最新")}</option>
+                <option value="sales_count DESC">{t("最热")}</option>
+                <option value="price ASC">{t("价格从低到高")}</option>
+                <option value="price DESC">{t("价格从高到低")}</option>
               </select>
             </div>
           </div>
@@ -107,8 +109,8 @@ function ProductsList() {
         ) : products.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-xl font-medium text-gray-900 mb-2">暂无商品</h3>
-            <p className="text-gray-600">换个关键词试试吧</p>
+            <h3 className="text-xl font-medium text-gray-900 mb-2">{t("暂无商品")}</h3>
+            <p className="text-gray-600">{t("换个关键词试试吧")}</p>
           </div>
         ) : (
           <>
@@ -127,8 +129,7 @@ function ProductsList() {
                     disabled={pagination.page === 1}
                     className="btn btn-secondary disabled:opacity-50"
                   >
-                    上一页
-                  </button>
+                    {t("上一页")}</button>
                   
                   {[...Array(pagination.totalPages)].map((_, i) => {
                     const page = i + 1;
@@ -159,8 +160,7 @@ function ProductsList() {
                     disabled={pagination.page === pagination.totalPages}
                     className="btn btn-secondary disabled:opacity-50"
                   >
-                    下一页
-                  </button>
+                    {t("下一页")}</button>
                 </div>
               </div>
             )}

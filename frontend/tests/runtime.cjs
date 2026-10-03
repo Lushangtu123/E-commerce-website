@@ -85,6 +85,7 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {},
     }),
   });
   const toast = { error() {}, success() {} };
+  const i18n = loadSource('src/lib/i18n.ts');
   const Page = loadSource(relativePath, { ...createBrowser(), ...globals }, {
     react: {
       ...React,
@@ -122,6 +123,8 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {},
       useParams: () => ({ id: '1' }),
     },
     'next/link': () => null,
+    '@/components/LanguageSwitcher': () => null,
+    '@/lib/i18n': { ...i18n, useI18n: () => ({ locale: 'zh-CN', t: (key, params) => i18n.translate(key, params, 'zh-CN'), formatDate: i18n.formatDate }) },
     '@/store/useAuthStore': { useAuthStore: Object.assign((selector) => selector ? selector(auth) : auth, { getState: () => auth }) },
     '@/store/useCartStore': { cartItemKey: loadSource('src/store/useCartStore.ts').cartItemKey, useCartStore: () => ({ items: [], setItems() {}, updateQuantity() {}, removeItem() {}, clearCart() {}, getTotalPrice() {} }) },
     '@/lib/api': api,

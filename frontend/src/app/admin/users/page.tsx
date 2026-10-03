@@ -1,11 +1,14 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
 export default function AdminUsersPage() {
+  const { t, formatDate } = useI18n();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -46,11 +49,11 @@ export default function AdminUsersPage() {
         setUsers(data.users);
         setTotal(data.pagination.total);
       } else {
-        toast.error(data.error || '获取用户列表失败');
+        toast.error(t(data.error || '获取用户列表失败'));
       }
     } catch (error) {
       logger.error('获取用户列表失败:', error);
-      toast.error('获取用户列表失败');
+      toast.error(t('获取用户列表失败'));
     } finally {
       setLoading(false);
     }
@@ -75,14 +78,14 @@ export default function AdminUsersPage() {
       const data = await response.json();
       
       if (response.ok) {
-        toast.success(newStatus === 1 ? '用户已启用' : '用户已禁用');
+        toast.success(t(newStatus === 1 ? '用户已启用' : '用户已禁用'));
         fetchUsers();
       } else {
-        toast.error(data.error || '操作失败');
+        toast.error(t(data.error || '操作失败'));
       }
     } catch (error) {
       logger.error('更新状态失败:', error);
-      toast.error('更新状态失败');
+      toast.error(t('更新状态失败'));
     }
   };
 
@@ -91,8 +94,8 @@ export default function AdminUsersPage() {
       <div className="space-y-6">
         {/* 页面标题 */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">用户管理</h1>
-          <p className="text-gray-600 mt-1">查看和管理所有用户</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("用户管理")}</h1>
+          <p className="text-gray-600 mt-1">{t("查看和管理所有用户")}</p>
         </div>
 
         {/* 搜索和筛选 */}
@@ -100,7 +103,7 @@ export default function AdminUsersPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
-              placeholder="搜索用户名、邮箱、手机号..."
+              placeholder={t("搜索用户名、邮箱、手机号...")}
               value={filters.keyword}
               onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -110,21 +113,21 @@ export default function AdminUsersPage() {
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">全部状态</option>
-              <option value="1">正常</option>
-              <option value="0">已禁用</option>
+              <option value="">{t("全部状态")}</option>
+              <option value="1">{t("正常")}</option>
+              <option value="0">{t("已禁用")}</option>
             </select>
             <button
               onClick={fetchUsers}
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
-              搜索
+              {t("搜索")}
             </button>
             <button
               onClick={() => setFilters({ keyword: '', status: '' })}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
-              重置
+              {t("重置")}
             </button>
           </div>
         </div>
@@ -135,7 +138,7 @@ export default function AdminUsersPage() {
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">加载中...</p>
+                <p className="mt-4 text-gray-600">{t("加载中...")}</p>
               </div>
             </div>
           ) : (
@@ -143,14 +146,14 @@ export default function AdminUsersPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户名</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">邮箱</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">手机号</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">订单数</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">消费金额</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">注册时间</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("用户名")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("邮箱")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("手机号")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("订单数")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("消费金额")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("状态")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("注册时间")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("操作")}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -173,13 +176,13 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {user.status === 1 ? (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">正常</span>
+                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{t("正常")}</span>
                         ) : (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">已禁用</span>
+                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{t("已禁用")}</span>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.created_at).toLocaleDateString('zh-CN')}
+                        {formatDate(user.created_at, true)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                         {user.status === 1 ? (
@@ -187,18 +190,18 @@ export default function AdminUsersPage() {
                             onClick={() => handleStatusChange(user.user_id, 0)}
                             className="text-red-600 hover:text-red-900"
                           >
-                            禁用
+                            {t("禁用")}
                           </button>
                         ) : (
                           <button
                             onClick={() => handleStatusChange(user.user_id, 1)}
                             className="text-green-600 hover:text-green-900"
                           >
-                            启用
+                            {t("启用")}
                           </button>
                         )}
                         <button className="text-blue-600 hover:text-blue-900">
-                          详情
+                          {t("详情")}
                         </button>
                       </td>
                     </tr>
@@ -209,7 +212,7 @@ export default function AdminUsersPage() {
               {/* 分页 */}
               <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <div className="text-sm text-gray-700">
-                  共 {total} 个用户
+                  {t("共 {count} 个用户", { count: total })}
                 </div>
                 <div className="flex space-x-2">
                   <button
@@ -217,17 +220,17 @@ export default function AdminUsersPage() {
                     disabled={page === 1}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
-                    上一页
+                    {t("上一页")}
                   </button>
                   <span className="px-4 py-2 text-sm text-gray-700">
-                    第 {page} 页
+                    {t("第 {page} 页", { page })}
                   </span>
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={page >= Math.ceil(total / 20)}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
-                    下一页
+                    {t("下一页")}
                   </button>
                 </div>
               </div>
@@ -238,4 +241,3 @@ export default function AdminUsersPage() {
     </AdminLayout>
   );
 }
-

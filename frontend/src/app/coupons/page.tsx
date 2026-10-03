@@ -6,6 +6,7 @@ import { couponApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { useI18n } from '@/lib/i18n';
 
 interface Coupon {
   coupon_id: number;
@@ -26,6 +27,7 @@ interface Coupon {
 
 export default function CouponsPage() {
   const router = useRouter();
+  const { t, locale, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export default function CouponsPage() {
     setReceivingIds(new Set());
     if (!isHydrated) return;
     if (!isAuthenticated) {
-      toast.error('请先登录');
+      toast.error(t('请先登录'));
       router.push('/login');
       return;
     }
@@ -54,7 +56,7 @@ export default function CouponsPage() {
     }).catch(error => {
       if (!active || !isCurrentSession()) return;
       logger.error('加载优惠券失败:', error);
-      toast.error(error.response?.data?.message || '加载失败');
+      toast.error(t(error.response?.data?.message || '加载失败'));
     }).finally(() => {
       if (active && isCurrentSession()) {
         setLoadedKey(sessionKey);
@@ -66,7 +68,7 @@ export default function CouponsPage() {
 
   const handleReceive = async (coupon: Coupon) => {
     if (!isAuthenticated) {
-      toast.error('请先登录');
+      toast.error(t('请先登录'));
       router.push('/login');
       return;
     }
@@ -77,7 +79,7 @@ export default function CouponsPage() {
     try {
       await couponApi.receive(coupon.code);
       if (!isCurrentSession()) return;
-      toast.success('领取成功！');
+      toast.success(t('领取成功！'));
       
       // 更新剩余数量
       setCoupons(prevCoupons =>
@@ -91,7 +93,7 @@ export default function CouponsPage() {
       if (!isCurrentSession()) return;
       logger.error('领取失败:', error);
       const message = error.response?.data?.message || '领取失败';
-      toast.error(message);
+      toast.error(t(message));
     } finally {
       if (isCurrentSession()) setReceivingIds(prev => {
         const newSet = new Set(prev);
@@ -117,15 +119,15 @@ export default function CouponsPage() {
   const getCouponDescription = (coupon: Coupon) => {
     switch (coupon.type) {
       case 1:
-        return `满${coupon.min_amount}元减${coupon.discount_value}元`;
+        return t('满{minimum}元减{discount}元', { minimum: coupon.min_amount, discount: coupon.discount_value });
       case 2:
         const discount = 100 - Number(coupon.discount_value);
         const maxText = Number(coupon.max_discount) > 0
-          ? `，最高优惠${coupon.max_discount}元`
+          ? t('，最高优惠{maximum}元', { maximum: coupon.max_discount ?? 0 })
           : '';
-        return `${discount / 10}折优惠${maxText}`;
+        return (locale === 'en' ? t('{percentage}%优惠', { percentage: Number(coupon.discount_value) }) : t('{discount}折优惠', { discount: discount / 10 })) + maxText;
       case 3:
-        return `直接抵扣${coupon.discount_value}元`;
+        return t('直接抵扣{discount}元', { discount: coupon.discount_value });
       default:
         return coupon.description;
     }
@@ -150,7 +152,7 @@ export default function CouponsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">加载中...</p>
+            <p className="mt-4 text-gray-600">{t("加载中...")}</p>
           </div>
         </div>
       </div>
@@ -162,15 +164,15 @@ export default function CouponsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">优惠券中心</h1>
-          <p className="mt-2 text-gray-600">领取优惠券，享受更多优惠</p>
+          <h1 className="text-3xl font-bold text-gray-900">{t("优惠券中心")}</h1>
+          <p className="mt-2 text-gray-600">{t("领取优惠券，享受更多优惠")}</p>
           
           <div className="mt-4 flex gap-4">
             <button
               onClick={() => router.push('/my/coupons')}
               className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
             >
-              我的优惠券
+              {t("我的优惠券")}
             </button>
           </div>
         </div>
@@ -181,7 +183,7 @@ export default function CouponsPage() {
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
-            <p className="mt-4 text-gray-500">暂无可领取的优惠券</p>
+            <p className="mt-4 text-gray-500">{t("暂无可领取的优惠券")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -194,18 +196,18 @@ export default function CouponsPage() {
                 <div className={`bg-gradient-to-r ${getCouponColor(coupon.type)} p-6 text-white`}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="text-sm opacity-90">{getCouponTypeText(coupon.type)}</div>
+                      <div className="text-sm opacity-90">{t(getCouponTypeText(coupon.type))}</div>
                       <div className="text-3xl font-bold mt-1">
-                        {coupon.type === 2 ? `${(100 - Number(coupon.discount_value)) / 10}折` : `¥${coupon.discount_value}`}
+                        {coupon.type === 2 ? (locale === 'en' ? t('{percentage}%优惠', { percentage: Number(coupon.discount_value) }) : t('{discount}折', { discount: (100 - Number(coupon.discount_value)) / 10 })) : `¥${coupon.discount_value}`}
                       </div>
                       <div className="text-sm opacity-90 mt-1">
-                        {coupon.type === 1 && `满${coupon.min_amount}元可用`}
-                        {coupon.type === 2 && Number(coupon.min_amount) > 0 && `满${coupon.min_amount}元可用`}
-                        {coupon.type === 3 && '无门槛'}
+                        {coupon.type === 1 && t('满{minimum}元可用', { minimum: coupon.min_amount })}
+                        {coupon.type === 2 && Number(coupon.min_amount) > 0 && t('满{minimum}元可用', { minimum: coupon.min_amount })}
+                        {coupon.type === 3 && t('无门槛')}
                       </div>
                     </div>
                     <div className="text-right text-sm opacity-90">
-                      <div>剩余</div>
+                      <div>{t("剩余")}</div>
                       <div className="text-xl font-semibold">{coupon.remain_quantity}</div>
                     </div>
                   </div>
@@ -221,8 +223,8 @@ export default function CouponsPage() {
                   )}
 
                   <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                    <span>有效期至 {new Date(coupon.end_time).toLocaleDateString()}</span>
-                    <span>限领 {coupon.per_user_limit} 张</span>
+                    <span>{t('有效期至 {date}', { date: formatDate(coupon.end_time, true) })}</span>
+                    <span>{t('限领 {count} 张', { count: coupon.per_user_limit })}</span>
                   </div>
 
                   <button
@@ -237,10 +239,10 @@ export default function CouponsPage() {
                     }`}
                   >
                     {receivingIds.has(coupon.coupon_id)
-                      ? '领取中...'
+                      ? t('领取中...')
                       : coupon.remain_quantity === 0
-                      ? '已领完'
-                      : '立即领取'}
+                      ? t('已领完')
+                      : t('立即领取')}
                   </button>
                 </div>
               </div>

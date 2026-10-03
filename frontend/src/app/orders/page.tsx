@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
+import { useI18n } from '@/lib/i18n';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -18,6 +19,7 @@ const ORDER_STATUS = {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const { t, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [pageState, setPage] = useState(1);
   const [tabState, setActiveTab] = useState<number | undefined>(undefined);
@@ -101,7 +103,7 @@ export default function OrdersPage() {
     if (!isCurrentScope() || loading || loadError || mutation.current) return;
     const order = orders.find(item => item.order_id === orderId);
     if (!order || (action === 'confirm' ? order.status !== 2 : order.status !== 0)) return;
-    if (action === 'cancel' && !confirm('确定要取消订单吗？')) return;
+    if (action === 'cancel' && !confirm(t('确定要取消订单吗？'))) return;
     if (!isCurrentScope() || mutation.current) return;
     const operation = {};
     mutation.current = operation;
@@ -109,11 +111,11 @@ export default function OrdersPage() {
     try {
       await orderApi[action](orderId);
       if (!isCurrentSession()) return;
-      toast.success(action === 'pay' ? '支付成功' : action === 'cancel' ? '订单已取消' : '确认收货成功');
+      toast.success(t(action === 'pay' ? '支付成功' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
       await latestRefresh.current?.();
     } catch (error: any) {
       if (!isCurrentSession()) return;
-      toast.error(error.response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败'));
+      toast.error(t(error.response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
     } finally {
       if (isCurrentSession() && mutation.current === operation) {
         mutation.current = null;
@@ -123,13 +125,13 @@ export default function OrdersPage() {
   };
 
   if (!isHydrated || !isAuthenticated) {
-    return <div className="py-8 text-center text-gray-600">加载中...</div>;
+    return <div className="py-8 text-center text-gray-600">{t("加载中...")}</div>;
   }
 
   return (
     <div className="py-8">
       <div className="container-custom">
-        <h1 className="text-3xl font-bold mb-8">我的订单</h1>
+        <h1 className="text-3xl font-bold mb-8">{t("我的订单")}</h1>
 
         {/* 状态筛选 */}
         <div className="card p-4 mb-6">
@@ -140,7 +142,7 @@ export default function OrdersPage() {
                 activeTab === undefined ? 'bg-primary-600 text-white' : 'bg-gray-100'
               }`}
             >
-              全部
+              {t("全部")}
             </button>
             <button
               onClick={() => { setActiveTab(0); setPage(1); }}
@@ -148,7 +150,7 @@ export default function OrdersPage() {
                 activeTab === 0 ? 'bg-primary-600 text-white' : 'bg-gray-100'
               }`}
             >
-              待支付
+              {t("待支付")}
             </button>
             <button
               onClick={() => { setActiveTab(1); setPage(1); }}
@@ -156,7 +158,7 @@ export default function OrdersPage() {
                 activeTab === 1 ? 'bg-primary-600 text-white' : 'bg-gray-100'
               }`}
             >
-              已支付
+              {t("已支付")}
             </button>
             <button
               onClick={() => { setActiveTab(2); setPage(1); }}
@@ -164,7 +166,7 @@ export default function OrdersPage() {
                 activeTab === 2 ? 'bg-primary-600 text-white' : 'bg-gray-100'
               }`}
             >
-              已发货
+              {t("已发货")}
             </button>
             <button
               onClick={() => { setActiveTab(3); setPage(1); }}
@@ -172,9 +174,9 @@ export default function OrdersPage() {
                 activeTab === 3 ? 'bg-primary-600 text-white' : 'bg-gray-100'
               }`}
             >
-              已完成
+              {t("已完成")}
             </button>
-            <button onClick={() => { setActiveTab(4); setPage(1); }} className={`px-4 py-2 rounded ${activeTab === 4 ? 'bg-primary-600 text-white' : 'bg-gray-100'}`}>已取消</button>
+            <button onClick={() => { setActiveTab(4); setPage(1); }} className={`px-4 py-2 rounded ${activeTab === 4 ? 'bg-primary-600 text-white' : 'bg-gray-100'}`}>{t("已取消")}</button>
           </div>
         </div>
 
@@ -190,16 +192,16 @@ export default function OrdersPage() {
           </div>
         ) : loadError ? (
           <div className="card p-6 text-center" role="alert">
-            <p className="text-red-600">{loadError}</p>
-            <button onClick={loadOrders} className="btn btn-secondary mt-4">重新加载</button>
+            <p className="text-red-600">{t(loadError)}</p>
+            <button onClick={loadOrders} className="btn btn-secondary mt-4">{t("重新加载")}</button>
           </div>
         ) : orders.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-2xl font-medium text-gray-900 mb-2">暂无订单</h3>
-            <p className="text-gray-600 mb-6">快去购物吧</p>
+            <h3 className="text-2xl font-medium text-gray-900 mb-2">{t("暂无订单")}</h3>
+            <p className="text-gray-600 mb-6">{t("快去购物吧")}</p>
             <Link href="/products" className="btn btn-primary">
-              去购物
+              {t("去购物")}
             </Link>
           </div>
         ) : (
@@ -208,19 +210,19 @@ export default function OrdersPage() {
               <div key={order.order_id} className="card p-6">
                 <div className="flex justify-between items-center mb-4 pb-4 border-b">
                   <div className="flex items-center space-x-4">
-                    <span className="text-gray-600">订单号: {order.order_no}</span>
+                    <span className="text-gray-600">{t("订单号:")} {order.order_no}</span>
                     <span className="text-gray-400">
-                      {new Date(order.created_at).toLocaleString()}
+                      {formatDate(order.created_at)}
                     </span>
                   </div>
                   <span className={`font-medium ${ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].color}`}>
-                    {ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].text}
+                    {t(ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].text)}
                   </span>
                 </div>
 
                 <div className="mb-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">订单金额</span>
+                    <span className="text-gray-600">{t("订单金额")}</span>
                     <span className="text-2xl font-bold text-primary-600">
                       ¥{order.total_amount}
                     </span>
@@ -232,7 +234,7 @@ export default function OrdersPage() {
                     href={`/orders/${order.order_id}`}
                     className="btn btn-secondary"
                   >
-                    查看详情
+                    {t("查看详情")}
                   </Link>
                   
                   {order.status === 0 && (
@@ -242,14 +244,14 @@ export default function OrdersPage() {
                         disabled={actionsPending}
                         className="btn btn-primary"
                       >
-                        立即支付
+                        {t("立即支付")}
                       </button>
                       <button
                         onClick={() => handleMutation(order.order_id, 'cancel')}
                         disabled={actionsPending}
                         className="btn btn-secondary"
                       >
-                        取消订单
+                        {t("取消订单")}
                       </button>
                     </>
                   )}
@@ -260,7 +262,7 @@ export default function OrdersPage() {
                       disabled={actionsPending}
                       className="btn btn-primary"
                     >
-                      确认收货
+                      {t("确认收货")}
                     </button>
                   )}
                 </div>
@@ -269,11 +271,11 @@ export default function OrdersPage() {
           </div>
         )}
         {!loading && !loadError && <div className="flex justify-between items-center mt-6">
-          <p className="text-gray-600">共 {total} 个订单</p>
+          <p className="text-gray-600">{t('共 {count} 个订单', { count: total })}</p>
           <div className="flex gap-3 items-center">
-            <button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="btn btn-secondary disabled:opacity-50">上一页</button>
-            <span>第 {page} / {Math.max(1, totalPages)} 页</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(value => value + 1)} className="btn btn-secondary disabled:opacity-50">下一页</button>
+            <button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="btn btn-secondary disabled:opacity-50">{t("上一页")}</button>
+            <span>{t('第 {page} / {total} 页', { page, total: Math.max(1, totalPages) })}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage(value => value + 1)} className="btn btn-secondary disabled:opacity-50">{t("下一页")}</button>
           </div>
         </div>}
       </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { adminCouponApi } from '@/lib/api';
@@ -27,6 +29,7 @@ interface Coupon {
 }
 
 export default function AdminCouponsPage() {
+  const { t, locale, formatDate } = useI18n();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -55,7 +58,7 @@ export default function AdminCouponsPage() {
       setCoupons(response.data || []);
     } catch (error: any) {
       logger.error('加载优惠券失败:', error);
-      toast.error(error.response?.data?.message || '加载失败');
+      toast.error(t(error.response?.data?.error || error.response?.data?.message || '加载失败'));
     } finally {
       setLoading(false);
     }
@@ -71,7 +74,7 @@ export default function AdminCouponsPage() {
         end_time: new Date(formData.end_time).toISOString(),
       });
       
-      toast.success('创建成功！');
+      toast.success(t('创建成功！'));
       setShowCreateForm(false);
       loadCoupons();
       
@@ -91,36 +94,36 @@ export default function AdminCouponsPage() {
       });
     } catch (error: any) {
       logger.error('创建失败:', error);
-      toast.error(error.response?.data?.message || '创建失败');
+      toast.error(t(error.response?.data?.error || error.response?.data?.message || '创建失败'));
     }
   };
 
   const handleUpdateStatus = async (id: number, status: number) => {
     try {
       await adminCouponApi.updateStatus(id, status);
-      toast.success('状态更新成功！');
+      toast.success(t('状态更新成功！'));
       loadCoupons();
     } catch (error: any) {
       logger.error('更新失败:', error);
-      toast.error(error.response?.data?.message || '更新失败');
+      toast.error(t(error.response?.data?.error || error.response?.data?.message || '更新失败'));
     }
   };
 
   const getCouponTypeText = (type: number) => {
     switch (type) {
       case 1:
-        return '满减券';
+        return t("满减券");
       case 2:
-        return '折扣券';
+        return t("折扣券");
       case 3:
-        return '无门槛券';
+        return t("无门槛券");
       default:
-        return '未知';
+        return t("未知");
     }
   };
 
   const getStatusText = (status: number) => {
-    return status === 1 ? '启用' : '禁用';
+    return status === 1 ? t("启用") : t("禁用");
   };
 
   const getStatusColor = (status: number) => {
@@ -134,7 +137,7 @@ export default function AdminCouponsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">加载中...</p>
+            <p className="mt-4 text-gray-600">{t("加载中...")}</p>
           </div>
         </div>
       </div>
@@ -149,14 +152,14 @@ export default function AdminCouponsPage() {
         {/* Header */}
         <div className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">优惠券管理</h1>
-            <p className="mt-2 text-gray-600">创建和管理优惠券</p>
+            <h1 className="text-3xl font-bold text-gray-900">{t("优惠券管理")}</h1>
+            <p className="mt-2 text-gray-600">{t("创建和管理优惠券")}</p>
           </div>
           <button
             onClick={() => setShowCreateForm(true)}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
-            + 创建优惠券
+            {t("+ 创建优惠券")}
           </button>
         </div>
 
@@ -165,7 +168,7 @@ export default function AdminCouponsPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">创建优惠券</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{t("创建优惠券")}</h2>
                 <button
                   onClick={() => setShowCreateForm(false)}
                   className="text-gray-400 hover:text-gray-600"
@@ -179,56 +182,56 @@ export default function AdminCouponsPage() {
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">优惠券代码 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("优惠券代码 *")}</label>
                     <input
                       type="text"
                       required
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="例如: SUMMER2024"
+                      placeholder={t("例如: SUMMER2024")}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">优惠券名称 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("优惠券名称 *")}</label>
                     <input
                       type="text"
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="例如: 夏季促销券"
+                      placeholder={t("例如: 夏季促销券")}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("描述")}</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={2}
-                    placeholder="优惠券说明"
+                    placeholder={t("优惠券说明")}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">类型 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("类型 *")}</label>
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: Number(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value={1}>满减券</option>
-                      <option value={2}>折扣券</option>
-                      <option value={3}>无门槛券</option>
+                      <option value={1}>{t("满减券")}</option>
+                      <option value={2}>{t("折扣券")}</option>
+                      <option value={3}>{t("无门槛券")}</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {formData.type === 2 ? '减免比例 (%)，20表示8折 *' : '优惠值 (元) *'}
+                      {formData.type === 2 ? t("减免比例 (%)，20表示8折 *") : t("优惠值 (元) *")}
                     </label>
                     <input
                       type="number"
@@ -244,7 +247,7 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">最低消费金额 (元)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("最低消费金额 (元)")}</label>
                     <input
                       type="number"
                       min="0"
@@ -255,7 +258,7 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">最大优惠金额 (元)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("最大优惠金额 (元)")}</label>
                     <input
                       type="number"
                       min="0"
@@ -269,7 +272,7 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">发行总量 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("发行总量 *")}</label>
                     <input
                       type="number"
                       required
@@ -280,7 +283,7 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">每人限领 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("每人限领 *")}</label>
                     <input
                       type="number"
                       required
@@ -294,7 +297,7 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">生效时间 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("生效时间 *")}</label>
                     <input
                       type="datetime-local"
                       required
@@ -304,7 +307,7 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">失效时间 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("失效时间 *")}</label>
                     <input
                       type="datetime-local"
                       required
@@ -321,13 +324,13 @@ export default function AdminCouponsPage() {
                     onClick={() => setShowCreateForm(false)}
                     className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
-                    取消
+                    {t("取消")}
                   </button>
                   <button
                     type="submit"
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    创建
+                    {t("创建")}
                   </button>
                 </div>
               </form>
@@ -342,12 +345,12 @@ export default function AdminCouponsPage() {
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
               </svg>
-              <p className="mt-4 text-gray-500">暂无优惠券</p>
+              <p className="mt-4 text-gray-500">{t("暂无优惠券")}</p>
               <button
                 onClick={() => setShowCreateForm(true)}
                 className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                创建第一个优惠券
+                {t("创建第一个优惠券")}
               </button>
             </div>
           ) : (
@@ -355,12 +358,12 @@ export default function AdminCouponsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">优惠券信息</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">使用情况</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("优惠券信息")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("类型")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("数量")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("使用情况")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("状态")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("操作")}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -368,24 +371,24 @@ export default function AdminCouponsPage() {
                     <tr key={coupon.coupon_id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900">{coupon.name}</div>
-                        <div className="text-sm text-gray-500">代码: {coupon.code}</div>
+                        <div className="text-sm text-gray-500">{t("代码: {code}", { code: coupon.code })}</div>
                         <div className="text-xs text-gray-400 mt-1">
-                          {new Date(coupon.start_time).toLocaleDateString()} - {new Date(coupon.end_time).toLocaleDateString()}
+                          {formatDate(coupon.start_time, true)} - {formatDate(coupon.end_time, true)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-900">{getCouponTypeText(coupon.type)}</span>
                         <div className="text-xs text-gray-500">
-                          {coupon.type === 2 ? `${(100 - coupon.discount_value) / 10}折` : `¥${coupon.discount_value}`}
+                          {coupon.type === 2 ? (locale === 'en' ? t('减免 {percent}%', { percent: Number(coupon.discount_value) }) : t('{discount}折', { discount: (100 - coupon.discount_value) / 10 })) : `¥${coupon.discount_value}`}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">剩余: {coupon.remain_quantity}</div>
-                        <div className="text-xs text-gray-500">总量: {coupon.total_quantity}</div>
+                        <div className="text-sm text-gray-900">{t("剩余: {count}", { count: coupon.remain_quantity })}</div>
+                        <div className="text-xs text-gray-500">{t("总量: {count}", { count: coupon.total_quantity })}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">已领: {coupon.received_count}</div>
-                        <div className="text-xs text-gray-500">已用: {coupon.used_count}</div>
+                        <div className="text-sm text-gray-900">{t("已领: {count}", { count: coupon.received_count })}</div>
+                        <div className="text-xs text-gray-500">{t("已用: {count}", { count: coupon.used_count })}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(coupon.status)}`}>
@@ -401,7 +404,7 @@ export default function AdminCouponsPage() {
                               : 'bg-green-100 text-green-600 hover:bg-green-200'
                           } transition-colors`}
                         >
-                          {coupon.status === 1 ? '禁用' : '启用'}
+                          {coupon.status === 1 ? t("禁用") : t("启用")}
                         </button>
                       </td>
                     </tr>

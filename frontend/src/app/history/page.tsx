@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 import { useRouter } from 'next/navigation';
 import { browseApi } from '@/lib/api';
 import { toast } from 'react-hot-toast';
@@ -20,6 +22,7 @@ interface BrowseHistory {
 }
 
 export default function BrowseHistoryPage() {
+  const { t, formatDate } = useI18n();
   const router = useRouter();
   const { user, isHydrated, rows: history, loading, page, total, totalPages, limit,
     error: loadError, reload: fetchHistory, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation } =
@@ -27,14 +30,14 @@ export default function BrowseHistoryPage() {
 
   const handleRemove = (productId: number) => runMutation(() => browseApi.deleteRecord(productId), {
     productId, refresh: true,
-    onSuccess: () => toast.success('删除成功'),
-    onError: error => toast.error(error.response?.data?.message || '删除失败'),
+    onSuccess: () => toast.success(t("删除成功")),
+    onError: error => toast.error(t(error.response?.data?.message || "删除失败")),
   });
 
   const handleClearAll = () => runMutation(() => browseApi.clearHistory(), {
-    confirm: () => confirm('确定要清空所有浏览历史吗？'), refresh: true,
-    onSuccess: () => toast.success('已清空浏览历史'),
-    onError: error => toast.error(error.response?.data?.message || '清空失败'),
+    confirm: () => confirm(t("确定要清空所有浏览历史吗？")), refresh: true,
+    onSuccess: () => toast.success(t("已清空浏览历史")),
+    onError: error => toast.error(t(error.response?.data?.message || "清空失败")),
   });
 
   const handleAddToCart = async (productId: number) => {
@@ -44,9 +47,9 @@ export default function BrowseHistoryPage() {
       productId,
       onSuccess: result => {
         if (result === 'select') router.push(`/products/${productId}`);
-        if (result === 'added') toast.success('已添加到购物车');
+        if (result === 'added') toast.success(t("已添加到购物车"));
       },
-      onError: error => toast.error(error.response?.data?.error || error.message || '添加失败'),
+      onError: error => toast.error(t(error.response?.data?.error || error.message || "添加失败")),
     });
   };
 
@@ -59,7 +62,7 @@ export default function BrowseHistoryPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">加载中...</p>
+          <p className="mt-4 text-gray-600">{t("加载中...")}</p>
         </div>
       </div>
     );
@@ -72,9 +75,8 @@ export default function BrowseHistoryPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <FiClock className="text-blue-600" />
-              浏览历史
-            </h1>
-            <p className="text-gray-600 mt-2">最近浏览了 {loadError ? '—' : total} 个商品</p>
+              {t("浏览历史")}</h1>
+            <p className="text-gray-600 mt-2">{t('最近浏览了 {count} 个商品', { count: loadError ? '—' : total })}</p>
           </div>
           
           {history.length > 0 && (
@@ -84,26 +86,24 @@ export default function BrowseHistoryPage() {
               className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition flex items-center gap-2"
             >
               <FiTrash />
-              清空历史
-            </button>
+              {t("清空历史")}</button>
           )}
         </div>
 
         {loadError ? (
           <div className="bg-white rounded-lg shadow-sm p-12 text-center" role="alert">
-            <p className="text-red-600">{loadError}</p>
-            <button onClick={fetchHistory} className="mt-4 px-4 py-2 border rounded-lg">重新加载</button>
+            <p className="text-red-600">{t(loadError)}</p>
+            <button onClick={fetchHistory} className="mt-4 px-4 py-2 border rounded-lg">{t("重新加载")}</button>
           </div>
         ) : history.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
             <FiClock className="text-6xl text-gray-300 mx-auto mb-4" />
-            <p className="text-xl text-gray-600 mb-4">暂无浏览记录</p>
+            <p className="text-xl text-gray-600 mb-4">{t("暂无浏览记录")}</p>
             <button
               onClick={() => router.push('/products')}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
-              去逛逛
-            </button>
+              {t("去逛逛")}</button>
           </div>
         ) : (
           <>
@@ -119,17 +119,17 @@ export default function BrowseHistoryPage() {
                   >
                     {item.main_image ? <img
                       src={item.main_image}
-                      alt={item.title || '商品已不存在'}
+                      alt={(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
                       className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
-                    /> : <div className="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400">暂无图片</div>}
+                    /> : <div className="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400">{t("暂无图片")}</div>}
                     {Number(item.stock) <= 0 && (
                       <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                        <span className="text-white text-xl font-bold">已售罄</span>
+                        <span className="text-white text-xl font-bold">{t("已售罄")}</span>
                       </div>
                     )}
                     {item.status !== 1 && (
                       <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                        <span className="text-white text-xl font-bold">已下架</span>
+                        <span className="text-white text-xl font-bold">{t("已下架")}</span>
                       </div>
                     )}
                   </div>
@@ -139,7 +139,7 @@ export default function BrowseHistoryPage() {
                       className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-blue-600"
                       onClick={() => handleProductClick(item.product_id)}
                     >
-                      {item.title || '商品已不存在'}
+                      {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
                     </h3>
 
                     <div className="flex items-baseline gap-2 mb-2">
@@ -149,7 +149,7 @@ export default function BrowseHistoryPage() {
                     </div>
 
                     <div className="text-xs text-gray-400 mb-4">
-                      浏览时间：{new Date(item.browsed_at).toLocaleString('zh-CN')}
+                      {t('浏览时间：{date}', { date: formatDate(item.browsed_at) })}
                     </div>
 
                     <div className="flex gap-2">
@@ -159,13 +159,13 @@ export default function BrowseHistoryPage() {
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <FiShoppingCart />
-                        {item.has_sku ? '选择规格' : '加入购物车'}
+                        {item.has_sku ? t("选择规格") : t("加入购物车")}
                       </button>
                       <button
                         onClick={() => handleRemove(item.product_id)}
                         disabled={busy}
                         className="p-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition"
-                        title="删除记录"
+                        title={t("删除记录")}
                       >
                         <FiTrash />
                       </button>
@@ -183,8 +183,7 @@ export default function BrowseHistoryPage() {
                   disabled={page === 1}
                   className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  上一页
-                </button>
+                  {t("上一页")}</button>
                 <span className="px-4 py-2 text-gray-600">
                   {page} / {totalPages}
                 </span>
@@ -193,8 +192,7 @@ export default function BrowseHistoryPage() {
                   disabled={page >= totalPages}
                   className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  下一页
-                </button>
+                  {t("下一页")}</button>
               </div>
             )}
           </>

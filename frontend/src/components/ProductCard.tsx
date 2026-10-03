@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { quickAddToCart } from '@/lib/quick-cart';
@@ -14,6 +16,7 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const { t } = useI18n();
   const active = useRef(true);
   const productContext = useRef(product.product_id);
   productContext.current = product.product_id;
@@ -26,7 +29,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     
     if (!isAuthenticated) {
-      toast.error('请先登录');
+      toast.error(t("请先登录"));
       return;
     }
 
@@ -34,10 +37,10 @@ export default function ProductCard({ product }: ProductCardProps) {
     try {
       const result = await quickAddToCart(product.product_id, () => active.current && productContext.current === product.product_id);
       if (result === 'select') router.push(`/products/${product.product_id}`);
-      if (result === 'added') toast.success('已加入购物车');
+      if (result === 'added') toast.success(t("已加入购物车"));
     } catch (error: any) {
       logger.error('加入购物车失败:', error);
-      toast.error(error.response?.data?.error || error.message || '加入购物车失败');
+      toast.error(t(error.response?.data?.error || error.message || "加入购物车失败"));
     } finally {
       if (active.current) setIsAdding(false);
     }
@@ -54,13 +57,11 @@ export default function ProductCard({ product }: ProductCardProps) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">
-            暂无图片
-          </div>
+            {t("暂无图片")}</div>
         )}
         {product.original_price && product.original_price > product.price && (
           <div className="absolute top-2 right-2 bg-primary-600 text-white px-2 py-1 rounded text-sm">
-            促销
-          </div>
+            {t("促销")}</div>
         )}
       </div>
       
@@ -78,7 +79,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               </span>
             )}
           </div>
-          <span className="text-gray-500 text-sm">已售 {product.sales_count}</span>
+          <span className="text-gray-500 text-sm">{t('已售 {count}', { count: product.sales_count })}</span>
         </div>
 
         <div className="flex items-center justify-between">
@@ -98,7 +99,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           >
             <FiShoppingCart />
             <span className="text-sm">
-              {Number(product.stock) <= 0 ? '已售罄' : isAdding ? '处理中...' : product.has_sku ? '选规格' : '加入'}
+              {Number(product.stock) <= 0 ? t("已售罄") : isAdding ? t("处理中...") : product.has_sku ? t("选规格") : t("加入")}
             </span>
           </button>
         </div>

@@ -6,6 +6,7 @@ import { couponApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { useI18n } from '@/lib/i18n';
 
 interface UserCoupon {
   user_coupon_id: number;
@@ -36,6 +37,7 @@ const STATUS_TABS = [
 
 export default function MyCouponsPage() {
   const router = useRouter();
+  const { t, locale, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [coupons, setCoupons] = useState<UserCoupon[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export default function MyCouponsPage() {
     setCoupons([]);
     if (!isHydrated) return;
     if (!isAuthenticated) {
-      toast.error('请先登录');
+      toast.error(t('请先登录'));
       router.push('/login');
       return;
     }
@@ -63,7 +65,7 @@ export default function MyCouponsPage() {
     }).catch(error => {
       if (!active || !isCurrentSession()) return;
       logger.error('加载优惠券失败:', error);
-      toast.error(error.response?.data?.message || '加载失败');
+      toast.error(t(error.response?.data?.message || '加载失败'));
     }).finally(() => {
       if (active && isCurrentSession()) {
         setLoadedKey(requestKey);
@@ -89,15 +91,15 @@ export default function MyCouponsPage() {
   const getCouponDescription = (coupon: UserCoupon) => {
     switch (coupon.type) {
       case 1:
-        return `满${coupon.min_amount}元减${coupon.discount_value}元`;
+        return t('满{minimum}元减{discount}元', { minimum: coupon.min_amount, discount: coupon.discount_value });
       case 2:
         const discount = 100 - Number(coupon.discount_value);
         const maxText = Number(coupon.max_discount) > 0
-          ? `，最高优惠${coupon.max_discount}元`
+          ? t('，最高优惠{maximum}元', { maximum: coupon.max_discount ?? 0 })
           : '';
-        return `${discount / 10}折优惠${maxText}`;
+        return (locale === 'en' ? t('{percentage}%优惠', { percentage: Number(coupon.discount_value) }) : t('{discount}折优惠', { discount: discount / 10 })) + maxText;
       case 3:
-        return `直接抵扣${coupon.discount_value}元`;
+        return t('直接抵扣{discount}元', { discount: coupon.discount_value });
       default:
         return coupon.description;
     }
@@ -122,7 +124,7 @@ export default function MyCouponsPage() {
   const handleUse = (coupon: UserCoupon) => {
     if (!isCurrentSession()) return;
     if (!canUseCoupon(coupon)) {
-      toast.error('优惠券当前不可用');
+      toast.error(t('优惠券当前不可用'));
       return;
     }
     router.push(`/cart?user_coupon_id=${coupon.user_coupon_id}`);
@@ -142,7 +144,7 @@ export default function MyCouponsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">加载中...</p>
+            <p className="mt-4 text-gray-600">{t("加载中...")}</p>
           </div>
         </div>
       </div>
@@ -154,15 +156,15 @@ export default function MyCouponsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">我的优惠券</h1>
-          <p className="mt-2 text-gray-600">查看和使用你的优惠券</p>
+          <h1 className="text-3xl font-bold text-gray-900">{t("我的优惠券")}</h1>
+          <p className="mt-2 text-gray-600">{t("查看和使用你的优惠券")}</p>
 
           <div className="mt-4 flex gap-4">
             <button
               onClick={() => router.push('/coupons')}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              领取更多优惠券
+              {t("领取更多优惠券")}
             </button>
           </div>
         </div>
@@ -180,7 +182,7 @@ export default function MyCouponsPage() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {tab.label}
+                {t(tab.label)}
               </button>
             ))}
           </div>
@@ -193,16 +195,16 @@ export default function MyCouponsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             <p className="mt-4 text-gray-500">
-              {activeStatus === 1 && '暂无未使用的优惠券'}
-              {activeStatus === 2 && '暂无已使用的优惠券'}
-              {activeStatus === 3 && '暂无已过期的优惠券'}
+              {activeStatus === 1 && t('暂无未使用的优惠券')}
+              {activeStatus === 2 && t('暂无已使用的优惠券')}
+              {activeStatus === 3 && t('暂无已过期的优惠券')}
             </p>
             {activeStatus === 1 && (
               <button
                 onClick={() => router.push('/coupons')}
                 className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                去领取优惠券
+                {t("去领取优惠券")}
               </button>
             )}
           </div>
@@ -217,8 +219,8 @@ export default function MyCouponsPage() {
                 {coupon.status !== 1 && (
                   <div className="absolute top-4 right-4 z-10">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      {coupon.status === 2 && '已使用'}
-                      {coupon.status === 3 && '已过期'}
+                      {coupon.status === 2 && t('已使用')}
+                      {coupon.status === 3 && t('已过期')}
                     </span>
                   </div>
                 )}
@@ -227,14 +229,14 @@ export default function MyCouponsPage() {
                 <div className={`bg-gradient-to-r ${getCouponColor(coupon.type, coupon.status)} p-6 text-white ${coupon.status !== 1 ? 'opacity-60' : ''}`}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="text-sm opacity-90">{getCouponTypeText(coupon.type)}</div>
+                      <div className="text-sm opacity-90">{t(getCouponTypeText(coupon.type))}</div>
                       <div className="text-3xl font-bold mt-1">
-                        {coupon.type === 2 ? `${(100 - Number(coupon.discount_value)) / 10}折` : `¥${coupon.discount_value}`}
+                        {coupon.type === 2 ? (locale === 'en' ? t('{percentage}%优惠', { percentage: Number(coupon.discount_value) }) : t('{discount}折', { discount: (100 - Number(coupon.discount_value)) / 10 })) : `¥${coupon.discount_value}`}
                       </div>
                       <div className="text-sm opacity-90 mt-1">
-                        {coupon.type === 1 && `满${coupon.min_amount}元可用`}
-                        {coupon.type === 2 && Number(coupon.min_amount) > 0 && `满${coupon.min_amount}元可用`}
-                        {coupon.type === 3 && '无门槛'}
+                        {coupon.type === 1 && t('满{minimum}元可用', { minimum: coupon.min_amount })}
+                        {coupon.type === 2 && Number(coupon.min_amount) > 0 && t('满{minimum}元可用', { minimum: coupon.min_amount })}
+                        {coupon.type === 3 && t('无门槛')}
                       </div>
                     </div>
                   </div>
@@ -247,17 +249,17 @@ export default function MyCouponsPage() {
 
                   <div className="space-y-2 text-xs text-gray-500 mb-4">
                     <div className="flex justify-between">
-                      <span>领取时间</span>
-                      <span>{new Date(coupon.received_at).toLocaleDateString()}</span>
+                      <span>{t("领取时间")}</span>
+                      <span>{formatDate(coupon.received_at, true)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>有效期至</span>
-                      <span>{new Date(coupon.expired_at).toLocaleDateString()}</span>
+                      <span>{t("有效期至")}</span>
+                      <span>{formatDate(coupon.expired_at, true)}</span>
                     </div>
                     {coupon.status === 2 && coupon.used_at && (
                       <div className="flex justify-between">
-                        <span>使用时间</span>
-                        <span>{new Date(coupon.used_at).toLocaleDateString()}</span>
+                        <span>{t("使用时间")}</span>
+                        <span>{formatDate(coupon.used_at, true)}</span>
                       </div>
                     )}
                   </div>
@@ -268,7 +270,7 @@ export default function MyCouponsPage() {
                       disabled={!canUseCoupon(coupon)}
                       className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
                     >
-                      {canUseCoupon(coupon) ? '立即使用' : '暂不可用'}
+                      {canUseCoupon(coupon) ? t('立即使用') : t('暂不可用')}
                     </button>
                   )}
                 </div>

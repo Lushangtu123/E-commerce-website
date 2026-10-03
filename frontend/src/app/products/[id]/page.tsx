@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi } from '@/lib/api';
@@ -12,6 +14,7 @@ import ProductCard from '@/components/ProductCard';
 import { logger } from '@/lib/logger';
 
 export default function ProductDetailPage() {
+  const { t, formatDate } = useI18n();
   const params = useParams();
   const router = useRouter();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
@@ -69,7 +72,7 @@ export default function ProductDetailPage() {
     }).catch((error: any) => {
       if (!isCurrentRequest()) return;
       logger.error('加载商品失败:', error);
-      toast.error('商品不存在');
+      toast.error(t("商品不存在"));
       router.push('/products');
     }).finally(() => { if (isCurrentRequest()) setLoading(false); });
     reviewApi.listByProduct(productId, { limit: 5 }).then((data: any) => {
@@ -101,16 +104,16 @@ export default function ProductDetailPage() {
   const handleAddToCart = async (): Promise<boolean> => {
     if (!isHydrated || !isCurrentContext() || loadedContext !== context || addingRequest.current) return false;
     if (!isAuthenticated) {
-      toast.error('请先登录');
+      toast.error(t("请先登录"));
       router.push('/login');
       return false;
     }
     if (!canPurchase) {
-      toast.error('请选择商品规格');
+      toast.error(t("请选择商品规格"));
       return false;
     }
     if (quantity < 1 || quantity > stock) {
-      toast.error('商品库存不足');
+      toast.error(t("商品库存不足"));
       return false;
     }
     addingRequest.current = context;
@@ -123,10 +126,10 @@ export default function ProductDetailPage() {
         price: Number(price), main_image: image, stock,
         ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs }),
       });
-      toast.success('已加入购物车');
+      toast.success(t("已加入购物车"));
       return true;
     } catch (error: any) {
-      if (isCurrentContext()) toast.error(error.response?.data?.error || '加入购物车失败');
+      if (isCurrentContext()) toast.error(t(error.response?.data?.error || "加入购物车失败"));
       return false;
     } finally {
       if (isCurrentContext()) {
@@ -143,7 +146,7 @@ export default function ProductDetailPage() {
   const handleToggleFavorite = async () => {
     if (!isHydrated || !isCurrentContext() || favoriting) return;
     if (!isAuthenticated) {
-      toast.error('请先登录');
+      toast.error(t("请先登录"));
       router.push('/login');
       return;
     }
@@ -152,9 +155,9 @@ export default function ProductDetailPage() {
       const data: any = await favoriteApi.toggle(productId);
       if (!isCurrentContext()) return;
       setIsFavorited(data.is_favorited);
-      toast.success(data.message);
+      toast.success(t(data.message));
     } catch (error: any) {
-      if (isCurrentContext()) toast.error(error.response?.data?.message || '操作失败');
+      if (isCurrentContext()) toast.error(t(error.response?.data?.message || "操作失败"));
     } finally {
       if (isCurrentContext()) setFavoriting(false);
     }
@@ -198,8 +201,7 @@ export default function ProductDetailPage() {
                 />
               ) : (
                 <div className="w-full h-96 flex items-center justify-center text-gray-400">
-                  暂无图片
-                </div>
+                  {t("暂无图片")}</div>
               )}
             </div>
           </div>
@@ -214,10 +216,10 @@ export default function ProductDetailPage() {
               <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4">
                 <div className="flex items-center">
                   <FiStar className="text-yellow-400 mr-1" />
-                  <span>{product.rating} 分</span>
+                  <span>{t('{rating} 分', { rating: product.rating })}</span>
                 </div>
-                <div>已售 {product.sales_count} 件</div>
-                <div>库存 {hasSku && !selectedSku ? product.stock : stock} 件</div>
+                <div>{t('已售 {count} 件', { count: product.sales_count })}</div>
+                <div>{t('库存 {count} 件', { count: hasSku && !selectedSku ? product.stock : stock })}</div>
               </div>
 
               <div className="bg-primary-50 p-6 rounded-lg">
@@ -236,7 +238,7 @@ export default function ProductDetailPage() {
 
             {hasSku && (
               <div>
-                <label htmlFor="product-sku" className="block text-gray-700 mb-2">商品规格</label>
+                <label htmlFor="product-sku" className="block text-gray-700 mb-2">{t("商品规格")}</label>
                 <select
                   id="product-sku"
                   value={selectedSkuId ?? ''}
@@ -244,21 +246,21 @@ export default function ProductDetailPage() {
                   onChange={event => { setSelectedSkuId(event.target.value ? Number(event.target.value) : undefined); setQuantity(1); }}
                   className="w-full border border-gray-300 rounded px-3 py-2"
                 >
-                  <option value="">{skus.length === 0 ? '暂无可用规格' : '请选择规格'}</option>
+                  <option value="">{skus.length === 0 ? t("暂无可用规格") : t("请选择规格")}</option>
                   {skus.map(sku => (
                     <option key={sku.sku_id} value={sku.sku_id} disabled={Number(sku.stock) <= 0}>
                       {Object.entries(sku.specs || {}).map(([name, value]) => `${name}: ${value}`).join(' / ') || sku.sku_code}
-                      {` — ¥${sku.price}（库存 ${sku.stock}）`}
+                      {t(' — ¥{price}（库存 {stock}）', { price: sku.price, stock: sku.stock })}
                     </option>
                   ))}
                 </select>
-                {selectedSku && <p className="text-sm text-gray-500 mt-2">规格编号：{selectedSku.sku_code}</p>}
+                {selectedSku && <p className="text-sm text-gray-500 mt-2">{t('规格编号：{code}', { code: selectedSku.sku_code })}</p>}
               </div>
             )}
 
             {/* 数量选择 */}
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700">数量:</span>
+              <span className="text-gray-700">{t("数量:")}</span>
               <div className="flex items-center border border-gray-300 rounded">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -296,7 +298,7 @@ export default function ProductDetailPage() {
                     ? 'border-red-500 bg-red-50 text-red-500 hover:bg-red-100'
                     : 'border-gray-300 text-gray-600 hover:border-red-500 hover:text-red-500'
                 }`}
-                title={isFavorited ? '取消收藏' : '收藏'}
+                title={isFavorited ? t("取消收藏") : t("收藏")}
               >
                 {isFavorited ? <FaHeart size={24} /> : <FaRegHeart size={24} />}
               </button>
@@ -307,22 +309,22 @@ export default function ProductDetailPage() {
                 className="flex-1 btn btn-outline disabled:opacity-50"
               >
                 <FiShoppingCart className="inline mr-2" />
-                {soldOut ? '已售罄' : adding ? '加入中...' : '加入购物车'}
+                {soldOut ? t("已售罄") : adding ? t("加入中...") : t("加入购物车")}
               </button>
               <button
                 onClick={handleBuyNow}
                 disabled={adding || !canPurchase || soldOut}
                 className="flex-1 btn btn-primary disabled:opacity-50"
               >
-                {soldOut ? '已售罄' : '立即购买'}
+                {soldOut ? t("已售罄") : t("立即购买")}
               </button>
             </div>
 
             {/* 商品描述 */}
             <div className="border-t pt-6">
-              <h3 className="font-bold text-lg mb-3">商品详情</h3>
+              <h3 className="font-bold text-lg mb-3">{t("商品详情")}</h3>
               <p className="text-gray-600 whitespace-pre-wrap">
-                {product.description || '暂无描述'}
+                {product.description || t("暂无描述")}
               </p>
             </div>
           </div>
@@ -330,12 +332,11 @@ export default function ProductDetailPage() {
 
         {/* 评论区 */}
         <div className="card p-6">
-          <h2 className="text-2xl font-bold mb-6">用户评价</h2>
+          <h2 className="text-2xl font-bold mb-6">{t("用户评价")}</h2>
           
           {reviews.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              暂无评价
-            </div>
+              {t("暂无评价")}</div>
           ) : (
             <div className="space-y-4">
               {reviews.map((review) => (
@@ -355,7 +356,7 @@ export default function ProductDetailPage() {
                             />
                           ))}
                         </div>
-                        <span>{new Date(review.created_at).toLocaleDateString()}</span>
+                        <span>{formatDate(review.created_at, true)}</span>
                       </div>
                     </div>
                   </div>
@@ -369,12 +370,11 @@ export default function ProductDetailPage() {
         {/* 相关推荐 */}
         {relatedProducts.length > 0 && (
           <div className="card p-6">
-            <h2 className="text-2xl font-bold mb-6">相关推荐</h2>
+            <h2 className="text-2xl font-bold mb-6">{t("相关推荐")}</h2>
             
             {loadingRecommendations ? (
               <div className="text-center py-12 text-gray-500">
-                加载中...
-              </div>
+                {t("加载中...")}</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {relatedProducts.map((relatedProduct) => (

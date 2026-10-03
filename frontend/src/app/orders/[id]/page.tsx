@@ -6,6 +6,7 @@ import { orderApi, orderTimeoutApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { useI18n } from '@/lib/i18n';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -18,6 +19,7 @@ const ORDER_STATUS = {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { t, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -77,7 +79,7 @@ export default function OrderDetailPage() {
     } catch (error: any) {
       if (!isCurrentSession() || request !== detailRequest.current) return;
       logger.error('加载订单失败:', error);
-      toast.error('订单不存在');
+      toast.error(t('订单不存在'));
       router.push('/orders');
     } finally {
       if (isCurrentSession() && request === detailRequest.current) setLoading(false);
@@ -106,27 +108,27 @@ export default function OrderDetailPage() {
     try {
       await orderApi.pay(orderId);
       if (!isCurrentSession()) return;
-      toast.success('支付成功');
+      toast.success(t('支付成功'));
       loadOrder();
     } catch (error: any) {
       if (!isCurrentSession()) return;
-      toast.error(error.response?.data?.error || '支付失败');
+      toast.error(t(error.response?.data?.error || '支付失败'));
     }
   };
 
   const handleCancel = async () => {
     if (!isCurrentSession()) return;
-    if (!confirm('确定要取消订单吗？')) return;
+    if (!confirm(t('确定要取消订单吗？'))) return;
     if (!isCurrentSession()) return;
 
     try {
       await orderApi.cancel(orderId);
       if (!isCurrentSession()) return;
-      toast.success('订单已取消');
+      toast.success(t('订单已取消'));
       loadOrder();
     } catch (error: any) {
       if (!isCurrentSession()) return;
-      toast.error(error.response?.data?.error || '取消失败');
+      toast.error(t(error.response?.data?.error || '取消失败'));
     }
   };
 
@@ -135,11 +137,11 @@ export default function OrderDetailPage() {
     try {
       await orderApi.confirm(orderId);
       if (!isCurrentSession()) return;
-      toast.success('确认收货成功');
+      toast.success(t('确认收货成功'));
       loadOrder();
     } catch (error: any) {
       if (!isCurrentSession()) return;
-      toast.error(error.response?.data?.error || '确认收货失败');
+      toast.error(t(error.response?.data?.error || '确认收货失败'));
     }
   };
 
@@ -165,45 +167,45 @@ export default function OrderDetailPage() {
   return (
     <div className="py-8">
       <div className="container-custom max-w-4xl">
-        <h1 className="text-3xl font-bold mb-8">订单详情</h1>
+        <h1 className="text-3xl font-bold mb-8">{t("订单详情")}</h1>
 
         {/* 订单状态 */}
         <div className="card p-6 mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <div className="text-gray-600 mb-2">订单状态</div>
+              <div className="text-gray-600 mb-2">{t("订单状态")}</div>
               <div className={`text-2xl font-bold ${ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].color}`}>
-                {ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].text}
+                {t(ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].text)}
               </div>
               {order.status === 0 && remainingTime !== null && remainingTime > 0 && (
                 <div className="mt-2 text-orange-600 text-sm">
-                  ⏰ 剩余支付时间: {remainingTime} 分钟
+                  {t('⏰ 剩余支付时间: {minutes} 分钟', { minutes: remainingTime })}
                 </div>
               )}
               {order.status === 0 && remainingTime === 0 && (
                 <div className="mt-2 text-red-600 text-sm">
-                  ⚠️ 订单已超时，即将自动取消
+                  {t("⚠️ 订单已超时，即将自动取消")}
                 </div>
               )}
             </div>
             <div className="text-right">
-              <div className="text-gray-600 mb-2">订单号</div>
+              <div className="text-gray-600 mb-2">{t("订单号")}</div>
               <div className="font-mono">{order.order_no}</div>
             </div>
           </div>
         </div>
 
         <div className="card p-6 mb-6">
-          <h2 className="font-bold text-lg mb-4">收货信息</h2>
+          <h2 className="font-bold text-lg mb-4">{t("收货信息")}</h2>
           {order.shipping_address_snapshot ? <div>
             <p className="font-medium">{order.shipping_address_snapshot.receiver_name} <span className="ml-2 text-gray-600">{order.shipping_address_snapshot.phone}</span></p>
             <p className="text-gray-600 mt-2">{order.shipping_address_snapshot.province}{order.shipping_address_snapshot.city}{order.shipping_address_snapshot.district}{order.shipping_address_snapshot.detail_address}</p>
-          </div> : <p className="text-gray-500">历史订单未记录收货信息</p>}
+          </div> : <p className="text-gray-500">{t("历史订单未记录收货信息")}</p>}
         </div>
 
         {/* 商品列表 */}
         <div className="card p-6 mb-6">
-          <h2 className="font-bold text-lg mb-4">商品信息</h2>
+          <h2 className="font-bold text-lg mb-4">{t("商品信息")}</h2>
           <div className="space-y-4">
             {items.map((item) => (
               <div key={item.item_id} className="flex items-center space-x-4 pb-4 border-b last:border-0">
@@ -216,14 +218,14 @@ export default function OrderDetailPage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                      无图
+                      {t("无图")}
                     </div>
                   )}
                 </div>
                 <div className="flex-1">
                   <h3 className="font-medium">{item.product_name}</h3>
                   {item.sku_specs && <p className="text-gray-600 text-sm mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
-                  {item.sku_code && <p className="text-gray-500 text-xs mt-1">规格编号：{item.sku_code}</p>}
+                  {item.sku_code && <p className="text-gray-500 text-xs mt-1">{t("规格编号：")}{item.sku_code}</p>}
                   <p className="text-gray-600 text-sm mt-1">¥{item.price} × {item.quantity}</p>
                 </div>
                 <div className="text-right">
@@ -236,28 +238,28 @@ export default function OrderDetailPage() {
 
         {/* 订单金额 */}
         <div className="card p-6 mb-6">
-          <h2 className="font-bold text-lg mb-4">订单金额</h2>
+          <h2 className="font-bold text-lg mb-4">{t("订单金额")}</h2>
           <div className="space-y-2">
             <div className="flex justify-between text-gray-600">
-              <span>商品总价</span>
+              <span>{t("商品总价")}</span>
               <span>¥{Number(order.original_amount ?? order.total_amount).toFixed(2)}</span>
             </div>
             {order.user_coupon_id && (
               <div className="flex justify-between text-gray-600">
-                <span>优惠券</span>
-                <span>{order.coupon_name || '优惠券'}{order.coupon_code && ` (${order.coupon_code})`}</span>
+                <span>{t("优惠券")}</span>
+                <span>{order.coupon_name || t('优惠券')}{order.coupon_code && ` (${order.coupon_code})`}</span>
               </div>
             )}
             <div className="flex justify-between text-gray-600">
-              <span>优惠券优惠</span>
+              <span>{t("优惠券优惠")}</span>
               <span>-¥{Number(order.discount_amount ?? 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
-              <span>运费</span>
-              <span className="text-green-600">免运费</span>
+              <span>{t("运费")}</span>
+              <span className="text-green-600">{t("免运费")}</span>
             </div>
             <div className="border-t pt-2 flex justify-between items-center">
-              <span className="font-medium">{order.status === 0 || order.status === 4 ? '应付金额' : '实付款'}</span>
+              <span className="font-medium">{order.status === 0 || order.status === 4 ? t('应付金额') : t('实付款')}</span>
               <span className="text-2xl font-bold text-primary-600">
                 ¥{Number(order.total_amount).toFixed(2)}
               </span>
@@ -267,28 +269,28 @@ export default function OrderDetailPage() {
 
         {/* 时间信息 */}
         <div className="card p-6 mb-6">
-          <h2 className="font-bold text-lg mb-4">订单时间</h2>
+          <h2 className="font-bold text-lg mb-4">{t("订单时间")}</h2>
           <div className="space-y-2 text-gray-600">
             <div className="flex justify-between">
-              <span>下单时间</span>
-              <span>{new Date(order.created_at).toLocaleString()}</span>
+              <span>{t("下单时间")}</span>
+              <span>{formatDate(order.created_at)}</span>
             </div>
             {order.paid_at && (
               <div className="flex justify-between">
-                <span>支付时间</span>
-                <span>{new Date(order.paid_at).toLocaleString()}</span>
+                <span>{t("支付时间")}</span>
+                <span>{formatDate(order.paid_at)}</span>
               </div>
             )}
             {order.shipped_at && (
               <div className="flex justify-between">
-                <span>发货时间</span>
-                <span>{new Date(order.shipped_at).toLocaleString()}</span>
+                <span>{t("发货时间")}</span>
+                <span>{formatDate(order.shipped_at)}</span>
               </div>
             )}
             {order.completed_at && (
               <div className="flex justify-between">
-                <span>完成时间</span>
-                <span>{new Date(order.completed_at).toLocaleString()}</span>
+                <span>{t("完成时间")}</span>
+                <span>{formatDate(order.completed_at)}</span>
               </div>
             )}
           </div>
@@ -297,23 +299,23 @@ export default function OrderDetailPage() {
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-3">
           <button onClick={() => router.push('/orders')} className="btn btn-secondary">
-            返回订单列表
+            {t("返回订单列表")}
           </button>
 
           {order.status === 0 && (
             <>
               <button onClick={handlePay} className="btn btn-primary">
-                立即支付
+                {t("立即支付")}
               </button>
               <button onClick={handleCancel} className="btn btn-secondary">
-                取消订单
+                {t("取消订单")}
               </button>
             </>
           )}
 
           {order.status === 2 && (
             <button onClick={handleConfirm} className="btn btn-primary">
-              确认收货
+              {t("确认收货")}
             </button>
           )}
         </div>

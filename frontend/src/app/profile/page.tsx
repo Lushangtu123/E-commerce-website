@@ -18,9 +18,11 @@ import {
   FiPhone
 } from 'react-icons/fi';
 import { logger } from '@/lib/logger';
+import { useI18n } from '@/lib/i18n';
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const { user, token, isAuthenticated, isHydrated, logout } = useAuthStore();
   const [result, setResult] = useState<{ key: string; stats?: UserStats; error?: string } | null>(null);
   const mounted = useRef(true);
@@ -83,7 +85,7 @@ export default function ProfilePage() {
     {
       icon: <FiGift size={24} />,
       title: '我的优惠券',
-      description: stats ? `${stats.availableCoupons}张可用` : '查看我的优惠券',
+      description: stats ? t('{count}张可用', { count: stats.availableCoupons }) : '查看我的优惠券',
       link: '/my/coupons',
       count: stats?.totalCoupons,
       color: 'text-orange-600 bg-orange-50',
@@ -126,7 +128,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">加载中...</p>
+          <p className="mt-4 text-gray-600">{t("加载中...")}</p>
         </div>
       </div>
     );
@@ -143,9 +145,9 @@ export default function ProfilePage() {
                 <FiUser size={40} className="text-blue-600" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold mb-2">{user?.username || '用户'}</h1>
+                <h1 className="text-3xl font-bold mb-2">{user?.username || t('用户')}</h1>
                 <p className="text-blue-100">{user?.email || ''}</p>
-                <p className="text-sm text-blue-200 mt-1">用户ID: {user?.user_id || 'N/A'}</p>
+                <p className="text-sm text-blue-200 mt-1">{t("用户ID:")} {user?.user_id || 'N/A'}</p>
               </div>
             </div>
             <button
@@ -153,7 +155,7 @@ export default function ProfilePage() {
               className="flex items-center gap-2 px-6 py-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
             >
               <FiLogOut size={20} />
-              <span>退出登录</span>
+              <span>{t("退出登录")}</span>
             </button>
           </div>
 
@@ -161,26 +163,26 @@ export default function ProfilePage() {
           <div className="grid grid-cols-4 gap-4 mt-8 pt-8 border-t border-white border-opacity-20">
             <div className="text-center">
               <div className="text-3xl font-bold mb-1">{stats?.totalOrders ?? '—'}</div>
-              <div className="text-sm text-blue-100">我的订单</div>
+              <div className="text-sm text-blue-100">{t("我的订单")}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold mb-1">{stats?.availableCoupons ?? '—'}</div>
-              <div className="text-sm text-blue-100">可用优惠券</div>
+              <div className="text-sm text-blue-100">{t("可用优惠券")}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold mb-1">{stats?.favoriteCount ?? '—'}</div>
-              <div className="text-sm text-blue-100">我的收藏</div>
+              <div className="text-sm text-blue-100">{t("我的收藏")}</div>
             </div>
             <Link href="/orders?status=0" className="text-center rounded hover:bg-white/10">
               <div className="text-3xl font-bold mb-1">{stats?.pendingOrders ?? '—'}</div>
-              <div className="text-sm text-blue-100">待支付</div>
+              <div className="text-sm text-blue-100">{t("待支付")}</div>
             </Link>
           </div>
         </div>
 
         {error && <div role="alert" className="bg-white rounded-xl p-4 mb-6 text-red-600">
-          <p>{error}</p>
-          <button onClick={loadUserStats} className="underline mt-2">重新加载统计</button>
+          <p>{t(error)}</p>
+          <button onClick={loadUserStats} className="underline mt-2">{t("重新加载统计")}</button>
         </div>}
 
         {/* 优惠券快捷入口 - 突出显示 */}
@@ -191,9 +193,9 @@ export default function ProfilePage() {
                 <FiGift size={32} />
               </div>
               <div>
-                <h2 className="text-2xl font-bold mb-1">🎁 优惠券中心</h2>
+                <h2 className="text-2xl font-bold mb-1">{t("🎁 优惠券中心")}</h2>
                 <p className="text-orange-100">
-                  {stats ? <>您有 <span className="font-bold text-xl">{stats.availableCoupons}</span> 张可用优惠券</> : '查看或领取优惠券'}
+                  {stats ? <>{t('您有')} <span className="font-bold text-xl">{stats.availableCoupons}</span> {t('张可用优惠券')}</> : t('查看或领取优惠券')}
                 </p>
               </div>
             </div>
@@ -202,13 +204,13 @@ export default function ProfilePage() {
                 href="/coupons"
                 className="px-6 py-3 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
               >
-                领取优惠券
+                {t("领取优惠券")}
               </Link>
               <Link
                 href="/my/coupons"
                 className="px-6 py-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors font-medium"
               >
-                我的优惠券
+                {t("我的优惠券")}
               </Link>
             </div>
           </div>
@@ -231,10 +233,10 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {item.title}
+                      {t(item.title)}
                       {item.highlight && <span className="ml-2 text-orange-500">🔥</span>}
                     </h3>
-                    <p className="text-sm text-gray-500">{item.description}</p>
+                    <p className="text-sm text-gray-500">{t(item.description)}</p>
                   </div>
                 </div>
                 {item.count !== undefined && item.count > 0 && (
@@ -251,7 +253,7 @@ export default function ProfilePage() {
         <div className="mt-8 bg-white rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
             <FiSettings size={24} />
-            账户信息
+            {t("账户信息")}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
@@ -259,7 +261,7 @@ export default function ProfilePage() {
                 <FiUser size={24} className="text-blue-600" />
               </div>
               <div>
-                <div className="text-sm text-gray-500">用户名</div>
+                <div className="text-sm text-gray-500">{t("用户名")}</div>
                 <div className="font-medium text-gray-900">{user?.username || 'N/A'}</div>
               </div>
             </div>
@@ -268,7 +270,7 @@ export default function ProfilePage() {
                 <FiPhone size={24} className="text-green-600" />
               </div>
               <div>
-                <div className="text-sm text-gray-500">邮箱</div>
+                <div className="text-sm text-gray-500">{t("邮箱")}</div>
                 <div className="font-medium text-gray-900">{user?.email || 'N/A'}</div>
               </div>
             </div>
@@ -277,28 +279,28 @@ export default function ProfilePage() {
 
         {/* 快速操作 */}
         <div className="mt-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-lg p-6 text-white">
-          <h3 className="text-xl font-bold mb-4">💎 会员专享</h3>
+          <h3 className="text-xl font-bold mb-4">{t("💎 会员专享")}</h3>
           <div className="grid grid-cols-3 gap-4">
             <Link
               href="/coupons"
               className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
             >
               <div className="text-2xl mb-2">🎁</div>
-              <div className="font-medium">领取优惠券</div>
+              <div className="font-medium">{t("领取优惠券")}</div>
             </Link>
             <Link
               href="/products"
               className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
             >
               <div className="text-2xl mb-2">🛍️</div>
-              <div className="font-medium">继续购物</div>
+              <div className="font-medium">{t("继续购物")}</div>
             </Link>
             <Link
               href="/orders"
               className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
             >
               <div className="text-2xl mb-2">📦</div>
-              <div className="font-medium">查看订单</div>
+              <div className="font-medium">{t("查看订单")}</div>
             </Link>
           </div>
         </div>
