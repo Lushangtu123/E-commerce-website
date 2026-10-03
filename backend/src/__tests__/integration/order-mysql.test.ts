@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
 import { getPool, query } from '../../database/mysql';
-import { createOrder, previewOrder, transitionOrder } from '../../services/order.service';
+import { createOrder as createOrderService, previewOrder, transitionOrder } from '../../services/order.service';
 import { ProductModel } from '../../models/product.model';
 import { FavoriteModel } from '../../models/favorite.model';
 import { BrowseHistoryModel } from '../../models/browse-history.model';
@@ -19,6 +19,9 @@ import orderRoutes from '../../routes/order.routes';
 import cartRoutes from '../../routes/cart.routes';
 import { migrateSkuTables } from '../../database/migrate-sku';
 import { migrateCouponTables } from '../../database/migrate-coupon';
+import { migrateAddressTables } from '../../database/migrate-address';
+import addressRoutes from '../../routes/address.routes';
+import { AddressModel } from '../../models/address.model';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 jest.mock('../../database/redis', () => ({ getRedisClient: () => ({ del: jest.fn().mockResolvedValue(1) }) }));
@@ -56,6 +59,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     }
     await migrateCouponTables(db);
     await migrateSkuTables(db);
+    await migrateAddressTables(db);
   });
 
   afterAll(async () => {
@@ -70,9 +74,17 @@ integration('真实 MySQL 订单事务及并发', () => {
     for (const table of ['coupon_usage_logs', 'user_coupons', 'coupons', 'order_items', 'orders', 'cart', 'favorites', 'browse_history', 'shipping_addresses', 'product_skus', 'products', 'users']) {
       await db.query(`DELETE FROM ${table}`);
     }
-    await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (1,'customer','customer@example.test','test')");
+    await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (1,'customer','customer@example.test','test'),(2,'other','other@example.test','test')");
+    await db.query(`INSERT INTO shipping_addresses (address_id,user_id,receiver_name,phone,province,city,district,detail_address,is_default)
+      VALUES (101,1,'收件人','13800138000','浙江省','杭州市','西湖区','测试路1号',1),
+             (102,2,'其他收件人','13800138001','浙江省','杭州市','滨江区','测试路2号',1)`);
     await db.query("INSERT INTO products (product_id,title,price,stock) VALUES (1,'商品一',10.10,10),(2,'商品二',5,1)");
   });
+
+  // Existing inventory/coupon tests use valid persisted addresses; no order behavior is mocked.
+  const createOrder = (userId: number, items: unknown, addressId = 100 + userId, remark?: string, couponId?: number) =>
+    createOrderService(userId, items, addressId, remark, couponId);
+  const ADDRESS = { receiver_name: '收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '测试路1号' };
 
   async function product() {
     const [rows] = await db.query<RowDataPacket[]>('SELECT stock, sales_count FROM products WHERE product_id = 1');
@@ -92,6 +104,139 @@ integration('真实 MySQL 订单事务及并发', () => {
       VALUES (1,'SAVE20','八折优惠',2,20,0,10,9,DATE_SUB(NOW(), INTERVAL 1 DAY),DATE_ADD(NOW(), INTERVAL 1 DAY))`);
     await db.query('INSERT INTO user_coupons (user_coupon_id,user_id,coupon_id,expired_at) VALUES (1,1,1,DATE_ADD(NOW(), INTERVAL 1 DAY))');
   }
+
+  test('无地址、他人地址及过期选择拒绝下单，券库存购物车完全保留', async () => {
+    await receivedCoupon();
+    await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,2)');
+    const app = express();
+    app.use(express.json());
+    app.use('/orders', orderRoutes);
+    const token = jwt.sign({ userId: 1 }, 'test-jwt-secret');
+    for (const addressId of [undefined, null, '101', 0, -1, 102, 999]) {
+      await request(app).post('/orders').set('Authorization', `Bearer ${token}`).send({
+        items: [{ product_id: 1, quantity: 2 }], shipping_address_id: addressId, user_coupon_id: 1,
+      }).expect(400);
+    }
+    expect(await product()).toMatchObject({ stock: 10, sales_count: 0 });
+    const [orders] = await db.query<RowDataPacket[]>('SELECT COUNT(*) AS count FROM orders');
+    const [cart] = await db.query<RowDataPacket[]>('SELECT quantity FROM cart WHERE user_id = 1');
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons WHERE user_coupon_id = 1');
+    expect(orders[0].count).toBe(0);
+    expect(cart[0].quantity).toBe(2);
+    expect(coupons[0]).toMatchObject({ status: 1, order_id: null });
+  });
+
+  test('新订单保存本人地址快照，修改和删除地址不改变客户和后台订单详情', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/orders', orderRoutes);
+    app.use('/addresses', addressRoutes);
+    const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
+    const created = await request(app).post('/orders').set(auth).send({
+      items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 101,
+      shipping_address_snapshot: { ...ADDRESS, receiver_name: '客户端伪造的收件人' },
+    }).expect(201);
+    const orderId = created.body.order_id;
+    await request(app).put('/addresses/101').set(auth).send({
+      ...ADDRESS, receiver_name: '改后收件人', phone: '13800138099', detail_address: '改后的路99号',
+    }).expect(200);
+    await request(app).delete('/addresses/101').set(auth).expect(200);
+    const detail = await request(app).get(`/orders/${orderId}`).set(auth).expect(200);
+    expect(detail.body.order.shipping_address_snapshot).toEqual(ADDRESS);
+    expect(detail.body.order.shipping_address_id).toBe(101);
+    const res = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    await getAdminOrderDetail({ params: { orderId: String(orderId) } } as any, res as any);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ order: expect.objectContaining({
+      shipping_address_snapshot: ADDRESS, receiver_name: ADDRESS.receiver_name, recipient_phone: ADDRESS.phone, detail_address: ADDRESS.detail_address,
+    }) }));
+    const [rows] = await db.query<RowDataPacket[]>('SELECT * FROM shipping_addresses WHERE address_id = 101');
+    expect(rows).toHaveLength(0);
+  });
+
+  test('旧订单缺失快照不回读他人的当前地址，仍可取消', async () => {
+    const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 1 }]);
+    await db.query('UPDATE orders SET shipping_address_snapshot = NULL, shipping_address_id = 102 WHERE order_id = ?', [orderId]);
+    const res = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    await getAdminOrderDetail({ params: { orderId: String(orderId) } } as any, res as any);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ order: expect.objectContaining({
+      shipping_address_snapshot: null, receiver_name: null, recipient_phone: null, detail_address: null,
+    }) }));
+    await transitionOrder(orderId, OrderStatus.CANCELLED, { userId: 1 });
+    expect(await product()).toMatchObject({ stock: 10 });
+  });
+
+  test('已有不完整地址需编辑后才能下新订单，预览仍只读', async () => {
+    await db.query('UPDATE shipping_addresses SET district = NULL WHERE address_id = 101');
+    expect(await previewOrder(1, [{ product_id: 1, quantity: 1 }])).toMatchObject({ total_amount: 10.1 });
+    await expect(createOrderService(1, [{ product_id: 1, quantity: 1 }], 101)).rejects.toThrow('地址信息');
+    expect(await product()).toMatchObject({ stock: 10 });
+    const [orders] = await db.query<RowDataPacket[]>('SELECT COUNT(*) AS count FROM orders');
+    expect(orders[0].count).toBe(0);
+  });
+
+  test('同用户下单、编辑地址和再次领券同时进行均可完成，不形成外键锁死锁', async () => {
+    await receivedCoupon();
+    await db.query('UPDATE coupons SET per_user_limit = 2 WHERE coupon_id = 1');
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>(done => { resolve = done; });
+      return { promise, resolve };
+    };
+    const requested = Array.from({ length: 3 }, deferred);
+    const acquired = Array.from({ length: 3 }, deferred);
+    const release = deferred();
+    const firstResources: string[] = [];
+    let connections = 0;
+    (getPool as jest.Mock).mockReturnValue({ getConnection: async () => {
+      const role = connections++;
+      const connection = await db.getConnection();
+      let firstLock = true;
+      return new Proxy(connection, { get(target, property) {
+        if (property === 'execute') return async (sql: string, params: any[]) => {
+          const initial = firstLock && sql.includes('FOR UPDATE');
+          if (initial) {
+            firstLock = false;
+            firstResources[role] = `${/FROM\s+(\w+)/i.exec(sql)?.[1]}:${params[0]}`;
+            requested[role].resolve();
+          }
+          const result = await target.execute(sql, params);
+          if (initial) { acquired[role].resolve(); await release.promise; }
+          return result;
+        };
+        const value = Reflect.get(target, property);
+        return typeof value === 'function' ? value.bind(target) : value;
+      } });
+    } });
+    let outcomes: Promise<PromiseSettledResult<unknown>[]> | undefined;
+    try {
+      const order = createOrder(1, [{ product_id: 1, quantity: 1 }], 101, undefined, 1);
+      await acquired[0].promise;
+      const edit = AddressModel.update(1, 101, { ...ADDRESS, detail_address: '编辑后的地址' });
+      await requested[1].promise;
+      const claim = CouponModel.receiveCoupon(1, 1);
+      outcomes = Promise.allSettled([order, edit, claim]);
+      await requested[2].promise;
+      // Distinct initial locks can all be held before continuing; shared initial locks serialize.
+      // This schedules the former address -> coupon -> user cycle without timing sleeps.
+      if (new Set(firstResources).size === 3) await Promise.all(acquired.map(event => event.promise));
+      release.resolve();
+      const results = await outcomes;
+      expect(results.map(result => result.status === 'rejected' ? `rejected:${result.reason.code}` : result.status))
+        .toEqual(['fulfilled', 'fulfilled', 'fulfilled']);
+      (getPool as jest.Mock).mockReturnValue(db);
+      const [orders] = await db.query<RowDataPacket[]>('SELECT shipping_address_snapshot,total_amount FROM orders');
+      const [coupons] = await db.query<RowDataPacket[]>('SELECT status FROM user_coupons ORDER BY user_coupon_id');
+      const addresses = await AddressModel.list(1);
+      expect(orders).toEqual([expect.objectContaining({ shipping_address_snapshot: ADDRESS, total_amount: '8.08' })]);
+      expect(coupons.map(coupon => coupon.status)).toEqual([2, 1]);
+      expect(addresses[0]).toMatchObject({ detail_address: '编辑后的地址', is_default: true });
+      expect(await product()).toMatchObject({ stock: 9 });
+    } finally {
+      release.resolve();
+      if (outcomes) await outcomes;
+      (getPool as jest.Mock).mockReturnValue(db);
+    }
+  });
 
   test('重复商品合并并按数据库价格结算、清理购物车', async () => {
     await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,4),(1,2,1)');
@@ -191,7 +336,7 @@ integration('真实 MySQL 订单事务及并发', () => {
   });
 
   test('后台订单详情可读取基线收货地址字段', async () => {
-    await db.query("INSERT INTO shipping_addresses (address_id,user_id,receiver_name,phone,detail_address) VALUES (1,1,'收件人','12345678901','测试地址')");
+    await db.query("INSERT INTO shipping_addresses (address_id,user_id,receiver_name,phone,province,city,district,detail_address) VALUES (1,1,'收件人','12345678901','浙江省','杭州市','西湖区','测试地址')");
     const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 1 }], 1);
     const res = { json: jest.fn(), status: jest.fn().mockReturnThis() };
     await getAdminOrderDetail({ params: { orderId: String(orderId) } } as any, res as any);
@@ -208,7 +353,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     await db.query('INSERT INTO user_coupons (user_coupon_id,user_id,coupon_id,expired_at) VALUES (1,1,1,DATE_ADD(NOW(), INTERVAL 1 DAY))');
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     await OrderController.create({ userId: 1, body: {
-      items: [{ product_id: 1, quantity: 2 }], user_coupon_id: 1, discount_amount: 10000, total_amount: 0,
+      items: [{ product_id: 1, quantity: 2 }], shipping_address_id: 101, user_coupon_id: 1, discount_amount: 10000, total_amount: 0,
     } } as any, res as any);
     expect(res.status).toHaveBeenCalledWith(201);
     const orderId = res.json.mock.calls[0][0].order_id;
@@ -334,7 +479,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     ['未生效', 'UPDATE coupons SET start_time = DATE_ADD(NOW(), INTERVAL 1 HOUR)', ''],
     ['已过期', 'UPDATE coupons SET end_time = DATE_SUB(NOW(), INTERVAL 1 SECOND)', ''],
     ['用户券过期', 'UPDATE user_coupons SET expired_at = DATE_SUB(NOW(), INTERVAL 1 SECOND)', ''],
-    ['非本人券', "INSERT INTO users (user_id,username,email,password_hash) VALUES (2,'other','other@example.test','test')", 'UPDATE user_coupons SET user_id = 2'],
+    ['非本人券', 'UPDATE user_coupons SET user_id = 2', ''],
     ['已占用', 'UPDATE user_coupons SET status = 2, order_id = 999', ''],
     ['未满门槛', 'UPDATE coupons SET min_amount = 99', ''],
   ])('预览与下单均拒绝%s，失败没有副作用', async (_label, sql, extra) => {

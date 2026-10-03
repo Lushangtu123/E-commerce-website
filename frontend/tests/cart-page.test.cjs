@@ -14,7 +14,7 @@ function setupCart(list) {
     imports: {
       '@/store/useAuthStore': { useAuthStore: Object.assign(() => stores.useAuthStore.getState(), { getState: stores.useAuthStore.getState }) },
       '@/store/useCartStore': { cartItemKey: stores.cartItemKey, useCartStore: () => stores.useCartStore.getState() },
-      '@/lib/api': { cartApi: { list } },
+      '@/lib/api': { addressApi: { list: async () => ({ addresses: [] }) }, cartApi: { list } },
     },
   });
   return { ...stores, runtime };

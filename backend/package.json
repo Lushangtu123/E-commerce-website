@@ -17,7 +17,9 @@
     "migrate-coupon": "node dist/database/migrate-coupon.js",
     "migrate-coupon:dev": "ts-node src/database/migrate-coupon.ts",
     "migrate-sku": "node dist/database/migrate-sku.js",
-    "migrate-sku:dev": "ts-node src/database/migrate-sku.ts"
+    "migrate-sku:dev": "ts-node src/database/migrate-sku.ts",
+    "migrate-address": "node dist/database/migrate-address.js",
+    "migrate-address:dev": "ts-node src/database/migrate-address.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.0",

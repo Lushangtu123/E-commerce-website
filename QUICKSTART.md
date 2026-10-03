@@ -33,7 +33,7 @@ MYSQL_TEST_HOST=127.0.0.1 MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD='填写测试
   npm test -- --runInBand src/__tests__/integration
 ```
 
-集成测试自动创建和删除 `ecommerce_order_test_<进程号>`、`ecommerce_coupon_migration_test_<进程号>`、`ecommerce_sku_migration_test_<进程号>` 数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。覆盖库存并发、优惠券占用/返还、失败回滚与旧库重复升级。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket；测试服务器使用 UTC 时区。
+集成测试自动创建和删除以 `ecommerce_order_test_`、`ecommerce_coupon_migration_test_`、`ecommerce_sku_migration_test_`、`address_test_`、`ecom_address_migration_test_` 开头的独立数据库，需要测试账号有建库权限，不读取应用的 `DB_NAME`。覆盖库存并发、优惠券占用/返还、地址归属和默认地址、订单收货快照、失败回滚与旧库重复升级。也可通过 `MYSQL_TEST_SOCKET` 指定本机测试实例的 Unix socket；测试服务器使用 UTC 时区。
 
 ## 更新已有数据库的优惠券结算
 
@@ -65,6 +65,23 @@ npm run migrate-sku
 规格迁移给购物车增加规格标识和唯一约束，给订单明细增加规格编号、编码与规格快照；可重复执行，保留原购物车数量和历史订单。全新数据库的 `npm run migrate` 已包含这两项迁移。切换时停止旧版写入，再升级数据库并启动新版前后端，避免旧版购物车接口误改多个规格。
 
 有规格的商品必须先在详情页选择规格。同商品的不同规格独立计价和扣库存；只有所选购物车行会在下单后移除。取消订单回补购买的原规格，即使规格已停用；旧无规格订单仍回补商品基础库存。已有购物车无规格行若对应商品后来增加了规格，会显示不可用，可删除后重新选择规格。
+
+## 更新已有数据库的收货地址
+
+在维护窗口停止旧版写入，备份数据库，再执行增量迁移并启动新版前后端：
+
+```bash
+cd backend
+npm run build
+npm run migrate-coupon
+npm run migrate-sku
+npm run migrate-address
+# Docker 环境：docker-compose exec backend npm run migrate-address
+```
+
+地址迁移给订单增加 `shipping_address_snapshot` JSON 字段。旧订单仅在当前地址仍存在且属于该订单用户时回填升级时的地址；无法恢复升级前已修改或已删除的收货信息，缺失信息保留为空。重复迁移不会覆盖已有快照。全新数据库的 `npm run migrate` 已包含这三项增量迁移。回退应用版本时可保留新增字段；旧版应用下单不写地址快照，因此维护窗口中不要混用版本。
+
+个人中心的「收货地址」支持新增、编辑、设为默认和删除，每人最多 20 个。新订单必须选择本人完整地址，下单后更改或删除地址不改变订单的收货信息。原有不完整地址需先编辑补全；旧订单仍可按原状态规则支付、取消和确认收货。
 
 ## 5分钟快速启动
 

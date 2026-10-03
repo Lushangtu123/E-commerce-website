@@ -21,6 +21,7 @@ beforeEach(() => {
     rollback: jest.fn().mockResolvedValue(undefined),
     release: jest.fn(),
     execute: jest.fn(async (sql: string) => {
+      if (sql.includes('FROM users')) return [[{ user_id: 7 }], []];
       if (sql.includes('FROM coupons')) return [[{ coupon_id: 10, remain_quantity: 2, per_user_limit: 1, end_time: new Date('2027-01-01') }], []];
       if (sql.includes('COUNT(*)')) return [[{ count: 0 }], []];
       if (sql.includes('UPDATE coupons')) return [{ affectedRows }, []];

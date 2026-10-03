@@ -170,6 +170,12 @@ export class CouponModel {
     try {
       await connection.beginTransaction();
 
+      // Order creation and address writes use the same user-first lock order.
+      const [users] = await connection.execute<RowDataPacket[]>(
+        'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]
+      );
+      if (!users.length) throw new Error('用户不存在');
+
       // 检查优惠券
       const [couponRows] = await connection.execute<RowDataPacket[]>(
         `SELECT * FROM coupons 

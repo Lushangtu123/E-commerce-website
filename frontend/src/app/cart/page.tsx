@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { cartApi, orderApi, type OrderPreview } from '@/lib/api';
+import Link from 'next/link';
+import { addressApi, cartApi, orderApi, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
@@ -24,6 +25,20 @@ export default function CartPage() {
   const linkedCouponId = useRef<number | undefined>(undefined);
   const previousSession = useRef<string | null>(null);
   const submittingRequest = useRef(false);
+  const mounted = useRef(true);
+  const [addressResult, setAddressResult] = useState<{ key: string; addresses: ShippingAddress[]; error?: string } | null>(null);
+  const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
+  const [addressRevision, setAddressRevision] = useState(0);
+  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
+  const addressLoading = addressResult?.key !== sessionKey;
+  const addressError = addressResult?.key === sessionKey ? addressResult.error : null;
+  const selectedAddress = addressSelection?.key === sessionKey ? addresses.find(address => address.address_id === addressSelection.id) : undefined;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('user_coupon_id');
@@ -44,7 +59,7 @@ export default function CartPage() {
   const quoteError = quoteFailure?.key === quoteKey ? quoteFailure.message : null;
   const isCurrentSession = () => {
     const currentAuth = useAuthStore.getState();
-    return currentAuth.isAuthenticated && currentAuth.token === token && currentAuth.user?.user_id === user?.user_id &&
+    return mounted.current && currentAuth.isAuthenticated && currentAuth.token === token && currentAuth.user?.user_id === user?.user_id &&
       localStorage.getItem('token') === (token ?? null);
   };
 
@@ -70,6 +85,26 @@ export default function CartPage() {
     }
     loadCart();
   }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
+
+  useEffect(() => {
+    const previousSelection = addressSelection;
+    setAddressResult(null);
+    setAddressSelection(null);
+    if (!isHydrated || !isAuthenticated || !isCurrentSession()) return;
+    let active = true;
+    addressApi.list().then(data => {
+      if (!active || !isCurrentSession()) return;
+      const ownedAddresses = data.addresses || [];
+      setAddressResult({ key: sessionKey, addresses: ownedAddresses });
+      const preferred = (previousSelection?.key === sessionKey && ownedAddresses.find(address => address.address_id === previousSelection.id)) ||
+        ownedAddresses.find(address => address.is_default === true || address.is_default === 1) || ownedAddresses[0];
+      if (preferred) setAddressSelection({ key: sessionKey, id: preferred.address_id });
+    }).catch(error => {
+      if (!active || !isCurrentSession()) return;
+      setAddressResult({ key: sessionKey, addresses: [], error: error.response?.data?.error || '加载收货地址失败' });
+    });
+    return () => { active = false; };
+  }, [isHydrated, isAuthenticated, token, user?.user_id, addressRevision]);
 
   useEffect(() => {
     if (!isHydrated || !isAuthenticated || loading || orderItems.length === 0) return;
@@ -168,12 +203,12 @@ export default function CartPage() {
       toast.error('请选择要结算的商品');
       return;
     }
-    if (!quote || quoteLoading || quoteError || submittingRequest.current || !isCurrentSession()) return;
+    if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || !isCurrentSession()) return;
 
     submittingRequest.current = true;
     setSubmitting(true);
     try {
-      const data: any = await orderApi.create({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
+      const data: any = await orderApi.create({ items: orderItems, shipping_address_id: selectedAddress.address_id, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
       if (!isCurrentSession()) return;
       orderItems.forEach(item => removeItem(item.product_id, item.sku_id));
       setSelectedItems([]);
@@ -184,6 +219,7 @@ export default function CartPage() {
       toast.error(error.response?.data?.error || error.response?.data?.message || '创建订单失败');
       setSelectedCouponId(undefined);
       setQuoteRevision(value => value + 1);
+      setAddressRevision(value => value + 1);
     } finally {
       if (isCurrentSession()) {
         submittingRequest.current = false;
@@ -323,6 +359,25 @@ export default function CartPage() {
           <div className="lg:col-span-1">
             <div className="card p-6 sticky top-24">
               <h3 className="font-bold text-lg mb-4">订单摘要</h3>
+              <div className="mb-6">
+                <label htmlFor="shipping-address" className="block font-medium mb-2">收货地址</label>
+                {addressLoading ? <p className="text-sm text-gray-500">收货地址加载中...</p> : addressError ? (
+                  <div className="text-sm text-red-600" role="alert">
+                    <p>{addressError}</p>
+                    <button onClick={() => setAddressRevision(value => value + 1)} className="underline mt-1">重新加载地址</button>
+                  </div>
+                ) : addresses.length === 0 ? <p className="text-sm text-gray-600">请先添加收货地址</p> : (
+                  <select id="shipping-address" value={selectedAddress?.address_id ?? ''} disabled={submitting}
+                    onChange={event => setAddressSelection({ key: sessionKey, id: Number(event.target.value) })}
+                    className="w-full border border-gray-300 rounded px-3 py-2">
+                    <option value="" disabled>请选择收货地址</option>
+                    {addresses.map(address => <option key={address.address_id} value={address.address_id}>
+                      {address.receiver_name} {address.phone} · {address.province}{address.city}{address.district}{address.detail_address}
+                    </option>)}
+                  </select>
+                )}
+                <Link href="/profile/address" className="inline-block text-primary-600 text-sm underline mt-2">管理收货地址</Link>
+              </div>
               
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-gray-600">
@@ -374,7 +429,7 @@ export default function CartPage() {
 
               <button
                 onClick={handleCheckout}
-                disabled={orderItems.length === 0 || submitting || !quote || quoteLoading || !!quoteError}
+                disabled={orderItems.length === 0 || submitting || !quote || quoteLoading || !!quoteError || addressLoading || !!addressError || !selectedAddress}
                 className="w-full btn btn-primary disabled:opacity-50"
               >
                 <FiShoppingBag className="inline mr-2" />

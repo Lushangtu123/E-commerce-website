@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadPage } = require('./runtime.cjs');
 
 const pages = [
-  'cart', 'coupons', 'favorites', 'history', 'orders', 'orders/[id]', 'profile', 'my/coupons',
+  'cart', 'coupons', 'favorites', 'history', 'orders', 'orders/[id]', 'profile', 'profile/address', 'my/coupons',
 ];
 
 test('protected pages wait for hydration before redirecting and load the persisted session afterwards', async () => {
@@ -18,7 +18,8 @@ test('protected pages wait for hydration before redirecting and load the persist
     await runtime.render({ isHydrated: true, isAuthenticated: true, user: { user_id: 1 } });
 
     assert.deepEqual(runtime.redirects, [], `${page}: persisted session must stay on the page`);
-    assert.equal(runtime.requests.length, 1, `${page}: must load once hydration finishes`);
+    assert.equal(runtime.requests.length, page === 'cart' ? 2 : 1, `${page}: must load once hydration finishes`);
+    if (page === 'cart') assert.deepEqual(runtime.requests.map(request => request.name), ['cartApi', 'addressApi']);
   }
 });
 

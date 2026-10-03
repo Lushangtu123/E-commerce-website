@@ -6,6 +6,7 @@ import { OrderModel, OrderStatus } from '../models/order.model';
 import logger from '../utils/logger';
 import { calculateDiscountCents } from '../utils/coupon-discount';
 import { CouponModel } from '../models/coupon.model';
+import { normalizeAddress } from '../models/address.model';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
@@ -73,19 +74,33 @@ export async function createOrder(
   const normalizedItems = normalizeItems(items);
   validateCouponId(userCouponId);
   if (remark !== undefined && (typeof remark !== 'string' || remark.length > 2000)) throw new OrderError('订单备注无效');
-  if (shippingAddressId !== undefined &&
-      (!Number.isSafeInteger(shippingAddressId) || shippingAddressId <= 0)) {
-    throw new OrderError('收货地址ID无效');
+  if (!Number.isSafeInteger(shippingAddressId) || Number(shippingAddressId) <= 0) {
+    throw new OrderError('请选择有效的收货地址');
   }
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
-    if (shippingAddressId !== undefined) {
-      const [addresses] = await connection.execute<RowDataPacket[]>(
-        'SELECT address_id FROM shipping_addresses WHERE address_id = ? AND user_id = ? FOR UPDATE',
-        [shippingAddressId, userId]
-      );
-      if (addresses.length === 0) throw new OrderError('收货地址不存在或不属于当前用户');
+    // Match address writes and coupon claims before taking address/product/coupon locks.
+    // user_coupons' user FK would otherwise introduce a coupon -> user lock edge.
+    const [users] = await connection.execute<RowDataPacket[]>(
+      'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]
+    );
+    if (!users.length) throw new OrderError('用户不存在', 404);
+    const [addresses] = await connection.execute<RowDataPacket[]>(
+      `SELECT receiver_name, phone, province, city, district, detail_address
+       FROM shipping_addresses WHERE address_id = ? AND user_id = ? FOR UPDATE`,
+      [shippingAddressId, userId]
+    );
+    if (addresses.length === 0) throw new OrderError('收货地址不存在或不属于当前用户，请重新选择');
+    let addressSnapshot;
+    try {
+      const address = addresses[0];
+      addressSnapshot = normalizeAddress({
+        receiver_name: address.receiver_name, phone: address.phone, province: address.province,
+        city: address.city, district: address.district, detail_address: address.detail_address,
+      });
+    } catch {
+      throw new OrderError('收货地址信息不完整或格式无效，请先编辑地址');
     }
 
     const { orderItems, totalCents } = await priceItems(connection, normalizedItems, true);
@@ -109,11 +124,12 @@ export async function createOrder(
     }
     const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO orders (order_no, user_id, total_amount, shipping_address_id, remark, status,
-                          original_amount, discount_amount, user_coupon_id, coupon_name, coupon_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          original_amount, discount_amount, user_coupon_id, coupon_name, coupon_code, shipping_address_snapshot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [OrderModel.generateOrderNo(), userId, ((totalCents - discountCents) / 100).toFixed(2),
         shippingAddressId ?? null, remark ?? null, OrderStatus.PENDING,
-        (totalCents / 100).toFixed(2), (discountCents / 100).toFixed(2), userCouponId ?? null, coupon?.name ?? null, coupon?.code ?? null]
+        (totalCents / 100).toFixed(2), (discountCents / 100).toFixed(2), userCouponId ?? null, coupon?.name ?? null, coupon?.code ?? null,
+        JSON.stringify(addressSnapshot)]
     );
     const orderId = result.insertId;
     if (coupon && userCouponId !== undefined) {

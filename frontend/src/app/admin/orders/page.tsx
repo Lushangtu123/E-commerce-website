@@ -121,7 +121,7 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* 订单列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -136,6 +136,7 @@ export default function AdminOrdersPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">订单号</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">收货信息</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">金额</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">商品数量</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
@@ -151,6 +152,12 @@ export default function AdminOrdersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {order.username || '未知用户'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 min-w-[16rem] max-w-xs">
+                        {order.shipping_address_snapshot ? <div>
+                          <p>{order.shipping_address_snapshot.receiver_name} {order.shipping_address_snapshot.phone}</p>
+                          <p className="mt-1">{order.shipping_address_snapshot.province}{order.shipping_address_snapshot.city}{order.shipping_address_snapshot.district}{order.shipping_address_snapshot.detail_address}</p>
+                        </div> : <span className="text-gray-500">历史订单未记录收货信息</span>}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         ¥{order.total_amount ? parseFloat(order.total_amount).toFixed(2) : '0.00'}

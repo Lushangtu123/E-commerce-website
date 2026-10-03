@@ -9,6 +9,18 @@ const orders = Array.from({ length: 5 }, (_, status) => ({
 const statusLabels = ['待支付', '已支付', '已发货', '已完成', '已取消'];
 const AdminLayout = ({ children }) => children;
 
+test('admin orders show the saved shipping snapshot instead of current address aliases and identify legacy orders', async () => {
+  const snapshot = { receiver_name: 'Original Receiver', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '旧地址 1 号' };
+  const runtime = loadPage('src/app/admin/orders/page.tsx', { initialState: { 0: [
+    { ...orders[0], shipping_address_snapshot: snapshot, receiver_name: 'Current Receiver', detail_address: '新地址' },
+    { ...orders[1], shipping_address_snapshot: null },
+  ], 1: false }, imports: { '@/components/AdminLayout': AdminLayout } });
+  const text = tree => Array.isArray(tree) ? tree.map(text).join('') : tree?.props ? text(tree.props.children) : typeof tree === 'string' || typeof tree === 'number' ? String(tree) : '';
+  const tree = await runtime.render({});
+  assert.ok(text(tree).includes('Original Receiver')); assert.ok(text(tree).includes('浙江省杭州市西湖区旧地址 1 号'));
+  assert.ok(!text(tree).includes('Current Receiver')); assert.ok(text(tree).includes('历史订单未记录收货信息'));
+});
+
 test('admin orders display and filter the same five statuses as customer orders', async () => {
   const runtime = loadPage('src/app/admin/orders/page.tsx', {
     initialState: { 0: orders, 1: false },

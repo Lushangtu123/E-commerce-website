@@ -25,6 +25,7 @@ import userRoutes from './routes/user.routes';
 import productRoutes from './routes/product.routes';
 import cartRoutes from './routes/cart.routes';
 import orderRoutes from './routes/order.routes';
+import addressRoutes from './routes/address.routes';
 import reviewRoutes from './routes/review.routes';
 import favoriteRoutes from './routes/favorite.routes';
 import searchRoutes from './routes/search.routes';
@@ -100,6 +101,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/addresses', addressRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/search', searchRoutes);
@@ -241,4 +243,3 @@ function gracefulShutdown(server: import('http').Server) {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
-

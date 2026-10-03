@@ -25,6 +25,16 @@ function setupDetail(order, items = []) {
 
 const auth = { isHydrated: true, isAuthenticated: true, user: { user_id: 1 } };
 
+test('customer order detail renders the original shipping snapshot and identifies legacy orders without one', async () => {
+  const shipping_address_snapshot = { receiver_name: 'Original Receiver', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '旧地址 1 号' };
+  let tree = await setupDetail({ status: 3, total_amount: 50, shipping_address_snapshot, receiver_name: 'Current Address Receiver', detail_address: '新地址' }).flush(auth);
+  assert.ok(textContent(tree).includes('Original Receiver')); assert.ok(textContent(tree).includes('13800138000'));
+  assert.ok(textContent(tree).includes('浙江省杭州市西湖区旧地址 1 号'));
+  assert.ok(!textContent(tree).includes('Current Address Receiver'));
+  tree = await setupDetail({ status: 3, total_amount: 50, shipping_address_snapshot: null }).flush(auth);
+  assert.ok(textContent(tree).includes('历史订单未记录收货信息'));
+});
+
 test('order detail shows the purchased SKU snapshot for each variant separately', async () => {
   const runtime = setupDetail({ status: 3, total_amount: 50 }, [
     { item_id: 1, product_name: 'Shirt', price: 20, quantity: 1, sku_id: 101, sku_code: 'OLD-RED', sku_specs: { Color: 'Red', Size: 'M' } },

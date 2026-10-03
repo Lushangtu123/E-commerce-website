@@ -87,16 +87,9 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
         o.*,
         u.username,
         u.email,
-        u.phone,
-        sa.receiver_name,
-        sa.phone as recipient_phone,
-        sa.province,
-        sa.city,
-        sa.district,
-        sa.detail_address
+        u.phone
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.user_id
-       LEFT JOIN shipping_addresses sa ON o.shipping_address_id = sa.address_id
        WHERE o.order_id = ?`,
       [orderId]
     );
@@ -117,8 +110,19 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
       [orderId]
     );
 
+    const order = orders[0] as any;
+    const address = order.shipping_address_snapshot;
     res.json({
-      order: orders[0],
+      order: {
+        ...order,
+        // Retain the existing admin fields, sourced only from the immutable snapshot.
+        receiver_name: address?.receiver_name ?? null,
+        recipient_phone: address?.phone ?? null,
+        province: address?.province ?? null,
+        city: address?.city ?? null,
+        district: address?.district ?? null,
+        detail_address: address?.detail_address ?? null,
+      },
       items
     });
   } catch (error) {

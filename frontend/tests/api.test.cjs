@@ -2,6 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadApi } = require('./runtime.cjs');
 
+test('address CRUD preserves full fields and uses customer credentials with separate resource IDs', async () => {
+  const { addressApi, requests } = loadApi({ token: 'customer-session', admin_token: 'admin-session' });
+  const body = { receiver_name: 'Receiver', phone: '+86 138-0013-8000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '文一路 1 号', is_default: true };
+  await addressApi.list(); await addressApi.create(body); await addressApi.update(41, body); await addressApi.remove(41);
+  assert.deepEqual(requests.map(request => [request.method, request.url]), [['get', '/addresses'], ['post', '/addresses'], ['put', '/addresses/41'], ['delete', '/addresses/41']]);
+  assert.deepEqual(JSON.parse(requests[1].data), body); assert.deepEqual(JSON.parse(requests[2].data), body);
+  assert.ok(requests.every(request => request.headers.get('Authorization') === 'Bearer customer-session'));
+});
+
 test('cart variant deletion targets its SKU while absent SKU still targets only the base row', async () => {
   const { cartApi, requests } = loadApi({ token: 'customer-session' });
   await cartApi.remove(12, 101);

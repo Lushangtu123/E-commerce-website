@@ -279,8 +279,14 @@ E-commerce-website/
 - `POST /api/users/login` - 用户登录
 - `GET /api/users/profile` - 获取个人信息
 - `PUT /api/users/profile` - 更新个人信息
-- `GET /api/users/addresses` - 获取收货地址列表
-- `POST /api/users/addresses` - 添加收货地址
+
+### 收货地址 (Address APIs)
+- `GET /api/addresses` - 获取本人收货地址，默认地址优先
+- `POST /api/addresses` - 添加完整地址，首个自动设为默认，每人最多 20 个
+- `PUT /api/addresses/:id` - 编辑完整地址，`is_default: true` 可设为默认
+- `DELETE /api/addresses/:id` - 删除本人地址，删除默认地址后自动选择另一地址
+
+完整地址包含 `receiver_name`、`phone`、`province`、`city`、`district`、`detail_address` 六个非空字符串，可选 `is_default` 布尔值；不能指定其他用户。前端个人中心的「收货地址」可管理地址，购物车结算必须选择地址。
 
 ### 商品相关 (Product APIs)
 - `GET /api/products` - 获取商品列表（支持分页、排序、筛选）
@@ -316,7 +322,7 @@ E-commerce-website/
 
 ### 订单相关 (Order APIs)
 - `POST /api/orders/preview` - items 为 `{ product_id, quantity, sku_id? }[]`，按服务器商品/规格价格预览金额与可用优惠券（只读）
-- `POST /api/orders` - 创建订单，可携带 `user_coupon_id`，返回原价、优惠额和应付金额
+- `POST /api/orders` - 创建订单，必填本人有效的 `shipping_address_id`，可携带 `user_coupon_id`，返回原价、优惠额和应付金额；收货信息由服务器保存快照，后续编辑或删除地址不改变订单
 - `GET /api/orders` - 获取订单列表
 - `GET /api/orders/:id` - 获取订单详情
 - `POST /api/orders/:id/pay` - 支付订单

@@ -14,6 +14,14 @@ export interface Order {
   status: number;
   payment_method?: string;
   shipping_address_id?: number;
+  shipping_address_snapshot?: {
+    receiver_name: string;
+    phone: string;
+    province: string | null;
+    city: string | null;
+    district: string | null;
+    detail_address: string | null;
+  } | null;
   remark?: string;
   created_at: Date;
   paid_at?: Date;

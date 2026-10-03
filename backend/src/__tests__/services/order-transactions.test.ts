@@ -11,6 +11,7 @@ import { OrderController } from '../../controllers/order.controller';
 import { cancelTimeoutOrder, checkAndCancelTimeoutOrders } from '../../services/order-timeout.service';
 import { getAdminOrderDetail, getOrderStatistics, updateOrderStatus } from '../../controllers/admin-order.controller';
 
+const ADDRESS = { receiver_name: '收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '测试路1号' };
 const PRODUCT = { product_id: 1, title: '商品', price: '19.99', stock: 10, main_image: 'image.jpg', status: 1 };
 let order: any;
 let productMissing: boolean;
@@ -29,7 +30,7 @@ function response() {
 }
 
 function request(body: any = {}, userId = 7) {
-  return { userId, body, params: { id: '1001', orderId: '1001' }, query: {}, admin: { adminId: 1 }, get: () => undefined } as any;
+  return { userId, body: { shipping_address_id: 3, ...body }, params: { id: '1001', orderId: '1001' }, query: {}, admin: { adminId: 1 }, get: () => undefined } as any;
 }
 
 function matching(pattern: string) {
@@ -49,10 +50,11 @@ beforeEach(() => {
     rollback: jest.fn().mockResolvedValue(undefined),
     release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[] = []) => {
+      if (sql.includes('FROM users')) return [[{ user_id: 7 }], []];
       if (failSql && sql.includes(failSql)) throw new Error('database failure');
       if (sql.includes('FROM product_skus')) return [[], []];
       if (sql.includes('FROM products')) return [productMissing ? [] : [{ ...PRODUCT, product_id: params[0] }], []];
-      if (sql.includes('FROM shipping_addresses')) return [addressOwned ? [{ address_id: 3 }] : [], []];
+      if (sql.includes('FROM shipping_addresses')) return [addressOwned ? [{ address_id: 3, ...ADDRESS }] : [], []];
       if (sql.includes('FROM order_items')) {
         return [[{ item_id: 1, order_id: 1001, product_id: 1, sku_id: null, quantity: 2 }], []];
       }
@@ -239,12 +241,15 @@ describe('超时和后台 schema 兼容', () => {
     expect(pool.execute.mock.calls[0][0]).toMatch(/created_at\s*<=\s*DATE_SUB\(NOW\(\), INTERVAL 30 MINUTE\)/);
   });
 
-  test('后台订单详情读取仓库迁移定义的地址字段', async () => {
+  test('后台订单详情使用已存地址快照，不回读当前地址', async () => {
     const res = response();
     await getAdminOrderDetail(request(), res);
     const sql = pool.query.mock.calls[0][0];
-    expect(sql).toContain('sa.receiver_name');
-    expect(sql).toContain('sa.detail_address');
+    expect(sql).toContain('o.*');
+    expect(sql).not.toContain('JOIN shipping_addresses');
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      order: expect.objectContaining({ receiver_name: null, recipient_phone: null, detail_address: null }),
+    }));
     expect(sql).not.toContain('sa.postal_code');
     expect(sql).not.toContain('sa.recipient_name');
   });

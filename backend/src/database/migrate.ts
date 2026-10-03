@@ -3,6 +3,7 @@ import { connectDatabase } from './mysql';
 import logger from '../utils/logger';
 import { migrateCouponTables } from './migrate-coupon';
 import { migrateSkuTables } from './migrate-sku';
+import { migrateAddressTables } from './migrate-address';
 
 const migrations = [
   // 用户表
@@ -68,6 +69,7 @@ const migrations = [
     status TINYINT DEFAULT 0 COMMENT '0:待支付 1:已支付 2:已发货 3:已完成 4:已取消',
     payment_method VARCHAR(20),
     shipping_address_id BIGINT,
+    shipping_address_snapshot JSON DEFAULT NULL,
     remark TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     paid_at TIMESTAMP NULL,
@@ -205,6 +207,7 @@ async function runMigrations() {
 
     await migrateCouponTables(pool);
     await migrateSkuTables(pool);
+    await migrateAddressTables(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

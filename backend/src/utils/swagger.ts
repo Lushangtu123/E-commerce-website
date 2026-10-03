@@ -22,6 +22,7 @@ const options: swaggerJSDoc.Options = {
       { name: '商品', description: '商品列表 / 详情 / 分类（公开接口）' },
       { name: '购物车', description: '需登录' },
       { name: '订单', description: '需登录' },
+      { name: '收货地址', description: '需登录，仅可管理本人地址' },
       { name: '评论', description: '商品评论' },
       { name: '收藏', description: '需登录' },
       { name: '搜索', description: '关键词搜索 / 热搜 / 搜索历史' },
@@ -118,6 +119,29 @@ const options: swaggerJSDoc.Options = {
             product_image: { type: 'string', nullable: true },
           },
         },
+        AddressInput: {
+          type: 'object', additionalProperties: false,
+          required: ['receiver_name', 'phone', 'province', 'city', 'district', 'detail_address'],
+          properties: {
+            receiver_name: { type: 'string', minLength: 1, maxLength: 50 },
+            phone: { type: 'string', minLength: 7, maxLength: 20, description: '7 至 15 位数字，可使用前导 +、空格或连字符' },
+            province: { type: 'string', minLength: 1, maxLength: 50 },
+            city: { type: 'string', minLength: 1, maxLength: 50 },
+            district: { type: 'string', minLength: 1, maxLength: 50 },
+            detail_address: { type: 'string', minLength: 1, maxLength: 200 },
+            is_default: { type: 'boolean' },
+          },
+        },
+        Address: {
+          type: 'object',
+          properties: {
+            address_id: { type: 'integer' }, user_id: { type: 'integer' },
+            receiver_name: { type: 'string' }, phone: { type: 'string' },
+            province: { type: 'string', nullable: true }, city: { type: 'string', nullable: true },
+            district: { type: 'string', nullable: true }, detail_address: { type: 'string', nullable: true },
+            is_default: { type: 'boolean' }, created_at: { type: 'string', format: 'date-time' },
+          },
+        },
         Order: {
           type: 'object',
           properties: {
@@ -130,6 +154,15 @@ const options: swaggerJSDoc.Options = {
             user_coupon_id: { type: 'integer', nullable: true },
             coupon_name: { type: 'string', nullable: true, description: '下单时优惠券名称快照' },
             coupon_code: { type: 'string', nullable: true },
+            shipping_address_id: { type: 'integer', nullable: true },
+            shipping_address_snapshot: {
+              type: 'object', nullable: true, description: '下单时收货信息，历史订单无法恢复时为空',
+              properties: {
+                receiver_name: { type: 'string' }, phone: { type: 'string' },
+                province: { type: 'string', nullable: true }, city: { type: 'string', nullable: true },
+                district: { type: 'string', nullable: true }, detail_address: { type: 'string', nullable: true },
+              },
+            },
             status: { type: 'integer', description: '待支付/已支付/已发货/已完成/已取消等' },
             created_at: { type: 'string', format: 'date-time' },
           },

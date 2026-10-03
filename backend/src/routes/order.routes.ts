@@ -48,7 +48,7 @@ router.post('/preview', OrderController.preview);
  *   post:
  *     tags: [订单]
  *     summary: 创建订单
- *     description: 下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
+ *     description: 必须选择本人有效地址，服务器保存收货快照。下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -56,7 +56,7 @@ router.post('/preview', OrderController.preview);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [items]
+ *             required: [items, shipping_address_id]
  *             properties:
  *               items:
  *                 type: array
@@ -67,14 +67,14 @@ router.post('/preview', OrderController.preview);
  *                     product_id: { type: integer, minimum: 1 }
  *                     sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *                     quantity: { type: integer, minimum: 1 }
- *               shipping_address_id: { type: integer, description: 收货地址 ID }
+ *               shipping_address_id: { type: integer, minimum: 1, description: 本人完整收货地址 ID（必填） }
  *               remark: { type: string, description: 订单备注 }
  *               user_coupon_id: { type: integer, minimum: 1, description: 用户已领取的优惠券 ID }
  *     responses:
  *       201:
  *         description: 创建成功，返回订单 ID、原价、优惠额和应付金额
  *       400:
- *         description: 商品不存在 / 库存不足
+ *         description: 商品不存在 / 库存不足 / 收货地址无效或信息不完整
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }

@@ -106,9 +106,39 @@ export const cartApi = {
 };
 
 // 订单相关API
+export interface AddressInput {
+  receiver_name: string;
+  phone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail_address: string;
+  is_default?: boolean;
+}
+
+export interface ShippingAddress extends Omit<AddressInput, 'is_default' | 'province' | 'city' | 'district' | 'detail_address'> {
+  address_id: number;
+  is_default?: boolean | 0 | 1;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  detail_address: string | null;
+}
+
+export const addressApi = {
+  list: () => api.get<any, { addresses: ShippingAddress[] }>('/addresses'),
+  create: (data: AddressInput) => api.post('/addresses', data),
+  update: (addressId: number, data: AddressInput) => api.put(`/addresses/${addressId}`, data),
+  remove: (addressId: number) => api.delete(`/addresses/${addressId}`),
+};
+
 export interface OrderInput {
   items: CartInput[];
   user_coupon_id?: number;
+}
+
+export interface OrderCreateInput extends OrderInput {
+  shipping_address_id: number;
 }
 
 export interface OrderPreview {
@@ -121,7 +151,7 @@ export interface OrderPreview {
 
 export const orderApi = {
   preview: (data: OrderInput) => api.post<any, OrderPreview>('/orders/preview', data),
-  create: (data: any) => api.post('/orders', data),
+  create: (data: OrderCreateInput) => api.post('/orders', data),
   list: (params?: any) => api.get('/orders', { params }),
   getDetail: (id: number) => api.get(`/orders/${id}`),
   cancel: (id: number) => api.post(`/orders/${id}/cancel`),

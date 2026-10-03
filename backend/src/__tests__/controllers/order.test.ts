@@ -10,6 +10,7 @@ import { getRedisClient } from '../../database/redis';
 import { sendOrderTimeoutCheckMessage } from '../../services/message-queue.service';
 import { OrderController } from '../../controllers/order.controller';
 
+const ADDRESS = { receiver_name: '收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '测试路1号' };
 const PRODUCT = { product_id: 1, title: '测试商品', price: '99.00', stock: 10, main_image: 'img.jpg', status: 1 };
 let products: any[];
 let connection: any;
@@ -30,9 +31,10 @@ beforeEach(() => {
     rollback: jest.fn().mockResolvedValue(undefined),
     release: jest.fn(),
     execute: jest.fn(async (sql: string) => {
+      if (sql.includes('FROM users')) return [[{ user_id: 7 }], []];
       if (sql.includes('FROM product_skus')) return [[], []];
       if (sql.includes('FROM products')) return [products, []];
-      if (sql.includes('FROM shipping_addresses')) return [[{ address_id: 3 }], []];
+      if (sql.includes('FROM shipping_addresses')) return [[{ address_id: 3, ...ADDRESS }], []];
       if (sql.includes('INSERT INTO orders')) return [{ insertId: 1001, affectedRows: 1 }, []];
       return [{ affectedRows: 1 }, []];
     }),
@@ -43,6 +45,16 @@ beforeEach(() => {
 });
 
 describe('create 创建订单', () => {
+  test.each([undefined, null, '3', 0, -1, 1.5])('必须明确选择合法本人地址 address=%p，失败不创建事务', async address => {
+    const res = mockRes();
+    await OrderController.create({ userId: 7, body: {
+      items: [{ product_id: 1, quantity: 1 }], shipping_address_id: address,
+    } } as any, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(connection.beginTransaction).not.toHaveBeenCalled();
+    expect(sendOrderTimeoutCheckMessage).not.toHaveBeenCalled();
+  });
+
   test('负数数量返回 400，不创建订单或增加库存', async () => {
     const res = mockRes();
     await OrderController.create({ userId: 7, body: { items: [{ product_id: 1, quantity: -2 }] } } as any, res);
@@ -58,7 +70,7 @@ describe('create 创建订单', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ message: '订单创建成功', order_id: 1001, original_amount: 198, discount_amount: 0, total_amount: 198 });
     const orderInsert = connection.execute.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO orders'));
-    expect(orderInsert[1]).toEqual([expect.any(String), 7, '198.00', 3, '尽快', 0, '198.00', '0.00', null, null, null]);
+    expect(orderInsert[1]).toEqual([expect.any(String), 7, '198.00', 3, '尽快', 0, '198.00', '0.00', null, null, null, JSON.stringify(ADDRESS)]);
     expect(connection.commit).toHaveBeenCalledTimes(1);
     expect(sendOrderTimeoutCheckMessage).toHaveBeenCalledWith(1001, 7);
     expect(connection.commit.mock.invocationCallOrder[0]).toBeLessThan((sendOrderTimeoutCheckMessage as jest.Mock).mock.invocationCallOrder[0]);
@@ -67,7 +79,7 @@ describe('create 创建订单', () => {
   test('MQ 发送失败时已提交订单仍创建成功', async () => {
     (sendOrderTimeoutCheckMessage as jest.Mock).mockResolvedValue(false);
     const res = mockRes();
-    await OrderController.create({ userId: 7, body: { items: [{ product_id: 1, quantity: 1 }] } } as any, res);
+    await OrderController.create({ userId: 7, body: { shipping_address_id: 3, items: [{ product_id: 1, quantity: 1 }] } } as any, res);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(connection.commit).toHaveBeenCalledTimes(1);
   });
@@ -82,7 +94,7 @@ describe('create 创建订单', () => {
   test('商品不存在时返回 400 并回滚', async () => {
     products = [];
     const res = mockRes();
-    await OrderController.create({ userId: 7, body: { items: [{ product_id: 999, quantity: 1 }] } } as any, res);
+    await OrderController.create({ userId: 7, body: { shipping_address_id: 3, items: [{ product_id: 999, quantity: 1 }] } } as any, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(connection.rollback).toHaveBeenCalledTimes(1);
     expect(connection.commit).not.toHaveBeenCalled();
@@ -91,7 +103,7 @@ describe('create 创建订单', () => {
   test('库存不足时返回 400 并回滚', async () => {
     products = [{ ...PRODUCT, stock: 1 }];
     const res = mockRes();
-    await OrderController.create({ userId: 7, body: { items: [{ product_id: 1, quantity: 5 }] } } as any, res);
+    await OrderController.create({ userId: 7, body: { shipping_address_id: 3, items: [{ product_id: 1, quantity: 5 }] } } as any, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(connection.rollback).toHaveBeenCalledTimes(1);
     expect(connection.commit).not.toHaveBeenCalled();

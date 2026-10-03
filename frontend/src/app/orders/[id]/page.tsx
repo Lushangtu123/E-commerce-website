@@ -193,6 +193,14 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
+        <div className="card p-6 mb-6">
+          <h2 className="font-bold text-lg mb-4">收货信息</h2>
+          {order.shipping_address_snapshot ? <div>
+            <p className="font-medium">{order.shipping_address_snapshot.receiver_name} <span className="ml-2 text-gray-600">{order.shipping_address_snapshot.phone}</span></p>
+            <p className="text-gray-600 mt-2">{order.shipping_address_snapshot.province}{order.shipping_address_snapshot.city}{order.shipping_address_snapshot.district}{order.shipping_address_snapshot.detail_address}</p>
+          </div> : <p className="text-gray-500">历史订单未记录收货信息</p>}
+        </div>
+
         {/* 商品列表 */}
         <div className="card p-6 mb-6">
           <h2 className="font-bold text-lg mb-4">商品信息</h2>
