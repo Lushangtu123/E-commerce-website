@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
+import OrderReviews from '@/components/OrderReviews';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -295,6 +296,8 @@ export default function OrderDetailPage() {
             )}
           </div>
         </div>
+
+        {order.status === 3 && <OrderReviews key={sessionKey} orderId={orderId} items={items} />}
 
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-3">

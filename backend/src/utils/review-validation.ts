@@ -29,6 +29,7 @@ export const reviewListSchema = Joi.object({
   page: queryInteger(2147483647).default(1),
   limit: queryInteger(100).default(10),
 }).required().unknown(false).prefs({ convert: false });
+const myReviewListSchema = reviewListSchema.keys({ order_id: queryInteger(Number.MAX_SAFE_INTEGER) });
 
 export function parseReviewInput(body: unknown): ReviewInput {
   const { error, value } = reviewCreateSchema.validate(body);
@@ -49,6 +50,12 @@ export function reviewProductPathId(value: unknown): number {
 
 export function parseReviewPage(parameters: unknown): { page: number; limit: number } {
   const { error, value } = reviewListSchema.validate(parameters);
+  if (error) throw new ReviewError('分页参数无效');
+  return value;
+}
+
+export function parseMyReviewPage(parameters: unknown): { page: number; limit: number; order_id?: number } {
+  const { error, value } = myReviewListSchema.validate(parameters);
   if (error) throw new ReviewError('分页参数无效');
   return value;
 }

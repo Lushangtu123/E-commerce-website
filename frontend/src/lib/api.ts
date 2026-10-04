@@ -190,11 +190,23 @@ export const orderApi = {
 };
 
 // 评论相关API
+export interface PurchaseReview {
+  review_id: number;
+  product_id: number;
+  order_id: number;
+  user_id: number;
+  rating: number;
+  content?: string | null;
+  created_at?: string;
+}
+
 export const reviewApi = {
-  create: (data: any) => api.post('/reviews', data),
+  create: (data: { product_id: number; order_id: number; rating: number; content?: string; images?: string[] }) =>
+    api.post<any, { review_id: number; message: string }>('/reviews', data),
   listByProduct: (productId: number, params?: any) =>
     api.get(`/reviews/product/${productId}`, { params }),
-  listByUser: (params?: any) => api.get('/reviews/my', { params }),
+  listByUser: (params?: { page?: number; limit?: number; order_id?: number }) =>
+    api.get<any, { reviews: PurchaseReview[]; totalPages: number }>('/reviews/my', { params }),
 };
 
 // 收藏相关API

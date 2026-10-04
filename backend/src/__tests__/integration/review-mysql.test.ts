@@ -188,4 +188,23 @@ integration('真实 MySQL 评价完整性与迁移', () => {
     expect((await request(app).post('/api/reviews').set('Authorization', auth(1)).send({ ...body, user_id: 2 })).status).toBe(400);
     expect((await db.query<RowDataPacket[]>('SELECT * FROM reviews'))[0]).toHaveLength(0);
   });
+
+  test('真实HTTP按订单过滤本人评价，分页不会返回其他订单或其他买家的记录', async () => {
+    await ReviewModel.create(1, 1, 1, 4, '订单一商品一');
+    await ReviewModel.create(2, 1, 1, 5, '订单一商品二');
+    await db.query("INSERT INTO reviews (product_id,user_id,order_id,rating,content) VALUES (1,1,2,3,'本人其他订单'),(1,2,3,2,'其他买家订单')");
+    for (const page of [1, 2]) {
+      const res = await request(app).get(`/api/reviews/my?order_id=1&page=${page}&limit=1`).set('Authorization', auth(1));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ total: 2, totalPages: 2, page, limit: 1 });
+      expect(res.body.reviews).toHaveLength(1);
+      expect(res.body.reviews[0]).toMatchObject({ user_id: 1, order_id: 1, content: page === 1 ? '订单一商品二' : '订单一商品一' });
+    }
+    const foreign = await request(app).get('/api/reviews/my?order_id=3').set('Authorization', auth(1));
+    expect(foreign.status).toBe(200); expect(foreign.body.reviews).toEqual([]); expect(foreign.body.total).toBe(0);
+    expect((await request(app).get('/api/reviews/my?order_id=1')).status).toBe(401);
+    expect((await request(app).get('/api/reviews/my?order_id=1%20OR%201=1').set('Authorization', auth(1))).status).toBe(400);
+    const all = await request(app).get('/api/reviews/my').set('Authorization', auth(1));
+    expect(all.body.total).toBe(3);
+  });
 });

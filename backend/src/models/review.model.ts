@@ -103,13 +103,15 @@ export class ReviewModel {
   }
 
   // 获取用户评论列表
-  static async listByUser(userId: number, page: number = 1, limit: number = 10): Promise<{ reviews: Review[], total: number }> {
+  static async listByUser(userId: number, page: number = 1, limit: number = 10, orderId?: number): Promise<{ reviews: Review[], total: number }> {
     assertReviewPage(userId, page, limit);
+    if (orderId !== undefined) assertReviewId(orderId);
     const offset = (page - 1) * limit;
+    const identity = orderId === undefined ? [userId] : [userId, orderId];
 
     const countResult = await query<RowDataPacket[]>(
-      'SELECT COUNT(*) as total FROM reviews WHERE user_id = ?',
-      [userId]
+      `SELECT COUNT(*) as total FROM reviews WHERE user_id = ?${orderId === undefined ? '' : ' AND order_id = ?'}`,
+      identity
     );
     const total = countResult[0].total;
 
@@ -117,10 +119,10 @@ export class ReviewModel {
       `SELECT r.*, p.title as product_title, p.main_image as product_image
        FROM reviews r
        LEFT JOIN products p ON r.product_id = p.product_id
-       WHERE r.user_id = ?
+       WHERE r.user_id = ?${orderId === undefined ? '' : ' AND r.order_id = ?'}
        ORDER BY r.created_at DESC, r.review_id DESC
        LIMIT ? OFFSET ?`,
-      [userId, limit, offset]
+      [...identity, limit, offset]
     );
 
     return { reviews, total };

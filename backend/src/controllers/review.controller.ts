@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { ReviewModel } from '../models/review.model';
 import logger from '../utils/logger';
-import { ReviewError, parseReviewInput, parseReviewPage, reviewProductPathId } from '../utils/review-validation';
+import { ReviewError, parseReviewInput, parseReviewPage, parseMyReviewPage, reviewProductPathId } from '../utils/review-validation';
 
 export class ReviewController {
   // 创建评论
@@ -56,9 +56,9 @@ export class ReviewController {
   // 获取我的评论列表
   static async listByUser(req: AuthRequest, res: Response) {
     try {
-      const { page, limit } = parseReviewPage(req.query);
+      const { page, limit, order_id } = parseMyReviewPage(req.query);
 
-      const result = await ReviewModel.listByUser(req.userId!, page, limit);
+      const result = await ReviewModel.listByUser(req.userId!, page, limit, order_id);
 
       res.json({
         reviews: result.reviews,

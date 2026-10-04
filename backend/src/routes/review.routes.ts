@@ -96,9 +96,13 @@ router.post('/', ReviewController.create);
  *   get:
  *     tags: [评论]
  *     summary: 获取我的评论列表
- *     description: page为1至2147483647，limit为1至100的十进制正整数，默认1和10；不允许指定其他用户或额外查询参数
+ *     description: 可用order_id筛选本人某个订单的评价；page为1至2147483647，limit为1至100的十进制正整数，默认1和10；不允许指定其他用户或额外查询参数
  *     security: [{ bearerAuth: [] }]
  *     parameters:
+ *       - name: order_id
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 9007199254740991 }
+ *         description: 可选订单ID，仍然只返回当前用户的评价
  *       - name: page
  *         in: query
  *         schema: { type: integer, minimum: 1, maximum: 2147483647, default: 1 }

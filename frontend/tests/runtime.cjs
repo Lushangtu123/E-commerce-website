@@ -31,7 +31,12 @@ function loadSource(relativePath, globals = {}, imports = {}) {
   vm.runInNewContext(output, {
     module,
     exports: module.exports,
-    require: (name) => Object.hasOwn(imports, name) ? imports[name] : name.startsWith('@/') ? loadSource(`src/${name.slice(2)}.ts`, globals, imports) : require(name),
+    require: (name) => {
+      if (Object.hasOwn(imports, name)) return imports[name];
+      if (!name.startsWith('@/')) return require(name);
+      const relative = `src/${name.slice(2)}`;
+      return loadSource(fs.existsSync(path.resolve(__dirname, '..', `${relative}.ts`)) ? `${relative}.ts` : `${relative}.tsx`, globals, imports);
+    },
     process: { env: { NEXT_PUBLIC_API_URL: 'http://localhost:3001/api' } },
     console,
     URL,

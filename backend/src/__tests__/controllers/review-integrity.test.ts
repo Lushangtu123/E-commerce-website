@@ -144,3 +144,27 @@ test('direct model calls cannot bypass input validation', async () => {
   await expect(ReviewModel.create(input.product_id, 7, input.order_id, 2.5)).rejects.toMatchObject({ statusCode: 400 });
   expect(getPool).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled();
 });
+
+test('my reviews can filter an order without changing customer scoping or pagination', async () => {
+  const res = response();
+  await ReviewController.listByUser(request(input, { query: { order_id: '2147483651', page: '2', limit: '100' } }), res);
+  expect(res.status).not.toHaveBeenCalled();
+  expect(res.json).toHaveBeenCalledWith({ reviews: [], total: 0, page: 2, limit: 100, totalPages: 0 });
+  expect(query).toHaveBeenNthCalledWith(1, expect.stringMatching(/WHERE user_id = \? AND order_id = \?/), [7, 2147483651]);
+  expect(query).toHaveBeenLastCalledWith(expect.stringMatching(/WHERE r.user_id = \? AND r.order_id = \?/), [7, 2147483651, 100, 100]);
+});
+
+test.each(['0', '-1', '01', '1x', '1.5', '', '9007199254740992', ['1', '2'], 1, {}])('my reviews rejects invalid order filter %p before querying', async order_id => {
+  const res = response();
+  await ReviewController.listByUser(request(input, { query: { order_id } }), res);
+  expect(res.status).toHaveBeenCalledWith(400);
+  expect(query).not.toHaveBeenCalled();
+});
+
+test('order filtering is private and direct model calls validate the filter', async () => {
+  const res = response();
+  await ReviewController.listByProduct(request(input, { query: { order_id: '1' } }), res);
+  expect(res.status).toHaveBeenCalledWith(400);
+  await expect(ReviewModel.listByUser(7, 1, 10, 1.5)).rejects.toMatchObject({ statusCode: 400 });
+  expect(query).not.toHaveBeenCalled();
+});
