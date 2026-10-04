@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/login`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -136,12 +136,9 @@ export default function AdminLoginPage() {
             </button>
           </form>
 
-          {/* 默认账号提示 */}
+          {/* 部署账号提示 */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800 font-medium mb-1">{t("默认管理员账号：")}</p>
-            <p className="text-sm text-blue-600">{t("用户名: admin")}</p>
-            <p className="text-sm text-blue-600">{t("密码: admin123")}</p>
-            <p className="text-xs text-blue-500 mt-2">{t("⚠️ 登录后请立即修改密码")}</p>
+            <p className="text-sm text-blue-800">{t("请使用部署时配置的管理员账号和密码登录。")}</p>
           </div>
 
           {/* 返回首页 */}
