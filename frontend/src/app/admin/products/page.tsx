@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { getAdminSessionToken } from '@/lib/admin-session';
 import AdminLayout from '@/components/AdminLayout';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
@@ -458,6 +459,7 @@ export default function AdminProductsPage() {
                         >
                           {t("编辑")}
                         </button>
+                        <Link href={`/admin/products/${product.product_id}/skus`} className="text-blue-600 hover:text-blue-900" onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}>{t('管理规格')}</Link>
                       </td>
                     </tr>
                   ))}

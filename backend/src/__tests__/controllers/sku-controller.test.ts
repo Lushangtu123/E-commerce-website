@@ -116,6 +116,11 @@ test('更新支持SKU编码并拒绝未知字段', async () => {
   expect((await call(updateSKU, { product_id: 2, stock: 3 }, { skuId: '11' })).statusCode).toBe(400);
 });
 
+test('SKU list exposes explicit parent identity for its management screen', async () => {
+  const res = await call(getProductSKUs);
+  expect(res.body.product).toEqual({ product_id: 1, title: '商品', status: 1 });
+});
+
 test('详情只显示启用规格，使用启用规格价格和库存汇总', async () => {
   skus.push({ ...skus[0], sku_id: 12, price: 9, stock: 3 });
   skus.push({ ...skus[0], sku_id: 13, status: 0, price: 1, stock: 50 });

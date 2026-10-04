@@ -192,8 +192,17 @@ router.delete('/:productId', requirePermission('product:delete'), deleteProduct)
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items: { $ref: '#/components/schemas/Sku' }
+ *               type: object
+ *               properties:
+ *                 product:
+ *                   type: object
+ *                   properties:
+ *                     product_id: { type: integer }
+ *                     title: { type: string }
+ *                     status: { type: integer, enum: [0, 1] }
+ *                 skus:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Sku' }
  */
 router.get('/:productId/skus', requirePermission('product:view'), getProductSKUs);
 
@@ -302,6 +311,47 @@ router.post('/:productId/skus/batch', requirePermission('product:create'), batch
  *         description: 更新成功
  */
 router.put('/skus/:skuId', requirePermission('product:edit'), updateSKU);
+
+/**
+ * @openapi
+ * /api/admin/products/{productId}/skus/{skuId}:
+ *   put:
+ *     tags: [管理后台-商品]
+ *     summary: 更新指定商品的 SKU
+ *     description: 需要 product:edit 权限；校验 SKU 所属商品，更新后清除商品缓存并记录审计日志
+ *     security: [{ adminAuth: [] }]
+ *     parameters:
+ *       - name: productId
+ *         in: path
+ *         required: true
+ *         schema: { type: integer }
+ *       - name: skuId
+ *         in: path
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             additionalProperties: false
+ *             properties:
+ *               sku_code: { type: string, maxLength: 50 }
+ *               specs: { type: object, minProperties: 1, maxProperties: 20 }
+ *               price: { type: number, minimum: 0, maximum: 99999999.99 }
+ *               original_price: { type: number, nullable: true }
+ *               stock: { type: integer, minimum: 0, maximum: 2147483647 }
+ *               image: { type: string, nullable: true, maxLength: 255 }
+ *               status: { type: integer, enum: [0, 1] }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *       404:
+ *         description: 商品或 SKU 不存在，或 SKU 不属于此商品
+ */
+router.put('/:productId/skus/:skuId', requirePermission('product:edit'), updateSKU);
 
 /**
  * @openapi

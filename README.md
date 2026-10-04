@@ -386,10 +386,11 @@ E-commerce-website/
 - `PUT /api/admin/products/:id` - 更新商品
 - `PUT /api/admin/products/:id/status` - 更新商品状态
 - `PUT /api/admin/products/batch/status` - 批量更新状态
-- `GET /api/admin/products/:id/skus` - 获取商品SKU
+- `GET /api/admin/products/:id/skus` - 获取全部启用/停用 SKU，返回 `{ product: { product_id, title, status }, skus }`
 - `POST /api/admin/products/:id/skus` - 创建SKU
 - `POST /api/admin/products/:id/skus/batch` - 批量创建SKU
 - `PUT /api/admin/products/skus/:skuId` - 更新SKU
+- `PUT /api/admin/products/:id/skus/:skuId` - 更新指定商品的 SKU，校验所属商品；需要 `product:edit` 权限
 - `DELETE /api/admin/products/skus/:skuId` - 停用SKU，保留历史库存及订单关联
 
 **订单管理:**
@@ -456,6 +457,8 @@ node --test tests/search-pages.test.cjs tests/admin-session.test.cjs tests/admin
 搜索历史在登录状态恢复后加载，并在切换账户时清空；迟到请求不能写入其他账户。商品搜索更换关键词或排序后回到第一页，加载失败可重试。
 
 后台商品、用户和日志列表统一使用 API 客户端处理登录失效，迟到响应不能覆盖当前身份或查询。商品批量选择仅作用于当前页，翻页或筛选后清空；商品与用户写操作在请求完成前禁止重复提交。
+
+商品列表的「管理规格」进入 `/admin/products/:id/skus`，可新增、编辑、启用和停用 SKU，并显示启用规格的库存总和及最低售价。规格属性使用名称/值表单，最多20项且名称不可重复；仅改价或库存时保留既有数字、布尔属性类型。编码为1–50个字符，以字母或数字开头，可含点、下划线和连字符；金额为0–99999999.99，最多两位小数；库存为0–2147483647的整数；原价和图片地址留空会清除。新增首个 SKU 后购买使用规格价格和库存，全部停用后无法购买；停用保留库存和订单关联。操作记录审计日志并清除商品缓存，失败保留输入，保存成功但刷新失败时只重载列表，避免重复新增。页面和系统提示支持中英文，账号、登录会话或商品切换后忽略旧请求。
 
 ## 📝 开发计划
 

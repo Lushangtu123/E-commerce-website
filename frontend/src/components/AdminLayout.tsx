@@ -145,7 +145,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               key={item.path}
               href={item.path}
               className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
-                pathname === item.path
+                pathname === item.path || pathname.startsWith(`${item.path}/`)
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}

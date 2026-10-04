@@ -119,6 +119,36 @@ export const productApi = {
   getHotProducts: (limit?: number) => api.get('/products/hot', { params: { limit } }),
 };
 
+export interface AdminSKU {
+  sku_id: number;
+  product_id: number;
+  sku_code: string;
+  specs: Record<string, string | number | boolean>;
+  price: number | string;
+  original_price?: number | string | null;
+  stock: number;
+  image?: string | null;
+  status: 0 | 1;
+}
+export interface AdminSKUInput {
+  sku_code: string;
+  specs: Record<string, string | number | boolean>;
+  price: number;
+  original_price: number | null;
+  stock: number;
+  image: string | null;
+  status: 0 | 1;
+}
+export interface AdminSKUList {
+  product: { product_id: number; title: string; status: number };
+  skus: AdminSKU[];
+}
+export const adminSKUApi = {
+  list: (productId: number) => api.get<any, AdminSKUList>(`/admin/products/${productId}/skus`),
+  create: (productId: number, data: AdminSKUInput) => api.post<any, { sku_id: number }>(`/admin/products/${productId}/skus`, data),
+  update: (productId: number, skuId: number, data: Partial<AdminSKUInput>) => api.put(`/admin/products/${productId}/skus/${skuId}`, data),
+};
+
 // 购物车相关API
 export interface CartInput {
   product_id: number;
