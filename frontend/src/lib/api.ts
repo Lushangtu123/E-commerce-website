@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from 'axios';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, type User } from '@/store/useAuthStore';
 import { clearAdminSession } from '@/lib/admin-session';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -96,14 +96,20 @@ export interface UserStats {
   favoriteCount: number;
 }
 
+export interface ProfileInput {
+  username: string;
+  phone: string | null;
+  avatar_url: string | null;
+}
+
 export const userApi = {
   register: (data: { username: string; email: string; password: string }) =>
     api.post('/users/register', data),
   login: (data: { email: string; password: string }) =>
     api.post('/users/login', data),
-  getProfile: () => api.get('/users/profile'),
+  getProfile: () => api.get<any, { user: User }>('/users/profile'),
   getStats: () => api.get<any, { stats: UserStats }>('/users/stats'),
-  updateProfile: (data: any) => api.put('/users/profile', data),
+  updateProfile: (data: ProfileInput) => api.put<any, { message: string; user: User }>('/users/profile', data),
 };
 
 // 商品相关API

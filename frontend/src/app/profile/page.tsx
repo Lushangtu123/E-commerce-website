@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { userApi, type UserStats } from '@/lib/api';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   FiUser, 
   FiShoppingBag, 
@@ -25,6 +26,9 @@ export default function ProfilePage() {
   const { t } = useI18n();
   const { user, token, isAuthenticated, isHydrated, logout } = useAuthStore();
   const [result, setResult] = useState<{ key: string; stats?: UserStats; error?: string } | null>(null);
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const avatarKey = JSON.stringify([user?.user_id, user?.avatar_url]);
+  const avatar = user?.avatar_url && /^https?:\/\/\S+$/i.test(user.avatar_url) && failedAvatar !== avatarKey ? user.avatar_url : null;
   const mounted = useRef(true);
   const revision = useRef(0);
   const sessionKey = JSON.stringify([token, user?.user_id]);
@@ -141,8 +145,8 @@ export default function ProfilePage() {
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl shadow-xl p-8 mb-8 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
-              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center">
-                <FiUser size={40} className="text-blue-600" />
+              <div className="w-20 h-20 shrink-0 bg-white rounded-full flex items-center justify-center overflow-hidden">
+                {avatar ? <Image src={avatar} width={80} height={80} unoptimized alt={t('用户头像')} className="w-full h-full object-cover" onError={() => setFailedAvatar(avatarKey)} /> : <FiUser size={40} className="text-blue-600" />}
               </div>
               <div>
                 <h1 className="text-3xl font-bold mb-2">{user?.username || t('用户')}</h1>
@@ -251,10 +255,13 @@ export default function ProfilePage() {
 
         {/* 账户信息 */}
         <div className="mt-8 bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <FiSettings size={24} />
-            {t("账户信息")}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <FiSettings size={24} />
+              {t("账户信息")}
+            </h2>
+            <Link href="/profile/settings" className="btn btn-outline">{t('编辑资料')}</Link>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
               <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
@@ -273,6 +280,10 @@ export default function ProfilePage() {
                 <div className="text-sm text-gray-500">{t("邮箱")}</div>
                 <div className="font-medium text-gray-900">{user?.email || 'N/A'}</div>
               </div>
+            </div>
+            <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
+              <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center"><FiPhone size={24} className="text-orange-600" /></div>
+              <div><div className="text-sm text-gray-500">{t('联系电话')}</div><div className="font-medium text-gray-900">{user?.phone || t('未填写')}</div></div>
             </div>
           </div>
         </div>

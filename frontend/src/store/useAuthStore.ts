@@ -2,12 +2,12 @@ import { create } from 'zustand';
 import { logger } from '@/lib/logger';
 import { useCartStore } from '@/store/useCartStore';
 
-interface User {
+export interface User {
   user_id: number;
   username: string;
   email: string;
-  phone?: string;
-  avatar_url?: string;
+  phone?: string | null;
+  avatar_url?: string | null;
 }
 
 interface AuthState {
@@ -17,7 +17,7 @@ interface AuthState {
   isHydrated: boolean;
   login: (user: User, token: string) => void;
   logout: () => void;
-  updateUser: (user: Partial<User>) => void;
+  updateUser: (user: Partial<User>, expectedToken?: string) => boolean;
   hydrate: () => void;
 }
 
@@ -70,8 +70,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: null, token: null, isAuthenticated: false, isHydrated: true });
   },
   
-  updateUser: (userData) =>
-    set((state) => ({
-      user: state.user ? { ...state.user, ...userData } : null,
-    })),
+  updateUser: (userData, expectedToken) => {
+    const state = get();
+    if (!state.isHydrated || !state.isAuthenticated || !state.user || !state.token ||
+      (expectedToken !== undefined && expectedToken !== state.token) ||
+      (userData.user_id !== undefined && userData.user_id !== state.user.user_id)) return false;
+    try {
+      if (localStorage.getItem('token') !== state.token ||
+        JSON.parse(localStorage.getItem('user') || 'null')?.user_id !== state.user.user_id) return false;
+      const user: User = { user_id: state.user.user_id, username: state.user.username, email: state.user.email,
+        phone: state.user.phone, avatar_url: state.user.avatar_url };
+      for (const key of ['username', 'email'] as const) {
+        if (Object.hasOwn(userData, key)) {
+          if (typeof userData[key] !== 'string') return false;
+          user[key] = userData[key]!;
+        }
+      }
+      for (const key of ['phone', 'avatar_url'] as const) {
+        if (Object.hasOwn(userData, key)) {
+          if (userData[key] != null && typeof userData[key] !== 'string') return false;
+          user[key] = userData[key];
+        }
+      }
+      // Persist before publishing state, so a refresh cannot restore obsolete details.
+      localStorage.setItem('user', JSON.stringify(user));
+      set({ user });
+      return true;
+    } catch (error) {
+      logger.error('Failed to save profile state:', error);
+      return false;
+    }
+  },
 }));
