@@ -4,6 +4,7 @@ import logger from '../utils/logger';
 import { migrateCouponTables } from './migrate-coupon';
 import { migrateSkuTables } from './migrate-sku';
 import { migrateAddressTables } from './migrate-address';
+import { migrateReviewTables } from './migrate-review';
 
 const migrations = [
   // 用户表
@@ -137,6 +138,8 @@ const migrations = [
     content TEXT,
     images JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_review_order_product (order_id, product_id),
+    CONSTRAINT ck_reviews_rating CHECK (rating BETWEEN 1 AND 5),
     INDEX idx_product (product_id),
     INDEX idx_user (user_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -208,6 +211,7 @@ async function runMigrations() {
     await migrateCouponTables(pool);
     await migrateSkuTables(pool);
     await migrateAddressTables(pool);
+    await migrateReviewTables(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

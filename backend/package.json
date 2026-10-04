@@ -19,7 +19,9 @@
     "migrate-sku": "node dist/database/migrate-sku.js",
     "migrate-sku:dev": "ts-node src/database/migrate-sku.ts",
     "migrate-address": "node dist/database/migrate-address.js",
-    "migrate-address:dev": "ts-node src/database/migrate-address.ts"
+    "migrate-address:dev": "ts-node src/database/migrate-address.ts",
+    "migrate-review": "node dist/database/migrate-review.js",
+    "migrate-review:dev": "ts-node src/database/migrate-review.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.0",

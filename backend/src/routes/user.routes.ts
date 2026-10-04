@@ -42,7 +42,7 @@ router.get('/stats', authMiddleware, UserController.getStats);
  *   post:
  *     tags: [用户]
  *     summary: 用户注册
- *     description: 注册接口带防刷限流
+ *     description: 带防刷限流；用户名和邮箱去除首尾空白，密码保留原文且最多72个UTF-8字节，拒绝额外字段
  *     requestBody:
  *       required: true
  *       content:
@@ -50,18 +50,21 @@ router.get('/stats', authMiddleware, UserController.getStats);
  *           schema:
  *             type: object
  *             required: [username, email, password]
+ *             additionalProperties: false
  *             properties:
- *               username: { type: string, example: zhangsan }
- *               email: { type: string, format: email, example: zhangsan@example.com }
- *               password: { type: string, format: password }
+ *               username: { type: string, minLength: 1, maxLength: 50, example: zhangsan }
+ *               email: { type: string, format: email, maxLength: 100, example: zhangsan@example.com }
+ *               password: { type: string, format: password, minLength: 6, description: 最多72个UTF-8字节，不去除空白 }
  *     responses:
- *       200:
+ *       201:
  *         description: 注册成功，返回用户信息与 Token
  *       400:
- *         description: 参数错误 / 邮箱已注册
+ *         description: 字段、类型或长度错误
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       409:
+ *         description: 用户名或邮箱已被使用，包括并发注册冲突
  *       429:
  *         description: 触发注册防刷限流
  */
@@ -73,7 +76,7 @@ router.post('/register', authLimiter, UserController.register);
  *   post:
  *     tags: [用户]
  *     summary: 用户登录
- *     description: 登录接口带防暴力破解限流
+ *     description: 带防暴力破解限流；邮箱去除首尾空白，密码保留原文，不对旧账户套用新注册密码长度规则
  *     requestBody:
  *       required: true
  *       content:
@@ -81,12 +84,15 @@ router.post('/register', authLimiter, UserController.register);
  *           schema:
  *             type: object
  *             required: [email, password]
+ *             additionalProperties: false
  *             properties:
- *               email: { type: string, format: email }
- *               password: { type: string, format: password }
+ *               email: { type: string, minLength: 1, maxLength: 100 }
+ *               password: { type: string, format: password, minLength: 1 }
  *     responses:
  *       200:
  *         description: 登录成功，返回用户信息与 Token
+ *       400:
+ *         description: 字段或类型错误
  *       401:
  *         description: 邮箱或密码错误
  *         content:
@@ -109,7 +115,12 @@ router.post('/login', authLimiter, UserController.login);
  *         description: 当前登录用户信息
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/User' }
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user: { $ref: '#/components/schemas/User' }
+ *       404:
+ *         description: 用户不存在
  *       401:
  *         description: 未登录或 Token 无效
  *         content:
@@ -124,6 +135,7 @@ router.get('/profile', authMiddleware, UserController.getProfile);
  *   put:
  *     tags: [用户]
  *     summary: 更新个人信息
+ *     description: 至少提供一个允许字段；字符串去除首尾空白，手机号和头像用空字符串或null清空；拒绝邮箱、密码和额外字段
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -131,13 +143,21 @@ router.get('/profile', authMiddleware, UserController.getProfile);
  *         application/json:
  *           schema:
  *             type: object
+ *             minProperties: 1
+ *             additionalProperties: false
  *             properties:
- *               username: { type: string }
- *               phone: { type: string }
- *               avatar_url: { type: string }
+ *               username: { type: string, minLength: 1, maxLength: 50 }
+ *               phone: { type: string, maxLength: 20, nullable: true }
+ *               avatar_url: { type: string, format: uri, maxLength: 255, nullable: true, description: HTTP(S)网址，或空字符串/null清空 }
  *     responses:
  *       200:
- *         description: 更新成功
+ *         description: 更新成功，返回message和公开user资料；提交已有值也成功
+ *       400:
+ *         description: 空更新或字段无效
+ *       404:
+ *         description: 用户不存在
+ *       409:
+ *         description: 用户名已被使用
  *       401:
  *         description: 未登录或 Token 无效
  *         content:

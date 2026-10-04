@@ -32,7 +32,9 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { username, email, password, confirmPassword } = formData;
+    const { password, confirmPassword } = formData;
+    const username = formData.username.trim();
+    const email = formData.email.trim();
 
     if (!username || !email || !password || !confirmPassword) {
       toast.error(t("请填写完整信息"));
@@ -46,6 +48,11 @@ export default function RegisterPage() {
 
     if (password.length < 6) {
       toast.error(t("密码长度不能少于6位"));
+      return;
+    }
+
+    if (new TextEncoder().encode(password).length > 72) {
+      toast.error(t('密码不能超过72个UTF-8字节'));
       return;
     }
 
@@ -83,6 +90,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="input"
                 placeholder={t("请输入用户名")}
+                maxLength={50}
                 required
               />
             </div>
@@ -97,6 +105,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="input"
                 placeholder={t("请输入邮箱")}
+                maxLength={100}
                 required
               />
             </div>
@@ -111,6 +120,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="input"
                 placeholder={t("请输入密码（至少6位）")}
+                minLength={6}
                 required
               />
             </div>
@@ -125,6 +135,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="input"
                 placeholder={t("请再次输入密码")}
+                minLength={6}
                 required
               />
             </div>
@@ -149,4 +160,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

@@ -1,5 +1,10 @@
-import { query } from '../database/mysql';
+import { getPool, query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { OrderStatus } from './order.model';
+import { ReviewError, assertReviewId, assertReviewPage, parseReviewInput } from '../utils/review-validation';
+import logger from '../utils/logger';
+
+export { ReviewError } from '../utils/review-validation';
 
 export interface Review {
   review_id: number;
@@ -25,16 +30,55 @@ export class ReviewModel {
     content?: string,
     images?: string[]
   ): Promise<number> {
-    const result = await query<ResultSetHeader>(
-      `INSERT INTO reviews (product_id, user_id, order_id, rating, content, images)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [productId, userId, orderId, rating, content, JSON.stringify(images)]
-    );
-    return result.insertId;
+    assertReviewId(userId);
+    const input = parseReviewInput({ product_id: productId, order_id: orderId, rating, content, images });
+    const connection = await getPool().getConnection();
+    try {
+      await connection.beginTransaction();
+      // Serialize every review of this purchase, including older databases
+      // that do not yet have the unique (order_id, product_id) index.
+      const [orders] = await connection.execute<RowDataPacket[]>(
+        'SELECT order_id, user_id, status FROM orders WHERE order_id = ? FOR UPDATE', [input.order_id]
+      );
+      const order = orders[0];
+      if (!order) throw new ReviewError('订单不存在', 404);
+      if (Number(order.user_id) !== userId) throw new ReviewError('无权评论该订单', 403);
+      if (Number(order.status) !== OrderStatus.COMPLETED) throw new ReviewError('订单未完成，不能评论');
+
+      const [items] = await connection.execute<RowDataPacket[]>(
+        'SELECT item_id FROM order_items WHERE order_id = ? AND product_id = ? LIMIT 1',
+        [input.order_id, input.product_id]
+      );
+      if (!items.length) throw new ReviewError('该商品不属于此订单');
+      // A locking read sees the latest committed review after waiting for the
+      // order lock, regardless of a transaction's earlier consistent snapshot.
+      const [reviews] = await connection.execute<RowDataPacket[]>(
+        'SELECT review_id FROM reviews WHERE order_id = ? AND product_id = ? LIMIT 1 FOR UPDATE',
+        [input.order_id, input.product_id]
+      );
+      if (reviews.length) throw new ReviewError('评论已存在，请勿重复提交', 409);
+
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO reviews (product_id, user_id, order_id, rating, content, images)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [input.product_id, userId, input.order_id, input.rating, input.content ?? null,
+          input.images === undefined ? null : JSON.stringify(input.images)]
+      );
+      await connection.commit();
+      return result.insertId;
+    } catch (error: any) {
+      try { await connection.rollback(); }
+      catch (rollbackError) { logger.error({ err: rollbackError }, '评论事务回滚失败'); }
+      if (error?.code === 'ER_DUP_ENTRY') throw new ReviewError('评论已存在，请勿重复提交', 409);
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   // 获取商品评论列表
   static async listByProduct(productId: number, page: number = 1, limit: number = 10): Promise<{ reviews: Review[], total: number }> {
+    assertReviewPage(productId, page, limit);
     const offset = (page - 1) * limit;
 
     // 获取总数
@@ -50,7 +94,7 @@ export class ReviewModel {
        FROM reviews r
        LEFT JOIN users u ON r.user_id = u.user_id
        WHERE r.product_id = ?
-       ORDER BY r.created_at DESC
+       ORDER BY r.created_at DESC, r.review_id DESC
        LIMIT ? OFFSET ?`,
       [productId, limit, offset]
     );
@@ -60,6 +104,7 @@ export class ReviewModel {
 
   // 获取用户评论列表
   static async listByUser(userId: number, page: number = 1, limit: number = 10): Promise<{ reviews: Review[], total: number }> {
+    assertReviewPage(userId, page, limit);
     const offset = (page - 1) * limit;
 
     const countResult = await query<RowDataPacket[]>(
@@ -73,7 +118,7 @@ export class ReviewModel {
        FROM reviews r
        LEFT JOIN products p ON r.product_id = p.product_id
        WHERE r.user_id = ?
-       ORDER BY r.created_at DESC
+       ORDER BY r.created_at DESC, r.review_id DESC
        LIMIT ? OFFSET ?`,
       [userId, limit, offset]
     );
@@ -83,6 +128,7 @@ export class ReviewModel {
 
   // 检查用户是否已评论该订单的商品
   static async hasReviewed(userId: number, orderId: number, productId: number): Promise<boolean> {
+    assertReviewId(userId); assertReviewId(orderId); assertReviewId(productId);
     const result = await query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM reviews WHERE user_id = ? AND order_id = ? AND product_id = ?',
       [userId, orderId, productId]
@@ -90,4 +136,3 @@ export class ReviewModel {
     return result[0].count > 0;
   }
 }
-

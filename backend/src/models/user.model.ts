@@ -1,13 +1,14 @@
 import { query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { normalizeProfile, ProfileUpdates } from '../utils/user-validation';
 
 export interface User {
   user_id: number;
   username: string;
   email: string;
   password_hash: string;
-  phone?: string;
-  avatar_url?: string;
+  phone?: string | null;
+  avatar_url?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -81,16 +82,18 @@ export class UserModel {
   // 根据ID查找用户
   static async findById(userId: number): Promise<User | null> {
     const users = await query<(User & RowDataPacket)[]>(
-      'SELECT user_id, username, email, phone, avatar_url, created_at FROM users WHERE user_id = ?',
+      'SELECT user_id, username, email, phone, avatar_url, created_at, updated_at FROM users WHERE user_id = ?',
       [userId]
     );
     return users.length > 0 ? users[0] : null;
   }
 
   // 更新用户信息
-  static async update(userId: number, updates: Partial<User>): Promise<boolean> {
-    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(updates), userId];
+  static async update(userId: number, updates: ProfileUpdates): Promise<boolean> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new RangeError('用户ID无效');
+    const allowed = normalizeProfile(updates);
+    const fields = Object.keys(allowed).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(allowed), userId];
     
     const result = await query<ResultSetHeader>(
       `UPDATE users SET ${fields} WHERE user_id = ?`,

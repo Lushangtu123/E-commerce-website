@@ -4,6 +4,7 @@ import { UserModel } from '../models/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
+import { normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
 
 export class UserController {
   static async getStats(req: AuthRequest, res: Response) {
@@ -20,22 +21,17 @@ export class UserController {
   // 注册
   static async register(req: AuthRequest, res: Response) {
     try {
-      const { username, email, password } = req.body;
-
-      // 验证
-      if (!username || !email || !password) {
-        return res.status(400).json({ error: '请填写完整信息' });
-      }
+      const { username, email, password } = normalizeRegistration(req.body);
 
       // 检查用户是否已存在
       const existingUser = await UserModel.findByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ error: '邮箱已被注册' });
+        return res.status(409).json({ error: '邮箱已被注册' });
       }
 
       const existingUsername = await UserModel.findByUsername(username);
       if (existingUsername) {
-        return res.status(400).json({ error: '用户名已被使用' });
+        return res.status(409).json({ error: '用户名已被使用' });
       }
 
       // 加密密码
@@ -58,6 +54,8 @@ export class UserController {
         user: { user_id: userId, username, email }
       });
     } catch (error) {
+      if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
+      if ((error as any)?.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '用户名或邮箱已被使用' });
       logger.error({ err: error }, '注册失败');
       res.status(500).json({ error: '注册失败' });
     }
@@ -66,11 +64,7 @@ export class UserController {
   // 登录
   static async login(req: AuthRequest, res: Response) {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ error: '请填写邮箱和密码' });
-      }
+      const { email, password } = normalizeLogin(req.body);
 
       // 查找用户
       const user = await UserModel.findByEmail(email);
@@ -104,6 +98,7 @@ export class UserController {
         }
       });
     } catch (error) {
+      if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '登录失败');
       res.status(500).json({ error: '登录失败' });
     }
@@ -118,7 +113,7 @@ export class UserController {
         return res.status(404).json({ error: '用户不存在' });
       }
 
-      res.json({ user });
+      res.json({ user: publicUser(user) });
     } catch (error) {
       logger.error({ err: error }, '获取用户信息失败');
       res.status(500).json({ error: '获取用户信息失败' });
@@ -128,21 +123,14 @@ export class UserController {
   // 更新个人信息
   static async updateProfile(req: AuthRequest, res: Response) {
     try {
-      const { username, phone, avatar_url } = req.body;
-      const updates: any = {};
-
-      if (username) updates.username = username;
-      if (phone) updates.phone = phone;
-      if (avatar_url) updates.avatar_url = avatar_url;
-
-      const success = await UserModel.update(req.userId!, updates);
-
-      if (success) {
-        res.json({ message: '更新成功' });
-      } else {
-        res.status(400).json({ error: '更新失败' });
-      }
+      const updates = normalizeProfile(req.body);
+      await UserModel.update(req.userId!, updates);
+      const user = await UserModel.findById(req.userId!);
+      if (!user) return res.status(404).json({ error: '用户不存在' });
+      res.json({ message: '更新成功', user: publicUser(user) });
     } catch (error) {
+      if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
+      if ((error as any)?.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '用户名已被使用' });
       logger.error({ err: error }, '更新用户信息失败');
       res.status(500).json({ error: '更新用户信息失败' });
     }
