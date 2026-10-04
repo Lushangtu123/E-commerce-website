@@ -1,7 +1,7 @@
 import { getRedisClient } from '../database/redis';
 
 export class CacheService {
-  private redis = getRedisClient();
+  private get redis() { return getRedisClient(); }
 
   // 设置缓存
   async set(key: string, value: any, expireSeconds?: number): Promise<void> {
@@ -31,9 +31,10 @@ export class CacheService {
 
   // 批量删除
   async delPattern(pattern: string): Promise<void> {
-    const keys = await this.redis.keys(pattern);
+    const prefix = this.redis.options.keyPrefix || '';
+    const keys = await this.redis.keys(prefix + pattern);
     if (keys.length > 0) {
-      await this.redis.del(...keys);
+      await this.redis.del(...keys.map(key => key.slice(prefix.length)));
     }
   }
 
@@ -114,4 +115,3 @@ export class CacheService {
 }
 
 export default new CacheService();
-

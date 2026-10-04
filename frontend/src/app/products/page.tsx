@@ -14,7 +14,7 @@ import { logger } from '@/lib/logger';
 
 function ProductsList() {
   const { t } = useI18n();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() || new URLSearchParams();
   const router = useRouter();
   const keyword = searchParams.get('keyword') || '';
   const sort = searchParams.get('sort') || 'created_at DESC';

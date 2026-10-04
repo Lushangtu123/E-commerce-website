@@ -3,7 +3,7 @@ import { connectDatabase } from './mysql';
 import bcrypt from 'bcryptjs';
 import logger from '../utils/logger';
 
-const categories = [
+export const categories = [
   { name: '电子产品', parent_id: null, sort_order: 1 },
   { name: '服装鞋包', parent_id: null, sort_order: 2 },
   { name: '食品生鲜', parent_id: null, sort_order: 3 },
@@ -11,7 +11,7 @@ const categories = [
   { name: '图书文娱', parent_id: null, sort_order: 5 },
 ];
 
-const products = [
+export const products = [
   {
     title: 'iPhone 15 Pro Max 256GB',
     description: '全新iPhone 15 Pro Max，A17 Pro芯片，钛金属设计，支持5G网络',
@@ -115,6 +115,7 @@ const products = [
 ];
 
 async function seed() {
+  if (process.env.NODE_ENV === 'production') throw new Error('生产环境禁止运行会清空数据的开发 seed');
   try {
     await connectDatabase();
     logger.info('开始填充示例数据...\n');
@@ -182,5 +183,5 @@ async function seed() {
   }
 }
 
-seed();
+if (require.main === module) seed();
 

@@ -15,7 +15,7 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const [storedAdmin, setAdmin] = useState<AdminSession['admin'] | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionToken, setSessionToken] = useState<string | null>(() => getAdminSessionToken());

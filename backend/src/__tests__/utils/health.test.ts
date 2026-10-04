@@ -46,6 +46,14 @@ test('全部依赖正常时状态为 ok', async () => {
   );
 });
 
+test('Vercel 仅检查所部署的 MySQL 和 Redis，不要求常驻 MongoDB 或 RabbitMQ', async () => {
+  mongoose.connection.db = null;
+  getChannel.mockImplementation(() => { throw new Error('RabbitMQ未初始化'); });
+  const report = await getHealthReport(true);
+  expect(report.status).toBe('ok');
+  expect(Object.keys(report.dependencies).sort()).toEqual(['mysql', 'redis']);
+});
+
 test('MySQL 异常时状态为 degraded 并携带错误信息', async () => {
   getPool.mockReturnValue({
     query: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED')),

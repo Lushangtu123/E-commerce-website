@@ -6,6 +6,7 @@
  * 此处统一定义 tags、安全方案与通用 schema。
  */
 import swaggerJSDoc from 'swagger-jsdoc';
+import path from 'path';
 
 const options: swaggerJSDoc.Options = {
   definition: {
@@ -238,8 +239,8 @@ const options: swaggerJSDoc.Options = {
       },
     },
   },
-  // 扫描路由文件中的 @openapi 注解；同时收录运维接口（index.ts）
-  apis: ['./src/routes/*.ts', './src/index.ts'],
+  // Resolve from this module so builds work from the repository or frontend directory.
+  apis: [path.resolve(__dirname, '../../src/routes/*.ts'), path.resolve(__dirname, '../../src/app.ts')],
 };
 
 export const swaggerSpec = swaggerJSDoc(options);

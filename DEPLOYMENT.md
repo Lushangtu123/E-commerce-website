@@ -2,6 +2,8 @@
 
 本文档提供了电商平台系统的详细部署说明。
 
+Vercel 同域 API、Upstash Redis/QStash 和 Aiven MySQL 的配置见 [云端部署指南](docs/VERCEL_UPSTASH.md)。该方案默认发布预览环境，使用独立的环境变量和外部订单超时任务。
+
 ## 部署方式
 
 ### 1. Docker Compose部署（推荐）
@@ -403,4 +405,3 @@ save 60 10000
 ## 联系方式
 
 如有部署问题，请查看项目文档或提交Issue。
-

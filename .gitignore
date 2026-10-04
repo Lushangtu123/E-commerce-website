@@ -10,6 +10,7 @@ coverage/
 build/
 dist/
 .next/
+.vercel/
 out/
 
 # 环境变量
@@ -46,4 +47,5 @@ uploads/
 
 # Docker
 docker-compose.override.yml
-
+.vercel
+.env*

@@ -36,7 +36,8 @@ export async function cancelTimeoutOrder(orderId: number): Promise<boolean> {
 /**
  * 检查并取消超时订单
  */
-export async function checkAndCancelTimeoutOrders(): Promise<void> {
+export async function checkAndCancelTimeoutOrders(batchSize = 50): Promise<{ checked: number; cancelled: number }> {
+  if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 100) throw new Error('无效的订单检查批次大小');
   const pool = getPool();
 
   try {
@@ -45,7 +46,8 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
       `SELECT order_id, order_no, user_id, created_at 
        FROM orders 
        WHERE status = 0 
-       AND created_at <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)`
+       AND created_at <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+       ORDER BY created_at, order_id LIMIT ${batchSize}`
     );
 
     logger.info(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
@@ -64,6 +66,7 @@ export async function checkAndCancelTimeoutOrders(): Promise<void> {
     if (timeoutOrders.length > 0) {
       logger.info(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
     }
+    return { checked: timeoutOrders.length, cancelled: successCount };
   } catch (error) {
     logger.error({ err: error }, '[订单超时检查] 查询超时订单失败');
     throw error;

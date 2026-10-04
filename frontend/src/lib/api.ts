@@ -2,7 +2,7 @@ import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore, type User } from '@/store/useAuthStore';
 import { clearAdminSession } from '@/lib/admin-session';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,

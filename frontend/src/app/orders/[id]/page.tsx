@@ -18,7 +18,7 @@ const ORDER_STATUS = {
 };
 
 export default function OrderDetailPage() {
-  const params = useParams();
+  const params = useParams() || {};
   const router = useRouter();
   const { t, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();

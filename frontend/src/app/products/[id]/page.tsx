@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 
 export default function ProductDetailPage() {
   const { t, formatDate } = useI18n();
-  const params = useParams();
+  const params = useParams() || {};
   const router = useRouter();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const { addItem } = useCartStore();

@@ -42,21 +42,19 @@ async function checkDependency(check: () => Promise<unknown>): Promise<Dependenc
  * 覆盖启动时必需的 4 个依赖（MySQL/Redis/MongoDB/RabbitMQ）；
  * 任一异常则整体状态为 degraded
  */
-export async function getHealthReport(): Promise<HealthReport> {
-  const [mysql, redis, mongodb, rabbitmq] = await Promise.all([
-    checkDependency(() => getPool().query('SELECT 1')),
-    checkDependency(() => getRedisClient().ping()),
-    checkDependency(() =>
-      mongoose.connection.db
-        ? mongoose.connection.db.admin().ping()
-        : Promise.reject(new Error('MongoDB未初始化'))
-    ),
-    checkDependency(async () => {
-      getChannel(); // 未初始化时抛错
-    }),
-  ]);
-
-  const dependencies = { mysql, redis, mongodb, rabbitmq };
+export async function getHealthReport(serverless = false): Promise<HealthReport> {
+  const checks: Record<string, () => Promise<unknown>> = {
+    mysql: () => getPool().query('SELECT 1'),
+    redis: () => getRedisClient().ping(),
+  };
+  if (!serverless) {
+    checks.mongodb = () => mongoose.connection.db
+      ? mongoose.connection.db.admin().ping() : Promise.reject(new Error('MongoDB未初始化'));
+    checks.rabbitmq = async () => { getChannel(); };
+  }
+  const dependencies: Record<string, DependencyStatus> = Object.fromEntries(await Promise.all(
+    Object.entries(checks).map(async ([name, check]) => [name, await checkDependency(check)] as const)
+  ));
   const allUp = Object.values(dependencies).every((d) => d.status === 'up');
 
   return {

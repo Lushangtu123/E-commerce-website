@@ -1,37 +1,47 @@
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 import dotenv from 'dotenv';
 import logger from '../utils/logger';
 
 dotenv.config();
 
 let redisClient: Redis;
+let connecting: Promise<void> | undefined;
 
-export async function connectRedis() {
-  redisClient = new Redis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD || undefined,
-    retryStrategy: (times) => {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    }
-  });
+export async function connectRedis(): Promise<void> {
+  if (redisClient) return;
+  if (connecting) return connecting;
+  connecting = initializeRedis();
+  try { await connecting; } finally { connecting = undefined; }
+}
 
-  redisClient.on('error', (err) => {
-    logger.error({ err }, 'Redis错误');
-  });
-
-  redisClient.on('connect', () => {
-    logger.info('Redis连接中...');
-  });
-
-  await redisClient.ping();
+async function initializeRedis(): Promise<void> {
+  const options: RedisOptions = {
+    lazyConnect: true,
+    keyPrefix: process.env.REDIS_KEY_PREFIX || 'ecommerce:',
+    maxRetriesPerRequest: 1,
+    connectTimeout: 10000,
+    commandTimeout: 5000,
+    retryStrategy: times => times <= 3 ? Math.min(times * 100, 1000) : null,
+  };
+  const client = process.env.REDIS_URL
+    ? new Redis(process.env.REDIS_URL, options)
+    : new Redis({ ...options, host: process.env.REDIS_HOST || 'localhost',
+      port: Number(process.env.REDIS_PORT || 6379), password: process.env.REDIS_PASSWORD || undefined,
+      ...(process.env.REDIS_TLS === 'true' ? { tls: {} } : {}),
+    });
+  // Do not include connection URLs or passwords in errors.
+  client.on('error', () => logger.warn('Redis连接错误'));
+  try {
+    await client.connect();
+    await client.ping();
+    redisClient = client;
+  } catch (error) {
+    client.disconnect();
+    throw error;
+  }
 }
 
 export function getRedisClient(): Redis {
-  if (!redisClient) {
-    throw new Error('Redis未初始化');
-  }
+  if (!redisClient) throw new Error('Redis未初始化');
   return redisClient;
 }
-

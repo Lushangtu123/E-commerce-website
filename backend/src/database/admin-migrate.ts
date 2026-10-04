@@ -167,10 +167,16 @@ async function runAdminMigrations() {
       SELECT 1, permission_id FROM permissions
     `);
 
-    // 创建默认管理员账号（密码：admin123）
+    // Production must never expose the repository's development password.
+    const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+    if (process.env.NODE_ENV === 'production' && (!bootstrapPassword || bootstrapPassword.length < 16)) {
+      logger.info('管理员表已初始化；请设置强 ADMIN_BOOTSTRAP_PASSWORD 后创建管理员');
+      return;
+    }
+    // 创建管理员账号
     logger.info('创建默认管理员账号...');
     const bcrypt = require('bcryptjs');
-    const defaultPassword = await bcrypt.hash('admin123', 10);
+    const defaultPassword = await bcrypt.hash(bootstrapPassword || 'admin123', 12);
     
     await connection.query(`
       INSERT IGNORE INTO admins (username, password_hash, real_name, email, role_id, status)
@@ -180,7 +186,7 @@ async function runAdminMigrations() {
     logger.info('\n✓ 初始数据插入成功！');
     logger.info('\n默认管理员账号:');
     logger.info('用户名: admin');
-    logger.info('密码: admin123');
+    if (process.env.NODE_ENV !== 'production') logger.info('密码: admin123');
     logger.info('请登录后立即修改密码！\n');
 
   } catch (error) {

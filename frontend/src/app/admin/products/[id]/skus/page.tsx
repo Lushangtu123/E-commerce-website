@@ -27,7 +27,7 @@ function validList(value: AdminSKUList, productId: number) {
 
 export default function AdminSKUPage() {
   const { t } = useI18n();
-  const params = useParams();
+  const params = useParams() || {};
   const productId = typeof params.id === 'string' && /^[1-9]\d*$/.test(params.id) ? Number(params.id) : 0;
   const validId = Number.isSafeInteger(productId) && productId > 0 && productId <= 2147483647;
   const [token, setToken] = useState<string | null>(null);

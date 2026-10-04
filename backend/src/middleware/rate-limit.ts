@@ -6,6 +6,7 @@
  * app.set('trust proxy', 1)，否则限流会按代理服务器 IP 统计
  */
 import { rateLimit } from 'express-rate-limit';
+import { RedisRateLimitStore } from './redis-rate-limit-store';
 
 // 限流时间窗口（毫秒），默认 60 秒
 const WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW || '', 10) || 60 * 1000;
@@ -19,6 +20,7 @@ const AUTH_MAX = parseInt(process.env.RATE_LIMIT_AUTH_MAX || '', 10) || 10;
  * 挂载在 /api 下，/health 与 /uploads 不受影响
  */
 export const apiLimiter = rateLimit({
+  ...(process.env.VERCEL || process.env.RATE_LIMIT_STORE === 'redis' ? { store: new RedisRateLimitStore('limits:api:') } : {}),
   windowMs: WINDOW_MS,
   limit: API_MAX,
   standardHeaders: 'draft-7',
@@ -31,6 +33,7 @@ export const apiLimiter = rateLimit({
  * 只统计失败请求，正常登录不受影响
  */
 export const authLimiter = rateLimit({
+  ...(process.env.VERCEL || process.env.RATE_LIMIT_STORE === 'redis' ? { store: new RedisRateLimitStore('limits:auth:') } : {}),
   windowMs: WINDOW_MS,
   limit: AUTH_MAX,
   standardHeaders: 'draft-7',

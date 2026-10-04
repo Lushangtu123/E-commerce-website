@@ -193,4 +193,15 @@ integration('真实 MySQL 收藏与浏览历史边界', () => {
     await expect(FavoriteModel.getUserFavorites(1, 0)).rejects.toThrow(); await expect(BrowseHistoryModel.getRecentProductIds(1, 101)).rejects.toThrow();
     expect(query).not.toHaveBeenCalled(); expect(await raw('favorites')).toEqual(favorites); expect(await raw('browse_history')).toEqual(history);
   });
+  test('推荐使用 MySQL 浏览记录及有效SKU库存，排除已浏览和下架商品', async () => {
+    await db.query('UPDATE products SET category_id=1');
+    await db.query('INSERT INTO product_skus(product_id,sku_code,price,stock,status) VALUES(5,?,12,0,0)', ['REC-DISABLED']);
+    await BrowseHistoryModel.add(1, 1);
+    const { getRecommendationsByBrowseHistory, getRelatedProducts } = require('../../services/recommendation.service');
+    const personalized = await getRecommendationsByBrowseHistory(1, 10);
+    expect(personalized.map((p: any) => p.product_id)).toEqual([2]);
+    const related = await getRelatedProducts(1, 10);
+    expect(related.map((p: any) => p.product_id)).toEqual([2]);
+  });
+
 });
