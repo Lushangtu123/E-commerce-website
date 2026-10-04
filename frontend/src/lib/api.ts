@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/useAuthStore';
+import { clearAdminSession } from '@/lib/admin-session';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -18,6 +19,10 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
   const pathname = requestUrl.pathname;
   const apiPath = apiUrl.pathname.replace(/\/$/, '');
   const path = pathname.startsWith(`${apiPath}/`) ? pathname.slice(apiPath.length) : pathname;
+  // Categories are a public read shared by the storefront and admin editor.
+  // Keep this exception exact and read-only; protected customer calls still
+  // require their hydrated identity to match browser storage.
+  if (path === '/products/categories' && config.method?.toLowerCase() === 'get') return null;
   return path === '/admin' || path.startsWith('/admin/') ? 'admin' : 'customer';
 };
 
@@ -52,19 +57,29 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // token过期或未登录
       if (typeof window !== 'undefined') {
-        const config = error.config || error.response.config || {};
-        const identity = getRequestIdentity(config);
-        if (identity) {
-          const isAdmin = identity === 'admin';
-          const tokenKey = isAdmin ? 'admin_token' : 'token';
-          const currentToken = localStorage.getItem(tokenKey);
-          const requestAuthorization = axios.AxiosHeaders.from(config.headers).get('Authorization');
-          if (currentToken && requestAuthorization !== `Bearer ${currentToken}`) {
-            return Promise.reject(error);
+        try {
+          const config = error.config || error.response.config || {};
+          const identity = getRequestIdentity(config);
+          if (identity) {
+            const isAdmin = identity === 'admin';
+            const tokenKey = isAdmin ? 'admin_token' : 'token';
+            const currentToken = localStorage.getItem(tokenKey);
+            const requestAuthorization = axios.AxiosHeaders.from(config.headers).get('Authorization');
+            if (currentToken && requestAuthorization !== `Bearer ${currentToken}`) {
+              return Promise.reject(error);
+            }
+            if (isAdmin) {
+              if (!clearAdminSession(currentToken)) return Promise.reject(error);
+            } else {
+              localStorage.removeItem(tokenKey);
+              localStorage.removeItem('user');
+            }
+            window.location.href = isAdmin ? '/admin/login' : '/login';
           }
-          localStorage.removeItem(tokenKey);
-          localStorage.removeItem(isAdmin ? 'admin_user' : 'user');
-          window.location.href = isAdmin ? '/admin/login' : '/login';
+        } catch {
+          // Preserve the HTTP error if storage is unavailable; do not clear a
+          // session whose current token cannot be compared with this request.
+          return Promise.reject(error);
         }
       }
     }

@@ -2,23 +2,24 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import api from '@/lib/api';
+import { getAdminSessionToken } from '@/lib/admin-session';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
 export default function AdminProductsPage() {
   const { t } = useI18n();
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState({
+  const [result, setResult] = useState<{ key: string; revision: number; rows: any[]; total: number; error?: string } | null>(null);
+  const [pageState, setPage] = useState(1);
+  const [filtersState, setFilters] = useState({
     keyword: '',
     status: ''
   });
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selection, setSelection] = useState<{ key: string; ids: number[] } | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [formScope, setFormScope] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [newProduct, setNewProduct] = useState({
@@ -33,130 +34,160 @@ export default function AdminProductsPage() {
   });
   const [editProduct, setEditProduct] = useState<any>(null);
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, [page, filters]);
+  const [, notifySessionChange] = useState(0);
+  const [queryToken, setQueryToken] = useState(getAdminSessionToken);
+  const token = getAdminSessionToken();
+  const ownsQuery = queryToken === token;
+  const page = ownsQuery ? pageState : 1;
+  const filters = ownsQuery ? filtersState : { keyword: '', status: '' };
+  const scopeKey = JSON.stringify([token, page, filters.keyword, filters.status]);
+  const currentScope = useRef(scopeKey);
+  currentScope.current = scopeKey;
+  const mounted = useRef(true);
+  const request = useRef(0);
+  const mutation = useRef<object | null>(null);
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const latestRefresh = useRef<(() => Promise<void>) | null>(null);
+  const isCurrentSession = () => mounted.current && !!token && getAdminSessionToken() === token;
+  const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey;
+  const ownsResult = isCurrentScope() && result?.key === scopeKey;
+  const products = ownsResult ? result.rows : [];
+  const total = ownsResult ? result.total : 0;
+  const loading = !ownsResult;
+  const loadError = ownsResult ? result.error : undefined;
+  const busy = !!token && pendingToken === token;
+  const isDisplayedScope = () => isCurrentScope() && ownsResult && !loadError && result?.revision === request.current;
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/categories`);
-      const data = await response.json();
-      if (response.ok) {
-        setCategories(data);
-      }
-    } catch (error) {
-      logger.error('获取分类失败:', error);
-    }
+  const selectedIds = ownsResult && selection?.key === scopeKey ? selection.ids.filter(id => products.some(product => product.product_id === id)) : [];
+  const allSelected = products.length > 0 && products.every(product => selectedIds.includes(product.product_id));
+  const setSelectedIds = (next: number[] | ((ids: number[]) => number[])) => {
+    if (!isCurrentScope()) return;
+    setSelection(previous => ({ key: scopeKey, ids: typeof next === 'function' ? next(previous?.key === scopeKey ? previous.ids : []) : next }));
   };
+
+  useEffect(() => {
+    mounted.current = true;
+    const onStorage = (event: StorageEvent) => {
+      if ((event.storageArea === null || event.storageArea === localStorage) &&
+        (event.key === null || event.key === 'admin_token' || event.key === 'admin_user')) notifySessionChange(value => value + 1);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => { mounted.current = false; request.current++; window.removeEventListener('storage', onStorage); };
+  }, []);
+
+  useEffect(() => {
+    if (!ownsQuery) {
+      setPage(1);
+      setFilters({ keyword: '', status: '' });
+      setQueryToken(token);
+      mutation.current = null;
+      setPendingToken(null);
+      setShowAddModal(false);
+      setShowEditModal(false);
+      setEditProduct(null);
+      setNewProduct({ title: '', description: '', price: '', stock: '', category_id: '', brand: '', main_image: '', status: 1 });
+      setCategories([]);
+    }
+  }, [token]);
 
   const fetchProducts = async () => {
+    if (!isCurrentScope()) return;
+    const revision = ++request.current;
+    setResult(null);
     try {
-      setLoading(true);
-      const token = localStorage.getItem('admin_token');
-      
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+      const data: any = await api.get('/admin/products', { params: {
+        page, limit: 20,
         ...(filters.keyword && { keyword: filters.keyword }),
-        ...(filters.status !== '' && { status: filters.status })
-      });
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/products?${params}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setProducts(data.products);
-        setTotal(data.pagination.total);
-      } else {
-        toast.error(t(data.error || '获取商品列表失败'));
-      }
-    } catch (error) {
+        ...(filters.status !== '' && { status: filters.status }),
+      } });
+      if (!isCurrentScope() || revision !== request.current) return;
+      const lastPage = Math.max(1, Number(data.pagination?.totalPages) || Math.ceil((Number(data.pagination?.total) || 0) / 20));
+      if (page > lastPage) { setPage(lastPage); return; }
+      setResult({ key: scopeKey, revision, rows: data.products || [], total: Number(data.pagination?.total) || 0 });
+    } catch (error: any) {
+      if (!isCurrentScope() || revision !== request.current) return;
       logger.error('获取商品列表失败:', error);
-      toast.error(t('获取商品列表失败'));
+      setResult({ key: scopeKey, revision, rows: [], total: 0, error: error.response?.data?.error || '获取商品列表失败' });
+    }
+  };
+
+  useEffect(() => {
+    setSelection(null);
+    fetchProducts();
+    return () => { request.current++; };
+  }, [scopeKey]);
+
+  useEffect(() => {
+    const capturedToken = token;
+    let active = true;
+    if (!isCurrentSession()) return;
+    api.get('/products/categories').then((data: any) => {
+      if (active && mounted.current && getAdminSessionToken() === capturedToken) setCategories(data);
+    }).catch(error => { if (active && isCurrentSession()) logger.error('获取分类失败:', error); });
+    return () => { active = false; };
+  }, [token]);
+
+  latestRefresh.current = fetchProducts;
+
+  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string, afterSuccess?: () => void) => {
+    if (!isDisplayedScope() || mutation.current) return;
+    const operation = {};
+    mutation.current = operation;
+    setPendingToken(token);
+    try {
+      await perform();
+      if (!isCurrentSession()) return;
+      if (isDisplayedScope()) {
+        afterSuccess?.();
+        toast.success(t(success));
+      }
+      await latestRefresh.current?.();
+    } catch (error: any) {
+      if (isDisplayedScope()) toast.error(t(error.response?.data?.error || failure));
     } finally {
-      setLoading(false);
+      if (isCurrentSession() && mutation.current === operation) {
+        mutation.current = null;
+        setPendingToken(null);
+      }
     }
   };
 
-  const handleStatusChange = async (productId: number, newStatus: number) => {
-    try {
-      const token = localStorage.getItem('admin_token');
-      
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${productId}/status`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ status: newStatus })
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast.success(t(newStatus === 1 ? '商品已上架' : '商品已下架'));
-        fetchProducts();
-      } else {
-        toast.error(t(data.error || '操作失败'));
-      }
-    } catch (error) {
-      logger.error('更新状态失败:', error);
-      toast.error(t('更新状态失败'));
-    }
+  const changeFilters = (next: { keyword: string; status: string }) => {
+    if (!isCurrentScope() || (page === 1 && next.keyword === filters.keyword && next.status === filters.status)) return;
+    currentScope.current = JSON.stringify([token, 1, next.keyword, next.status]);
+    request.current++;
+    setResult(null);
+    setPage(1);
+    setFilters(next);
   };
 
-  const handleBatchStatusChange = async (newStatus: number) => {
-    if (selectedIds.length === 0) {
-      toast.error(t('请先选择商品'));
-      return;
-    }
+  const changePage = (next: number) => {
+    if (!isDisplayedScope()) return;
+    const target = Math.max(1, Math.min(next, Math.max(1, Math.ceil(total / 20))));
+    if (target === page) return;
+    currentScope.current = JSON.stringify([token, target, filters.keyword, filters.status]);
+    request.current++;
+    setResult(null);
+    setPage(target);
+  };
 
-    try {
-      const token = localStorage.getItem('admin_token');
-      
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/batch/status`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            productIds: selectedIds,
-            status: newStatus 
-          })
-        }
-      );
+  const handleStatusChange = (productId: number, newStatus: number) => {
+    if (!isDisplayedScope() || !products.some(row => row.product_id === productId)) return;
+    return runMutation(() => api.put(`/admin/products/${productId}/status`, { status: newStatus }),
+      newStatus === 1 ? '商品已上架' : '商品已下架', '更新状态失败');
+  };
 
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast.success(t(newStatus === 1 ? '已上架{count}个商品' : '已下架{count}个商品', { count: selectedIds.length }));
-        setSelectedIds([]);
-        fetchProducts();
-      } else {
-        toast.error(t(data.error || '批量操作失败'));
-      }
-    } catch (error) {
-      logger.error('批量操作失败:', error);
-      toast.error(t('批量操作失败'));
-    }
+  const handleBatchStatusChange = (newStatus: number) => {
+    if (!isDisplayedScope() || mutation.current) return;
+    const ids = [...selectedIds];
+    if (ids.length === 0) { toast.error(t('请先选择商品')); return; }
+    return runMutation(() => api.put('/admin/products/batch/status', { productIds: ids, status: newStatus }),
+      t(newStatus === 1 ? '已上架{count}个商品' : '已下架{count}个商品', { count: ids.length }), '批量操作失败',
+      () => setSelectedIds([]));
   };
 
   const toggleSelect = (productId: number) => {
+    if (mutation.current || !isDisplayedScope() || !products.some(product => product.product_id === productId)) return;
     setSelectedIds(prev => 
       prev.includes(productId)
         ? prev.filter(id => id !== productId)
@@ -165,70 +196,42 @@ export default function AdminProductsPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === products.length) {
+    if (mutation.current || !isDisplayedScope()) return;
+    if (allSelected) {
       setSelectedIds([]);
     } else {
       setSelectedIds(products.map(p => p.product_id));
     }
   };
 
-  const handleAddProduct = async () => {
-    // 验证表单
+  const updateNewProduct = (next: typeof newProduct) => {
+    if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setNewProduct(next);
+  };
+  const updateEditProduct = (next: any) => {
+    if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setEditProduct(next);
+  };
+
+  const handleAddProduct = () => {
+    if (formScope !== scopeKey || !isDisplayedScope() || mutation.current) return;
     if (!newProduct.title || !newProduct.price || !newProduct.category_id) {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
     }
-
-    try {
-      const token = localStorage.getItem('admin_token');
-      
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/products`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            title: newProduct.title,
-            description: newProduct.description,
-            price: parseFloat(newProduct.price),
-            stock: parseInt(newProduct.stock) || 0,
-            category_id: parseInt(newProduct.category_id),
-            brand: newProduct.brand,
-            image_url: newProduct.main_image,
-            status: newProduct.status
-          })
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast.success(t('商品添加成功'));
-        setShowAddModal(false);
-        setNewProduct({
-          title: '',
-          description: '',
-          price: '',
-          stock: '',
-          category_id: '',
-          brand: '',
-          main_image: '',
-          status: 1
-        });
-        fetchProducts();
-      } else {
-        toast.error(t(data.error || '添加失败'));
-      }
-    } catch (error) {
-      logger.error('添加商品失败:', error);
-      toast.error(t('添加商品失败'));
-    }
+    const payload = {
+      title: newProduct.title, description: newProduct.description,
+      price: parseFloat(newProduct.price), stock: parseInt(newProduct.stock) || 0,
+      category_id: parseInt(newProduct.category_id), brand: newProduct.brand,
+      image_url: newProduct.main_image, status: newProduct.status,
+    };
+    return runMutation(() => api.post('/admin/products', payload), '商品添加成功', '添加商品失败', () => {
+      setShowAddModal(false);
+      setNewProduct({ title: '', description: '', price: '', stock: '', category_id: '', brand: '', main_image: '', status: 1 });
+    });
   };
 
   const openEditModal = (product: any) => {
+    if (!isDisplayedScope() || mutation.current || !products.some(row => row.product_id === product.product_id)) return;
+    setFormScope(scopeKey);
     setEditProduct({
       product_id: product.product_id,
       title: product.title,
@@ -243,51 +246,23 @@ export default function AdminProductsPage() {
     setShowEditModal(true);
   };
 
-  const handleEditProduct = async () => {
-    // 验证表单
+  const handleEditProduct = () => {
+    if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || mutation.current ||
+      !products.some(product => product.product_id === editProduct.product_id)) return;
     if (!editProduct.title || !editProduct.price || !editProduct.category_id) {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
     }
-
-    try {
-      const token = localStorage.getItem('admin_token');
-      
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${editProduct.product_id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            title: editProduct.title,
-            description: editProduct.description,
-            price: parseFloat(editProduct.price),
-            stock: parseInt(editProduct.stock) || 0,
-            category_id: parseInt(editProduct.category_id),
-            brand: editProduct.brand,
-            image_url: editProduct.main_image,
-            status: editProduct.status
-          })
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast.success(t('商品更新成功'));
-        setShowEditModal(false);
-        setEditProduct(null);
-        fetchProducts();
-      } else {
-        toast.error(t(data.error || '更新失败'));
-      }
-    } catch (error) {
-      logger.error('更新商品失败:', error);
-      toast.error(t('更新商品失败'));
-    }
+    const payload = {
+      title: editProduct.title, description: editProduct.description,
+      price: parseFloat(editProduct.price), stock: parseInt(editProduct.stock) || 0,
+      category_id: parseInt(editProduct.category_id), brand: editProduct.brand,
+      image_url: editProduct.main_image, status: editProduct.status,
+    };
+    return runMutation(() => api.put(`/admin/products/${editProduct.product_id}`, payload), '商品更新成功', '更新商品失败', () => {
+      setShowEditModal(false);
+      setEditProduct(null);
+    });
   };
 
   const getStatusBadge = (status: number) => {
@@ -307,7 +282,8 @@ export default function AdminProductsPage() {
             <p className="text-gray-600 mt-1">{t("管理商品的上下架和信息")}</p>
           </div>
           <button 
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { if (isDisplayedScope() && !mutation.current) { setFormScope(scopeKey); setShowAddModal(true); } }}
+            disabled={busy || loading || !!loadError}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <span className="flex items-center">
@@ -326,12 +302,12 @@ export default function AdminProductsPage() {
               type="text"
               placeholder={t("搜索商品名称...")}
               value={filters.keyword}
-              onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+              onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <select
               value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              onChange={(e) => changeFilters({ ...filters, status: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">{t("全部状态")}</option>
@@ -345,7 +321,7 @@ export default function AdminProductsPage() {
               {t("搜索")}
             </button>
             <button
-              onClick={() => setFilters({ keyword: '', status: '' })}
+              onClick={() => changeFilters({ keyword: '', status: '' })}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               {t("重置")}
@@ -361,12 +337,14 @@ export default function AdminProductsPage() {
               <div className="space-x-2">
                 <button
                   onClick={() => handleBatchStatusChange(1)}
+                  disabled={busy}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                 >
                   {t("批量上架")}
                 </button>
                 <button
                   onClick={() => handleBatchStatusChange(0)}
+                  disabled={busy}
                   className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
                 >
                   {t("批量下架")}
@@ -391,6 +369,11 @@ export default function AdminProductsPage() {
                 <p className="mt-4 text-gray-600">{t("加载中...")}</p>
               </div>
             </div>
+          ) : loadError ? (
+            <div role="alert" className="p-8 text-center">
+              <p className="text-red-600">{t(loadError)}</p>
+              <button onClick={fetchProducts} className="mt-4 px-4 py-2 border rounded-lg">{t('重新加载')}</button>
+            </div>
           ) : (
             <>
               <table className="w-full">
@@ -399,8 +382,9 @@ export default function AdminProductsPage() {
                     <th className="px-6 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selectedIds.length === products.length && products.length > 0}
+                        checked={allSelected}
                         onChange={toggleSelectAll}
+                        disabled={busy}
                         className="rounded border-gray-300"
                       />
                     </th>
@@ -420,6 +404,7 @@ export default function AdminProductsPage() {
                           type="checkbox"
                           checked={selectedIds.includes(product.product_id)}
                           onChange={() => toggleSelect(product.product_id)}
+                          disabled={busy}
                           className="rounded border-gray-300"
                         />
                       </td>
@@ -452,6 +437,7 @@ export default function AdminProductsPage() {
                         {product.status === 1 ? (
                           <button
                             onClick={() => handleStatusChange(product.product_id, 0)}
+                            disabled={busy}
                             className="text-orange-600 hover:text-orange-900"
                           >
                             {t("下架")}
@@ -459,6 +445,7 @@ export default function AdminProductsPage() {
                         ) : (
                           <button
                             onClick={() => handleStatusChange(product.product_id, 1)}
+                            disabled={busy}
                             className="text-green-600 hover:text-green-900"
                           >
                             {t("上架")}
@@ -466,6 +453,7 @@ export default function AdminProductsPage() {
                         )}
                         <button 
                           onClick={() => openEditModal(product)}
+                          disabled={busy}
                           className="text-blue-600 hover:text-blue-900"
                         >
                           {t("编辑")}
@@ -483,7 +471,7 @@ export default function AdminProductsPage() {
                 </div>
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
+                    onClick={() => changePage(page - 1)}
                     disabled={page === 1}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -493,7 +481,7 @@ export default function AdminProductsPage() {
                     {t("第 {page} 页", { page })}
                   </span>
                   <button
-                    onClick={() => setPage(page + 1)}
+                    onClick={() => changePage(page + 1)}
                     disabled={page >= Math.ceil(total / 20)}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -506,7 +494,7 @@ export default function AdminProductsPage() {
         </div>
 
         {/* 添加商品模态框 */}
-        {showAddModal && (
+        {ownsQuery && formScope === scopeKey && showAddModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
@@ -531,7 +519,7 @@ export default function AdminProductsPage() {
                     <input
                       type="text"
                       value={newProduct.title}
-                      onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+                      onChange={(e) => updateNewProduct({ ...newProduct, title: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder={t("请输入商品标题")}
                     />
@@ -544,7 +532,7 @@ export default function AdminProductsPage() {
                     </label>
                     <textarea
                       value={newProduct.description}
-                      onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                      onChange={(e) => updateNewProduct({ ...newProduct, description: e.target.value })}
                       rows={3}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder={t("请输入商品描述")}
@@ -561,7 +549,7 @@ export default function AdminProductsPage() {
                         type="number"
                         step="0.01"
                         value={newProduct.price}
-                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                        onChange={(e) => updateNewProduct({ ...newProduct, price: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0.00"
                       />
@@ -573,7 +561,7 @@ export default function AdminProductsPage() {
                       <input
                         type="number"
                         value={newProduct.stock}
-                        onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                        onChange={(e) => updateNewProduct({ ...newProduct, stock: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0"
                       />
@@ -588,7 +576,7 @@ export default function AdminProductsPage() {
                       </label>
                       <select
                         value={newProduct.category_id}
-                        onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}
+                        onChange={(e) => updateNewProduct({ ...newProduct, category_id: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">{t("请选择分类")}</option>
@@ -606,7 +594,7 @@ export default function AdminProductsPage() {
                       <input
                         type="text"
                         value={newProduct.brand}
-                        onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
+                        onChange={(e) => updateNewProduct({ ...newProduct, brand: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder={t("请输入品牌")}
                       />
@@ -621,7 +609,7 @@ export default function AdminProductsPage() {
                     <input
                       type="text"
                       value={newProduct.main_image}
-                      onChange={(e) => setNewProduct({ ...newProduct, main_image: e.target.value })}
+                      onChange={(e) => updateNewProduct({ ...newProduct, main_image: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="https://example.com/image.jpg"
                     />
@@ -644,7 +632,7 @@ export default function AdminProductsPage() {
                     </label>
                     <select
                       value={newProduct.status}
-                      onChange={(e) => setNewProduct({ ...newProduct, status: parseInt(e.target.value) })}
+                      onChange={(e) => updateNewProduct({ ...newProduct, status: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value={1}>{t("上架")}</option>
@@ -663,6 +651,7 @@ export default function AdminProductsPage() {
                   </button>
                   <button
                     onClick={handleAddProduct}
+                    disabled={busy}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     {t("添加商品")}
@@ -674,7 +663,7 @@ export default function AdminProductsPage() {
         )}
 
         {/* 编辑商品模态框 */}
-        {showEditModal && editProduct && (
+        {ownsQuery && formScope === scopeKey && showEditModal && editProduct && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
@@ -702,7 +691,7 @@ export default function AdminProductsPage() {
                     <input
                       type="text"
                       value={editProduct.title}
-                      onChange={(e) => setEditProduct({ ...editProduct, title: e.target.value })}
+                      onChange={(e) => updateEditProduct({ ...editProduct, title: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder={t("请输入商品标题")}
                     />
@@ -715,7 +704,7 @@ export default function AdminProductsPage() {
                     </label>
                     <textarea
                       value={editProduct.description}
-                      onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })}
+                      onChange={(e) => updateEditProduct({ ...editProduct, description: e.target.value })}
                       rows={3}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder={t("请输入商品描述")}
@@ -732,7 +721,7 @@ export default function AdminProductsPage() {
                         type="number"
                         step="0.01"
                         value={editProduct.price}
-                        onChange={(e) => setEditProduct({ ...editProduct, price: e.target.value })}
+                        onChange={(e) => updateEditProduct({ ...editProduct, price: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0.00"
                       />
@@ -744,7 +733,7 @@ export default function AdminProductsPage() {
                       <input
                         type="number"
                         value={editProduct.stock}
-                        onChange={(e) => setEditProduct({ ...editProduct, stock: e.target.value })}
+                        onChange={(e) => updateEditProduct({ ...editProduct, stock: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0"
                       />
@@ -759,7 +748,7 @@ export default function AdminProductsPage() {
                       </label>
                       <select
                         value={editProduct.category_id}
-                        onChange={(e) => setEditProduct({ ...editProduct, category_id: e.target.value })}
+                        onChange={(e) => updateEditProduct({ ...editProduct, category_id: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">{t("请选择分类")}</option>
@@ -777,7 +766,7 @@ export default function AdminProductsPage() {
                       <input
                         type="text"
                         value={editProduct.brand}
-                        onChange={(e) => setEditProduct({ ...editProduct, brand: e.target.value })}
+                        onChange={(e) => updateEditProduct({ ...editProduct, brand: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder={t("请输入品牌")}
                       />
@@ -792,7 +781,7 @@ export default function AdminProductsPage() {
                     <input
                       type="text"
                       value={editProduct.main_image}
-                      onChange={(e) => setEditProduct({ ...editProduct, main_image: e.target.value })}
+                      onChange={(e) => updateEditProduct({ ...editProduct, main_image: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="https://example.com/image.jpg"
                     />
@@ -815,7 +804,7 @@ export default function AdminProductsPage() {
                     </label>
                     <select
                       value={editProduct.status}
-                      onChange={(e) => setEditProduct({ ...editProduct, status: parseInt(e.target.value) })}
+                      onChange={(e) => updateEditProduct({ ...editProduct, status: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value={1}>{t("上架")}</option>
@@ -837,6 +826,7 @@ export default function AdminProductsPage() {
                   </button>
                   <button
                     onClick={handleEditProduct}
+                    disabled={busy}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     {t("保存修改")}

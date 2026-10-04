@@ -2,91 +2,140 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import api from '@/lib/api';
+import { getAdminSessionToken } from '@/lib/admin-session';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
 export default function AdminUsersPage() {
   const { t, formatDate } = useI18n();
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState({
+  const [result, setResult] = useState<{ key: string; revision: number; rows: any[]; total: number; error?: string } | null>(null);
+  const [pageState, setPage] = useState(1);
+  const [filtersState, setFilters] = useState({
     keyword: '',
     status: ''
   });
 
+  const [, notifySessionChange] = useState(0);
+  const [queryToken, setQueryToken] = useState(getAdminSessionToken);
+  const token = getAdminSessionToken();
+  const ownsQuery = queryToken === token;
+  const page = ownsQuery ? pageState : 1;
+  const filters = ownsQuery ? filtersState : { keyword: '', status: '' };
+  const scopeKey = JSON.stringify([token, page, filters.keyword, filters.status]);
+  const currentScope = useRef(scopeKey);
+  currentScope.current = scopeKey;
+  const mounted = useRef(true);
+  const request = useRef(0);
+  const mutation = useRef<object | null>(null);
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const latestRefresh = useRef<(() => Promise<void>) | null>(null);
+  const isCurrentSession = () => mounted.current && !!token && getAdminSessionToken() === token;
+  const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey;
+  const ownsResult = isCurrentScope() && result?.key === scopeKey;
+  const users = ownsResult ? result.rows : [];
+  const total = ownsResult ? result.total : 0;
+  const loading = !ownsResult;
+  const loadError = ownsResult ? result.error : undefined;
+  const busy = !!token && pendingToken === token;
+  const isDisplayedScope = () => isCurrentScope() && ownsResult && !loadError && result?.revision === request.current;
+
   useEffect(() => {
-    fetchUsers();
-  }, [page, filters]);
+    mounted.current = true;
+    const onStorage = (event: StorageEvent) => {
+      if ((event.storageArea === null || event.storageArea === localStorage) &&
+        (event.key === null || event.key === 'admin_token' || event.key === 'admin_user')) notifySessionChange(value => value + 1);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => { mounted.current = false; request.current++; window.removeEventListener('storage', onStorage); };
+  }, []);
+
+  useEffect(() => {
+    if (!ownsQuery) {
+      setPage(1);
+      setFilters({ keyword: '', status: '' });
+      setQueryToken(token);
+      mutation.current = null;
+      setPendingToken(null);
+    }
+  }, [token]);
 
   const fetchUsers = async () => {
+    if (!isCurrentScope()) return;
+    const revision = ++request.current;
+    setResult(null);
     try {
-      setLoading(true);
-      const token = localStorage.getItem('admin_token');
-      
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+      const data: any = await api.get('/admin/users', { params: {
+        page, limit: 20,
         ...(filters.keyword && { keyword: filters.keyword }),
-        ...(filters.status !== '' && { status: filters.status })
-      });
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/users?${params}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setUsers(data.users);
-        setTotal(data.pagination.total);
-      } else {
-        toast.error(t(data.error || '获取用户列表失败'));
-      }
-    } catch (error) {
+        ...(filters.status !== '' && { status: filters.status }),
+      } });
+      if (!isCurrentScope() || revision !== request.current) return;
+      const lastPage = Math.max(1, Number(data.pagination?.totalPages) || Math.ceil((Number(data.pagination?.total) || 0) / 20));
+      if (page > lastPage) { setPage(lastPage); return; }
+      setResult({ key: scopeKey, revision, rows: data.users || [], total: Number(data.pagination?.total) || 0 });
+    } catch (error: any) {
+      if (!isCurrentScope() || revision !== request.current) return;
       logger.error('获取用户列表失败:', error);
-      toast.error(t('获取用户列表失败'));
-    } finally {
-      setLoading(false);
+      setResult({ key: scopeKey, revision, rows: [], total: 0, error: error.response?.data?.error || '获取用户列表失败' });
     }
   };
 
-  const handleStatusChange = async (userId: number, newStatus: number) => {
-    try {
-      const token = localStorage.getItem('admin_token');
-      
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}/status`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ status: newStatus })
-        }
-      );
+  useEffect(() => {
+    fetchUsers();
+    return () => { request.current++; };
+  }, [scopeKey]);
 
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast.success(t(newStatus === 1 ? '用户已启用' : '用户已禁用'));
-        fetchUsers();
-      } else {
-        toast.error(t(data.error || '操作失败'));
+  latestRefresh.current = fetchUsers;
+
+  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string, afterSuccess?: () => void) => {
+    if (!isDisplayedScope() || mutation.current) return;
+    const operation = {};
+    mutation.current = operation;
+    setPendingToken(token);
+    try {
+      await perform();
+      if (!isCurrentSession()) return;
+      if (isDisplayedScope()) {
+        afterSuccess?.();
+        toast.success(t(success));
       }
-    } catch (error) {
-      logger.error('更新状态失败:', error);
-      toast.error(t('更新状态失败'));
+      await latestRefresh.current?.();
+    } catch (error: any) {
+      if (isDisplayedScope()) toast.error(t(error.response?.data?.error || failure));
+    } finally {
+      if (isCurrentSession() && mutation.current === operation) {
+        mutation.current = null;
+        setPendingToken(null);
+      }
     }
+  };
+
+  const changeFilters = (next: { keyword: string; status: string }) => {
+    if (!isCurrentScope() || (page === 1 && next.keyword === filters.keyword && next.status === filters.status)) return;
+    currentScope.current = JSON.stringify([token, 1, next.keyword, next.status]);
+    request.current++;
+    setResult(null);
+    setPage(1);
+    setFilters(next);
+  };
+
+  const changePage = (next: number) => {
+    if (!isDisplayedScope()) return;
+    const target = Math.max(1, Math.min(next, Math.max(1, Math.ceil(total / 20))));
+    if (target === page) return;
+    currentScope.current = JSON.stringify([token, target, filters.keyword, filters.status]);
+    request.current++;
+    setResult(null);
+    setPage(target);
+  };
+
+  const handleStatusChange = (userId: number, newStatus: number) => {
+    if (!isDisplayedScope() || !users.some(row => row.user_id === userId)) return;
+    return runMutation(() => api.put(`/admin/users/${userId}/status`, { status: newStatus }),
+      newStatus === 1 ? '用户已启用' : '用户已禁用', '更新状态失败');
   };
 
   return (
@@ -105,12 +154,12 @@ export default function AdminUsersPage() {
               type="text"
               placeholder={t("搜索用户名、邮箱、手机号...")}
               value={filters.keyword}
-              onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+              onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <select
               value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              onChange={(e) => changeFilters({ ...filters, status: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">{t("全部状态")}</option>
@@ -124,7 +173,7 @@ export default function AdminUsersPage() {
               {t("搜索")}
             </button>
             <button
-              onClick={() => setFilters({ keyword: '', status: '' })}
+              onClick={() => changeFilters({ keyword: '', status: '' })}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               {t("重置")}
@@ -140,6 +189,11 @@ export default function AdminUsersPage() {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">{t("加载中...")}</p>
               </div>
+            </div>
+          ) : loadError ? (
+            <div role="alert" className="p-8 text-center">
+              <p className="text-red-600">{t(loadError)}</p>
+              <button onClick={fetchUsers} className="mt-4 px-4 py-2 border rounded-lg">{t('重新加载')}</button>
             </div>
           ) : (
             <>
@@ -188,6 +242,7 @@ export default function AdminUsersPage() {
                         {user.status === 1 ? (
                           <button
                             onClick={() => handleStatusChange(user.user_id, 0)}
+                            disabled={busy}
                             className="text-red-600 hover:text-red-900"
                           >
                             {t("禁用")}
@@ -195,6 +250,7 @@ export default function AdminUsersPage() {
                         ) : (
                           <button
                             onClick={() => handleStatusChange(user.user_id, 1)}
+                            disabled={busy}
                             className="text-green-600 hover:text-green-900"
                           >
                             {t("启用")}
@@ -216,7 +272,7 @@ export default function AdminUsersPage() {
                 </div>
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
+                    onClick={() => changePage(page - 1)}
                     disabled={page === 1}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -226,7 +282,7 @@ export default function AdminUsersPage() {
                     {t("第 {page} 页", { page })}
                   </span>
                   <button
-                    onClick={() => setPage(page + 1)}
+                    onClick={() => changePage(page + 1)}
                     disabled={page >= Math.ceil(total / 20)}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >

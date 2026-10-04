@@ -2,9 +2,11 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { logger } from '@/lib/logger';
+import api from '@/lib/api';
+import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
 
 export default function AdminLogsPage() {
   const { t, formatDate } = useI18n();
@@ -12,36 +14,83 @@ export default function AdminLogsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [sessionToken, setSessionToken] = useState<string | null>(() => getAdminSessionToken());
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const requestId = useRef(0);
+  const tokenRef = useRef(sessionToken);
+  const queryRef = useRef({ sessionToken, page, retry });
+  tokenRef.current = sessionToken;
+  queryRef.current = { sessionToken, page, retry };
 
   useEffect(() => {
-    fetchLogs();
-  }, [page]);
+    mounted.current = true;
+    const syncSession = () => {
+      if (!mounted.current) return;
+      const next = getAdminSessionToken();
+      if (next === tokenRef.current) return;
+      tokenRef.current = next;
+      requestId.current += 1;
+      setSessionToken(next);
+      setPage(1);
+      setLogs([]);
+      setTotal(0);
+      setError(null);
+      setLoadedKey(null);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === 'admin_token' || event.key === 'admin_user') syncSession();
+    };
+    syncSession();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(ADMIN_SESSION_EVENT, syncSession);
+    return () => {
+      mounted.current = false;
+      requestId.current += 1;
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(ADMIN_SESSION_EVENT, syncSession);
+    };
+  }, []);
 
-  const fetchLogs = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('admin_token');
-      
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/logs?page=${page}&limit=20`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
+  useEffect(() => {
+    let active = true;
+    const id = ++requestId.current;
+    const key = `${sessionToken}:${page}`;
+    const isCurrent = () => active && mounted.current && id === requestId.current && !!sessionToken && getAdminSessionToken() === sessionToken;
+    setLoading(true);
+    setError(null);
+    setLoadedKey(null);
+    if (!isCurrent()) return () => { active = false; };
+    const fetchLogs = async () => {
+      try {
+        const data = await api.get<any, { logs: any[]; pagination: { total: number } }>('/admin/logs', { params: { page, limit: 20 } });
+        if (!isCurrent()) return;
         setLogs(data.logs);
         setTotal(data.pagination.total);
+        setLoadedKey(key);
+      } catch (error: any) {
+        if (!isCurrent()) return;
+        logger.error('获取日志失败:', error);
+        setLogs([]);
+        setTotal(0);
+        setError(error?.response?.data?.error || error?.message || '获取日志失败');
+        setLoadedKey(key);
+      } finally {
+        if (isCurrent()) setLoading(false);
       }
-    } catch (error) {
-      logger.error('获取日志失败:', error);
-    } finally {
-      setLoading(false);
-    }
+    };
+    void fetchLogs();
+    return () => { active = false; };
+  }, [sessionToken, page, retry]);
+
+  const resultCurrent = !!sessionToken && getAdminSessionToken() === sessionToken && loadedKey === `${sessionToken}:${page}`;
+  const isCurrentView = () => mounted.current && queryRef.current.sessionToken === sessionToken && queryRef.current.page === page && queryRef.current.retry === retry && getAdminSessionToken() === sessionToken;
+  const changePage = (next: number) => {
+    if (!isCurrentView() || !resultCurrent || error || loading) return;
+    requestId.current += 1;
+    setPage(next);
   };
 
   const getActionBadge = (action: string) => {
@@ -87,12 +136,27 @@ export default function AdminLogsPage() {
 
         {/* 日志列表 */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          {loading ? (
+          {loading || !resultCurrent ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">{t("加载中...")}</p>
               </div>
+            </div>
+          ) : error ? (
+            <div role="alert" className="p-8 text-center">
+              <p className="text-red-600">{t(error)}</p>
+              <button
+                onClick={() => {
+                  if (isCurrentView()) {
+                    requestId.current += 1;
+                    setRetry(value => value + 1);
+                  }
+                }}
+                className="mt-4 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+              >
+                {t('重新加载')}
+              </button>
             </div>
           ) : (
             <>
@@ -136,7 +200,7 @@ export default function AdminLogsPage() {
                 </div>
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
+                    onClick={() => changePage(Math.max(1, page - 1))}
                     disabled={page === 1}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -146,7 +210,7 @@ export default function AdminLogsPage() {
                     {t("第 {page} 页", { page })}
                   </span>
                   <button
-                    onClick={() => setPage(page + 1)}
+                    onClick={() => changePage(page + 1)}
                     disabled={page >= Math.ceil(total / 20)}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >

@@ -2,8 +2,9 @@
 
 import { useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { ADMIN_SESSION_EVENT, clearAdminSession, getAdminSession, getAdminSessionToken, type AdminSession } from '@/lib/admin-session';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -15,29 +16,44 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
-  const [admin, setAdmin] = useState<any>(null);
+  const [storedAdmin, setAdmin] = useState<AdminSession['admin'] | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sessionToken, setSessionToken] = useState<string | null>(() => getAdminSessionToken());
+  const mounted = useRef(false);
 
   useEffect(() => {
     if (typeof document !== 'undefined') document.title = t('管理后台 - 电商平台');
   }, [locale, t]);
 
   useEffect(() => {
-    // 检查登录状态
-    const token = localStorage.getItem('admin_token');
-    const adminData = localStorage.getItem('admin_user');
-    
-    if (!token || !adminData) {
-      router.push('/admin/login');
-      return;
-    }
-
-    setAdmin(JSON.parse(adminData));
-  }, [router]);
+    let active = true;
+    mounted.current = true;
+    const syncSession = () => {
+      if (!active) return;
+      const next = getAdminSession();
+      setAdmin(next?.admin ?? null);
+      setSessionToken(next?.token ?? null);
+      if (!next) router.push('/admin/login');
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === 'admin_token' || event.key === 'admin_user') syncSession();
+    };
+    syncSession();
+    window.addEventListener?.('storage', onStorage);
+    window.addEventListener?.(ADMIN_SESSION_EVENT, syncSession);
+    return () => {
+      active = false;
+      mounted.current = false;
+      window.removeEventListener?.('storage', onStorage);
+      window.removeEventListener?.(ADMIN_SESSION_EVENT, syncSession);
+    };
+  }, [router, pathname]);
 
   const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
+    if (!mounted.current || !sessionToken || getAdminSessionToken() !== sessionToken) return;
+    clearAdminSession(sessionToken);
+    setAdmin(null);
+    setSessionToken(null);
     router.push('/admin/login');
   };
 
@@ -98,9 +114,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     }
   ];
 
-  if (!admin) {
+  const current = getAdminSession();
+  if (!storedAdmin || !current || current.token !== sessionToken) {
     return <div className="min-h-screen flex items-center justify-center">{t("加载中...")}</div>;
   }
+  const admin = current.admin;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -191,7 +209,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </div>
 
         {/* 页面内容 */}
-        <div className="p-6">
+        <div key={sessionToken} className="p-6">
           {children}
         </div>
       </div>

@@ -2,8 +2,8 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 // 标记为动态页面
 export const dynamic = 'force-dynamic';
@@ -15,25 +15,52 @@ import { logger } from '@/lib/logger';
 function ProductsList() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
-  const [products, setProducts] = useState<any[]>([]);
+  const router = useRouter();
+  const keyword = searchParams.get('keyword') || '';
+  const sort = searchParams.get('sort') || 'created_at DESC';
+  const [result, setResult] = useState<{ scope: string | null; rows: any[] }>({ scope: null, rows: [] });
   const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({
+  const [loadError, setLoadError] = useState(false);
+  const [pageState, setPagination] = useState({
+    keyword,
+    sort,
     page: 1,
     limit: 20,
     total: 0,
     totalPages: 0,
   });
 
-  const keyword = searchParams.get('keyword') || '';
-  const sort = searchParams.get('sort') || 'created_at DESC';
+  const matchesQuery = pageState.keyword === keyword && pageState.sort === sort;
+  const pagination = { ...pageState, page: matchesQuery ? pageState.page : 1,
+    total: matchesQuery ? pageState.total : 0, totalPages: matchesQuery ? pageState.totalPages : 0 };
+  const scope = JSON.stringify([keyword, sort, pagination.page]);
+  const products = result.scope === scope ? result.rows : [];
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const requestRevision = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; requestRevision.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    setPagination(previous => previous.keyword === keyword && previous.sort === sort ? previous :
+      { ...previous, keyword, sort, page: 1, total: 0, totalPages: 0 });
+  }, [keyword, sort]);
 
   useEffect(() => {
     loadProducts();
   }, [keyword, sort, pagination.page]);
 
   const loadProducts = async () => {
+    if (!mounted.current || currentScope.current !== scope) return;
+    const request = ++requestRevision.current;
+    const isCurrent = () => mounted.current && request === requestRevision.current && currentScope.current === scope;
     try {
       setLoading(true);
+      setLoadError(false);
       const data: any = await productApi.list({
         keyword,
         sort,
@@ -41,22 +68,30 @@ function ProductsList() {
         limit: pagination.limit,
       });
 
-      setProducts(data.products || []);
+      if (!isCurrent()) return;
+      setResult({ scope, rows: data.products || [] });
       setPagination({
         ...pagination,
+        keyword,
+        sort,
         total: data.total,
         totalPages: data.totalPages,
       });
     } catch (error: any) {
+      if (!isCurrent()) return;
+      setResult({ scope, rows: [] });
+      setLoadError(true);
       logger.error('加载商品失败:', error);
       toast.error(t("加载商品失败"));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
   const handlePageChange = (page: number) => {
-    setPagination({ ...pagination, page });
+    if (!mounted.current || currentScope.current !== scope || result.scope !== scope || loading || loadError ||
+      page < 1 || page > pagination.totalPages || page === pagination.page) return;
+    setPagination({ ...pagination, keyword, sort, page });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -71,7 +106,7 @@ function ProductsList() {
           
           <div className="flex items-center justify-between">
             <div className="text-gray-600">
-              {t('共找到 {count} 件商品', { count: pagination.total })}</div>
+              {t('共找到 {count} 件商品', { count: loading || loadError || result.scope !== scope ? '—' : pagination.total })}</div>
             
             <div className="flex items-center space-x-4">
               <span className="text-gray-600">{t("排序:")}</span>
@@ -80,7 +115,8 @@ function ProductsList() {
                 onChange={(e) => {
                   const params = new URLSearchParams(searchParams);
                   params.set('sort', e.target.value);
-                  window.location.href = `/products?${params.toString()}`;
+                  params.delete('page');
+                  router.push(`/products?${params.toString()}`);
                 }}
                 className="input w-auto"
               >
@@ -94,7 +130,7 @@ function ProductsList() {
         </div>
 
         {/* 商品列表 */}
-        {loading ? (
+        {loading || result.scope !== scope ? (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {[...Array(12)].map((_, i) => (
               <div key={i} className="card animate-pulse">
@@ -105,6 +141,11 @@ function ProductsList() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-20" role="alert">
+            <p className="text-red-600">{t('加载商品失败')}</p>
+            <button onClick={loadProducts} className="btn btn-secondary mt-4">{t('重新加载')}</button>
           </div>
         ) : products.length === 0 ? (
           <div className="text-center py-20">
@@ -194,4 +235,3 @@ export default function ProductsPage() {
     </Suspense>
   );
 }
-

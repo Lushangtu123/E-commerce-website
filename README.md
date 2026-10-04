@@ -436,7 +436,14 @@ npm test
 # 前端测试
 cd frontend
 npm test
+
+# 搜索、管理员会话与列表回归（在 frontend 目录运行）
+node --test tests/search-pages.test.cjs tests/admin-session.test.cjs tests/admin-lists.test.cjs
 ```
+
+搜索历史在登录状态恢复后加载，并在切换账户时清空；迟到请求不能写入其他账户。商品搜索更换关键词或排序后回到第一页，加载失败可重试。
+
+后台商品、用户和日志列表统一使用 API 客户端处理登录失效，迟到响应不能覆盖当前身份或查询。商品批量选择仅作用于当前页，翻页或筛选后清空；商品与用户写操作在请求完成前禁止重复提交。
 
 ## 📝 开发计划
 

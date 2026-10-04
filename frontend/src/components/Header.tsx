@@ -15,23 +15,42 @@ import { logger } from '@/lib/logger';
 
 export default function Header() {
   const { t } = useI18n();
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated, isHydrated, token, user, logout } = useAuthStore();
   const { getTotalCount } = useCartStore();
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchHistory, setSearchHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<{ scope: string | null; rows: any[] }>({ scope: null, rows: [] });
   const [hotKeywords, setHotKeywords] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement>(null);
+  const mounted = useRef(true);
+  const historyRequest = useRef(0);
+  const scope = isHydrated && isAuthenticated && token && user ? JSON.stringify([token, user.user_id]) : null;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+
+  const isCurrentSession = () => {
+    const auth = useAuthStore.getState();
+    try {
+      return mounted.current && !!scope && currentScope.current === scope && auth.isHydrated && auth.isAuthenticated &&
+        auth.token === token && auth.user?.user_id === user?.user_id && localStorage.getItem('token') === token;
+    } catch { return false; }
+  };
+  const searchHistory = isCurrentSession() && history.scope === scope ? history.rows : [];
 
   useEffect(() => {
-    // 只在初次挂载时加载
-    if (isAuthenticated) {
-      fetchSearchHistory();
-    }
+    mounted.current = true;
     fetchHotKeywords();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 移除isAuthenticated依赖，避免无限循环
+    return () => { mounted.current = false; historyRequest.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    historyRequest.current += 1;
+    setHistory({ scope: null, rows: [] });
+    setSearchKeyword('');
+    setShowDropdown(false);
+    if (scope) fetchSearchHistory();
+  }, [scope]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -44,18 +63,22 @@ export default function Header() {
   }, []);
 
   const fetchSearchHistory = async () => {
+    if (!isCurrentSession()) return;
+    const request = ++historyRequest.current;
     try {
       const data: any = await searchApi.getHistory(10);
-      setSearchHistory(data.history || []);
+      if (isCurrentSession() && request === historyRequest.current) {
+        setHistory({ scope, rows: data.history || [] });
+      }
     } catch (error) {
-      logger.error('获取搜索历史失败:', error);
+      if (isCurrentSession() && request === historyRequest.current) logger.error('获取搜索历史失败:', error);
     }
   };
 
   const fetchHotKeywords = async () => {
     try {
       const data: any = await searchApi.getHot(7, 10);
-      setHotKeywords(data.keywords || []);
+      if (mounted.current) setHotKeywords(data.keywords || []);
     } catch (error) {
       logger.error('获取热搜失败:', error);
     }
@@ -65,12 +88,12 @@ export default function Header() {
     e.preventDefault();
     if (searchKeyword.trim()) {
       setShowDropdown(false);
-      router.push(`/products?keyword=${encodeURIComponent(searchKeyword)}`);
+      router.push(`/products?keyword=${encodeURIComponent(searchKeyword.trim())}`);
       // 记录搜索历史
-      if (isAuthenticated) {
+      if (isCurrentSession()) {
         try {
           await searchApi.record(searchKeyword.trim());
-          fetchSearchHistory();
+          if (isCurrentSession()) fetchSearchHistory();
         } catch (error) {
           logger.error('记录搜索历史失败:', error);
         }
@@ -78,7 +101,8 @@ export default function Header() {
     }
   };
 
-  const handleHistoryClick = (keyword: string) => {
+  const handleHistoryClick = (keyword: string, privateHistory = false) => {
+    if (privateHistory && !isCurrentSession()) return;
     setSearchKeyword(keyword);
     setShowDropdown(false);
     router.push(`/products?keyword=${encodeURIComponent(keyword)}`);
@@ -86,9 +110,10 @@ export default function Header() {
 
   const handleDeleteHistory = async (keyword: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isCurrentSession()) return;
     try {
       await searchApi.deleteKeyword(keyword);
-      fetchSearchHistory();
+      if (isCurrentSession()) fetchSearchHistory();
     } catch (error) {
       logger.error('删除搜索记录失败:', error);
     }
@@ -145,7 +170,7 @@ export default function Header() {
                           <div
                             key={index}
                             className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded cursor-pointer group"
-                            onClick={() => handleHistoryClick(item.keyword)}
+                            onClick={() => handleHistoryClick(item.keyword, true)}
                           >
                             <span className="text-sm text-gray-700">{item.keyword}</span>
                             <button
@@ -280,4 +305,3 @@ export default function Header() {
     </header>
   );
 }
-
