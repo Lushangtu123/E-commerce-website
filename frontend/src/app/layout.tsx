@@ -2,13 +2,13 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import AppShell from '@/components/AppShell';
-import { SITE_DESCRIPTION, SITE_NAME, isIndexable, siteUrl } from '@/lib/site';
+import { SITE_DESCRIPTION, SITE_NAME, TITLE_TEMPLATE, isIndexable, siteUrl } from '@/lib/site';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
-  title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
+  title: { default: SITE_NAME, template: TITLE_TEMPLATE },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   // Page titles and descriptions flow into og:/twitter: tags; only shared defaults live here.

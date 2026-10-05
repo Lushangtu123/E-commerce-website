@@ -16,6 +16,8 @@ export const accountTranslations: Record<string, string> = {
   '更新您的用户名和联系方式': 'Update your username and contact details',
   '个人资料加载中...': 'Loading your profile...',
   '返回个人中心': 'Back to my account',
+  '个人中心': 'My account',
+  '账户设置': 'Account settings',
   '邮箱用于登录，在此页面不可修改': 'Your email is used to sign in and cannot be changed here',
   '头像地址': 'Avatar URL',
   '用户头像': 'Profile picture',

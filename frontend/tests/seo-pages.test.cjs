@@ -160,3 +160,21 @@ test('public pages declare their own canonical and the root layout never sets on
   });
   assert.equal(root.metadata.alternates, undefined);
 });
+
+test('nested pages keep the site name in their titles', () => {
+  const { resolveTitle } = require('next/dist/lib/metadata/resolvers/resolve-title');
+  const { TITLE_TEMPLATE } = site();
+  const title = (file) => loadSource(file).metadata.title;
+  const chains = [
+    ['src/app/products/layout.tsx', '全部商品', { title: 'iPhone 15 Pro' }],
+    ['src/app/orders/layout.tsx', '我的订单', { file: 'src/app/orders/[id]/layout.tsx' }],
+    ['src/app/profile/layout.tsx', '个人中心', { file: 'src/app/profile/address/layout.tsx' }],
+    ['src/app/profile/layout.tsx', '个人中心', { file: 'src/app/profile/settings/layout.tsx' }],
+  ];
+  for (const [parentFile, parentTitle, child] of chains) {
+    const parent = resolveTitle(title(parentFile), TITLE_TEMPLATE);
+    assert.equal(parent.absolute, `${parentTitle} | 电商平台`, parentFile);
+    const childTitle = child.title ?? title(child.file);
+    assert.equal(resolveTitle(childTitle, parent.template).absolute, `${childTitle} | 电商平台`, child.file ?? childTitle);
+  }
+});
