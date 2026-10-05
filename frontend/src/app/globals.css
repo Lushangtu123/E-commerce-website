@@ -165,6 +165,13 @@
     cursor: pointer;
   }
 
+  /* v3 preflight left form fields on the browser's Field background; v4 makes them transparent. */
+  input:where(:not([type='button'], [type='reset'], [type='submit'])),
+  select,
+  textarea {
+    background-color: Field;
+  }
+
   /* v3 placeholders were gray-400; v4 uses half-opacity current text color. */
   input::placeholder,
   textarea::placeholder {
