@@ -145,15 +145,15 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 用户信息卡片 */}
-        <div className="bg-linear-to-r/srgb from-blue-600 to-blue-800 rounded-2xl shadow-xl p-8 mb-8 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
+        <div className="bg-linear-to-r/srgb from-blue-600 to-blue-800 rounded-2xl shadow-xl p-6 sm:p-8 mb-8 text-white">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-4 sm:gap-6">
               <div className="w-20 h-20 shrink-0 bg-white rounded-full flex items-center justify-center overflow-hidden">
                 {avatar ? <Image src={avatar} width={80} height={80} unoptimized alt={t('用户头像')} className="w-full h-full object-cover" onError={() => setFailedAvatar(avatarKey)} /> : <FiUser size={40} className="text-blue-600" />}
               </div>
-              <div>
-                <h1 className="text-3xl font-bold mb-2">{user?.username || t('用户')}</h1>
-                <p className="text-blue-100">{user?.email || ''}</p>
+              <div className="min-w-0">
+                <h1 className="mb-2 truncate text-2xl font-bold sm:text-3xl">{user?.username || t('用户')}</h1>
+                <p className="truncate text-blue-100">{user?.email || ''}</p>
                 <p className="text-sm text-blue-200 mt-1">{t("用户ID:")} {user?.user_id || 'N/A'}</p>
               </div>
             </div>
