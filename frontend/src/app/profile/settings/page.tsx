@@ -8,6 +8,7 @@ import { useAuthStore, type User } from '@/store/useAuthStore';
 import { userApi, type ProfileInput } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ChangePassword from '@/components/ChangePassword';
+import { requestFailure } from '@/lib/api-error';
 
 type Draft = { username: string; phone: string; avatar_url: string };
 type Loaded = { key: string; profile?: User; error?: string };
@@ -74,8 +75,8 @@ export default function ProfileSettingsPage() {
         setResult({ key: sessionKey, error: '无法同步个人资料，请重新加载' }); return;
       }
       accept(data.user);
-    } catch (error: any) {
-      if (isCurrent() && request === revision.current) setResult({ key: sessionKey, error: error.response?.data?.error || '加载个人资料失败，请重试' });
+    } catch (error) {
+      if (isCurrent() && request === revision.current) setResult({ key: sessionKey, error: requestFailure(error).response?.data?.error || '加载个人资料失败，请重试' });
     }
   };
 
@@ -125,8 +126,8 @@ export default function ProfileSettingsPage() {
       }
       accept(data.user);
       setNotice({ key: sessionKey, success: '资料已保存' });
-    } catch (error: any) {
-      if (active()) setNotice({ key: sessionKey, error: error.response?.data?.error || '保存个人资料失败，请重试' });
+    } catch (error) {
+      if (active()) setNotice({ key: sessionKey, error: requestFailure(error).response?.data?.error || '保存个人资料失败，请重试' });
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;

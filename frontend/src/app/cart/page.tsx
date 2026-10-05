@@ -11,6 +11,7 @@ import { FiTrash2, FiShoppingBag, FiShoppingCart } from 'react-icons/fi';
 import ProductImage from '@/components/ProductImage';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 export default function CartPage() {
   const router = useRouter();
@@ -217,9 +218,9 @@ export default function CartPage() {
       setSelectedItems([]);
       toast.success(t('订单创建成功'));
       router.push(`/orders/${data.order_id}`);
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(error.response?.data?.error || error.response?.data?.message || '创建订单失败'));
+      toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || '创建订单失败'));
       setSelectedCouponId(undefined);
       setQuoteRevision(value => value + 1);
       setAddressRevision(value => value + 1);

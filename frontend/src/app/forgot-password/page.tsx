@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { userApi } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 export default function ForgotPasswordPage() {
   const { t } = useI18n();
@@ -24,10 +25,10 @@ export default function ForgotPasswordPage() {
     try {
       await userApi.forgotPassword(value);
       if (mounted.current) setNotice({ success: '如果该邮箱已注册，您将收到密码重置邮件；请检查收件箱和垃圾邮件' });
-    } catch (error: any) {
+    } catch (error) {
       if (mounted.current) {
-        if (error.response?.data?.code === 'PASSWORD_RESET_UNAVAILABLE') { setAvailable(false); setNotice({ error: '密码找回邮件服务暂不可用，请联系商家' }); }
-        else setNotice({ error: error.response?.data?.error || '发送重置邮件失败，请稍后重试' });
+        if (requestFailure(error).response?.data?.code === 'PASSWORD_RESET_UNAVAILABLE') { setAvailable(false); setNotice({ error: '密码找回邮件服务暂不可用，请联系商家' }); }
+        else setNotice({ error: requestFailure(error).response?.data?.error || '发送重置邮件失败，请稍后重试' });
       }
     } finally { if (mounted.current) { pending.current = false; setBusy(false); } }
   };

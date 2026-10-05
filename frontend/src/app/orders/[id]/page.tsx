@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import OrderReviews from '@/components/OrderReviews';
 import OrderAfterSales from '@/components/OrderAfterSales';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
+import { requestFailure } from '@/lib/api-error';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -86,7 +87,7 @@ export default function OrderDetailPage() {
       setOrder(data.order);
       setItems(data.items || []);
       setLoadedKey(sessionKey);
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession() || request !== detailRequest.current) return;
       logger.error('加载订单失败:', error);
       toast.error(t('订单不存在'));
@@ -107,7 +108,7 @@ export default function OrderDetailPage() {
       if (data.remaining_minutes === 0) {
         loadOrder();
       }
-    } catch (error: any) {
+    } catch (error) {
       if (!isActive() || !isCurrentSession()) return;
       logger.error('加载剩余时间失败:', error);
     }
@@ -121,9 +122,9 @@ export default function OrderDetailPage() {
       if (!isCurrentSession()) return;
       toast.success(t('模拟支付完成，未实际扣款'));
       loadOrder();
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(error.response?.data?.error || '支付失败'));
+      toast.error(t(requestFailure(error).response?.data?.error || '支付失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
@@ -140,9 +141,9 @@ export default function OrderDetailPage() {
       if (!isCurrentSession()) return;
       toast.success(t('订单已取消'));
       loadOrder();
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(error.response?.data?.error || '取消失败'));
+      toast.error(t(requestFailure(error).response?.data?.error || '取消失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
@@ -156,9 +157,9 @@ export default function OrderDetailPage() {
       if (!isCurrentSession()) return;
       toast.success(t('确认收货成功'));
       loadOrder();
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(error.response?.data?.error || '确认收货失败'));
+      toast.error(t(requestFailure(error).response?.data?.error || '确认收货失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }

@@ -9,6 +9,7 @@ import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { requestFailure } from '@/lib/api-error';
 
 export default function LoginPage() {
   const { t } = useI18n();
@@ -34,9 +35,9 @@ export default function LoginPage() {
       login(data.user, data.token);
       toast.success(t("登录成功"));
       router.push('/');
-    } catch (error: any) {
+    } catch (error) {
       logger.error('登录请求失败');
-      toast.error(t(error.response?.data?.error || "登录失败"));
+      toast.error(t(requestFailure(error).response?.data?.error || "登录失败"));
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import AdminLayout from '@/components/AdminLayout';
 import { logger } from '@/lib/logger';
 import api from '@/lib/api';
 import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
+import { requestFailure } from '@/lib/api-error';
 
 export default function AdminLogsPage() {
   const { t, formatDate } = useI18n();
@@ -70,12 +71,12 @@ export default function AdminLogsPage() {
         setLogs(data.logs);
         setTotal(data.pagination.total);
         setLoadedKey(key);
-      } catch (error: any) {
+      } catch (error) {
         if (!isCurrent()) return;
         logger.error('获取日志失败:', error);
         setLogs([]);
         setTotal(0);
-        setError(error?.response?.data?.error || error?.message || '获取日志失败');
+        setError(requestFailure(error).response?.data?.error || requestFailure(error).message || '获取日志失败');
         setLoadedKey(key);
       } finally {
         if (isCurrent()) setLoading(false);

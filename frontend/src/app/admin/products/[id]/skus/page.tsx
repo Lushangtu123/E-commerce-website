@@ -8,6 +8,7 @@ import { adminSKUApi, type AdminSKUList, type AdminSKU } from '@/lib/api';
 import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
 import { useI18n } from '@/lib/i18n';
 import { skuDraft, parseSKUForm, skuChanges, type SKUDraft } from '@/lib/sku-form';
+import { requestFailure } from '@/lib/api-error';
 
 type Editor = { key: string; id: number | null; draft: SKUDraft };
 
@@ -68,8 +69,8 @@ export default function AdminSKUPage() {
       if (!isCurrent() || request.current !== revision) return;
       if (!validList(next, productId)) throw new Error();
       setResult({ key, revision, data: next });
-    } catch (error: any) {
-      if (isCurrent() && request.current === revision) setResult({ key, revision, error: afterSave ? '规格已保存，但列表刷新失败，请重新加载' : error.response?.data?.error || '获取SKU列表失败' });
+    } catch (error) {
+      if (isCurrent() && request.current === revision) setResult({ key, revision, error: afterSave ? '规格已保存，但列表刷新失败，请重新加载' : requestFailure(error).response?.data?.error || '获取SKU列表失败' });
     }
   };
   useEffect(() => {
@@ -104,8 +105,8 @@ export default function AdminSKUPage() {
       if (!active()) return;
       replaceEditor(null); setNotice({ key, success: '规格已保存' });
       await load(true);
-    } catch (error: any) {
-      if (active()) setNotice({ key, error: error.response?.data?.error || (current.id === null ? '创建SKU失败' : '更新SKU失败') });
+    } catch (error) {
+      if (active()) setNotice({ key, error: requestFailure(error).response?.data?.error || (current.id === null ? '创建SKU失败' : '更新SKU失败') });
     } finally {
       if (mutation.current === operation) { mutation.current = null; if (isCurrent()) setPendingKey(null); }
     }
@@ -122,8 +123,8 @@ export default function AdminSKUPage() {
       if (!active()) return;
       setNotice({ key, success: sku.status === 1 ? '规格已停用' : '规格已启用' });
       await load(true);
-    } catch (error: any) {
-      if (active()) setNotice({ key, error: error.response?.data?.error || '更新SKU失败' });
+    } catch (error) {
+      if (active()) setNotice({ key, error: requestFailure(error).response?.data?.error || '更新SKU失败' });
     } finally {
       if (mutation.current === operation) { mutation.current = null; if (isCurrent()) setPendingKey(null); }
     }

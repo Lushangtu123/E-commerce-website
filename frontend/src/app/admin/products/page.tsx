@@ -10,6 +10,7 @@ import ProductImage from '@/components/ProductImage';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { requestFailure } from '@/lib/api-error';
 
 export default function AdminProductsPage() {
   const { t } = useI18n();
@@ -106,10 +107,10 @@ export default function AdminProductsPage() {
       const lastPage = Math.max(1, Number(data.pagination?.totalPages) || Math.ceil((Number(data.pagination?.total) || 0) / 20));
       if (page > lastPage) { setPage(lastPage); return; }
       setResult({ key: scopeKey, revision, rows: data.products || [], total: Number(data.pagination?.total) || 0 });
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentScope() || revision !== request.current) return;
       logger.error('获取商品列表失败:', error);
-      setResult({ key: scopeKey, revision, rows: [], total: 0, error: error.response?.data?.error || '获取商品列表失败' });
+      setResult({ key: scopeKey, revision, rows: [], total: 0, error: requestFailure(error).response?.data?.error || '获取商品列表失败' });
     }
   };
 
@@ -144,8 +145,8 @@ export default function AdminProductsPage() {
         toast.success(t(success));
       }
       await latestRefresh.current?.();
-    } catch (error: any) {
-      if (isDisplayedScope()) toast.error(t(error.response?.data?.error || failure));
+    } catch (error) {
+      if (isDisplayedScope()) toast.error(t(requestFailure(error).response?.data?.error || failure));
     } finally {
       if (isCurrentSession() && mutation.current === operation) {
         mutation.current = null;

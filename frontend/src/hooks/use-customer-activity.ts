@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+import { requestFailure } from '@/lib/api-error';
 
 interface ActivityResult<T> {
   key: string;
@@ -92,10 +93,10 @@ export function useCustomerActivity<T extends { product_id: number }>(
       const pages = Number(data.pagination?.total_pages) || Math.ceil(count / limit);
       if (page > Math.max(1, pages)) { setPage(Math.max(1, pages)); return; }
       setResult({ key: scopeKey, revision, rows: data[collection] || [], total: count, totalPages: pages });
-    } catch (cause: any) {
+    } catch (cause) {
       if (!isCurrentQuery() || revision !== request.current) return;
       setResult({ key: scopeKey, revision, rows: [], total: 0, totalPages: 0,
-        error: cause.response?.data?.message || cause.response?.data?.error || errorMessage });
+        error: requestFailure(cause).response?.data?.message || requestFailure(cause).response?.data?.error || errorMessage });
     }
   };
   latestRefresh.current = reload;
@@ -114,7 +115,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
       if (isCurrentScope()) options.onSuccess(value);
       // A deletion may finish after pagination changes; reload the page currently displayed.
       if (options.refresh) await latestRefresh.current?.();
-    } catch (cause: any) {
+    } catch (cause) {
       if (isCurrentScope()) options.onError(cause);
     } finally {
       if (isCurrentSession() && mutation.current === operation) {

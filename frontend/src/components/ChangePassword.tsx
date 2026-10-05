@@ -6,6 +6,7 @@ import { userApi } from '@/lib/api';
 import { passwordError } from '@/lib/password-validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 export default function ChangePassword({ onPasswordChanged }: { onPasswordChanged?: () => void } = {}) {
   const { t } = useI18n(), router = useRouter();
@@ -38,8 +39,8 @@ export default function ChangePassword({ onPasswordChanged }: { onPasswordChange
       setValues({ current: '', next: '', confirm: '' });
       onPasswordChanged?.();
       useAuthStore.getState().logout(); router.push('/login?passwordChanged=1');
-    } catch (error: any) {
-      if (active() && mutation.current === operation) setNotice({ key, error: error.response?.data?.error || '修改密码失败，请重试' });
+    } catch (error) {
+      if (active() && mutation.current === operation) setNotice({ key, error: requestFailure(error).response?.data?.error || '修改密码失败，请重试' });
     } finally {
       if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); }
     }

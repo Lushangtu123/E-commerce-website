@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import { useAdminSession } from '@/hooks/use-admin-session';
 import { useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
+import { requestFailure } from '@/lib/api-error';
 
 const NEXT_STATUS: Record<number, { status: number; text: string }> = { 0: { status: 4, text: '取消订单' }, 1: { status: 2, text: '发货' }, 2: { status: 3, text: '完成订单' } };
 const STATUS = ['待支付', '已支付', '已发货', '已完成', '已取消'];
@@ -31,8 +32,8 @@ export default function AdminOrdersPage() {
       const total = Number(data.pagination?.total) || 0;
       if (page > Math.max(1, Math.ceil(total / 20))) { setPage(Math.max(1, Math.ceil(total / 20))); return; }
       setResult({ key, orders: data.orders || [], total });
-    } catch (error: any) {
-      if (active() && revision === request.current) setResult({ key, orders: [], total: 0, error: error.response?.data?.error || '获取订单列表失败' });
+    } catch (error) {
+      if (active() && revision === request.current) setResult({ key, orders: [], total: 0, error: requestFailure(error).response?.data?.error || '获取订单列表失败' });
     }
   };
   latestLoad.current = fetchOrders;
@@ -54,7 +55,7 @@ export default function AdminOrdersPage() {
       if (!session.active() || mutation.current !== operation) return;
       if (active()) { toast.success(t('订单状态已更新')); setShipment(null); }
       await latestLoad.current?.();
-    } catch (error: any) { if (active() && mutation.current === operation) toast.error(t(error.response?.data?.error || '更新订单状态失败')); }
+    } catch (error) { if (active() && mutation.current === operation) toast.error(t(requestFailure(error).response?.data?.error || '更新订单状态失败')); }
     finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   return <AdminLayout><div className="space-y-6">

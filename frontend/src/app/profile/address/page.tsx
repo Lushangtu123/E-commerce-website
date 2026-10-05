@@ -7,6 +7,7 @@ import { addressApi, type AddressInput, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 const fields = [
   { name: 'receiver_name', label: '收货人', max: 50 },
@@ -61,8 +62,8 @@ export default function AddressPage() {
     try {
       const data = await addressApi.list();
       if (isCurrent() && revision === request.current) setResult({ key: sessionKey, addresses: data.addresses || [] });
-    } catch (error: any) {
-      if (isCurrent() && revision === request.current) setResult({ key: sessionKey, addresses: [], error: error.response?.data?.error || '加载收货地址失败' });
+    } catch (error) {
+      if (isCurrent() && revision === request.current) setResult({ key: sessionKey, addresses: [], error: requestFailure(error).response?.data?.error || '加载收货地址失败' });
     }
   };
 
@@ -90,9 +91,9 @@ export default function AddressPage() {
       setEditing(undefined);
       toast.success(t(success));
       await loadAddresses();
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrent()) return;
-      const message = error.response?.data?.error || error.response?.data?.message || '地址操作失败，请重试';
+      const message = requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || '地址操作失败，请重试';
       setFormError(message);
       toast.error(t(message));
     } finally {
