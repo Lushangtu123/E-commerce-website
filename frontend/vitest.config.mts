@@ -13,6 +13,9 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['tests/**/*.test.{ts,tsx}'],
     setupFiles: ['tests/setup.ts'],
+    // Each test starts from the vi.fn() implementations given in its vi.mock factories.
+    mockReset: true,
     restoreMocks: true,
+    unstubGlobals: true,
   },
 });

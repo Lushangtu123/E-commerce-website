@@ -29,7 +29,6 @@ const switchToSecondCustomer = () => act(() => {
 
 describe('cart page', () => {
   beforeEach(() => {
-    list.mockReset();
     useAuthStore.getState().login(firstUser, 'first-session');
   });
 
