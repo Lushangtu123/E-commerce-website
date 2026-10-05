@@ -1,11 +1,11 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translateTitle, useI18n } from '@/lib/i18n';
 import Header from '@/components/Header';
 import SiteFooter from '@/components/SiteFooter';
 import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LOCALE_STORAGE_KEY, useLocaleStore } from '@/store/useLocaleStore';
 import { Analytics } from '@vercel/analytics/next';
@@ -14,7 +14,7 @@ import { redactTelemetryUrl } from '@/lib/telemetry';
 
 /** Client half of the root layout: language, session sync and storefront chrome. */
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { t, locale } = useI18n();
+  const { locale } = useI18n();
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith('/admin');
   const hydrate = useAuthStore((state) => state.hydrate);
@@ -25,10 +25,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  // Server metadata titles are Chinese; English keeps the translated site name.
+  // Server metadata titles are Chinese, and Next.js may set them after this effect
+  // (streamed metadata, client navigation), so translate whenever the title changes.
+  const sourceTitle = useRef<string | null>(null);
+  const writtenTitle = useRef<string | null>(null);
   useEffect(() => {
-    if (!isAdminRoute && locale === 'en') document.title = t('电商平台');
-  }, [locale, isAdminRoute, pathname]);
+    const sync = () => {
+      if (sourceTitle.current === null || document.title !== writtenTitle.current) sourceTitle.current = document.title;
+      const next = locale === 'en' ? translateTitle(sourceTitle.current, locale) : sourceTitle.current;
+      writtenTitle.current = next;
+      if (document.title !== next) document.title = next;
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.head, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [locale]);
 
   useEffect(() => {
     hydrateLocale();

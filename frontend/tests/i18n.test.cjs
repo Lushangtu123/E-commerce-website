@@ -127,10 +127,18 @@ test('app shell synchronizes html language and cross-tab preference changes with
   const app = setup({ 'ecommerce-locale': 'en', token: 'customer-session' });
   const listeners = new Map();
   const auth = { hydrate() {} };
-  const document = { title: '', documentElement: { lang: 'zh-CN' } };
+  const document = { title: '全部商品 | 电商平台', head: {}, documentElement: { lang: 'zh-CN' } };
+  const observers = new Set();
+  class MutationObserver {
+    constructor(callback) { this.callback = callback; }
+    observe(target) { assert.equal(target, document.head); observers.add(this); }
+    disconnect() { observers.delete(this); }
+  }
+  // Next.js replaces the title after navigation or streamed metadata.
+  const nextSetsTitle = (title) => { document.title = title; [...observers].forEach((observer) => observer.callback([])); };
   const localeHook = Object.assign((selector) => selector(app.useLocaleStore.getState()), { getState: app.useLocaleStore.getState });
   const page = loadPage('src/components/AppShell.tsx', { globals: {
-    ...app, document, window: {
+    ...app, document, MutationObserver, window: {
       addEventListener: (name, fn) => { const entries = listeners.get(name) || []; entries.push(fn); listeners.set(name, entries); },
       removeEventListener: (name, fn) => listeners.set(name, listeners.get(name).filter((item) => item !== fn)),
     },
@@ -146,14 +154,35 @@ test('app shell synchronizes html language and cross-tab preference changes with
   assert.equal(document.documentElement.lang, 'zh-CN');
   await page.render(auth);
   assert.equal(document.documentElement.lang, 'en');
-  assert.equal(document.title, 'Shop');
+  assert.equal(document.title, 'All products | Shop');
+  nextSetsTitle('登录 | 电商平台');
+  assert.equal(document.title, 'Sign in | Shop');
+  nextSetsTitle('iPhone 15 Pro | 电商平台');
+  assert.equal(document.title, 'iPhone 15 Pro | Shop');
   app.localStorage.setItem('ecommerce-locale', 'zh-CN');
   listeners.get('storage').forEach((fn) => fn({ storageArea: app.localStorage, key: 'ecommerce-locale' }));
   await page.render(auth);
   assert.equal(document.documentElement.lang, 'zh-CN');
+  assert.equal(document.title, 'iPhone 15 Pro | 电商平台');
   assert.equal(app.localStorage.getItem('token'), 'customer-session');
   page.unmount();
   assert.equal(listeners.get('storage').length, 0);
+  assert.equal(observers.size, 0);
+});
+
+test('page titles translate part by part and every static metadata title has an English entry', () => {
+  const app = setup();
+  assert.equal(app.translateTitle('全部商品 | 电商平台', 'en'), 'All products | Shop');
+  assert.equal(app.translateTitle('全部商品 | 电商平台', 'zh-CN'), '全部商品 | 电商平台');
+  assert.equal(app.translateTitle('A | B 商品 | 电商平台', 'en'), 'A | B 商品 | Shop');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
+  const root = path.resolve(__dirname, '..');
+  const layouts = walk(path.join(root, 'src/app')).filter((file) => /\/layout\.tsx$/.test(file) && !file.includes(`${path.sep}admin${path.sep}`));
+  const titles = layouts.flatMap((file) => [...fs.readFileSync(file, 'utf8').matchAll(/export const metadata[^;]*?title: (?:\{ default: )?'([^']+)'/g)].map((match) => match[1]));
+  assert.ok(titles.length >= 15, `found ${titles.length} titles`);
+  for (const title of [...titles, '商品详情', '电商平台']) assert.notEqual(app.translate(title, {}, 'en'), title, `untranslated title ${title}`);
 });
 
 test('visible UI literals and translation placeholders are covered by the dictionaries', () => {

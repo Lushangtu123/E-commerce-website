@@ -36,6 +36,13 @@ export function translate(key: string, params: Params = {}, locale: Locale = use
     Object.hasOwn(params, name) ? String(params[name]) : placeholder);
 }
 
+const TITLE_SEPARATOR = ' | ';
+
+/** Server titles are Chinese ("页面 | 电商平台"); each part is translated, product names stay literal. */
+export function translateTitle(title: string, locale: Locale = useLocaleStore.getState().locale): string {
+  return title.split(TITLE_SEPARATOR).map((part) => translate(part, {}, locale)).join(TITLE_SEPARATOR);
+}
+
 export function formatDate(value: string | number | Date | null | undefined, dateOnly = false, options: Intl.DateTimeFormatOptions = {}): string {
   if (value == null || value === '') return '—';
   const date = new Date(value);
