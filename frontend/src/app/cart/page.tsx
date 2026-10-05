@@ -275,6 +275,7 @@ export default function CartPage() {
             <div className="card p-4 flex items-center">
               <input
                 type="checkbox"
+                aria-label={t("全选")}
                 checked={availableItems.length > 0 && orderItems.length === availableItems.length}
                 disabled={submitting || availableItems.length === 0}
                 onChange={handleSelectAll}
@@ -289,6 +290,7 @@ export default function CartPage() {
                 <div className="flex flex-wrap items-center gap-4">
                   <input
                     type="checkbox"
+                    aria-label={t("选择 {title}", { title: item.title })}
                     checked={isAvailable(item) && selectedItems.includes(cartItemKey(item))}
                     disabled={submitting || !isAvailable(item)}
                     onChange={() => handleToggleSelect(item)}

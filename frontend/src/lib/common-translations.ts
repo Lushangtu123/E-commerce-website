@@ -68,6 +68,7 @@ export const commonTranslations: Record<string, string> = {
   '加载商品失败': 'Unable to load products',
   '全部商品': 'All products',
   '商品列表': 'Product list',
+  '选择 {title}': 'Select {title}',
   '搜索结果: {keyword}': 'Search results: {keyword}',
   '共找到 {count} 件商品': '{count} products found',
   '排序:': 'Sort by:',
