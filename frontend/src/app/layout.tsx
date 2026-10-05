@@ -1,109 +1,27 @@
-'use client';
-
-import { useI18n } from '@/lib/i18n';
-
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import Header from '@/components/Header';
-import { Toaster } from 'react-hot-toast';
-import { FiShoppingBag } from 'react-icons/fi';
-import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
-import { useAuthStore } from '@/store/useAuthStore';
-import { LOCALE_STORAGE_KEY, useLocaleStore } from '@/store/useLocaleStore';
-import { Analytics } from '@vercel/analytics/next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
-import { redactTelemetryUrl } from '@/lib/telemetry';
+import AppShell from '@/components/AppShell';
+import { SITE_DESCRIPTION, SITE_NAME, isIndexable, siteUrl } from '@/lib/site';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { t, locale } = useI18n();
-  const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith('/admin');
-  const hydrate = useAuthStore((state) => state.hydrate);
-  const hydrateLocale = useLocaleStore((state) => state.hydrate);
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
+  title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  // Page titles and descriptions flow into og:/twitter: tags; only shared defaults live here.
+  openGraph: { type: 'website', siteName: SITE_NAME, locale: 'zh_CN' },
+  twitter: { card: 'summary' },
+  robots: isIndexable() ? { index: true, follow: true } : { index: false, follow: false },
+};
 
-  useEffect(() => {
-    if (!isAdminRoute) document.title = t('电商平台');
-  }, [locale, isAdminRoute]);
-
-  useEffect(() => {
-    hydrateLocale();
-    const syncLocale = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && (event.key === null || event.key === LOCALE_STORAGE_KEY)) {
-        hydrateLocale();
-      }
-    };
-    window.addEventListener('storage', syncLocale);
-    return () => window.removeEventListener('storage', syncLocale);
-  }, [hydrateLocale]);
-  
-  // 在客户端首次渲染时从localStorage加载状态
-  useEffect(() => {
-    hydrate();
-    const syncSession = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && (event.key === null || event.key === 'token' || event.key === 'user')) {
-        hydrate();
-      }
-    };
-    window.addEventListener('storage', syncSession);
-    return () => window.removeEventListener('storage', syncSession);
-  }, [hydrate]);
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={locale}>
+    <html lang="zh-CN">
       <body className={inter.className}>
-        {!isAdminRoute && <Header />}
-        <main className={`min-h-screen ${!isAdminRoute ? 'bg-gray-50' : ''}`}>
-          {children}
-        </main>
-        {!isAdminRoute && (
-          <footer className="border-t border-gray-200 bg-white">
-            <div className="container-custom py-12">
-              <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-                <div className="col-span-2 md:col-span-1">
-                  <div className="flex items-center gap-2 text-gray-900">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
-                      <FiShoppingBag size={16} aria-hidden="true" />
-                    </span>
-                    <span className="font-semibold tracking-tight">{t("电商平台")}</span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-gray-500">{t("专业的电商平台，为您提供优质的购物体验")}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{t("客户服务")}</h3>
-                  <ul className="mt-3 space-y-2 text-sm text-gray-500">
-                    <li>{t("帮助中心")}</li>
-                    <li>{t("退换货政策")}</li>
-                    <li>{t("配送说明")}</li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{t("联系我们")}</h3>
-                  <ul className="mt-3 space-y-2 text-sm text-gray-500">
-                    <li>{t("客服电话: 400-123-4567")}</li>
-                    <li>{t("邮箱: service@example.com")}</li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{t("关注我们")}</h3>
-                  <p className="mt-3 text-sm text-gray-500">{t("获取最新优惠信息")}</p>
-                </div>
-              </div>
-              <div className="mt-10 border-t border-gray-200 pt-6 text-sm text-gray-400">
-                <p>{t("© 2025 电商平台. All rights reserved.")}</p>
-              </div>
-            </div>
-          </footer>
-        )}
-        <Toaster position="top-center" />
-        <Analytics beforeSend={redactTelemetryUrl} />
-        <SpeedInsights beforeSend={redactTelemetryUrl} />
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

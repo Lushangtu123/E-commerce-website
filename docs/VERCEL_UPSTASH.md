@@ -25,6 +25,7 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 | `CRON_SECRET` | 至少 32 字符的独立随机定时任务密钥 |
 | `CORS_ORIGIN` | 允许的前端来源；跨域调用时须包含实际域名 |
 | `NEXT_PUBLIC_API_URL=/api` | 同域 API 地址 |
+| `NEXT_PUBLIC_SITE_URL` | 可选。网站公开地址，用于 canonical、Open Graph 和 sitemap；不填时生产环境使用 Vercel 项目生产域名。只有 Production 允许搜索引擎收录，Preview 一律 noindex |
 | `PAYMENT_MODE=demo` | 仅 Preview 演示交易，不实际扣款；默认 disabled，生产环境强制关闭模拟支付 |
 | `RESEND_API_KEY`、`EMAIL_FROM`、`APP_URL` | 可选的 Resend 密码找回；发件域名须验证，APP_URL 为可信 HTTPS 网站根地址 |
 

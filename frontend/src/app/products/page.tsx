@@ -110,8 +110,9 @@ function ProductsList() {
               {t('共找到 {count} 件商品', { count: loading || loadError || result.scope !== scope ? '—' : pagination.total })}</div>
             
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">{t("排序:")}</span>
+              <label htmlFor="product-sort" className="text-sm text-gray-500">{t("排序:")}</label>
               <select
+                id="product-sort"
                 value={sort}
                 onChange={(e) => {
                   const params = new URLSearchParams(searchParams);

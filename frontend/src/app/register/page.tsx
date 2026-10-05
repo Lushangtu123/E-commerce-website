@@ -74,18 +74,20 @@ export default function RegisterPage() {
     <div className="min-h-[calc(100vh-200px)] flex items-center justify-center py-12 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">{t("注册账号")}</h2>
+          <h1 className="text-3xl font-bold text-gray-900">{t("注册账号")}</h1>
           <p className="mt-2 text-gray-600">{t("创建您的账号，开始购物之旅")}</p>
         </div>
 
         <div className="card p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="register-username" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("用户名")}</label>
               <input
+                id="register-username"
                 type="text"
                 name="username"
+                autoComplete="username"
                 value={formData.username}
                 onChange={handleChange}
                 className="input"
@@ -96,11 +98,13 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("邮箱")}</label>
               <input
+                id="register-email"
                 type="email"
                 name="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={handleChange}
                 className="input"
@@ -111,11 +115,13 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("密码")}</label>
               <input
+                id="register-password"
                 type="password"
                 name="password"
+                autoComplete="new-password"
                 value={formData.password}
                 onChange={handleChange}
                 className="input"
@@ -126,11 +132,13 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="register-confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("确认密码")}</label>
               <input
+                id="register-confirmPassword"
                 type="password"
                 name="confirmPassword"
+                autoComplete="new-password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 className="input"

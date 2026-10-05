@@ -46,7 +46,7 @@ export default function LoginPage() {
     <div className="min-h-[calc(100vh-200px)] flex items-center justify-center py-12 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">{t("登录账号")}</h2>
+          <h1 className="text-3xl font-bold text-gray-900">{t("登录账号")}</h1>
           <p className="mt-2 text-gray-600">{t("欢迎回来！请登录您的账号")}</p>
         </div>
 
@@ -54,10 +54,12 @@ export default function LoginPage() {
           {passwordChanged && <p role="status" className="mb-6 text-green-700">{t('密码已修改，请使用新密码登录')}</p>}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("邮箱")}</label>
               <input
+                id="login-email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
@@ -67,10 +69,12 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("密码")}</label>
               <input
+                id="login-password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="input"

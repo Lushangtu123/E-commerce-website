@@ -22,7 +22,6 @@ export const adminTranslations: Record<string, string> = {
   '请输入密码': 'Enter your password',
   '请使用部署时配置的管理员账号和密码登录。': 'Sign in with the administrator account and password configured for this deployment.',
   '← 返回商城首页': '← Back to the store',
-  '© 2025 电商平台. All rights reserved.': '© 2025 Store. All rights reserved.',
   '退出登录': 'Sign out',
   '前往商城': 'Visit store',
   '关闭侧栏': 'Close sidebar',

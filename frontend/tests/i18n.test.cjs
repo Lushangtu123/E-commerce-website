@@ -123,30 +123,34 @@ test('server error templates preserve product names and literal replacement char
   assert.doesNotMatch(app.translate('商品 123 不存在或已下架'), /不存在/);
 });
 
-test('root synchronizes html language and cross-tab preference changes without changing sessions', async () => {
+test('app shell synchronizes html language and cross-tab preference changes without changing sessions', async () => {
   const app = setup({ 'ecommerce-locale': 'en', token: 'customer-session' });
   const listeners = new Map();
   const auth = { hydrate() {} };
+  const document = { title: '', documentElement: { lang: 'zh-CN' } };
   const localeHook = Object.assign((selector) => selector(app.useLocaleStore.getState()), { getState: app.useLocaleStore.getState });
-  const page = loadPage('src/app/layout.tsx', { globals: {
-    ...app, document: { title: '' }, window: {
+  const page = loadPage('src/components/AppShell.tsx', { globals: {
+    ...app, document, window: {
       addEventListener: (name, fn) => { const entries = listeners.get(name) || []; entries.push(fn); listeners.set(name, entries); },
       removeEventListener: (name, fn) => listeners.set(name, listeners.get(name).filter((item) => item !== fn)),
     },
   }, imports: {
-    './globals.css': {},
     '@/components/Header': () => null,
-    'next/font/google': { Inter: () => ({ className: 'font-test' }) },
+    '@/components/SiteFooter': () => null,
     'react-hot-toast': { Toaster: () => null },
     'next/navigation': { usePathname: () => '/' },
     '@/lib/i18n': i18nImport(app),
     '@/store/useLocaleStore': { useLocaleStore: localeHook, LOCALE_STORAGE_KEY: app.LOCALE_STORAGE_KEY },
   } });
-  assert.equal((await page.render(auth)).props.lang, 'zh-CN');
-  assert.equal((await page.render(auth)).props.lang, 'en');
+  await page.render(auth);
+  assert.equal(document.documentElement.lang, 'zh-CN');
+  await page.render(auth);
+  assert.equal(document.documentElement.lang, 'en');
+  assert.equal(document.title, 'Shop');
   app.localStorage.setItem('ecommerce-locale', 'zh-CN');
   listeners.get('storage').forEach((fn) => fn({ storageArea: app.localStorage, key: 'ecommerce-locale' }));
-  assert.equal((await page.render(auth)).props.lang, 'zh-CN');
+  await page.render(auth);
+  assert.equal(document.documentElement.lang, 'zh-CN');
   assert.equal(app.localStorage.getItem('token'), 'customer-session');
   page.unmount();
   assert.equal(listeners.get('storage').length, 0);
