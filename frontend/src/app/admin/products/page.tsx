@@ -4,6 +4,7 @@ import { useI18n } from '@/lib/i18n';
 
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
+import type { AdminPage, AdminProductRow, Category } from '@/lib/api';
 import { getAdminSessionToken } from '@/lib/admin-session';
 import AdminLayout from '@/components/AdminLayout';
 import ProductImage from '@/components/ProductImage';
@@ -12,9 +13,22 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 
+/** The edit modal keeps numbers as strings while the administrator types. */
+interface EditProductForm {
+  product_id: number;
+  title: string;
+  description: string;
+  price: string;
+  stock: string;
+  category_id: string;
+  brand: string;
+  main_image: string;
+  status: number;
+}
+
 export default function AdminProductsPage() {
   const { t } = useI18n();
-  const [result, setResult] = useState<{ key: string; revision: number; rows: any[]; total: number; error?: string } | null>(null);
+  const [result, setResult] = useState<{ key: string; revision: number; rows: AdminProductRow[]; total: number; error?: string } | null>(null);
   const [pageState, setPage] = useState(1);
   const [filtersState, setFilters] = useState({
     keyword: '',
@@ -24,7 +38,7 @@ export default function AdminProductsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [formScope, setFormScope] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [newProduct, setNewProduct] = useState({
     title: '',
     description: '',
@@ -35,7 +49,7 @@ export default function AdminProductsPage() {
     main_image: '',
     status: 1
   });
-  const [editProduct, setEditProduct] = useState<any>(null);
+  const [editProduct, setEditProduct] = useState<EditProductForm | null>(null);
 
   const [, notifySessionChange] = useState(0);
   const [queryToken, setQueryToken] = useState(getAdminSessionToken);
@@ -98,7 +112,7 @@ export default function AdminProductsPage() {
     const revision = ++request.current;
     setResult(null);
     try {
-      const data: any = await api.get('/admin/products', { params: {
+      const data = await api.get<unknown, AdminPage & { products?: AdminProductRow[] }>('/admin/products', { params: {
         page, limit: 20,
         ...(filters.keyword && { keyword: filters.keyword }),
         ...(filters.status !== '' && { status: filters.status }),
@@ -124,7 +138,7 @@ export default function AdminProductsPage() {
     const capturedToken = token;
     let active = true;
     if (!isCurrentSession()) return;
-    api.get('/products/categories').then((data: any) => {
+    api.get<unknown, Category[]>('/products/categories').then((data) => {
       if (active && mounted.current && getAdminSessionToken() === capturedToken) setCategories(data);
     }).catch(error => { if (active && isCurrentSession()) logger.error('获取分类失败:', error); });
     return () => { active = false; };
@@ -210,7 +224,7 @@ export default function AdminProductsPage() {
   const updateNewProduct = (next: typeof newProduct) => {
     if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setNewProduct(next);
   };
-  const updateEditProduct = (next: any) => {
+  const updateEditProduct = (next: EditProductForm) => {
     if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setEditProduct(next);
   };
 
@@ -232,7 +246,7 @@ export default function AdminProductsPage() {
     });
   };
 
-  const openEditModal = (product: any) => {
+  const openEditModal = (product: AdminProductRow) => {
     if (!isDisplayedScope() || mutation.current || !products.some(row => row.product_id === product.product_id)) return;
     setFormScope(scopeKey);
     setEditProduct({
@@ -421,7 +435,7 @@ export default function AdminProductsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{product.price ? parseFloat(product.price).toFixed(2) : '0.00'}
+                        ¥{product.price ? Number(product.price).toFixed(2) : '0.00'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {product.stock}

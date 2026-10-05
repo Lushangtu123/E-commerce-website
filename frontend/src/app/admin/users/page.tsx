@@ -4,6 +4,7 @@ import { useI18n } from '@/lib/i18n';
 
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
+import type { AdminPage, AdminUserRow } from '@/lib/api';
 import { getAdminSessionToken } from '@/lib/admin-session';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
@@ -12,7 +13,7 @@ import { requestFailure } from '@/lib/api-error';
 
 export default function AdminUsersPage() {
   const { t, formatDate } = useI18n();
-  const [result, setResult] = useState<{ key: string; revision: number; rows: any[]; total: number; error?: string } | null>(null);
+  const [result, setResult] = useState<{ key: string; revision: number; rows: AdminUserRow[]; total: number; error?: string } | null>(null);
   const [pageState, setPage] = useState(1);
   const [filtersState, setFilters] = useState({
     keyword: '',
@@ -68,7 +69,7 @@ export default function AdminUsersPage() {
     const revision = ++request.current;
     setResult(null);
     try {
-      const data: any = await api.get('/admin/users', { params: {
+      const data = await api.get<unknown, AdminPage & { users?: AdminUserRow[] }>('/admin/users', { params: {
         page, limit: 20,
         ...(filters.keyword && { keyword: filters.keyword }),
         ...(filters.status !== '' && { status: filters.status }),
@@ -227,7 +228,7 @@ export default function AdminUsersPage() {
                         {user.order_count || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{(user.total_spent ? parseFloat(user.total_spent) : 0).toFixed(2)}
+                        ¥{(user.total_spent ? Number(user.total_spent) : 0).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {user.status === 1 ? (

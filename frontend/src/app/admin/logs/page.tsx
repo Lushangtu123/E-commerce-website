@@ -6,12 +6,13 @@ import { useState, useEffect, useRef } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { logger } from '@/lib/logger';
 import api from '@/lib/api';
+import type { AdminLog } from '@/lib/api';
 import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
 import { requestFailure } from '@/lib/api-error';
 
 export default function AdminLogsPage() {
   const { t, formatDate } = useI18n();
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AdminLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -66,7 +67,7 @@ export default function AdminLogsPage() {
     if (!isCurrent()) return () => { active = false; };
     const fetchLogs = async () => {
       try {
-        const data = await api.get<any, { logs: any[]; pagination: { total: number } }>('/admin/logs', { params: { page, limit: 20 } });
+        const data = await api.get<unknown, { logs: AdminLog[]; pagination: { total: number } }>('/admin/logs', { params: { page, limit: 20 } });
         if (!isCurrent()) return;
         setLogs(data.logs);
         setTotal(data.pagination.total);
@@ -112,7 +113,7 @@ export default function AdminLogsPage() {
       UPDATE_SKU: '更新SKU',
       DELETE_SKU: '删除SKU',
     };
-    const actionColors: any = {
+    const actionColors: Record<string, string> = {
       'LOGIN': 'bg-blue-100 text-blue-700',
       'CREATE_PRODUCT': 'bg-green-100 text-green-700',
       'UPDATE_PRODUCT': 'bg-yellow-100 text-yellow-700',
