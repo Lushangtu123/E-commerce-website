@@ -14,7 +14,7 @@ const app = express(); app.use('/api/orders', orderRoutes);
 const auth = { Authorization: `Bearer ${jwt.sign({ userId: 7 }, 'test-jwt-secret')}` };
 beforeEach(() => {
   jest.clearAllMocks();
-  (query as jest.Mock).mockImplementation(async (sql: string) => sql.includes('COUNT(*)') ? [{ total: 3 }] : [{ order_id: 2, user_id: 7, status: 0 }]);
+  (query as jest.Mock).mockImplementation(async (sql: string) => sql.startsWith('SELECT auth_version') ? [{ auth_version: 0 }] : sql.includes('COUNT(*)') ? [{ total: 3 }] : [{ order_id: 2, user_id: 7, status: 0 }]);
 });
 
 test('未认证不能列订单；默认分页使用10且同时间按订单ID稳定排序', async () => {
@@ -28,7 +28,7 @@ test('未认证不能列订单；默认分页使用10且同时间按订单ID稳�
 test.each(['0', '1', '2', '3', '4'])('合法状态%s与分页绑定参数，status0不会丢失', async status => {
   const response = await request(app).get(`/api/orders?status=${status}&page=2&limit=2`).set(auth).expect(200);
   expect(response.body).toMatchObject({ page: 2, limit: 2, total: 3, totalPages: 2 });
-  expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('status = ?'), [7, Number(status)]);
+  expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('status = ?'), [7, Number(status)]);
   expect(query).toHaveBeenLastCalledWith(expect.any(String), [7, Number(status), 2, 2]);
 });
 
@@ -36,9 +36,10 @@ test.each([
   'status=1x', 'status=-1', 'status=5', 'status=1.5', 'status=', 'status=null', 'status=0&status=1',
   'page=-1', 'page=0', 'page=1x', 'page=1.5', 'page=', 'page=1&page=2', 'page=2147483648',
   'limit=0', 'limit=-1', 'limit=101', 'limit=2x', 'limit=', 'limit=1&limit=2', 'user_id=8',
-])('非法订单查询拒绝且不连接数据库：%s', async params => {
+])('非法订单查询仅检查会话且不执行订单SQL：%s', async params => {
   await request(app).get(`/api/orders?${params}`).set(auth).expect(400);
-  expect(query).not.toHaveBeenCalled();
+  expect(query).toHaveBeenCalledTimes(1);
+  expect(query).toHaveBeenCalledWith('SELECT auth_version FROM users WHERE user_id = ?', [7]);
 });
 
 test('最大page与limit可安全计算并绑定offset', async () => {
@@ -65,7 +66,10 @@ test('controller非HTTP调用的null或数组分页也返回400', async () => {
 });
 
 test('数据库失败保持500且隐藏驱动细节', async () => {
-  (query as jest.Mock).mockRejectedValue(new Error('driver secret'));
+  (query as jest.Mock).mockImplementation(async sql => {
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    throw new Error('driver secret');
+  });
   const response = await request(app).get('/api/orders').set(auth).expect(500);
   expect(response.body).toEqual({ error: '获取订单列表失败' });
 });

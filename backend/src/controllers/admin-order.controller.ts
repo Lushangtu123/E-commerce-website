@@ -135,13 +135,15 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
 export const updateOrderStatus = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { status } = req.body;
+    const { status, shipping_company, tracking_number } = req.body;
 
     if (status === undefined) {
       return res.status(400).json({ error: '状态不能为空' });
     }
 
-    const result = await transitionOrder(Number(orderId), status as OrderStatus);
+    const result = await transitionOrder(Number(orderId), status as OrderStatus, {
+      shipment: status === OrderStatus.SHIPPED ? { shipping_company, tracking_number } : undefined,
+    });
     await invalidateOrderProductCache(result.productIds);
     const statusText = ['待支付', '已支付', '已发货', '已完成', '已取消'][status];
 

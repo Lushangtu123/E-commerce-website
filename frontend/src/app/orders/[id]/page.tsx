@@ -8,6 +8,8 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
 import OrderReviews from '@/components/OrderReviews';
+import OrderAfterSales from '@/components/OrderAfterSales';
+import { usePaymentSettings } from '@/hooks/use-payment-settings';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -29,6 +31,9 @@ export default function OrderDetailPage() {
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const detailRequest = useRef(0);
   const mounted = useRef(true);
+  const actionLock = useRef(false);
+  const [actionPending, setActionPending] = useState(false);
+  const payments = usePaymentSettings(isHydrated && isAuthenticated);
 
   const orderId = parseInt(params.id as string);
   const sessionKey = JSON.stringify([token, user?.user_id, orderId]);
@@ -49,6 +54,8 @@ export default function OrderDetailPage() {
     setOrder(null);
     setItems([]);
     setRemainingTime(null);
+    actionLock.current = false;
+    setActionPending(false);
     if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
@@ -105,22 +112,26 @@ export default function OrderDetailPage() {
   };
 
   const handlePay = async () => {
-    if (!isCurrentSession()) return;
+    if (!isCurrentSession() || !payments.canPay || actionLock.current || order?.status !== 0) return;
+    actionLock.current = true; setActionPending(true);
     try {
       await orderApi.pay(orderId);
       if (!isCurrentSession()) return;
-      toast.success(t('支付成功'));
+      toast.success(t('模拟支付完成，未实际扣款'));
       loadOrder();
     } catch (error: any) {
       if (!isCurrentSession()) return;
       toast.error(t(error.response?.data?.error || '支付失败'));
+    } finally {
+      if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
   };
 
   const handleCancel = async () => {
-    if (!isCurrentSession()) return;
+    if (!isCurrentSession() || actionLock.current || order?.status !== 0) return;
     if (!confirm(t('确定要取消订单吗？'))) return;
-    if (!isCurrentSession()) return;
+    if (!isCurrentSession() || actionLock.current) return;
+    actionLock.current = true; setActionPending(true);
 
     try {
       await orderApi.cancel(orderId);
@@ -130,11 +141,14 @@ export default function OrderDetailPage() {
     } catch (error: any) {
       if (!isCurrentSession()) return;
       toast.error(t(error.response?.data?.error || '取消失败'));
+    } finally {
+      if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
   };
 
   const handleConfirm = async () => {
-    if (!isCurrentSession()) return;
+    if (!isCurrentSession() || actionLock.current || order?.status !== 2) return;
+    actionLock.current = true; setActionPending(true);
     try {
       await orderApi.confirm(orderId);
       if (!isCurrentSession()) return;
@@ -143,6 +157,8 @@ export default function OrderDetailPage() {
     } catch (error: any) {
       if (!isCurrentSession()) return;
       toast.error(t(error.response?.data?.error || '确认收货失败'));
+    } finally {
+      if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
   };
 
@@ -169,6 +185,7 @@ export default function OrderDetailPage() {
     <div className="py-8">
       <div className="container-custom max-w-4xl">
         <h1 className="text-3xl font-bold mb-8">{t("订单详情")}</h1>
+        {order.payment_method === 'demo' ? <p role="status" className="mb-6 rounded-lg bg-amber-50 p-4 text-amber-900">{t('演示订单，未实际扣款')}</p> : order.status === 0 && <p role="status" className="mb-6 rounded-lg bg-amber-50 p-4 text-amber-900">{t(payments.loading ? '正在确认支付服务...' : payments.isDemo ? '当前为演示支付，不会实际扣款' : '暂未开通在线支付，请勿向任何个人转账')}</p>}
 
         {/* 订单状态 */}
         <div className="card p-6 mb-6">
@@ -205,6 +222,11 @@ export default function OrderDetailPage() {
         </div>
 
         {/* 商品列表 */}
+        {(order.status === 2 || order.status === 3 || order.shipping_company || order.tracking_number) && <div className="card p-6 mb-6">
+          <h2 className="font-bold text-lg mb-4">{t('物流信息')}</h2>
+          {order.shipping_company && order.tracking_number ? <dl className="space-y-2 text-gray-600"><div><dt className="inline font-medium">{t('快递公司')}：</dt><dd className="inline">{order.shipping_company}</dd></div><div><dt className="inline font-medium">{t('运单号')}：</dt><dd className="inline font-mono break-all">{order.tracking_number}</dd></div></dl> : <p className="text-gray-500">{t('历史订单未记录物流信息')}</p>}
+          <p className="mt-3 text-sm text-gray-500">{t('请使用快递公司官方渠道查询物流')}</p>
+        </div>}
         <div className="card p-6 mb-6">
           <h2 className="font-bold text-lg mb-4">{t("商品信息")}</h2>
           <div className="space-y-4">
@@ -298,6 +320,7 @@ export default function OrderDetailPage() {
         </div>
 
         {order.status === 3 && <OrderReviews key={sessionKey} orderId={orderId} items={items} />}
+        {[1, 2, 3].includes(order.status) && <OrderAfterSales key={sessionKey} orderId={orderId} />}
 
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-3">
@@ -307,17 +330,17 @@ export default function OrderDetailPage() {
 
           {order.status === 0 && (
             <>
-              <button onClick={handlePay} className="btn btn-primary">
-                {t("立即支付")}
-              </button>
-              <button onClick={handleCancel} className="btn btn-secondary">
+              {payments.canPay && <button onClick={handlePay} disabled={actionPending} className="btn btn-primary">
+                {t("模拟支付")}
+              </button>}
+              <button onClick={handleCancel} disabled={actionPending} className="btn btn-secondary">
                 {t("取消订单")}
               </button>
             </>
           )}
 
           {order.status === 2 && (
-            <button onClick={handleConfirm} className="btn btn-primary">
+            <button onClick={handleConfirm} disabled={actionPending} className="btn btn-primary">
               {t("确认收货")}
             </button>
           )}

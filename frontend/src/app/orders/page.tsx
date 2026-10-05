@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
+import { usePaymentSettings } from '@/hooks/use-payment-settings';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -51,6 +52,7 @@ export default function OrdersPage() {
   };
   const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey;
   const actionsPending = pendingSession === sessionKey;
+  const payments = usePaymentSettings(isHydrated && isAuthenticated);
 
   useEffect(() => {
     mounted.current = true;
@@ -101,6 +103,7 @@ export default function OrdersPage() {
 
   const handleMutation = async (orderId: number, action: 'pay' | 'cancel' | 'confirm') => {
     if (!isCurrentScope() || loading || loadError || mutation.current) return;
+    if (action === 'pay' && !payments.canPay) return;
     const order = orders.find(item => item.order_id === orderId);
     if (!order || (action === 'confirm' ? order.status !== 2 : order.status !== 0)) return;
     if (action === 'cancel' && !confirm(t('确定要取消订单吗？'))) return;
@@ -111,7 +114,7 @@ export default function OrdersPage() {
     try {
       await orderApi[action](orderId);
       if (!isCurrentSession()) return;
-      toast.success(t(action === 'pay' ? '支付成功' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
+      toast.success(t(action === 'pay' ? '模拟支付完成，未实际扣款' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
       await latestRefresh.current?.();
     } catch (error: any) {
       if (!isCurrentSession()) return;
@@ -132,6 +135,7 @@ export default function OrdersPage() {
     <div className="py-8">
       <div className="container-custom">
         <h1 className="text-3xl font-bold mb-8">{t("我的订单")}</h1>
+        <p className="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-900" role="status">{t(payments.loading ? '正在确认支付服务...' : payments.isDemo ? '当前为演示支付，不会实际扣款' : '暂未开通在线支付，请勿向任何个人转账')}</p>
 
         {/* 状态筛选 */}
         <div className="card p-4 mb-6">
@@ -239,13 +243,13 @@ export default function OrdersPage() {
                   
                   {order.status === 0 && (
                     <>
-                      <button
+                      {payments.canPay && <button
                         onClick={() => handleMutation(order.order_id, 'pay')}
                         disabled={actionsPending}
                         className="btn btn-primary"
                       >
-                        {t("立即支付")}
-                      </button>
+                        {t("模拟支付")}
+                      </button>}
                       <button
                         onClick={() => handleMutation(order.order_id, 'cancel')}
                         disabled={actionsPending}

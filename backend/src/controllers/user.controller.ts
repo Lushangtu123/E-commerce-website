@@ -5,8 +5,62 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
 import { normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
+import { passwordMailConfig } from '../services/password-mail.service';
+import { PasswordResetModel } from '../models/password-reset.model';
+import { normalizePasswordChange, normalizePasswordForgot, normalizePasswordReset } from '../utils/password-validation';
+import { createHash } from 'crypto';
+import { requestPasswordRecovery } from '../services/password-recovery.service';
 
 export class UserController {
+  static passwordCapabilities(_req: AuthRequest, res: Response) {
+    return res.json({ passwordResetAvailable: Boolean(passwordMailConfig()), passwordMinLength: 12, passwordMaxBytes: 72 });
+  }
+
+  static async forgotPassword(req: AuthRequest, res: Response) {
+    const config = passwordMailConfig();
+    if (!config) return res.status(503).json({ error: '密码找回邮件服务暂未配置', code: 'PASSWORD_RESET_UNAVAILABLE' });
+    try {
+      const { email } = normalizePasswordForgot(req.body);
+      await requestPasswordRecovery(email, config);
+      return res.json({ message: '如果该邮箱已注册，我们会发送密码重置邮件，请检查收件箱。' });
+    } catch (error) {
+      if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
+      // Do not log request bodies, reset bearer tokens, or mail-provider responses.
+      logger.error('密码找回请求处理失败');
+      return res.status(503).json({ error: '密码找回暂不可用，请稍后重试' });
+    }
+  }
+
+  static async changePassword(req: AuthRequest, res: Response) {
+    try {
+      const { currentPassword, newPassword } = normalizePasswordChange(req.body);
+      const user = await UserModel.findCredentialsById(req.userId!);
+      if (!user) return res.status(401).json({ error: '登录已过期，请重新登录' });
+      if (!await bcrypt.compare(currentPassword, user.password_hash)) return res.status(400).json({ error: '当前密码错误' });
+      if (await bcrypt.compare(newPassword, user.password_hash)) return res.status(400).json({ error: '新密码不能与当前密码相同' });
+      const hash = await bcrypt.hash(newPassword, 12);
+      if (!await PasswordResetModel.changePassword(user.user_id, user.password_hash, hash)) return res.status(409).json({ error: '账户密码已更新，请重新登录后重试' });
+      return res.json({ message: '密码已修改，请重新登录', reauthenticate: true });
+    } catch (error) {
+      if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
+      logger.error('修改密码失败');
+      return res.status(503).json({ error: '修改密码暂不可用，请稍后重试' });
+    }
+  }
+
+  static async resetPassword(req: AuthRequest, res: Response) {
+    try {
+      const { token, newPassword } = normalizePasswordReset(req.body);
+      const hash = await bcrypt.hash(newPassword, 12);
+      const consumed = await PasswordResetModel.consume(createHash('sha256').update(token).digest('hex'), hash);
+      if (!consumed) return res.status(400).json({ error: '密码重置链接无效或已过期', code: 'INVALID_RESET_TOKEN' });
+      return res.json({ message: '密码已重置，请重新登录', reauthenticate: true });
+    } catch (error) {
+      if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
+      logger.error('重置密码失败');
+      return res.status(503).json({ error: '密码重置暂不可用，请稍后重试' });
+    }
+  }
   static async getStats(req: AuthRequest, res: Response) {
     try {
       const stats = await UserModel.getStats(req.userId!);
@@ -43,7 +97,7 @@ export class UserController {
       // 生成token
       // @ts-ignore
       const token = jwt.sign(
-        { userId, username, email },
+        { userId, username, email, type: 'user', authVersion: 0 },
         process.env.JWT_SECRET || 'secret',
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
@@ -81,7 +135,7 @@ export class UserController {
       // 生成token
       // @ts-ignore
       const token = jwt.sign(
-        { userId: user.user_id, username: user.username, email: user.email },
+        { userId: user.user_id, username: user.username, email: user.email, type: 'user', authVersion: user.auth_version ?? 0 },
         process.env.JWT_SECRET || 'secret',
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );

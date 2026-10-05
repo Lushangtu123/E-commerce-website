@@ -20,6 +20,7 @@ import cartRoutes from '../../routes/cart.routes';
 import { migrateSkuTables } from '../../database/migrate-sku';
 import { migrateCouponTables } from '../../database/migrate-coupon';
 import { migrateAddressTables } from '../../database/migrate-address';
+import { migrateFulfillment } from '../../database/migrate-fulfillment';
 import addressRoutes from '../../routes/address.routes';
 import { AddressModel } from '../../models/address.model';
 
@@ -49,6 +50,8 @@ integration('真实 MySQL 订单事务及并发', () => {
     await server.query(`CREATE DATABASE ${database} CHARACTER SET utf8mb4`);
     databaseCreated = true;
     db = mysql.createPool({ ...connectionOptions, database });
+    // Align SQL NOW() with the fixture's UTC Date serialization on hosts in any timezone.
+    db.on('connection', connection => { connection.query("SET time_zone = '+00:00'"); });
     (getPool as jest.Mock).mockReturnValue(db);
     (query as jest.Mock).mockImplementation(async (sql: string, values?: any[]) => (await db.query(sql, values))[0]);
     // Use the project's actual base schema, so stale SQL column names fail here.
@@ -60,6 +63,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     await migrateCouponTables(db);
     await migrateSkuTables(db);
     await migrateAddressTables(db);
+    await migrateFulfillment(db);
   });
 
   afterAll(async () => {
@@ -326,7 +330,7 @@ integration('真实 MySQL 订单事务及并发', () => {
   test('支付、发货、完成写入基线时间字段并禁止回退', async () => {
     const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 1 }]);
     await transitionOrder(orderId, OrderStatus.PAID, { userId: 1 });
-    await transitionOrder(orderId, OrderStatus.SHIPPED);
+    await transitionOrder(orderId, OrderStatus.SHIPPED, { shipment: { shipping_company: '顺丰', tracking_number: 'SFTEST1001' } });
     await transitionOrder(orderId, OrderStatus.COMPLETED, { userId: 1 });
     await expect(transitionOrder(orderId, OrderStatus.PENDING)).rejects.toThrow();
     const [orders] = await db.query<RowDataPacket[]>('SELECT status,paid_at,shipped_at,completed_at FROM orders WHERE order_id = ?', [orderId]);

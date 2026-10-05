@@ -7,6 +7,7 @@ import { FiUser } from 'react-icons/fi';
 import { useAuthStore, type User } from '@/store/useAuthStore';
 import { userApi, type ProfileInput } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import ChangePassword from '@/components/ChangePassword';
 
 type Draft = { username: string; phone: string; avatar_url: string };
 type Loaded = { key: string; profile?: User; error?: string };
@@ -34,6 +35,7 @@ export default function ProfileSettingsPage() {
   const mounted = useRef(true);
   const revision = useRef(0);
   const mutation = useRef<object | null>(null);
+  const passwordChanged = useRef(false);
   const profile = result?.key === sessionKey ? result.profile : undefined;
   const busy = saving === sessionKey;
   const dirty = !!profile && !!draft && !equal(draft, valuesOf(profile));
@@ -80,7 +82,8 @@ export default function ProfileSettingsPage() {
   useEffect(() => {
     setResult(null); loaded.current = null; replaceDraft(null); setNotice(null); setSaving(null); mutation.current = null;
     if (!isHydrated) return;
-    if (!isAuthenticated) { router.push('/login'); return; }
+    if (!isAuthenticated) { router.push(passwordChanged.current ? '/login?passwordChanged=1' : '/login'); return; }
+    passwordChanged.current = false;
     loadProfile();
     return () => { revision.current += 1; };
   }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
@@ -171,6 +174,7 @@ export default function ProfileSettingsPage() {
           </div>
         </form>
       )}
+      <ChangePassword key={sessionKey} onPasswordChanged={() => { if (isCurrent()) passwordChanged.current = true; }} />
     </div>
   );
 }

@@ -16,7 +16,7 @@ function amountRow(tree, label) {
 function setupDetail(order, items = []) {
   return loadPage('src/app/orders/[id]/page.tsx', {
     globals: { setInterval: () => 1, clearInterval() {} },
-    imports: { '@/lib/api': {
+    imports: { '@/lib/api': { paymentApi: { getSettings: async () => ({ mode: 'demo', canPay: true, isDemo: true }) },
       orderApi: { getDetail: async () => ({ order, items }) },
       orderTimeoutApi: { getRemainingTime: async () => ({ remaining_minutes: 10 }) },
     } },
@@ -104,13 +104,13 @@ test('an old detail page payment handler cannot issue a request for another brow
   let payments = 0;
   const runtime = loadPage('src/app/orders/[id]/page.tsx', {
     globals: { ...browser, setInterval: () => 1, clearInterval() {} },
-    imports: { '@/lib/api': {
+    imports: { '@/lib/api': { paymentApi: { getSettings: async () => ({ mode: 'demo', canPay: true, isDemo: true }) },
       orderApi: { getDetail: async () => ({ order: { status: 0, total_amount: 10 }, items: [] }), pay: async () => { payments++; } },
       orderTimeoutApi: { getRemainingTime: async () => ({ remaining_minutes: 10 }) },
     } },
   });
   const tree = await runtime.flush({ ...auth, token: 'A' });
-  const pay = findElements(tree, element => element.type === 'button' && textContent(element) === '立即支付')[0];
+  const pay = findElements(tree, element => element.type === 'button' && textContent(element) === '模拟支付')[0];
   browser.localStorage.setItem('token', 'B');
   await pay.props.onClick();
   assert.equal(payments, 0);

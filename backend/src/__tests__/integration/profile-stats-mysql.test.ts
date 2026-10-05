@@ -81,14 +81,14 @@ integration('真实 MySQL 个人统计与订单分页', () => {
     await db.query("INSERT INTO orders (order_id,order_no,user_id,total_amount,status,created_at) VALUES (20,'U2',2,10,0,'2026-01-02 03:04:05')");
   }
 
-  test('真实认证统计返回当前用户空计数，删除用户404，不暴露用户私密字段', async () => {
+  test('真实认证统计返回当前用户空计数，删除用户撤销会话401，不暴露用户私密字段', async () => {
     await request(app).get('/api/users/stats').expect(401);
     const admin = jwt.sign({ adminId: 1, type: 'admin' }, 'test-jwt-secret');
     await request(app).get('/api/users/stats').set('Authorization', `Bearer ${admin}`).expect(401);
     const response = await request(app).get('/api/users/stats?user_id=2').set(auth()).expect(200);
     expect(response.body).toEqual({ stats: { totalOrders: 0, pendingOrders: 0, totalCoupons: 0, availableCoupons: 0, favoriteCount: 0 } });
     await db.query('DELETE FROM users WHERE user_id = 1');
-    await request(app).get('/api/users/stats').set(auth()).expect(404);
+    await request(app).get('/api/users/stats').set(auth()).expect(401);
   });
 
   test('订单/券/收藏总量按本人统计，券门槛不减少可用数量，不发生JOIN倍增', async () => {
@@ -103,7 +103,8 @@ integration('真实 MySQL 个人统计与订单分页', () => {
     (query as jest.Mock).mockClear();
     const response = await request(app).get('/api/users/stats?user_id=2').set(auth()).expect(200);
     expect(response.body).toEqual({ stats: { totalOrders: 6, pendingOrders: 2, totalCoupons: 5, availableCoupons: 3, favoriteCount: 3 } });
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenNthCalledWith(1, 'SELECT auth_version FROM users WHERE user_id = ?', [1]);
     expect(await UserModel.getStats(2)).toEqual({ totalOrders: 1, pendingOrders: 1, totalCoupons: 1, availableCoupons: 1, favoriteCount: 1 });
   });
 
@@ -159,7 +160,10 @@ integration('真实 MySQL 个人统计与订单分页', () => {
       await request(app).get(`/api/orders?${params}`).set(auth()).expect(400);
     }
     await expect(OrderModel.listByUser(1, undefined, 0, 10)).rejects.toThrow();
-    expect(query).not.toHaveBeenCalled();
+    expect((query as jest.Mock).mock.calls).toHaveLength(8);
+    for (const [sql, params] of (query as jest.Mock).mock.calls) {
+      expect(sql).toBe('SELECT auth_version FROM users WHERE user_id = ?'); expect(params).toEqual([1]);
+    }
     const [after] = await db.query<RowDataPacket[]>('SELECT * FROM orders ORDER BY order_id'); expect(after).toEqual(before);
   });
 });

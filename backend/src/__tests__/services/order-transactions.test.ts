@@ -170,7 +170,7 @@ describe('订单状态迁移', () => {
   test('支付只计销量一次，取消不能覆盖已支付订单', async () => {
     const first = response();
     await OrderController.pay(request(), first);
-    expect(first.json).toHaveBeenCalledWith({ message: '支付成功' });
+    expect(first.json).toHaveBeenCalledWith({ message: '模拟支付完成，未实际扣款', payment_mode: 'demo' });
     expect(matching('FROM orders')[0][0]).toContain('FOR UPDATE');
     expect(matching('UPDATE orders')[0][0]).toContain('paid_at = NOW()');
     expect(order.status).toBe(1);
@@ -201,7 +201,7 @@ describe('订单状态迁移', () => {
   test('后台已支付订单发货写 shipped_at，禁止回退到待支付', async () => {
     order.status = 1;
     const shipped = response();
-    await updateOrderStatus(request({ status: 2 }), shipped);
+    await updateOrderStatus(request({ status: 2, shipping_company: '顺丰', tracking_number: 'SFTEST1001' }), shipped);
     expect(shipped.json).toHaveBeenCalledWith({ message: '更新成功', status: 2 });
     expect(matching('UPDATE orders')[0][0]).toContain('shipped_at = NOW()');
     expect(matching('UPDATE orders')[0][0]).not.toContain('updated_at');

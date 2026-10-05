@@ -63,7 +63,7 @@ export default function RegisterPage() {
       toast.success(t("注册成功"));
       router.push('/');
     } catch (error: any) {
-      logger.error('注册失败:', error);
+      logger.error('注册请求失败');
       toast.error(t(error.response?.data?.error || "注册失败"));
     } finally {
       setLoading(false);

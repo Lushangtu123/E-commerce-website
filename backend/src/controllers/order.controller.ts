@@ -5,6 +5,7 @@ import { createOrder, previewOrder, transitionOrder, invalidateOrderProductCache
 import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
 import logger from '../utils/logger';
+import { getPaymentSettings } from '../utils/payment-settings';
 
 export class OrderController {
   static async preview(req: AuthRequest, res: Response) {
@@ -117,10 +118,13 @@ export class OrderController {
   // 支付订单（模拟）
   static async pay(req: AuthRequest, res: Response) {
     try {
+      if (!getPaymentSettings().canPay) {
+        return res.status(503).json({ error: '支付服务尚未配置，暂不能付款' });
+      }
       const result = await transitionOrder(Number(req.params.id), OrderStatus.PAID, { userId: req.userId! });
       await invalidateOrderProductCache(result.productIds);
 
-      res.json({ message: '支付成功' });
+      res.json({ message: '模拟支付完成，未实际扣款', payment_mode: 'demo' });
     } catch (error) {
       if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '支付订单失败');

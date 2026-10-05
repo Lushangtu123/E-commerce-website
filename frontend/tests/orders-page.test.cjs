@@ -21,7 +21,7 @@ function setup({ list, pay = async () => ({}), cancel = async () => ({}), confir
   const runtime = loadPage('src/app/orders/page.tsx', { globals: { ...stores, confirm }, imports: {
     '@/store/useAuthStore': { useAuthStore: Object.assign(() => stores.useAuthStore.getState(), { getState: stores.useAuthStore.getState }) },
     'react-hot-toast': { __esModule: true, default: toast, toast },
-    '@/lib/api': { orderApi: {
+    '@/lib/api': { paymentApi: { getSettings: async () => ({ mode: 'demo', canPay: true, isDemo: true }) }, orderApi: {
       list: async params => { requests.push(JSON.parse(JSON.stringify(params))); return getList(params); },
       pay: async id => { mutations.push(['pay', id]); return pay(id); },
       cancel: async id => { mutations.push(['cancel', id]); return cancel(id); },
@@ -103,13 +103,13 @@ test('failed lists display a retry error instead of an empty history and recover
 test('same order pending actions reject duplicate pay or cancel and refresh only after payment succeeds', async () => {
   let finish; const pending = new Promise(resolve => { finish = resolve; });
   const context = setup({ pay: () => pending }); let tree = await context.runtime.flush({});
-  const pay = button(tree, '立即支付'); const cancel = button(tree, '取消订单');
+  const pay = button(tree, '模拟支付'); const cancel = button(tree, '取消订单');
   const work = pay.props.onClick(); const duplicate = pay.props.onClick(); const conflicting = cancel.props.onClick();
   assert.deepEqual(context.mutations, [['pay', 1]]);
-  tree = await context.runtime.flush(); assert.ok(findElements(tree, element => element.type === 'button' && ['立即支付', '取消订单', '确认收货'].includes(text(element))).every(element => element.props.disabled));
+  tree = await context.runtime.flush(); assert.ok(findElements(tree, element => element.type === 'button' && ['模拟支付', '取消订单', '确认收货'].includes(text(element))).every(element => element.props.disabled));
   assert.equal(context.requests.length, 1);
   finish({}); await Promise.all([work, duplicate, conflicting]); await context.runtime.flush();
-  assert.equal(context.requests.length, 2); assert.deepEqual(context.notifications, ['支付成功']);
+  assert.equal(context.requests.length, 2); assert.deepEqual(context.notifications, ['模拟支付完成，未实际扣款']);
 });
 
 test('canceling the only order on the final filtered page returns to the remaining last page', async () => {
@@ -128,7 +128,7 @@ test('old action handlers cannot send mutations after a filter change or another
   for (const action of ['pay', 'cancel', 'confirm']) {
     for (const change of ['filter', 'storage']) {
       const context = setup({ list: async () => ({ orders: [order(1, action === 'confirm' ? 2 : 0)], total: 1, totalPages: 1 }) });
-      let tree = await context.runtime.flush({}); const oldAction = button(tree, action === 'pay' ? '立即支付' : action === 'cancel' ? '取消订单' : '确认收货');
+      let tree = await context.runtime.flush({}); const oldAction = button(tree, action === 'pay' ? '模拟支付' : action === 'cancel' ? '取消订单' : '确认收货');
       if (change === 'filter') { button(tree, '已取消').props.onClick(); await context.runtime.flush(); }
       else context.localStorage.setItem('token', 'other-tab-session');
       await oldAction.props.onClick(); assert.deepEqual(context.mutations, [], `${action}/${change}`);
@@ -143,7 +143,7 @@ test('late mutation success or failure after account, storage or unmount changes
         let finish, fail; const pending = new Promise((resolve, reject) => { finish = resolve; fail = reject; });
         const context = setup({ pay: () => pending, cancel: () => pending, confirmOrder: () => pending,
           list: async () => ({ orders: [order(1, action === 'confirm' ? 2 : 0)], total: 1, totalPages: 1 }) });
-        const tree = await context.runtime.flush({}); const work = button(tree, action === 'pay' ? '立即支付' : action === 'cancel' ? '取消订单' : '确认收货').props.onClick();
+        const tree = await context.runtime.flush({}); const work = button(tree, action === 'pay' ? '模拟支付' : action === 'cancel' ? '取消订单' : '确认收货').props.onClick();
         if (change === 'account') { context.useAuthStore.getState().login(secondUser, 'second-session'); await context.runtime.flush(); }
         if (change === 'storage') context.localStorage.setItem('token', 'other-tab-session');
         if (change === 'unmount') context.runtime.unmount();
@@ -163,7 +163,7 @@ test('a mutation finishing after filter or page changes refreshes the current qu
   for (const change of ['filter', 'page']) {
     let finish; const pending = new Promise(resolve => { finish = resolve; });
     const context = setup({ pay: () => pending, list: async params => ({ orders: [order(params.page, params.status ?? 0, `${params.status === 4 ? 'CANCELLED' : 'ALL'}-PAGE${params.page}`)], total: 13, totalPages: 2 }) });
-    let tree = await context.runtime.flush({}); const work = button(tree, '立即支付').props.onClick();
+    let tree = await context.runtime.flush({}); const work = button(tree, '模拟支付').props.onClick();
     button(tree, change === 'filter' ? '已取消' : '下一页').props.onClick(); tree = await context.runtime.flush();
     const expected = change === 'filter' ? { page: 1, limit: 10, status: 4 } : { page: 2, limit: 10 };
     assert.deepEqual(context.requests.at(-1), expected); finish({}); await work; tree = await context.runtime.flush();
@@ -195,16 +195,16 @@ test('a late list after leaving the page or changing browser credentials cannot 
 test('a failed payment keeps the current orders, reports the server error and releases pending actions for retry', async () => {
   let fail = true;
   const context = setup({ pay: async () => { if (fail) throw { response: { data: { error: '订单已过期' } } }; } });
-  let tree = await context.runtime.flush({}); await button(tree, '立即支付').props.onClick(); tree = await context.runtime.flush();
+  let tree = await context.runtime.flush({}); await button(tree, '模拟支付').props.onClick(); tree = await context.runtime.flush();
   assert.ok(context.notifications.includes('订单已过期')); assert.equal(context.requests.length, 1);
-  assert.equal(button(tree, '立即支付').props.disabled, false); assert.equal(displayedOrders(tree).length, 10);
-  fail = false; await button(tree, '立即支付').props.onClick(); assert.equal(context.requests.length, 2);
+  assert.equal(button(tree, '模拟支付').props.disabled, false); assert.equal(displayedOrders(tree).length, 10);
+  fail = false; await button(tree, '模拟支付').props.onClick(); assert.equal(context.requests.length, 2);
 });
 
 test('only unpaid orders expose pay and cancel, while only shipped orders expose confirmation', async () => {
   const context = setup({ list: async () => ({ orders: [0, 1, 2, 3, 4].map(status => order(status + 1, status)), total: 5, totalPages: 1 }) });
   const tree = await context.runtime.flush({});
-  const actions = findElements(tree, element => element.type === 'button' && ['立即支付', '取消订单', '确认收货'].includes(text(element)));
-  assert.deepEqual(actions.map(text), ['立即支付', '取消订单', '确认收货']);
+  const actions = findElements(tree, element => element.type === 'button' && ['模拟支付', '取消订单', '确认收货'].includes(text(element)));
+  assert.deepEqual(actions.map(text), ['模拟支付', '取消订单', '确认收货']);
   await actions[2].props.onClick(); assert.deepEqual(context.mutations, [['confirm', 3]]);
 });

@@ -210,3 +210,31 @@ test('a hydrated customer cannot send an order with another tab identity until s
   await browser.orderApi.create({ items: [{ product_id: 22, quantity: 1 }] });
   assert.equal(browser.requests[0].headers.get('Authorization'), 'Bearer customer-B');
 });
+
+test('exact POST authentication entry routes carry no session token and preserve both sessions after a failed attempt', async () => {
+  for (const path of ['/users/login', '/users/register', '/admin/login']) {
+    const browser = loadApi({ token: 'customer-session', admin_token: 'admin-session', admin_user: '{"username":"Admin"}' });
+    const customer = browser.localStorage.getItem('user'), admin = browser.localStorage.getItem('admin_user');
+    browser.window.location.href = '/login?passwordChanged=1';
+    browser.default.defaults.adapter = async config => {
+      browser.requests.push(config);
+      throw Object.assign(new Error('Incorrect credentials'), { config, response: { status: 401, data: { error: '邮箱或密码错误' } } });
+    };
+    await assert.rejects(browser.default.post(path, { password: 'test-password' }, { headers: { Authorization: 'Bearer supplied-session' } }), /Incorrect credentials/);
+    assert.equal(browser.requests[0].headers.get('Authorization'), undefined, path);
+    assert.equal(browser.localStorage.getItem('token'), 'customer-session', path); assert.equal(browser.localStorage.getItem('user'), customer, path);
+    assert.equal(browser.localStorage.getItem('admin_token'), 'admin-session', path); assert.equal(browser.localStorage.getItem('admin_user'), admin, path);
+    assert.equal(browser.window.location.href, '/login?passwordChanged=1', path);
+  }
+});
+
+test('only POST auth entry routes are anonymous while other methods and similar paths keep their guarded identity', async () => {
+  const browser = loadApi({ token: 'customer-a', admin_token: 'admin-a' });
+  await browser.default.get('/users/login'); await browser.default.get('/users/register'); await browser.default.put('/admin/login', {});
+  await browser.default.post('/users/login-extra', {}); await browser.default.post('/users/register/profile', {}); await browser.default.post('/admin/login/other', {});
+  assert.deepEqual(browser.requests.map(config => config.headers.get('Authorization')), ['Bearer customer-a', 'Bearer customer-a', 'Bearer admin-a', 'Bearer customer-a', 'Bearer customer-a', 'Bearer admin-a']);
+  browser.localStorage.setItem('token', 'other-tab-customer');
+  await browser.userApi.login({ email: 'customer@example.test', password: 'test-password' }); await browser.userApi.register({ username: 'Customer', email: 'customer@example.test', password: 'test-password' });
+  assert.ok(browser.requests.slice(-2).every(config => !config.headers.get('Authorization')));
+  await assert.rejects(browser.default.get('/users/login'), /登录状态已变化/); await assert.rejects(browser.default.post('/users/login-extra', {}), /登录状态已变化/);
+});

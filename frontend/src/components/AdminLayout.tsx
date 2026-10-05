@@ -86,6 +86,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       path: '/admin/orders'
     },
     {
+      name: t('售后管理'),
+      icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10H4l5-5m-5 5a8 8 0 111 7" /></svg>,
+      path: '/admin/after-sales'
+    },
+    {
       name: t("优惠券管理"),
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

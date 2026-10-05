@@ -25,6 +25,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 | `CRON_SECRET` | 至少 32 字符的独立随机定时任务密钥 |
 | `CORS_ORIGIN` | 允许的前端来源；跨域调用时须包含实际域名 |
 | `NEXT_PUBLIC_API_URL=/api` | 同域 API 地址 |
+| `PAYMENT_MODE=demo` | 仅 Preview 演示交易，不实际扣款；默认 disabled，生产环境强制关闭模拟支付 |
+| `RESEND_API_KEY`、`EMAIL_FROM`、`APP_URL` | 可选的 Resend 密码找回；发件域名须验证，APP_URL 为可信 HTTPS 网站根地址 |
 
 连接初始化可复用并在失败后重试，MySQL 与 Redis 均保留 TLS 验证。Vercel API 不启动监听器、RabbitMQ 消费者或后台定时器；`/api/health` 检查 MySQL 和 Redis，`/api/openapi.json` 提供接口定义。
 
@@ -33,6 +35,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 先配置云数据库变量，在本地运行 `npm --prefix backend run build`，然后运行 `backend/dist/database/migrate.js` 及 `backend/dist/database/admin-migrate.js`。管理员初始化还需临时设置至少 16 字符的 `ADMIN_BOOTSTRAP_PASSWORD`；生产环境不会创建默认弱密码账户。迁移不会在每次函数请求中运行。
 
 初始化命令应从后端目录运行，或在进程中直接注入配置；不要提交 `.env`、云端连接地址中的密码、CA 私钥或管理员密码。`seed` 会清空开发数据，已禁止在 `NODE_ENV=production` 下执行。示例商品不是实际商品，正式运营前需由管理员替换。
+
+已有数据库升级时，编译后依次运行 `backend/dist/database/migrate-account-security.js` 和 `backend/dist/database/migrate-fulfillment.js`。两者只添加缺失字段和新表，重复运行安全，不重建账户或订单。账户安全迁移保留历史密码，将历史会话版本设为 0；改密后旧会话立即失效。物流迁移添加快递公司、运单号和售后审核记录。
 
 ## QStash 订单超时任务
 
@@ -48,6 +52,10 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 ## 当前能力范围
 
-Vercel 方案不需要 MongoDB 或 RabbitMQ，普通商品搜索和推荐使用 MySQL。额外的 Elasticsearch 接口需要单独配置服务；此部署没有提供 Elasticsearch。支付目前是项目内状态流转，尚未对接实际收款渠道。Vercel 文件系统不能作为持久上传存储。
+Vercel 方案不需要 MongoDB 或 RabbitMQ，普通商品搜索和推荐使用 MySQL。额外的 Elasticsearch 接口需要单独配置服务；此部署没有提供 Elasticsearch。演示支付会明确显示未实际扣款，并记录 payment_method=demo，尚未对接实际收款渠道。发货必须填写快递公司和运单号；售后仅支持申请、撤回、管理员批准或拒绝，批准不会自动退款、恢复库存或改变订单状态。每个订单最多创建一次售后申请。Vercel 文件系统不能作为持久上传存储。
+
+邮件服务未配置时，找回密码页面禁用发送，接口返回 503；已登录用户仍可验证当前密码并修改密码。配置邮件服务后，重置链接使用一次性凭据，30 分钟有效，重置后撤销所有旧会话。邮件发送和真实支付需要运营方准备外部服务，本仓库不会自动注册付费服务。
+
+浏览器回归在本机或 CI 使用独立 MySQL 测试库，不访问云端商城数据。在后端编译后，从前端目录执行 `npx playwright install chromium`，再设置本机 `MYSQL_TEST_HOST`、`MYSQL_TEST_PORT`、`MYSQL_TEST_USER`、`MYSQL_TEST_PASSWORD`（或 `MYSQL_TEST_SOCKET`）并运行 `npm run test:e2e`。数据库账户须能创建和删除测试库。测试覆盖注册、地址、结算、演示支付、发货、收货、售后审核和修改密码；缓存接口隔离模拟，交易与账户存储使用真实 MySQL。
 
 免费数据库适用于试用，容量、闲置暂停和配额以平台控制台为准。生产发布前应准备独立配置、商品数据、备份和支付服务。若尚未连接 Git 集成，推送 GitHub 只触发仓库 CI，需要再运行 Vercel CLI 发布。

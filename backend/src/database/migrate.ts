@@ -5,6 +5,8 @@ import { migrateCouponTables } from './migrate-coupon';
 import { migrateSkuTables } from './migrate-sku';
 import { migrateAddressTables } from './migrate-address';
 import { migrateReviewTables } from './migrate-review';
+import { migrateAccountSecurity } from './migrate-account-security';
+import { migrateFulfillment } from './migrate-fulfillment';
 
 const migrations = [
   // 用户表
@@ -13,6 +15,7 @@ const migrations = [
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    auth_version INT UNSIGNED NOT NULL DEFAULT 0,
     phone VARCHAR(20),
     avatar_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -69,6 +72,8 @@ const migrations = [
     coupon_code VARCHAR(50) DEFAULT NULL,
     status TINYINT DEFAULT 0 COMMENT '0:待支付 1:已支付 2:已发货 3:已完成 4:已取消',
     payment_method VARCHAR(20),
+    shipping_company VARCHAR(60) DEFAULT NULL,
+    tracking_number VARCHAR(100) DEFAULT NULL,
     shipping_address_id BIGINT,
     shipping_address_snapshot JSON DEFAULT NULL,
     remark TEXT,
@@ -212,6 +217,8 @@ async function runMigrations() {
     await migrateSkuTables(pool);
     await migrateAddressTables(pool);
     await migrateReviewTables(pool);
+    await migrateAccountSecurity(pool);
+    await migrateFulfillment(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

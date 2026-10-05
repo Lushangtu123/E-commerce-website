@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { UserModel } from '../models/user.model';
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -8,42 +9,53 @@ export interface AuthRequest extends Request {
 
 function userPayload(decoded: string | jwt.JwtPayload): decoded is jwt.JwtPayload {
   return typeof decoded === 'object' && decoded.type !== 'admin' &&
-    Number.isSafeInteger(decoded.userId) && decoded.userId > 0;
+    (decoded.type === undefined || decoded.type === 'user') &&
+    Number.isSafeInteger(decoded.userId) && decoded.userId > 0 &&
+    (decoded.authVersion === undefined || (Number.isSafeInteger(decoded.authVersion) && decoded.authVersion >= 0));
 }
 
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+  let decoded: jwt.JwtPayload;
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
 
     if (!token) {
       return res.status(401).json({ error: '未登录，请先登录' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
-    if (!userPayload(decoded)) return res.status(401).json({ error: '无效的用户令牌' });
-    req.userId = decoded.userId;
-    req.user = decoded;
-    
-    next();
+    const verified = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    if (!userPayload(verified)) return res.status(401).json({ error: '无效的用户令牌' });
+    decoded = verified;
   } catch (error) {
     return res.status(401).json({ error: '登录已过期，请重新登录' });
   }
+  try {
+    const version = await UserModel.getAuthVersion(decoded.userId);
+    if (version === null || version !== (decoded.authVersion ?? 0)) return res.status(401).json({ error: '登录已过期，请重新登录' });
+    req.userId = decoded.userId;
+    req.user = decoded;
+    return next();
+  } catch {
+    return res.status(503).json({ error: '账户认证暂不可用，请稍后重试' });
+  }
 }
 
-export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  delete req.userId;
+  delete req.user;
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
 
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
-      if (userPayload(decoded)) {
+      if (userPayload(decoded) && (await UserModel.getAuthVersion(decoded.userId)) === (decoded.authVersion ?? 0)) {
         req.userId = decoded.userId;
         req.user = decoded;
       }
     }
     
-    next();
   } catch (error) {
-    next();
+    // Anonymous browsing is allowed, but failures never grant an identity.
   }
+  next();
 }

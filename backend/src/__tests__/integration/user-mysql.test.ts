@@ -106,12 +106,12 @@ integration('真实 MySQL 账户HTTP契约', () => {
     expect((await request(app).post('/api/users/login').send({ email: 'legacy-email', password: 'incorrect' })).status).toBe(401);
   });
 
-  test('资料读取和更新要求有效用户令牌，已删除账户返回404', async () => {
+  test('资料读取和更新要求有效用户令牌，已删除账户撤销会话返回401', async () => {
     expect((await request(app).get('/api/users/profile')).status).toBe(401);
     expect((await request(app).put('/api/users/profile').send({ username: 'changed' })).status).toBe(401);
     const profile = await request(app).get('/api/users/profile').set('Authorization', auth(1));
     expect(profile.status).toBe(200);
     expect(profile.body.user.password_hash).toBeUndefined();
-    expect((await request(app).put('/api/users/profile').set('Authorization', auth(99)).send({ username: 'missing' })).status).toBe(404);
+    expect((await request(app).put('/api/users/profile').set('Authorization', auth(99)).send({ username: 'missing' })).status).toBe(401);
   });
 });

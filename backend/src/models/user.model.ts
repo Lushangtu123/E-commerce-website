@@ -7,6 +7,7 @@ export interface User {
   username: string;
   email: string;
   password_hash: string;
+  auth_version?: number;
   phone?: string | null;
   avatar_url?: string | null;
   created_at: Date;
@@ -22,6 +23,19 @@ export interface UserStats {
 }
 
 export class UserModel {
+  static async getAuthVersion(userId: number): Promise<number | null> {
+    const rows = await query<RowDataPacket[]>('SELECT auth_version FROM users WHERE user_id = ?', [userId]);
+    if (!rows.length) return null;
+    const version = rows[0].auth_version;
+    if (!Number.isSafeInteger(version) || version < 0) throw new Error('账户认证版本无效');
+    return version;
+  }
+
+  static async findCredentialsById(userId: number): Promise<Pick<User, 'user_id' | 'password_hash' | 'auth_version'> | null> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new RangeError('用户ID无效');
+    const rows = await query<RowDataPacket[]>('SELECT user_id, password_hash, auth_version FROM users WHERE user_id = ?', [userId]);
+    return rows[0] as any ?? null;
+  }
   /** One statement gives every scalar count the same read snapshot, without multiplying joined rows. */
   static async getStats(userId: number): Promise<UserStats | null> {
     if (!Number.isSafeInteger(userId) || userId <= 0) throw new RangeError('用户ID无效');

@@ -4,11 +4,11 @@ import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { getPool } from '../../database/mysql';
+import { getPool, query } from '../../database/mysql';
 import { AddressModel } from '../../models/address.model';
 import addressRoutes from '../../routes/address.routes';
 
-jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
+jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 
 // Opt in to the isolated local test server; this suite never connects to the application's DB_NAME.
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
@@ -33,6 +33,7 @@ integration('真实 MySQL 地址事务及并发', () => {
     databaseCreated = true;
     db = mysql.createPool({ ...options, database });
     (getPool as jest.Mock).mockReturnValue(db);
+    (query as jest.Mock).mockImplementation(async (sql: string, values?: any[]) => (await db.query(sql, values))[0]);
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
     const tables = new Set(['users', 'shipping_addresses']);
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {

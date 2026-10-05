@@ -2,10 +2,10 @@
 const embeddedApi = process.env.VERCEL === '1' || process.env.ECOMMERCE_SERVERLESS_API === 'true';
 const nextConfig = {
   env: { ECOMMERCE_SERVERLESS_API: embeddedApi ? 'true' : 'false' },
-  ...(embeddedApi ? { experimental: {
-    externalDir: true,
-    outputFileTracingRoot: require('path').join(__dirname, '..'),
-  } } : {}),
+  outputFileTracingRoot: embeddedApi ? require('path').join(__dirname, '..') : __dirname,
+  ...(embeddedApi ? {
+    experimental: { externalDir: true },
+  } : {}),
   reactStrictMode: true,
   images: {
     remotePatterns: [

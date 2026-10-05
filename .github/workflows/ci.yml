@@ -50,6 +50,23 @@ jobs:
       - name: 运行测试
         run: npm test
 
+      - name: 安装浏览器回归测试依赖
+        run: npm ci --prefix ../frontend
+
+      - name: 安装 Chromium
+        run: ../frontend/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: 真实 MySQL 浏览器交易流程
+        run: npm --prefix ../frontend run test:e2e
+
+      - name: 保存浏览器验证截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commerce-browser-evidence
+          path: frontend/test-results/
+          if-no-files-found: ignore
+
   frontend:
     name: 前端：构建
     runs-on: ubuntu-latest

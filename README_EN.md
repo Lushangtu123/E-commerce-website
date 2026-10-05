@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/Node.js-24_LTS-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 
 A modern, full-featured e-commerce platform built with a microservices architecture, implementing complete core e-commerce functionalities with a separation of frontend and backend.
 
@@ -22,6 +22,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 
 ### User Features
 - ✅ User registration, login, and profile management
+- ✅ Password changes revoke existing sessions; single-use email recovery requires Resend configuration
 - ✅ **Personal Center** - Unified management of personal info, orders, coupons 🆕
 - ✅ Product browsing, searching, and filtering
 - ✅ **Favorites System** - Add/remove favorites, manage favorite lists 🆕
@@ -43,11 +44,12 @@ A modern, full-featured e-commerce platform built with a microservices architect
 
 ### Order Features
 - ✅ Order creation and checkout
-- ✅ Payment processing (simulated)
+- ✅ Explicit local / Preview demo payment, with no actual charge; disabled in production
 - ✅ **Automatic Order Timeout Cancellation** - Auto-cancel after 30 minutes 🆕
 - ✅ Order status management (pending/paid/shipped/completed)
 - ✅ Order cancellation
 - ✅ Order confirmation and delivery tracking
+- ✅ Mandatory carrier and tracking number for shipment; after-sales requests, withdrawal and admin review without automatic refunds
 - ✅ Detailed order views
 - ✅ **Coupon Usage in Orders** - Select coupons during checkout 🆕
 
@@ -75,7 +77,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 ## 🛠️ Technology Stack
 
 ### Frontend
-- **Framework**: Next.js 14 + React 18
+- **Framework**: Next.js 15.5 + React 18
 - **Language**: TypeScript 5
 - **Styling**: TailwindCSS 3
 - **State Management**: Zustand 4
@@ -433,6 +435,8 @@ E-commerce-website/
 - Admin activity logs
 
 ## 🧪 Testing
+
+The browser regression uses an isolated local MySQL database for registration, addresses, demo checkout, shipment, receipt, after-sales review and password change. See [deployment instructions](./docs/VERCEL_UPSTASH.md) for setup and additive account / fulfillment migrations. Recovery is disabled until the email provider is configured; real payment requires a merchant integration.
 
 ```bash
 # Backend tests

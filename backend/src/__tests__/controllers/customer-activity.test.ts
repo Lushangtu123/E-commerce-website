@@ -14,10 +14,15 @@ const auth = { Authorization: `Bearer ${jwt.sign({ userId: 7 }, 'test-jwt-secret
 let available: boolean;
 let favorited: boolean;
 let orphan: boolean;
+const expectOnlyAuthentication = () => {
+  expect((query as jest.Mock).mock.calls.filter(([sql]) => !sql.startsWith('SELECT auth_version'))).toHaveLength(0);
+  for (const [, params] of (query as jest.Mock).mock.calls) expect(params).toEqual([7]);
+};
 
 beforeEach(() => {
   jest.clearAllMocks(); available = true; favorited = false; orphan = false;
   (query as jest.Mock).mockImplementation(async (sql: string) => {
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
     if (sql.startsWith('INSERT')) return { insertId: available ? 50 : 0, affectedRows: available ? 1 : 0 };
     if (sql.startsWith('DELETE')) return { affectedRows: 1 };
     if (sql.startsWith('SELECT 1 FROM favorites')) return favorited ? [{ 1: 1 }] : [];
@@ -40,26 +45,26 @@ test('所有收藏/历史端点都需要用户登录，未认证不查数据库'
 test.each([
   'page=0', 'page=-1', 'page=1x', 'page=1.5', 'page=', 'page=01', 'page=1&page=2', 'page[]=1', 'page=2147483648',
   'limit=0', 'limit=-1', 'limit=101', 'limit=1x', 'limit=', 'limit=1&limit=2', 'limit[]=1', 'user_id=8', 'unknown=x',
-])('列表严格拒绝非法/未知参数 %s，不查询DB', async parameters => {
+])('列表严格拒绝非法/未知参数 %s，仅验证会话，不查询业务数据', async parameters => {
   await request(app).get(`/api/favorites/my?${parameters}`).set(auth).expect(400);
   await request(app).get(`/api/browse/history?${parameters}`).set(auth).expect(400);
-  expect(query).not.toHaveBeenCalled();
+  expectOnlyAuthentication();
 });
 
 test('默认分页20和规范最大整数页，响应保留pagination合同及绑定参数', async () => {
   const favorite = await request(app).get('/api/favorites/my').set(auth).expect(200);
   expect(favorite.body.pagination).toEqual({ page: 1, limit: 20, total: 3, total_pages: 1 });
-  expect(query).toHaveBeenNthCalledWith(1, expect.any(String), [7, 20, 0]);
+  expect(query).toHaveBeenNthCalledWith(2, expect.any(String), [7, 20, 0]);
   const history = await request(app).get('/api/browse/history?page=2147483647&limit=100').set(auth).expect(200);
   expect(history.body.pagination).toEqual({ page: 2147483647, limit: 100, total: 3, total_pages: 1 });
-  expect(query).toHaveBeenNthCalledWith(3, expect.any(String), [7, 100, 214748364600]);
+  expect(query).toHaveBeenNthCalledWith(5, expect.any(String), [7, 100, 214748364600]);
 });
 
 test.each([0, -1, 1.5, '1', null, true, [], Number.MAX_SAFE_INTEGER + 1])('商品body严格数值正整数 %p', async product_id => {
   for (const endpoint of ['/api/favorites', '/api/favorites/toggle', '/api/browse/record']) {
     await request(app).post(endpoint).set(auth).send({ product_id }).expect(400);
   }
-  expect(query).not.toHaveBeenCalled();
+  expectOnlyAuthentication();
 });
 
 test('商品body拒绝未知字段和空body，尤其不能提供user_id', async () => {
@@ -67,24 +72,24 @@ test('商品body拒绝未知字段和空body，尤其不能提供user_id', async
     await request(app).post(endpoint).set(auth).send({ product_id: 1, user_id: 8 }).expect(400);
     await request(app).post(endpoint).set(auth).send({}).expect(400);
   }
-  expect(query).not.toHaveBeenCalled();
+  expectOnlyAuthentication();
 });
 
 test.each(['0', '-1', '1x', '1.5', '01', '9007199254740992'])('商品path严格规范正整数 %s', async id => {
   await request(app).delete(`/api/favorites/${id}`).set(auth).expect(400);
   await request(app).get(`/api/favorites/check/${id}`).set(auth).expect(400);
   await request(app).delete(`/api/browse/history/${id}`).set(auth).expect(400);
-  expect(query).not.toHaveBeenCalled();
+  expectOnlyAuthentication();
 });
 
 test.each([[], Array(101).fill(1), [1, '2'], [1, null], [0], [-1], [1.5], [Number.MAX_SAFE_INTEGER + 1], '1,2'])('批量check严格1..100整数数组 %p', async product_ids => {
   await request(app).post('/api/favorites/check-multiple').set(auth).send({ product_ids }).expect(400);
-  expect(query).not.toHaveBeenCalled();
+  expectOnlyAuthentication();
 });
 
 test('批量check拒绝未知字段，合法数组仅按本人owner绑定', async () => {
   await request(app).post('/api/favorites/check-multiple').set(auth).send({ product_ids: [1], user_id: 8 }).expect(400);
-  expect(query).not.toHaveBeenCalled();
+  expectOnlyAuthentication();
   await request(app).post('/api/favorites/check-multiple').set(auth).send({ product_ids: [1, 2] }).expect(200);
   expect(query).toHaveBeenCalledWith(expect.any(String), [7, 1, 2]);
 });
@@ -151,7 +156,10 @@ test('直接模型商品/批量/recent边界拒绝无效值', async () => {
 });
 
 test('未知数据库异常仍是500且不泄露内部信息', async () => {
-  (query as jest.Mock).mockRejectedValue(new Error('private database secret'));
+  (query as jest.Mock).mockImplementation(async sql => {
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    throw new Error('private database secret');
+  });
   const result = await request(app).get('/api/favorites/my').set(auth).expect(500);
   expect(result.body).toEqual({ message: '获取收藏列表失败' });
 });

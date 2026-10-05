@@ -6,3 +6,5 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.LOG_LEVEL = 'silent';
+// Existing order transaction fixtures explicitly exercise the demo payment mode.
+process.env.PAYMENT_MODE = 'demo';

@@ -2,7 +2,7 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { userApi } from '@/lib/api';
@@ -17,6 +17,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuthStore();
+  const [passwordChanged, setPasswordChanged] = useState(false);
+  useEffect(() => { setPasswordChanged(new URLSearchParams(window.location.search).get('passwordChanged') === '1'); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +35,7 @@ export default function LoginPage() {
       toast.success(t("登录成功"));
       router.push('/');
     } catch (error: any) {
-      logger.error('登录失败:', error);
+      logger.error('登录请求失败');
       toast.error(t(error.response?.data?.error || "登录失败"));
     } finally {
       setLoading(false);
@@ -49,6 +51,7 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-8">
+          {passwordChanged && <p role="status" className="mb-6 text-green-700">{t('密码已修改，请使用新密码登录')}</p>}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -84,6 +87,7 @@ export default function LoginPage() {
               {loading ? t("登录中...") : t("登录")}
             </button>
           </form>
+          <Link href="/forgot-password" className="block mt-4 text-primary-600 underline">{t('忘记密码？')}</Link>
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
@@ -96,4 +100,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

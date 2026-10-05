@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/Node.js-24_LTS-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 
 这是一个基于微服务架构的现代化电商平台，采用前后端分离设计，实现了完整的电商核心功能和管理后台。
 
@@ -24,6 +24,7 @@
 
 - ✅ **中英文界面** - 商城和管理后台可通过语言菜单切换中文 / English，刷新、跳转及重新登录后保留选择；日期随语言格式化，商品、用户和地址内容保留原文，金额仍使用人民币。
 - ✅ 用户注册、登录、个人信息管理
+- ✅ 修改密码并撤销旧会话；一次性邮件重置接口（需配置 Resend）
 - ✅ **个人中心** - 统一管理个人信息、订单、优惠券等 🆕
 - ✅ 商品浏览、搜索、筛选
 - ✅ **收藏系统** - 添加/移除收藏，收藏列表管理 🆕
@@ -45,11 +46,12 @@
 
 ### 订单功能 (Order Features)
 - ✅ 订单创建与结算
-- ✅ 订单支付（模拟）
+- ✅ 订单模拟支付（本地 / Preview 显式启用，明确提示未扣款，生产环境禁用）
 - ✅ **订单超时自动取消** - 30分钟未支付自动取消 🆕
 - ✅ 订单状态管理（待支付/已支付/已发货/已完成）
 - ✅ 订单取消
 - ✅ 确认收货
+- ✅ 快递公司、运单号与售后申请、撤回及管理员审核（审核不自动退款）
 - ✅ 订单详情查看
 - ✅ **优惠券在订单中使用** - 结算时可选择优惠券 🆕
 
@@ -77,7 +79,7 @@
 ## 🛠️ 技术栈
 
 ### 前端
-- **框架**: Next.js 14 + React 18
+- **框架**: Next.js 15.5 + React 18
 - **语言**: TypeScript
 - **样式**: TailwindCSS
 - **状态管理**: Zustand
@@ -284,6 +286,10 @@ E-commerce-website/
 - `GET /api/users/profile` - 获取个人信息
 - `GET /api/users/stats` - 获取本人订单总数、待支付订单数、已领券总数、当前有效可用券数和收藏数
 - `PUT /api/users/profile` - 更新个人信息
+- `PUT /api/users/password` - 验证当前密码并修改密码，撤销所有旧用户会话
+- `GET /api/users/password/capabilities` - 获取找回功能可用状态
+- `POST /api/users/password/forgot` - 请求重置邮件；服务未配置时安全禁用
+- `POST /api/users/password/reset` - 使用 30 分钟内的一次性凭据重置密码
 
 注册仅接受用户名、邮箱和密码：用户名去除首尾空白后为 1–50 个字符，邮箱为合法地址且最多 100 个字符，密码至少 6 位、最多 72 个 UTF-8 字节，保留密码空白。注册成功返回 `201`，用户名或邮箱冲突返回 `409`，包含并发注册冲突。登录保留已有账户的密码长度兼容性。
 
@@ -341,11 +347,15 @@ E-commerce-website/
 - `POST /api/orders` - 创建订单，必填本人有效的 `shipping_address_id`，可携带 `user_coupon_id`，返回原价、优惠额和应付金额；收货信息由服务器保存快照，后续编辑或删除地址不改变订单
 - `GET /api/orders` - 获取本人订单列表；`page` 默认 1，`limit` 默认 10（最多 100），`status` 可选 0–4；返回 `orders`、`total`、`page`、`limit`、`totalPages`
 - `GET /api/orders/:id` - 获取订单详情
-- `POST /api/orders/:id/pay` - 支付订单
+- `GET /api/payments/settings` - 查看是否允许演示支付
+- `POST /api/orders/:id/pay` - 演示支付，不实际扣款；禁用时返回 503
 - `POST /api/orders/:id/cancel` - 取消订单
 
 个人中心显示服务器统计，加载失败可重试；「待支付」入口直接筛选未付款订单。可用券数量排除已使用、过期、未生效、停用及规则无效的券，满减门槛由具体订单结算时校验。订单列表支持全部五种状态和前后翻页，按创建时间及订单 ID 倒序排列；支付或取消导致当前筛选页为空时自动回到有效页。
 - `POST /api/orders/:id/confirm` - 确认收货
+- `GET /api/orders/:id/after-sales`、`POST /api/orders/:id/after-sales` - 查看、提交本人的售后申请
+- `POST /api/orders/:id/after-sales/withdraw` - 撤回待审核申请
+- `GET /api/admin/after-sales`、`POST /api/admin/after-sales/:id/review` - 管理员查看及审核；每个订单最多申请一次，不自动退款或恢复库存
 
 ### 评论相关 (Review APIs)
 - `POST /api/reviews` - 创建评论
@@ -453,6 +463,8 @@ npm test
 # 搜索、管理员会话与列表回归（在 frontend 目录运行）
 node --test tests/search-pages.test.cjs tests/admin-session.test.cjs tests/admin-lists.test.cjs
 ```
+
+完整浏览器交易回归使用真实本机 MySQL 测试库，覆盖注册、地址、演示支付、发货、收货、售后审核及修改密码。运行方式及新数据库迁移见 [Vercel / Upstash 部署文档](./docs/VERCEL_UPSTASH.md)。
 
 搜索历史在登录状态恢复后加载，并在切换账户时清空；迟到请求不能写入其他账户。商品搜索更换关键词或排序后回到第一页，加载失败可重试。
 

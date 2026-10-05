@@ -29,6 +29,8 @@ export interface Order {
   coupon_code?: string | null;
   status: number;
   payment_method?: string;
+  shipping_company?: string | null;
+  tracking_number?: string | null;
   shipping_address_id?: number;
   shipping_address_snapshot?: {
     receiver_name: string;

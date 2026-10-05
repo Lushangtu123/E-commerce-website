@@ -806,44 +806,15 @@ GET /api/products/search?keyword=手机&page=1&limit=12
 
 ---
 
-### 4. 支付订单
+### 4. 演示支付订单
 
-处理订单支付（模拟）。
+**接口**: `POST /api/orders/:id/pay`，需用户认证。无需请求体；历史 payment_method 字段不会启用真实支付渠道。
 
-**接口**: `POST /api/orders/:id/pay`  
-**认证**: 需要
+先读取 `GET /api/payments/settings`，响应为 `{ "mode": "demo" | "disabled", "canPay": boolean, "isDemo": boolean }`。仅本地或 Vercel Preview 显式设置 `PAYMENT_MODE=demo` 时可用；生产环境强制禁用模拟支付。
 
-**路径参数**:
-- `id`: 订单ID
+成功响应为 `{ "message": "模拟支付完成，未实际扣款", "payment_mode": "demo" }`，订单记录 `payment_method=demo`。没有实际扣款或支付服务回调。
 
-**请求体**:
-```json
-{
-  "payment_method": "alipay"
-}
-```
-
-**支付方式**:
-- `alipay`: 支付宝
-- `wechat`: 微信支付
-- `balance`: 余额支付
-
-**响应**:
-```json
-{
-  "message": "支付成功",
-  "order": {
-    "id": 1,
-    "order_no": "ORD20251031001",
-    "status": "paid",
-    "payment_time": "2025-10-31T10:05:00.000Z"
-  }
-}
-```
-
-**错误**:
-- `400`: 订单状态不允许支付
-- `404`: 订单不存在
+错误：`400` 订单状态不允许支付，`403` 无权操作他人订单，`404` 订单不存在，`503` 演示支付未启用。
 
 ---
 
@@ -1895,3 +1866,22 @@ const createOrder = async (orderData) => {
 
 
 
+
+## 账户安全、物流与售后审核
+
+| 接口 | 请求与行为 |
+| --- | --- |
+| `GET /api/users/password/capabilities` | 返回 passwordResetAvailable、passwordMinLength=12、passwordMaxBytes=72，无凭据 |
+| `PUT /api/users/password` | 用户认证，body 为 currentPassword、newPassword；验证旧密码，改密后撤销所有旧 JWT |
+| `POST /api/users/password/forgot` | body 为 email；配置 Resend 后已知、未知邮箱返回相同提示；每 IP 每 15 分钟最多 5 次；未配置返回 503 |
+| `POST /api/users/password/reset` | body 为 token（64 位小写十六进制）、newPassword；凭据 30 分钟有效且仅能使用一次，成功后撤销所有旧会话 |
+| `PUT /api/admin/orders/:id/status` | 发货 status=2 时必须同时提供 shipping_company（1–60 字符）、tracking_number（1–100 字符）；只允许从已支付订单发货 |
+| `GET /api/orders/:id/after-sales` | 用户认证，读取本人订单的申请 |
+| `POST /api/orders/:id/after-sales` | body 为 type（refund / return）、reason（1–500 字符）；已支付、已发货或已完成订单可申请，每订单最多一次 |
+| `POST /api/orders/:id/after-sales/withdraw` | 用户认证，只能撤回待审核申请 |
+| `GET /api/admin/after-sales` | 需 order:view 权限；page、limit、status 分页筛选 |
+| `POST /api/admin/after-sales/:id/review` | 需 order:edit 权限；body 为 status（approved / rejected）、note（1–500 字符），审核和审计原子写入 |
+
+新密码至少 12 字符，最多 72 个 UTF-8 字节，保留空白；注册和历史登录保留兼容规则。重置原文凭据不存入数据库，不在响应或日志中返回，邮件链接放入 URL 片段。账户重置成功后须使用新密码重新登录。
+
+售后记录使用 request_id、review_note 字段，状态为 requested / approved / rejected / withdrawn。审核通过只保存审核结果，不代表已退款，不改变订单状态或库存。真实收款、退款与邮件发送依赖运营方的外部服务。

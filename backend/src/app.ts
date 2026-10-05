@@ -31,6 +31,9 @@ import adminCouponRoutes from './routes/admin-coupon.routes';
 // 优惠券路由
 import couponRoutes from './routes/coupon.routes';
 import internalRoutes from './routes/internal.routes';
+import paymentRoutes from './routes/payment.routes';
+import afterSalesRoutes from './routes/after-sales.routes';
+import adminAfterSalesRoutes from './routes/admin-after-sales.routes';
 import logger from './utils/logger';
 import { validateEnv, getCorsOrigins } from './utils/validate-env';
 
@@ -87,8 +90,10 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
 
   // API路由
   app.use('/api/users', userRoutes);
+  app.use('/api/payments', paymentRoutes);
   app.use('/api/products', productRoutes);
   app.use('/api/cart', cartRoutes);
+  app.use('/api/orders', afterSalesRoutes);
   app.use('/api/orders', orderRoutes);
   app.use('/api/addresses', addressRoutes);
   app.use('/api/reviews', reviewRoutes);
@@ -102,6 +107,7 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin/products', adminProductRoutes);
   app.use('/api/admin/orders', adminOrderRoutes);
+  app.use('/api/admin/after-sales', adminAfterSalesRoutes);
   app.use('/api/admin/users', adminUserRoutes);
   app.use('/api/admin/coupons', adminCouponRoutes);
 

@@ -97,7 +97,7 @@ router.get('/:orderId', requirePermission('order:view'), getAdminOrderDetail);
  *   put:
  *     tags: [管理后台-订单]
  *     summary: 更新订单状态
- *     description: 需要 order:edit 权限，操作记审计日志
+ *     description: 需要 order:edit 权限，操作记审计日志。发货必须提供物流公司和运单号，已发货订单禁止再次修改。
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: orderId
@@ -113,6 +113,8 @@ router.get('/:orderId', requirePermission('order:view'), getAdminOrderDetail);
  *             required: [status]
  *             properties:
  *               status: { type: integer, description: 目标订单状态 }
+ *               shipping_company: { type: string, minLength: 1, maxLength: 60, description: 发货必填的物流公司 }
+ *               tracking_number: { type: string, minLength: 1, maxLength: 100, description: 发货必填的运单号 }
  *     responses:
  *       200:
  *         description: 更新成功

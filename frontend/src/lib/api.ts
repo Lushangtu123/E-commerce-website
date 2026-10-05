@@ -19,10 +19,15 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
   const pathname = requestUrl.pathname;
   const apiPath = apiUrl.pathname.replace(/\/$/, '');
   const path = pathname.startsWith(`${apiPath}/`) ? pathname.slice(apiPath.length) : pathname;
+  // Invalid credentials are form errors. These exact entry routes neither use
+  // an existing session nor invalidate one when a sign-in attempt fails.
+  if (config.method?.toLowerCase() === 'post' && ['/users/login', '/users/register', '/admin/login'].includes(path)) return null;
   // Categories are a public read shared by the storefront and admin editor.
   // Keep this exception exact and read-only; protected customer calls still
   // require their hydrated identity to match browser storage.
   if (path === '/products/categories' && config.method?.toLowerCase() === 'get') return null;
+  if ((path === '/payments/settings' || path === '/users/password/capabilities') && config.method?.toLowerCase() === 'get') return null;
+  if ((path === '/users/password/forgot' || path === '/users/password/reset') && config.method?.toLowerCase() === 'post') return null;
   return path === '/admin' || path.startsWith('/admin/') ? 'admin' : 'customer';
 };
 
@@ -110,6 +115,10 @@ export const userApi = {
   getProfile: () => api.get<any, { user: User }>('/users/profile'),
   getStats: () => api.get<any, { stats: UserStats }>('/users/stats'),
   updateProfile: (data: ProfileInput) => api.put<any, { message: string; user: User }>('/users/profile', data),
+  passwordCapabilities: () => api.get<any, { passwordResetAvailable: boolean; passwordMinLength: number; passwordMaxBytes: number }>('/users/password/capabilities'),
+  forgotPassword: (email: string) => api.post<any, { message: string }>('/users/password/forgot', { email }),
+  resetPassword: (data: { token: string; newPassword: string }) => api.post('/users/password/reset', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) => api.put('/users/password', data),
 };
 
 // 商品相关API
@@ -217,6 +226,22 @@ export const orderApi = {
   cancel: (id: number) => api.post(`/orders/${id}/cancel`),
   pay: (id: number) => api.post(`/orders/${id}/pay`),
   confirm: (id: number) => api.post(`/orders/${id}/confirm`),
+};
+
+export interface PaymentSettings { mode: 'disabled' | 'demo'; canPay: boolean; isDemo: boolean }
+export const paymentApi = { getSettings: () => api.get<any, PaymentSettings>('/payments/settings') };
+
+export interface AfterSalesRequest {
+  request_id: number; order_id: number; order_no?: string; username?: string;
+  type: 'refund' | 'return'; reason: string; status: 'requested' | 'approved' | 'rejected' | 'withdrawn';
+  review_note?: string | null; created_at?: string; reviewed_at?: string | null;
+}
+export const afterSalesApi = {
+  get: (orderId: number) => api.get<any, { after_sales: AfterSalesRequest | null }>(`/orders/${orderId}/after-sales`),
+  create: (orderId: number, data: { type: 'refund' | 'return'; reason: string }) => api.post<any, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales`, data),
+  withdraw: (orderId: number) => api.post<any, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/withdraw`),
+  list: (params: { page: number; limit: number; status?: string }) => api.get<any, { requests: AfterSalesRequest[]; pagination: { total: number; totalPages: number } }>('/admin/after-sales', { params }),
+  review: (id: number, data: { status: 'approved' | 'rejected'; note: string }) => api.post(`/admin/after-sales/${id}/review`, data),
 };
 
 // 评论相关API

@@ -72,7 +72,7 @@ function loadStores(storage) {
   return { ...browser, ...cartModule, ...authModule };
 }
 
-function loadPage(relativePath, { initialState = {}, imports = {}, globals = {}, props = {}, renderPage = (Page, props) => Page(props) } = {}) {
+function loadPage(relativePath, { initialState = {}, imports = {}, globals = {}, props = {}, strictEffects = false, renderPage = (Page, props) => Page(props) } = {}) {
   const React = require('react');
   const hooks = [];
   const requests = [];
@@ -115,9 +115,14 @@ function loadPage(relativePath, { initialState = {}, imports = {}, globals = {},
         const previous = hooks[index]?.dependencies;
         if (!dependencies || !previous || dependencies.some((value, i) => !Object.is(value, previous[i]))) {
           const cleanup = hooks[index]?.cleanup;
+          const replay = strictEffects && !previous;
           pendingEffects.push(() => {
             if (typeof cleanup === 'function') cleanup();
             hooks[index].cleanup = effect();
+            if (replay) {
+              if (typeof hooks[index].cleanup === 'function') hooks[index].cleanup();
+              hooks[index].cleanup = effect();
+            }
           });
         }
         hooks[index] = { ...hooks[index], dependencies };

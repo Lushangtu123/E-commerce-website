@@ -7,6 +7,7 @@ import logger from '../utils/logger';
 import { calculateDiscountCents } from '../utils/coupon-discount';
 import { CouponModel } from '../models/coupon.model';
 import { normalizeAddress } from '../models/address.model';
+import { getPaymentSettings } from '../utils/payment-settings';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
@@ -190,15 +191,36 @@ export interface OrderTransitionResult {
   changed: boolean;
 }
 
+export interface ShipmentInput {
+  shipping_company: string;
+  tracking_number: string;
+}
+
+function normalizeShipment(input: unknown): ShipmentInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new OrderError('请填写有效的物流公司和运单号');
+  const fields = input as Record<string, unknown>;
+  const validText = (value: unknown, maximum: number): value is string =>
+    typeof value === 'string' && !/[\u0000-\u001f\u007f-\u009f]/.test(value) &&
+    value.trim().length > 0 && value.trim().length <= maximum;
+  if (!validText(fields.shipping_company, 60) || !validText(fields.tracking_number, 100)) {
+    throw new OrderError('请填写有效的物流公司和运单号');
+  }
+  return { shipping_company: fields.shipping_company.trim(), tracking_number: fields.tracking_number.trim() };
+}
+
 /** Payment, manual cancellation and timeout consumers all acquire the same order lock. */
 export async function transitionOrder(
   orderId: number,
   targetStatus: OrderStatus,
-  options: { userId?: number; timeoutOnly?: boolean } = {}
+  options: { userId?: number; timeoutOnly?: boolean; shipment?: unknown } = {}
 ): Promise<OrderTransitionResult> {
   if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new OrderError('订单ID无效');
   if (!Number.isInteger(targetStatus) || targetStatus < OrderStatus.PENDING || targetStatus > OrderStatus.CANCELLED) {
     throw new OrderError('订单状态无效');
+  }
+  const shipment = targetStatus === OrderStatus.SHIPPED ? normalizeShipment(options.shipment) : undefined;
+  if (targetStatus === OrderStatus.PAID && !getPaymentSettings().canPay) {
+    throw new OrderError('支付尚未开放，请勿转账或重复下单', 503);
   }
   const connection = await getPool().getConnection();
   try {
@@ -284,9 +306,11 @@ export async function transitionOrder(
       [OrderStatus.COMPLETED]: 'completed_at',
     };
     const timeUpdate = timeField[targetStatus] ? `, ${timeField[targetStatus]} = NOW()` : '';
+    const shipmentUpdate = shipment ? ', shipping_company = ?, tracking_number = ?' : '';
+    const paymentUpdate = targetStatus === OrderStatus.PAID ? ", payment_method = 'demo'" : '';
     const [updated] = await connection.execute<ResultSetHeader>(
-      `UPDATE orders SET status = ?${timeUpdate} WHERE order_id = ? AND status = ?`,
-      [targetStatus, orderId, order.status]
+      `UPDATE orders SET status = ?${timeUpdate}${shipmentUpdate}${paymentUpdate} WHERE order_id = ? AND status = ?`,
+      [targetStatus, ...(shipment ? [shipment.shipping_company, shipment.tracking_number] : []), orderId, order.status]
     );
     if (updated.affectedRows !== 1) throw new OrderError('订单状态已改变');
     await connection.commit();

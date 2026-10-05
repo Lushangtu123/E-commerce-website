@@ -2,8 +2,107 @@ import { Router } from 'express';
 import { UserController } from '../controllers/user.controller';
 import { authMiddleware } from '../middleware/auth';
 import { authLimiter } from '../middleware/rate-limit';
+import { passwordRecoveryLimiter } from '../middleware/password-recovery-limit';
 
 const router = Router();
+
+/**
+ * @openapi
+ * /api/users/password/capabilities:
+ *   get:
+ *     tags: [用户]
+ *     summary: 获取密码找回可用状态和新密码规则
+ *     responses:
+ *       200:
+ *         description: 不返回任何凭据，仅提供密码找回可用状态
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 passwordResetAvailable: { type: boolean }
+ *                 passwordMinLength: { type: integer, example: 12 }
+ *                 passwordMaxBytes: { type: integer, example: 72 }
+ */
+router.get('/password/capabilities', UserController.passwordCapabilities);
+
+/**
+ * @openapi
+ * /api/users/password/forgot:
+ *   post:
+ *     tags: [用户]
+ *     summary: 请求一次性密码重置邮件
+ *     description: 每个IP每15分钟最多5次，包括成功请求。未知邮箱返回相同提示；邮件链接30分钟内有效，原文令牌不会写入数据库或接口响应。
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             additionalProperties: false
+ *             properties:
+ *               email: { type: string, format: email, maxLength: 100 }
+ *     responses:
+ *       200: { description: 无论邮箱是否存在均返回相同提示，不保证邮箱可投递 }
+ *       400: { description: 邮箱字段无效 }
+ *       429: { description: 超过找回请求限额 }
+ *       503: { description: 邮件配置缺失或密码找回暂不可用 }
+ */
+router.post('/password/forgot', passwordRecoveryLimiter, UserController.forgotPassword);
+
+/**
+ * @openapi
+ * /api/users/password/reset:
+ *   post:
+ *     tags: [用户]
+ *     summary: 使用一次性凭据重置密码并撤销全部现有用户会话
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword]
+ *             additionalProperties: false
+ *             properties:
+ *               token: { type: string, pattern: '^[a-f0-9]{64}$' }
+ *               newPassword: { type: string, format: password, minLength: 12, description: 最多72个UTF-8字节，不去除空白 }
+ *     responses:
+ *       200: { description: 密码已更新，所有旧会话和重置链接失效，必须重新登录 }
+ *       400: { description: 密码无效或重置凭据已过期、已使用 }
+ *       429: { description: 超过密码验证尝试限额 }
+ *       503: { description: 密码重置暂不可用 }
+ */
+router.post('/password/reset', authLimiter, UserController.resetPassword);
+
+/**
+ * @openapi
+ * /api/users/password:
+ *   put:
+ *     tags: [用户]
+ *     summary: 验证当前密码并修改密码，撤销全部现有用户会话
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword, newPassword]
+ *             additionalProperties: false
+ *             properties:
+ *               currentPassword: { type: string, format: password, minLength: 1 }
+ *               newPassword: { type: string, format: password, minLength: 12, description: 最多72个UTF-8字节，不去除空白 }
+ *     responses:
+ *       200: { description: 密码已修改，必须重新登录 }
+ *       400: { description: 当前密码错误或新密码无效 }
+ *       401: { description: 用户令牌无效或已撤销 }
+ *       409: { description: 并发密码修改，请重新登录 }
+ *       429: { description: 超过密码验证尝试限额 }
+ *       503: { description: 密码修改暂不可用 }
+ */
+router.put('/password', authMiddleware, authLimiter, UserController.changePassword);
 
 /**
  * @openapi
