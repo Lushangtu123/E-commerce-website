@@ -167,16 +167,16 @@ export default function ProductDetailPage() {
 
   if (!isHydrated || loading || loadedContext !== context) {
     return (
+      // Same element tree as the loaded layout below, so the grid is updated in place
+      // instead of being replaced (a replaced grid counts as a large layout shift).
       <div className="py-10">
         <div className="container-custom">
-          <div className="animate-pulse">
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:gap-12">
-              <div className="aspect-square rounded-2xl bg-gray-100"></div>
-              <div className="space-y-4">
-                <div className="h-8 w-3/4 rounded bg-gray-100"></div>
-                <div className="h-5 w-1/2 rounded bg-gray-100"></div>
-                <div className="h-24 rounded-xl bg-gray-100"></div>
-              </div>
+          <div className="mb-12 grid animate-pulse grid-cols-1 gap-8 md:grid-cols-2 lg:gap-12" aria-busy="true">
+            <div className="aspect-square rounded-2xl bg-gray-100"></div>
+            <div className="space-y-4">
+              <div className="h-8 w-3/4 rounded bg-gray-100"></div>
+              <div className="h-5 w-1/2 rounded bg-gray-100"></div>
+              <div className="h-24 rounded-xl bg-gray-100"></div>
             </div>
           </div>
         </div>
@@ -194,7 +194,7 @@ export default function ProductDetailPage() {
         <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:gap-12">
           {/* 商品图片 */}
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <ProductImage src={image} alt={product.title} className="aspect-square" fit="contain" />
+            <ProductImage src={image} alt={product.title} className="aspect-square" fit="contain" priority />
           </div>
 
           {/* 商品信息 */}

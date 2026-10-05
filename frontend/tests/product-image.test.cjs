@@ -25,6 +25,15 @@ test('a broken image shows the fallback and recovers when the URL is corrected',
   assert.equal(img(tree).props.src, 'https://cdn.test/fixed.jpg');
 });
 
+test('only the priority image loads eagerly and first', async () => {
+  const lazy = img(await image({ src: 'https://cdn.test/a.jpg', alt: 'A' }).runtime.flush());
+  assert.equal(lazy.props.loading, 'lazy');
+  assert.equal(lazy.props.fetchPriority, 'auto');
+  const first = img(await image({ src: 'https://cdn.test/a.jpg', alt: 'A', priority: true }).runtime.flush());
+  assert.equal(first.props.loading, 'eager');
+  assert.equal(first.props.fetchPriority, 'high');
+});
+
 test('missing images use the fallback instead of requesting a placeholder file', async () => {
   for (const src of [null, undefined, '']) {
     const tree = await image({ src, alt: 'Item' }).runtime.flush();

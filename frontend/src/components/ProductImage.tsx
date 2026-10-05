@@ -15,6 +15,8 @@ interface ProductImageProps {
   imageClassName?: string;
   /** Hide the "no image" caption on small thumbnails. */
   compact?: boolean;
+  /** The above-the-fold image of a page (its Largest Contentful Paint): load it eagerly and first. */
+  priority?: boolean;
 }
 
 /**
@@ -22,7 +24,7 @@ interface ProductImageProps {
  * broken URLs. Images are admin-entered URLs on arbitrary hosts, so this stays a
  * plain <img> rather than next/image.
  */
-export default function ProductImage({ src, alt, className = '', fit = 'cover', imageClassName = '', compact = false }: ProductImageProps) {
+export default function ProductImage({ src, alt, className = '', fit = 'cover', imageClassName = '', compact = false, priority = false }: ProductImageProps) {
   const { t } = useI18n();
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showImage = Boolean(src) && failedSrc !== src;
@@ -33,7 +35,8 @@ export default function ProductImage({ src, alt, className = '', fit = 'cover', 
         <img
           src={src!}
           alt={alt}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"
           onError={() => setFailedSrc(src!)}
           className={`h-full w-full ${fit === 'contain' ? 'object-contain' : 'object-cover'} ${imageClassName}`}

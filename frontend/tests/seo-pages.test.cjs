@@ -94,8 +94,9 @@ test('API results separate definite misses from an unavailable backend', async (
 });
 
 const NOT_FOUND = new Error('NEXT_NOT_FOUND');
-const productLayout = (result) => loadSource('src/app/products/[id]/layout.tsx', {}, {
+const productLayout = (result, preloads = []) => loadSource('src/app/products/[id]/layout.tsx', {}, {
   react: { cache: (fn) => fn },
+  'react-dom': { preload: (href, options) => preloads.push({ href, ...options }) },
   'next/navigation': { notFound: () => { throw NOT_FOUND; } },
   '@/lib/site': { ...site(), fetchApiResult: async () => result },
 });
@@ -116,6 +117,18 @@ test('product metadata uses the product and falls back only when the backend is 
 
   await assert.rejects(metadata({ kind: 'missing', status: 404 }), NOT_FOUND);
   await assert.rejects(metadata({ kind: 'ok', data: { product: { product_id: 1, title: 'x' } } }, '../admin'), NOT_FOUND);
+});
+
+test('the product layout preloads the main image only when it is a shareable URL', async () => {
+  const preloadsFor = async (product) => {
+    const preloads = [];
+    await productLayout(product ? { kind: 'ok', data: { product } } : { kind: 'unavailable' }, preloads).default({ children: 'page', params: Promise.resolve({ id: '7' }) });
+    return preloads.map((entry) => ({ ...entry }));
+  };
+  assert.deepEqual(await preloadsFor({ product_id: 7, title: 'A', main_image: 'https://img.example/a.png' }), [{ href: 'https://img.example/a.png', as: 'image', fetchPriority: 'high' }]);
+  assert.deepEqual(await preloadsFor({ product_id: 7, title: 'A', main_image: 'javascript:alert(1)' }), []);
+  assert.deepEqual(await preloadsFor({ product_id: 7, title: 'A', main_image: null }), []);
+  assert.deepEqual(await preloadsFor(null), []);
 });
 
 test('product layout returns a real 404 for missing, delisted and malformed products only', async () => {
