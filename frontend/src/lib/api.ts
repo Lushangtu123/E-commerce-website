@@ -112,18 +112,18 @@ export const userApi = {
     api.post('/users/register', data),
   login: (data: { email: string; password: string }) =>
     api.post('/users/login', data),
-  getProfile: () => api.get<any, { user: User }>('/users/profile'),
-  getStats: () => api.get<any, { stats: UserStats }>('/users/stats'),
-  updateProfile: (data: ProfileInput) => api.put<any, { message: string; user: User }>('/users/profile', data),
-  passwordCapabilities: () => api.get<any, { passwordResetAvailable: boolean; passwordMinLength: number; passwordMaxBytes: number }>('/users/password/capabilities'),
-  forgotPassword: (email: string) => api.post<any, { message: string }>('/users/password/forgot', { email }),
+  getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
+  getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
+  updateProfile: (data: ProfileInput) => api.put<unknown, { message: string; user: User }>('/users/profile', data),
+  passwordCapabilities: () => api.get<unknown, { passwordResetAvailable: boolean; passwordMinLength: number; passwordMaxBytes: number }>('/users/password/capabilities'),
+  forgotPassword: (email: string) => api.post<unknown, { message: string }>('/users/password/forgot', { email }),
   resetPassword: (data: { token: string; newPassword: string }) => api.post('/users/password/reset', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.put('/users/password', data),
 };
 
 // 商品相关API
 export const productApi = {
-  list: (params?: any) => api.get('/products', { params }),
+  list: (params?: object) => api.get('/products', { params }),
   getDetail: (id: number) => api.get(`/products/${id}`),
   getHotProducts: (limit?: number) => api.get('/products/hot', { params: { limit } }),
 };
@@ -153,8 +153,8 @@ export interface AdminSKUList {
   skus: AdminSKU[];
 }
 export const adminSKUApi = {
-  list: (productId: number) => api.get<any, AdminSKUList>(`/admin/products/${productId}/skus`),
-  create: (productId: number, data: AdminSKUInput) => api.post<any, { sku_id: number }>(`/admin/products/${productId}/skus`, data),
+  list: (productId: number) => api.get<unknown, AdminSKUList>(`/admin/products/${productId}/skus`),
+  create: (productId: number, data: AdminSKUInput) => api.post<unknown, { sku_id: number }>(`/admin/products/${productId}/skus`, data),
   update: (productId: number, skuId: number, data: Partial<AdminSKUInput>) => api.put(`/admin/products/${productId}/skus/${skuId}`, data),
 };
 
@@ -195,7 +195,7 @@ export interface ShippingAddress extends Omit<AddressInput, 'is_default' | 'prov
 }
 
 export const addressApi = {
-  list: () => api.get<any, { addresses: ShippingAddress[] }>('/addresses'),
+  list: () => api.get<unknown, { addresses: ShippingAddress[] }>('/addresses'),
   create: (data: AddressInput) => api.post('/addresses', data),
   update: (addressId: number, data: AddressInput) => api.put(`/addresses/${addressId}`, data),
   remove: (addressId: number) => api.delete(`/addresses/${addressId}`),
@@ -219,9 +219,9 @@ export interface OrderPreview {
 }
 
 export const orderApi = {
-  preview: (data: OrderInput) => api.post<any, OrderPreview>('/orders/preview', data),
+  preview: (data: OrderInput) => api.post<unknown, OrderPreview>('/orders/preview', data),
   create: (data: OrderCreateInput) => api.post('/orders', data),
-  list: (params?: any) => api.get('/orders', { params }),
+  list: (params?: object) => api.get('/orders', { params }),
   getDetail: (id: number) => api.get(`/orders/${id}`),
   cancel: (id: number) => api.post(`/orders/${id}/cancel`),
   pay: (id: number) => api.post(`/orders/${id}/pay`),
@@ -229,7 +229,7 @@ export const orderApi = {
 };
 
 export interface PaymentSettings { mode: 'disabled' | 'demo'; canPay: boolean; isDemo: boolean }
-export const paymentApi = { getSettings: () => api.get<any, PaymentSettings>('/payments/settings') };
+export const paymentApi = { getSettings: () => api.get<unknown, PaymentSettings>('/payments/settings') };
 
 export interface AfterSalesRequest {
   request_id: number; order_id: number; order_no?: string; username?: string;
@@ -237,10 +237,10 @@ export interface AfterSalesRequest {
   review_note?: string | null; created_at?: string; reviewed_at?: string | null;
 }
 export const afterSalesApi = {
-  get: (orderId: number) => api.get<any, { after_sales: AfterSalesRequest | null }>(`/orders/${orderId}/after-sales`),
-  create: (orderId: number, data: { type: 'refund' | 'return'; reason: string }) => api.post<any, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales`, data),
-  withdraw: (orderId: number) => api.post<any, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/withdraw`),
-  list: (params: { page: number; limit: number; status?: string }) => api.get<any, { requests: AfterSalesRequest[]; pagination: { total: number; totalPages: number } }>('/admin/after-sales', { params }),
+  get: (orderId: number) => api.get<unknown, { after_sales: AfterSalesRequest | null }>(`/orders/${orderId}/after-sales`),
+  create: (orderId: number, data: { type: 'refund' | 'return'; reason: string }) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales`, data),
+  withdraw: (orderId: number) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/withdraw`),
+  list: (params: { page: number; limit: number; status?: string }) => api.get<unknown, { requests: AfterSalesRequest[]; pagination: { total: number; totalPages: number } }>('/admin/after-sales', { params }),
   review: (id: number, data: { status: 'approved' | 'rejected'; note: string }) => api.post(`/admin/after-sales/${id}/review`, data),
 };
 
@@ -257,11 +257,11 @@ export interface PurchaseReview {
 
 export const reviewApi = {
   create: (data: { product_id: number; order_id: number; rating: number; content?: string; images?: string[] }) =>
-    api.post<any, { review_id: number; message: string }>('/reviews', data),
-  listByProduct: (productId: number, params?: any) =>
+    api.post<unknown, { review_id: number; message: string }>('/reviews', data),
+  listByProduct: (productId: number, params?: object) =>
     api.get(`/reviews/product/${productId}`, { params }),
   listByUser: (params?: { page?: number; limit?: number; order_id?: number }) =>
-    api.get<any, { reviews: PurchaseReview[]; totalPages: number }>('/reviews/my', { params }),
+    api.get<unknown, { reviews: PurchaseReview[]; totalPages: number }>('/reviews/my', { params }),
 };
 
 // 收藏相关API
@@ -271,7 +271,7 @@ export const favoriteApi = {
   toggle: (productId: number) => api.post('/favorites/toggle', { product_id: productId }),
   check: (productId: number) => api.get(`/favorites/check/${productId}`),
   checkMultiple: (productIds: number[]) => api.post('/favorites/check-multiple', { product_ids: productIds }),
-  list: (params?: any) => api.get('/favorites/my', { params }),
+  list: (params?: object) => api.get('/favorites/my', { params }),
   getCount: () => api.get('/favorites/count'),
 };
 
@@ -288,7 +288,7 @@ export const searchApi = {
 // 浏览历史相关API
 export const browseApi = {
   record: (productId: number) => api.post('/browse/record', { product_id: productId }),
-  getHistory: (params?: any) => api.get('/browse/history', { params }),
+  getHistory: (params?: object) => api.get('/browse/history', { params }),
   clearHistory: () => api.delete('/browse/history'),
   deleteRecord: (productId: number) => api.delete(`/browse/history/${productId}`),
 };

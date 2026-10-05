@@ -5,6 +5,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
@@ -143,12 +144,12 @@ export default function AdminLoginPage() {
 
           {/* 返回首页 */}
           <div className="mt-6 text-center">
-            <a
+            <Link
               href="/"
               className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
             >
               {t("← 返回商城首页")}
-            </a>
+            </Link>
           </div>
         </div>
 

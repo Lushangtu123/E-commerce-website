@@ -146,7 +146,7 @@ export default function CartPage() {
       if (!isCurrentSession()) return;
       setItems(data.items || []);
       setSelectedItems((data.items || []).filter(isAvailable).map(cartItemKey));
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
       setItems([]);
       setSelectedItems([]);
@@ -168,7 +168,7 @@ export default function CartPage() {
         if (!isCurrentSession()) return;
         setItems(refreshed.items || []);
       } else updateQuantity(item.product_id, newQuantity, item.sku_id);
-    } catch (error: any) {
+    } catch {
       if (isCurrentSession()) toast.error(t('更新失败'));
     }
   };
@@ -181,7 +181,7 @@ export default function CartPage() {
       removeItem(item.product_id, item.sku_id);
       setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
       toast.success(t('已删除'));
-    } catch (error: any) {
+    } catch {
       if (isCurrentSession()) toast.error(t('删除失败'));
     }
   };

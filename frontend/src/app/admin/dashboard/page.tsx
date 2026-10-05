@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { logger } from '@/lib/logger';
 
 export default function AdminDashboardPage() {
@@ -142,7 +142,8 @@ export default function AdminDashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tickFormatter={value => formatDate(value, true, { timeZone: 'UTC' })} />
                 <YAxis />
-                <Tooltip labelFormatter={value => formatDate(value, true, { timeZone: 'UTC' })} />
+                <Tooltip labelFormatter={label => typeof label === 'string' || typeof label === 'number'
+                  ? formatDate(label, true, { timeZone: 'UTC' }) : label} />
                 <Legend />
                 <Line type="monotone" dataKey="revenue" name={t("销售额")} stroke="#3b82f6" strokeWidth={2} />
                 <Line type="monotone" dataKey="order_count" name={t("订单数")} stroke="#10b981" strokeWidth={2} />
