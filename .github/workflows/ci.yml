@@ -93,6 +93,9 @@ jobs:
       - name: 前端回归测试
         run: npm test
 
+      - name: ESLint 检查
+        run: npm run lint
+
       - name: 构建同域 API 后端
         run: npm ci --prefix ../backend && npm --prefix ../backend run build
 

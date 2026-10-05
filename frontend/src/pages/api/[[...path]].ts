@@ -3,6 +3,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 // Keep the existing Express routes and transaction service in the same deployment.
 const handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void> =
   process.env.ECOMMERCE_SERVERLESS_API === 'true'
+    // Loaded only when the embedded API is enabled, so standalone builds never bundle the backend.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     ? require('../../../../backend/dist/serverless').default
     : async (_req, res) => { res.status(503).json({ error: '请使用已配置的独立后端 API' }); };
 
