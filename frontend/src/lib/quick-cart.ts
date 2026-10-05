@@ -13,7 +13,7 @@ export async function quickAddToCart(productId: number, isActive: () => boolean 
   };
   if (!current()) return null;
   try {
-    const data: any = await productApi.getDetail(productId);
+    const data = await productApi.getDetail(productId);
     if (!current()) return null;
     const product = data.product;
     if (product.has_sku) return 'select';
@@ -21,7 +21,7 @@ export async function quickAddToCart(productId: number, isActive: () => boolean 
     await cartApi.add({ product_id: productId, quantity: 1 });
     if (!current()) return null;
     useCartStore.getState().addItem({ cart_id: Date.now(), product_id: productId, quantity: 1,
-      title: product.title, price: Number(product.price), main_image: product.main_image,
+      title: product.title, price: Number(product.price), main_image: product.main_image ?? undefined,
       stock: Number(product.stock), available: true });
     return 'added';
   } catch (error) {

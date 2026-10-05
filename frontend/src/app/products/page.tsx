@@ -7,7 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 
 // 标记为动态页面
 export const dynamic = 'force-dynamic';
-import { productApi } from '@/lib/api';
+import { productApi, type Product } from '@/lib/api';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import { FiPackage } from 'react-icons/fi';
 import toast from 'react-hot-toast';
@@ -19,7 +19,7 @@ function ProductsList() {
   const router = useRouter();
   const keyword = searchParams.get('keyword') || '';
   const sort = searchParams.get('sort') || 'created_at DESC';
-  const [result, setResult] = useState<{ scope: string | null; rows: any[] }>({ scope: null, rows: [] });
+  const [result, setResult] = useState<{ scope: string | null; rows: Product[] }>({ scope: null, rows: [] });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [pageState, setPagination] = useState({
@@ -62,7 +62,7 @@ function ProductsList() {
     try {
       setLoading(true);
       setLoadError(false);
-      const data: any = await productApi.list({
+      const data = await productApi.list({
         keyword,
         sort,
         page: pagination.page,

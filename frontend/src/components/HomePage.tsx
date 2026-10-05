@@ -3,7 +3,7 @@
 import { useI18n } from '@/lib/i18n';
 
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { productApi, recommendationApi } from '@/lib/api';
+import { productApi, recommendationApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import Link from 'next/link';
@@ -14,10 +14,10 @@ import { FiArrowRight, FiGift, FiRotateCcw, FiShield, FiTruck } from 'react-icon
 export default function Home() {
   const { t } = useI18n();
   const { isAuthenticated } = useAuthStore();
-  const [hotProducts, setHotProducts] = useState<any[]>([]);
-  const [newProducts, setNewProducts] = useState<any[]>([]);
+  const [hotProducts, setHotProducts] = useState<Product[]>([]);
+  const [newProducts, setNewProducts] = useState<Product[]>([]);
   // The subtitle must describe the session the recommendations were fetched for.
-  const [recommendations, setRecommendations] = useState<{ products: any[]; personalized: boolean }>({ products: [], personalized: false });
+  const [recommendations, setRecommendations] = useState<{ products: Product[]; personalized: boolean }>({ products: [], personalized: false });
   const recommendationRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
@@ -37,8 +37,8 @@ export default function Home() {
       productApi.getHotProducts(8),
       productApi.list({ sort: 'created_at DESC', limit: 8 }),
     ]);
-    if (hot.status === 'fulfilled') setHotProducts((hot.value as any).products || []);
-    if (latest.status === 'fulfilled') setNewProducts((latest.value as any).products || []);
+    if (hot.status === 'fulfilled') setHotProducts(hot.value.products || []);
+    if (latest.status === 'fulfilled') setNewProducts(latest.value.products || []);
     const failures = [hot, latest].filter((result) => result.status === 'rejected');
     failures.forEach((failure) => logger.error('加载数据失败:', failure.reason));
     if (failures.length) toast.error(t("加载数据失败"));
@@ -51,7 +51,7 @@ export default function Home() {
     const personalized = isAuthenticated;
     setLoadingRecommendations(true);
     try {
-      const data: any = await recommendationApi.getGuessYouLike(8);
+      const data = await recommendationApi.getGuessYouLike(8);
       if (request === recommendationRequest.current) setRecommendations({ products: data.recommendations || [], personalized });
     } catch (error) {
       if (request !== recommendationRequest.current) return;
