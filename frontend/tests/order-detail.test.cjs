@@ -115,3 +115,37 @@ test('an old detail page payment handler cannot issue a request for another brow
   await pay.props.onClick();
   assert.equal(payments, 0);
 });
+
+function duplicateSiblingKeys(tree) {
+  const duplicates = [];
+  const visit = (node) => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (!node?.props) return;
+    const children = Array.isArray(node.props.children) ? node.props.children.flat(Infinity) : [];
+    const keys = children.filter(child => child?.props && child.key != null).map(child => child.key);
+    duplicates.push(...keys.filter((key, index) => keys.indexOf(key) !== index));
+    visit(node.props.children);
+  };
+  visit(tree);
+  return duplicates;
+}
+
+test('completed orders render reviews and after-sales siblings with distinct session-scoped keys', async () => {
+  const OrderReviews = () => null;
+  const OrderAfterSales = () => null;
+  const runtime = loadPage('src/app/orders/[id]/page.tsx', {
+    globals: { setInterval: () => 1, clearInterval() {} },
+    imports: {
+      '@/components/OrderReviews': { __esModule: true, default: OrderReviews },
+      '@/components/OrderAfterSales': { __esModule: true, default: OrderAfterSales },
+      '@/lib/api': { paymentApi: { getSettings: async () => ({ mode: 'demo', canPay: true, isDemo: true }) },
+        orderApi: { getDetail: async () => ({ order: { status: 3, total_amount: 50 }, items: [] }) },
+        orderTimeoutApi: { getRemainingTime: async () => ({ remaining_minutes: 10 }) } },
+    },
+  });
+  const tree = await runtime.flush(auth);
+  const sections = findElements(tree, element => element.type === OrderReviews || element.type === OrderAfterSales);
+  assert.equal(sections.length, 2);
+  assert.notEqual(sections[0].key, sections[1].key);
+  assert.deepEqual(duplicateSiblingKeys(tree), []);
+});

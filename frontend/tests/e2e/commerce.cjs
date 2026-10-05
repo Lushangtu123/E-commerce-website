@@ -25,6 +25,19 @@ async function ready(url, child) {
   }
   throw new Error('Local test server readiness timeout');
 }
+// Console errors are collected from every page. Only the deliberate old-password login may
+// log its expected 401 response and the login form's handled failure.
+const consoleErrors = [];
+let expectedLoginFailure = false;
+const expectedLoginErrors = [/status of 401 \(Unauthorized\)/, /^登录请求失败/];
+function watchConsole(page, label) {
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    if (expectedLoginFailure && expectedLoginErrors.some(pattern => pattern.test(text))) return;
+    consoleErrors.push(`[${label}] ${new URL(page.url()).pathname}: ${text.slice(0, 300)}`);
+  });
+}
 async function visibleText(page, text) {
   await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible' });
 }
@@ -42,6 +55,7 @@ async function visibleText(page, text) {
   page.setDefaultTimeout(30000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  watchConsole(page, 'customer');
   page.on('dialog', dialog => dialog.accept());
   await page.goto('http://127.0.0.1:3100/register');
   await page.locator('input[name="username"]').fill(`browser${Date.now()}`);
@@ -74,6 +88,7 @@ async function visibleText(page, text) {
   const admin = await adminContext.newPage();
   admin.setDefaultTimeout(30000);
   admin.on('pageerror', error => errors.push(error.message));
+  watchConsole(admin, 'admin');
   await admin.goto('http://127.0.0.1:3100/admin/login');
   await admin.locator('input[type="text"]').fill('admin');
   await admin.locator('input[type="password"]').fill('BrowserFixtureAdmin123!');
@@ -114,13 +129,17 @@ async function visibleText(page, text) {
   await page.waitForURL(/\/login\?passwordChanged=1$/);
   await page.locator('input[type="email"]').fill(customerEmail);
   await page.locator('input[type="password"]').fill('BrowserCustomer123!');
+  expectedLoginFailure = true;
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await visibleText(page, '邮箱或密码错误');
+  expectedLoginFailure = false;
   await page.locator('input[type="password"]').fill('BrowserUpdated456!');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await page.waitForURL('http://127.0.0.1:3100/');
   console.log('PASS browser password change revokes session');
   assert.deepEqual(errors, [], 'browser runtime errors');
+  assert.deepEqual(consoleErrors, [], 'browser console errors');
+  console.log('PASS browser console has no unexpected errors');
   await adminContext.close();
   await context.close();
 })().catch(async error => {

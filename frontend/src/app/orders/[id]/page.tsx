@@ -319,8 +319,8 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {order.status === 3 && <OrderReviews key={sessionKey} orderId={orderId} items={items} />}
-        {[1, 2, 3].includes(order.status) && <OrderAfterSales key={sessionKey} orderId={orderId} />}
+        {order.status === 3 && <OrderReviews key={`${sessionKey}:reviews`} orderId={orderId} items={items} />}
+        {[1, 2, 3].includes(order.status) && <OrderAfterSales key={`${sessionKey}:after-sales`} orderId={orderId} />}
 
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-3">
