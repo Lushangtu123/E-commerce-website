@@ -30,9 +30,9 @@ interface UserCoupon {
 }
 
 const STATUS_TABS = [
-  { value: 1, label: '未使用', color: 'text-blue-600' },
-  { value: 2, label: '已使用', color: 'text-gray-600' },
-  { value: 3, label: '已过期', color: 'text-red-600' },
+  { value: 1, label: '未使用' },
+  { value: 2, label: '已使用' },
+  { value: 3, label: '已过期' },
 ];
 
 export default function MyCouponsPage() {
@@ -111,11 +111,9 @@ export default function MyCouponsPage() {
     }
     switch (type) {
       case 1:
-        return 'from-orange-500 to-red-500';
       case 2:
-        return 'from-blue-500 to-indigo-500';
       case 3:
-        return 'from-green-500 to-emerald-500';
+        return 'from-primary-500 to-primary-700';
       default:
         return 'from-gray-500 to-gray-600';
     }
@@ -143,7 +141,7 @@ export default function MyCouponsPage() {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
             <p className="mt-4 text-gray-600">{t("加载中...")}</p>
           </div>
         </div>
@@ -162,7 +160,7 @@ export default function MyCouponsPage() {
           <div className="mt-4 flex gap-4">
             <button
               onClick={() => router.push('/coupons')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               {t("领取更多优惠券")}
             </button>
@@ -176,9 +174,10 @@ export default function MyCouponsPage() {
               <button
                 key={tab.value}
                 onClick={() => setActiveStatus(tab.value)}
+                aria-pressed={activeStatus === tab.value}
                 className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
                   activeStatus === tab.value
-                    ? `${tab.color} border-b-2 border-current`
+                    ? 'text-primary-600 border-b-2 border-current'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -202,7 +201,7 @@ export default function MyCouponsPage() {
             {activeStatus === 1 && (
               <button
                 onClick={() => router.push('/coupons')}
-                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
                 {t("去领取优惠券")}
               </button>
@@ -268,7 +267,7 @@ export default function MyCouponsPage() {
                     <button
                       onClick={() => handleUse(coupon)}
                       disabled={!canUseCoupon(coupon)}
-                      className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      className="w-full py-2 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
                     >
                       {canUseCoupon(coupon) ? t('立即使用') : t('暂不可用')}
                     </button>

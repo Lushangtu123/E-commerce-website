@@ -141,7 +141,7 @@ export default function ProfileSettingsPage() {
     <div className="container-custom py-8 max-w-2xl">
       <Link href="/profile" className="text-primary-600 underline">{t('返回个人中心')}</Link>
       <div className="flex items-center gap-3 mt-6 mb-6">
-        <div className="rounded-xl p-3 bg-blue-50 text-blue-600"><FiUser size={28} /></div>
+        <div className="rounded-xl p-3 bg-primary-50 text-primary-600"><FiUser size={28} /></div>
         <div><h1 className="text-2xl font-bold text-gray-900">{t('编辑资料')}</h1><p className="mt-1 text-sm text-gray-600">{t('更新您的用户名和联系方式')}</p></div>
       </div>
       {result.error ? (

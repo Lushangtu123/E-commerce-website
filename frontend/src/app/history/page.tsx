@@ -62,7 +62,7 @@ export default function BrowseHistoryPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">{t("加载中...")}</p>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function BrowseHistoryPage() {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <FiClock className="text-blue-600" />
+              <FiClock className="text-primary-600" />
               {t("浏览历史")}</h1>
             <p className="text-gray-600 mt-2">{t('最近浏览了 {count} 个商品', { count: loadError ? '—' : total })}</p>
           </div>
@@ -102,7 +102,7 @@ export default function BrowseHistoryPage() {
             <p className="text-xl text-gray-600 mb-4">{t("暂无浏览记录")}</p>
             <button
               onClick={() => router.push('/products')}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
             >
               {t("去逛逛")}</button>
           </div>
@@ -138,7 +138,7 @@ export default function BrowseHistoryPage() {
 
                   <div className="p-4">
                     <h3
-                      className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-blue-600"
+                      className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-primary-600"
                       onClick={() => handleProductClick(item.product_id)}
                     >
                       {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
@@ -158,7 +158,7 @@ export default function BrowseHistoryPage() {
                       <button
                         onClick={() => handleAddToCart(item.product_id)}
                         disabled={busy || !canBuyActivityProduct(item)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <FiShoppingCart />
                         {item.has_sku ? t("选择规格") : t("加入购物车")}

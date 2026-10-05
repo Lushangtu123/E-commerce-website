@@ -17,6 +17,7 @@ import {
   FiCreditCard,
   FiMapPin,
   FiPhone,
+  FiMail,
   FiTrendingUp,
   FiAward,
   FiPackage
@@ -87,7 +88,6 @@ export default function ProfilePage() {
       description: '查看订单状态',
       link: '/orders',
       count: stats?.totalOrders,
-      color: 'text-blue-600 bg-blue-50',
     },
     {
       icon: <FiGift size={24} />,
@@ -95,7 +95,6 @@ export default function ProfilePage() {
       description: stats ? t('{count}张可用', { count: stats.availableCoupons }) : '查看我的优惠券',
       link: '/my/coupons',
       count: stats?.totalCoupons,
-      color: 'text-orange-600 bg-orange-50',
       highlight: true,
     },
     {
@@ -104,21 +103,18 @@ export default function ProfilePage() {
       description: '收藏的商品',
       link: '/favorites',
       count: stats?.favoriteCount,
-      color: 'text-red-600 bg-red-50',
     },
     {
       icon: <FiClock size={24} />,
       title: '浏览足迹',
       description: '最近浏览',
       link: '/history',
-      color: 'text-purple-600 bg-purple-50',
     },
     {
       icon: <FiCreditCard size={24} />,
       title: '优惠券中心',
       description: '领取更多优惠券',
       link: '/coupons',
-      color: 'text-green-600 bg-green-50',
       highlight: true,
     },
     {
@@ -126,7 +122,6 @@ export default function ProfilePage() {
       title: '收货地址',
       description: '管理地址',
       link: '/profile/address',
-      color: 'text-indigo-600 bg-indigo-50',
     },
   ];
 
@@ -134,7 +129,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
           <p className="mt-4 text-gray-600">{t("加载中...")}</p>
         </div>
       </div>
@@ -145,21 +140,21 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 用户信息卡片 */}
-        <div className="bg-linear-to-r/srgb from-blue-600 to-blue-800 rounded-2xl shadow-xl p-6 sm:p-8 mb-8 text-white">
+        <div className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-xs p-6 sm:p-8 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-4 sm:gap-6">
-              <div className="w-20 h-20 shrink-0 bg-white rounded-full flex items-center justify-center overflow-hidden">
-                {avatar ? <Image src={avatar} width={80} height={80} unoptimized alt={t('用户头像')} className="w-full h-full object-cover" onError={() => setFailedAvatar(avatarKey)} /> : <FiUser size={40} className="text-blue-600" />}
+              <div className="w-20 h-20 shrink-0 bg-primary-50 rounded-full flex items-center justify-center overflow-hidden">
+                {avatar ? <Image src={avatar} width={80} height={80} unoptimized alt={t('用户头像')} className="w-full h-full object-cover" onError={() => setFailedAvatar(avatarKey)} /> : <FiUser size={40} className="text-primary-600" />}
               </div>
               <div className="min-w-0">
-                <h1 className="mb-2 truncate text-2xl font-bold sm:text-3xl">{user?.username || t('用户')}</h1>
-                <p className="truncate text-blue-100">{user?.email || ''}</p>
-                <p className="text-sm text-blue-200 mt-1">{t("用户ID:")} {user?.user_id || 'N/A'}</p>
+                <h1 className="mb-2 truncate text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{user?.username || t('用户')}</h1>
+                <p className="truncate text-gray-600">{user?.email || ''}</p>
+                <p className="text-sm text-gray-500 mt-1">{t("用户ID:")} {user?.user_id || 'N/A'}</p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              className="btn btn-secondary flex items-center gap-2 px-6 py-3"
             >
               <FiLogOut size={20} />
               <span>{t("退出登录")}</span>
@@ -167,22 +162,22 @@ export default function ProfilePage() {
           </div>
 
           {/* 快速统计 */}
-          <div className="grid grid-cols-4 gap-4 mt-8 pt-8 border-t border-white/20">
+          <div className="grid grid-cols-4 gap-4 mt-8 pt-8 border-t border-gray-100">
             <div className="text-center">
-              <div className="text-3xl font-bold mb-1">{stats?.totalOrders ?? '—'}</div>
-              <div className="text-sm text-blue-100">{t("我的订单")}</div>
+              <div className="text-3xl font-semibold text-gray-900 mb-1">{stats?.totalOrders ?? '—'}</div>
+              <div className="text-sm text-gray-500">{t("我的订单")}</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold mb-1">{stats?.availableCoupons ?? '—'}</div>
-              <div className="text-sm text-blue-100">{t("可用优惠券")}</div>
+              <div className="text-3xl font-semibold text-gray-900 mb-1">{stats?.availableCoupons ?? '—'}</div>
+              <div className="text-sm text-gray-500">{t("可用优惠券")}</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold mb-1">{stats?.favoriteCount ?? '—'}</div>
-              <div className="text-sm text-blue-100">{t("我的收藏")}</div>
+              <div className="text-3xl font-semibold text-gray-900 mb-1">{stats?.favoriteCount ?? '—'}</div>
+              <div className="text-sm text-gray-500">{t("我的收藏")}</div>
             </div>
-            <Link href="/orders?status=0" className="text-center rounded-sm hover:bg-white/10">
-              <div className="text-3xl font-bold mb-1">{stats?.pendingOrders ?? '—'}</div>
-              <div className="text-sm text-blue-100">{t("待支付")}</div>
+            <Link href="/orders?status=0" className="text-center rounded-lg hover:bg-gray-50">
+              <div className="text-3xl font-semibold text-gray-900 mb-1">{stats?.pendingOrders ?? '—'}</div>
+              <div className="text-sm text-gray-500">{t("待支付")}</div>
             </Link>
           </div>
         </div>
@@ -193,15 +188,15 @@ export default function ProfilePage() {
         </div>}
 
         {/* 优惠券快捷入口 - 突出显示 */}
-        <div className="bg-linear-to-r/srgb from-orange-500 to-red-500 rounded-xl shadow-lg p-6 mb-8">
-          <div className="flex items-center justify-between text-white">
+        <div className="bg-gray-900 rounded-xl p-6 mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 text-white">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-                <FiGift size={32} />
+              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center">
+                <FiGift size={32} className="text-primary-400" />
               </div>
               <div>
                 <h2 className="text-2xl font-bold mb-1">{t("优惠券中心")}</h2>
-                <p className="text-orange-100">
+                <p className="text-gray-300">
                   {stats ? <>{t('您有')} <span className="font-bold text-xl">{stats.availableCoupons}</span> {t('张可用优惠券')}</> : t('查看或领取优惠券')}
                 </p>
               </div>
@@ -209,13 +204,13 @@ export default function ProfilePage() {
             <div className="flex gap-3">
               <Link
                 href="/coupons"
-                className="px-6 py-3 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
+                className="px-6 py-3 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors font-medium"
               >
                 {t("领取优惠券")}
               </Link>
               <Link
                 href="/my/coupons"
-                className="px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors font-medium"
+                className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-medium"
               >
                 {t("我的优惠券")}
               </Link>
@@ -229,25 +224,25 @@ export default function ProfilePage() {
             <Link
               key={index}
               href={item.link}
-              className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 ${
-                item.highlight ? 'ring-2 ring-orange-500/50' : ''
+              className={`bg-white rounded-xl ring-1 shadow-xs hover:shadow-md transition-shadow duration-300 p-6 ${
+                item.highlight ? 'ring-primary-200' : 'ring-gray-200'
               }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 ${item.color} rounded-xl flex items-center justify-center`}>
+                  <div className="w-14 h-14 bg-primary-50 text-primary-600 rounded-xl flex items-center justify-center">
                     {item.icon}
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
                       {t(item.title)}
-                      {item.highlight && <FiTrendingUp className="ml-2 inline h-4 w-4 align-[-2px] text-orange-500" aria-hidden="true" />}
+                      {item.highlight && <FiTrendingUp className="ml-2 inline h-4 w-4 align-[-2px] text-primary-500" aria-hidden="true" />}
                     </h3>
                     <p className="text-sm text-gray-500">{t(item.description)}</p>
                   </div>
                 </div>
                 {item.count !== undefined && item.count > 0 && (
-                  <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[24px] text-center">
+                  <div className="bg-primary-600 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[24px] text-center">
                     {item.count}
                   </div>
                 )}
@@ -257,7 +252,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 账户信息 */}
-        <div className="mt-8 bg-white rounded-xl shadow-md p-6">
+        <div className="mt-8 bg-white rounded-xl ring-1 ring-gray-200 shadow-xs p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <FiSettings size={24} />
@@ -267,8 +262,8 @@ export default function ProfilePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
-              <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
-                <FiUser size={24} className="text-blue-600" />
+              <div className="w-12 h-12 bg-primary-50 rounded-full flex items-center justify-center">
+                <FiUser size={24} className="text-primary-600" />
               </div>
               <div>
                 <div className="text-sm text-gray-500">{t("用户名")}</div>
@@ -276,8 +271,8 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
-              <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center">
-                <FiPhone size={24} className="text-green-600" />
+              <div className="w-12 h-12 bg-primary-50 rounded-full flex items-center justify-center">
+                <FiMail size={24} className="text-primary-600" />
               </div>
               <div>
                 <div className="text-sm text-gray-500">{t("邮箱")}</div>
@@ -285,33 +280,33 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
-              <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center"><FiPhone size={24} className="text-orange-600" /></div>
+              <div className="w-12 h-12 bg-primary-50 rounded-full flex items-center justify-center"><FiPhone size={24} className="text-primary-600" /></div>
               <div><div className="text-sm text-gray-500">{t('联系电话')}</div><div className="font-medium text-gray-900">{user?.phone || t('未填写')}</div></div>
             </div>
           </div>
         </div>
 
         {/* 快速操作 */}
-        <div className="mt-8 bg-linear-to-r/srgb from-purple-500 to-pink-500 rounded-xl shadow-lg p-6 text-white">
-          <h3 className="mb-4 flex items-center gap-2 text-xl font-bold"><FiAward className="h-5 w-5" aria-hidden="true" />{t("会员专享")}</h3>
+        <div className="mt-8 bg-white rounded-xl ring-1 ring-gray-200 shadow-xs p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-xl font-bold text-gray-900"><FiAward className="h-5 w-5 text-primary-600" aria-hidden="true" />{t("会员专享")}</h3>
           <div className="grid grid-cols-3 gap-4">
             <Link
               href="/coupons"
-              className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
+              className="bg-gray-50 text-gray-700 hover:bg-primary-50 hover:text-primary-700 rounded-lg p-4 text-center transition-colors"
             >
               <FiGift className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
               <div className="font-medium">{t("领取优惠券")}</div>
             </Link>
             <Link
               href="/products"
-              className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
+              className="bg-gray-50 text-gray-700 hover:bg-primary-50 hover:text-primary-700 rounded-lg p-4 text-center transition-colors"
             >
               <FiShoppingBag className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
               <div className="font-medium">{t("继续购物")}</div>
             </Link>
             <Link
               href="/orders"
-              className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
+              className="bg-gray-50 text-gray-700 hover:bg-primary-50 hover:text-primary-700 rounded-lg p-4 text-center transition-colors"
             >
               <FiPackage className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
               <div className="font-medium">{t("查看订单")}</div>
