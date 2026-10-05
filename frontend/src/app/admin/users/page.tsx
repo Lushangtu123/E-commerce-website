@@ -155,12 +155,12 @@ export default function AdminUsersPage() {
               placeholder={t("搜索用户名、邮箱、手机号...")}
               value={filters.keyword}
               onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <select
               value={filters.status}
               onChange={(e) => changeFilters({ ...filters, status: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">{t("全部状态")}</option>
               <option value="1">{t("正常")}</option>
@@ -186,7 +186,7 @@ export default function AdminUsersPage() {
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">{t("加载中...")}</p>
               </div>
             </div>
@@ -256,7 +256,7 @@ export default function AdminUsersPage() {
                             {t("启用")}
                           </button>
                         )}
-                        <button className="text-blue-600 hover:text-blue-900">
+                        <button className="text-primary-600 hover:text-primary-800">
                           {t("详情")}
                         </button>
                       </td>

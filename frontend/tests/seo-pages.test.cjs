@@ -170,6 +170,7 @@ test('nested pages keep the site name in their titles', () => {
     ['src/app/orders/layout.tsx', '我的订单', { file: 'src/app/orders/[id]/layout.tsx' }],
     ['src/app/profile/layout.tsx', '个人中心', { file: 'src/app/profile/address/layout.tsx' }],
     ['src/app/profile/layout.tsx', '个人中心', { file: 'src/app/profile/settings/layout.tsx' }],
+    ['src/app/admin/layout.tsx', '管理后台', { file: 'src/app/admin/login/layout.tsx' }],
   ];
   for (const [parentFile, parentTitle, child] of chains) {
     const parent = resolveTitle(title(parentFile), TITLE_TEMPLATE);

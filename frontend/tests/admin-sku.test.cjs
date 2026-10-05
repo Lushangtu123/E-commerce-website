@@ -223,7 +223,7 @@ test('SKU subroutes keep Products highlighted without matching a similarly named
     const page = loadPage('src/components/AdminLayout.tsx', { globals: context, imports: { 'next/navigation': { useRouter: () => router, usePathname: () => pathname } } });
     const tree = await page.flush({});
     const link = findElements(tree, element => element.props.href === '/admin/products')[0];
-    assert.equal(link.props.className.includes('bg-blue-600'), pathname === '/admin/products/1/skus');
+    assert.equal(link.props['aria-current'], pathname === '/admin/products/1/skus' ? 'page' : undefined);
   }
 });
 

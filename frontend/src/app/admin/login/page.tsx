@@ -3,24 +3,20 @@
 import { useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
 export default function AdminLoginPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
   });
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') document.title = t('管理员登录 - 电商平台');
-  }, [locale, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,18 +53,18 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-blue-500 to-purple-600 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="flex justify-end mb-4"><LanguageSwitcher /></div>
         {/* Logo和标题 */}
         <div className="text-center mb-8">
           <div className="inline-block p-4 bg-white rounded-full shadow-lg mb-4">
-            <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-12 h-12 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">{t("管理员登录")}</h1>
-          <p className="text-blue-100">{t("电商平台后台管理系统")}</p>
+          <p className="text-gray-300">{t("电商平台后台管理系统")}</p>
         </div>
 
         {/* 登录表单 */}
@@ -92,7 +88,7 @@ export default function AdminLoginPage() {
                   required
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder={t("请输入用户名")}
                 />
               </div>
@@ -116,7 +112,7 @@ export default function AdminLoginPage() {
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder={t("请输入密码")}
                 />
               </div>
@@ -126,7 +122,7 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -143,8 +139,8 @@ export default function AdminLoginPage() {
           </form>
 
           {/* 部署账号提示 */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">{t("请使用部署时配置的管理员账号和密码登录。")}</p>
+          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-sm text-gray-700">{t("请使用部署时配置的管理员账号和密码登录。")}</p>
           </div>
 
           {/* 返回首页 */}
@@ -159,7 +155,7 @@ export default function AdminLoginPage() {
         </div>
 
         {/* 底部信息 */}
-        <div className="mt-8 text-center text-white text-sm">
+        <div className="mt-8 text-center text-gray-400 text-sm">
           <p>{t("© {year} 电商平台. All rights reserved.", { year: new Date().getFullYear() })}</p>
         </div>
       </div>
