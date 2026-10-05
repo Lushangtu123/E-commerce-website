@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { getAdminSessionToken } from '@/lib/admin-session';
 import AdminLayout from '@/components/AdminLayout';
+import ProductImage from '@/components/ProductImage';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
@@ -411,11 +412,7 @@ export default function AdminProductsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-                          <img
-                            src={product.main_image || '/placeholder.png'}
-                            alt={product.title}
-                            className="w-12 h-12 rounded-lg object-cover"
-                          />
+                          <ProductImage src={product.main_image} alt={product.title} compact className="h-12 w-12 shrink-0 rounded-lg" />
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">{product.title}</div>
                             <div className="text-sm text-gray-500">{product.category_name}</div>
@@ -615,15 +612,9 @@ export default function AdminProductsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder="https://example.com/image.jpg"
                     />
+                    {/* Shows the fallback for a broken URL, and recovers once the URL is corrected. */}
                     {newProduct.main_image && (
-                      <img
-                        src={newProduct.main_image}
-                        alt={t("预览")}
-                        className="mt-2 w-32 h-32 object-cover rounded-lg"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
+                      <ProductImage src={newProduct.main_image} alt={t("预览")} className="mt-2 h-32 w-32 rounded-lg" />
                     )}
                   </div>
 
@@ -787,15 +778,9 @@ export default function AdminProductsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder="https://example.com/image.jpg"
                     />
+                    {/* Shows the fallback for a broken URL, and recovers once the URL is corrected. */}
                     {editProduct.main_image && (
-                      <img
-                        src={editProduct.main_image}
-                        alt={t("预览")}
-                        className="mt-2 w-32 h-32 object-cover rounded-lg"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
+                      <ProductImage src={editProduct.main_image} alt={t("预览")} className="mt-2 h-32 w-32 rounded-lg" />
                     )}
                   </div>
 
