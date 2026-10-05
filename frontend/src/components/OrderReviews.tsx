@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { reviewApi, type PurchaseReview } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 type Item = { product_id: number; product_name: string };
 type Draft = { rating: string; content: string };
@@ -59,8 +60,8 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       }
       currentReviews.current = all;
       setResult({ key, reviews: all });
-    } catch (error: any) {
-      if (isCurrent() && generation === request.current) setResult({ key, error: error.response?.data?.error || '加载订单评价失败，请重试' });
+    } catch (error) {
+      if (isCurrent() && generation === request.current) setResult({ key, error: requestFailure(error).response?.data?.error || '加载订单评价失败，请重试' });
     }
   };
 
@@ -100,10 +101,10 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       const reviews = [...(currentReviews.current ?? []), { review_id: data.review_id, user_id: user!.user_id, order_id: orderId, product_id: productId, rating, content }];
       currentReviews.current = reviews; setResult({ key, reviews });
       setNotice({ key, productId, success: '评论成功' });
-    } catch (error: any) {
+    } catch (error) {
       if (!active()) return;
-      if (error.response?.status === 409) await load(true);
-      if (active()) setNotice({ key, productId, error: error.response?.data?.error || '创建评论失败' });
+      if (requestFailure(error).response?.status === 409) await load(true);
+      if (active()) setNotice({ key, productId, error: requestFailure(error).response?.data?.error || '创建评论失败' });
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;

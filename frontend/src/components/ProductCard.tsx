@@ -12,6 +12,7 @@ import { FiShoppingCart } from 'react-icons/fi';
 import { FaStar } from 'react-icons/fa';
 import ProductImage from '@/components/ProductImage';
 import { logger } from '@/lib/logger';
+import { requestFailure } from '@/lib/api-error';
 
 interface ProductCardProps {
   product: any;
@@ -40,9 +41,9 @@ export default function ProductCard({ product }: ProductCardProps) {
       const result = await quickAddToCart(product.product_id, () => active.current && productContext.current === product.product_id);
       if (result === 'select') router.push(`/products/${product.product_id}`);
       if (result === 'added') toast.success(t("已加入购物车"));
-    } catch (error: any) {
+    } catch (error) {
       logger.error('加入购物车失败:', error);
-      toast.error(t(error.response?.data?.error || error.message || "加入购物车失败"));
+      toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).message || "加入购物车失败"));
     } finally {
       if (active.current) setIsAdding(false);
     }

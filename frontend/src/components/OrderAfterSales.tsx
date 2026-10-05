@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { afterSalesApi, type AfterSalesRequest } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 export const AFTER_SALES_STATUS = { requested: '待审核', approved: '审核通过', rejected: '审核拒绝', withdrawn: '已撤回' };
 
@@ -29,8 +30,8 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     try {
       const data = await afterSalesApi.get(orderId);
       if (active() && revision === request.current) setResult({ key, value: data.after_sales });
-    } catch (error: any) {
-      if (active() && revision === request.current) setResult({ key, value: null, error: error.response?.data?.error || '加载售后申请失败，请重试' });
+    } catch (error) {
+      if (active() && revision === request.current) setResult({ key, value: null, error: requestFailure(error).response?.data?.error || '加载售后申请失败，请重试' });
     }
   };
   useEffect(() => {
@@ -49,8 +50,8 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
       if (!active() || mutation.current !== operation) return;
       setResult({ key, value: data.after_sales }); setReason('');
       setNotice({ key, success: withdraw ? '售后申请已撤回' : '售后申请已提交，等待审核' });
-    } catch (error: any) {
-      if (active() && mutation.current === operation) setNotice({ key, error: error.response?.data?.error || '处理售后申请失败，请重试' });
+    } catch (error) {
+      if (active() && mutation.current === operation) setNotice({ key, error: requestFailure(error).response?.data?.error || '处理售后申请失败，请重试' });
     } finally {
       if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); }
     }

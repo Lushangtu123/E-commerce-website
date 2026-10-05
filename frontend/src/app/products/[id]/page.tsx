@@ -13,6 +13,7 @@ import { FaHeart, FaStar } from 'react-icons/fa';
 import ProductCard from '@/components/ProductCard';
 import ProductImage from '@/components/ProductImage';
 import { logger } from '@/lib/logger';
+import { requestFailure } from '@/lib/api-error';
 
 export default function ProductDetailPage() {
   const { t, formatDate } = useI18n();
@@ -129,8 +130,8 @@ export default function ProductDetailPage() {
       });
       toast.success(t("已加入购物车"));
       return true;
-    } catch (error: any) {
-      if (isCurrentContext()) toast.error(t(error.response?.data?.error || "加入购物车失败"));
+    } catch (error) {
+      if (isCurrentContext()) toast.error(t(requestFailure(error).response?.data?.error || "加入购物车失败"));
       return false;
     } finally {
       if (isCurrentContext()) {
@@ -157,8 +158,8 @@ export default function ProductDetailPage() {
       if (!isCurrentContext()) return;
       setIsFavorited(data.is_favorited);
       toast.success(t(data.message));
-    } catch (error: any) {
-      if (isCurrentContext()) toast.error(t(error.response?.data?.message || "操作失败"));
+    } catch (error) {
+      if (isCurrentContext()) toast.error(t(requestFailure(error).response?.data?.message || "操作失败"));
     } finally {
       if (isCurrentContext()) setFavoriting(false);
     }

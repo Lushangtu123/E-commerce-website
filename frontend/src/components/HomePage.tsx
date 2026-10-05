@@ -53,7 +53,7 @@ export default function Home() {
     try {
       const data: any = await recommendationApi.getGuessYouLike(8);
       if (request === recommendationRequest.current) setRecommendations({ products: data.recommendations || [], personalized });
-    } catch (error: any) {
+    } catch (error) {
       if (request !== recommendationRequest.current) return;
       logger.error('加载推荐失败:', error);
       setRecommendations({ products: [], personalized });

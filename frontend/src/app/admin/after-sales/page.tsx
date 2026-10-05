@@ -7,6 +7,7 @@ import { AFTER_SALES_STATUS } from '@/components/OrderAfterSales';
 import { useAdminSession } from '@/hooks/use-admin-session';
 import { useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
+import { requestFailure } from '@/lib/api-error';
 
 export default function AdminAfterSalesPage() {
   const { t, formatDate } = useI18n(), session = useAdminSession();
@@ -27,7 +28,7 @@ export default function AdminAfterSalesPage() {
       const total = Number(data.pagination?.total) || 0;
       if (page > Math.max(1, Math.ceil(total / 20))) { setPage(Math.max(1, Math.ceil(total / 20))); return; }
       setResult({ key, requests: data.requests || [], total });
-    } catch (error: any) { if (active() && revision === request.current) setResult({ key, requests: [], total: 0, error: error.response?.data?.error || '加载售后申请失败，请重试' }); }
+    } catch (error) { if (active() && revision === request.current) setResult({ key, requests: [], total: 0, error: requestFailure(error).response?.data?.error || '加载售后申请失败，请重试' }); }
   };
   latestLoad.current = load;
   useEffect(() => { setPage(1); setStatus('requested'); setReview(null); mutation.current = null; setBusy(false); }, [session.token]);
@@ -43,7 +44,7 @@ export default function AdminAfterSalesPage() {
       if (!session.active() || mutation.current !== operation) return;
       if (active()) { toast.success(t('售后审核已保存，未执行资金退款')); setReview(null); }
       await latestLoad.current?.();
-    } catch (error: any) { if (active() && mutation.current === operation) toast.error(t(error.response?.data?.error || '保存售后审核失败，请重试')); }
+    } catch (error) { if (active() && mutation.current === operation) toast.error(t(requestFailure(error).response?.data?.error || '保存售后审核失败，请重试')); }
     finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   return <AdminLayout><div className="space-y-6">

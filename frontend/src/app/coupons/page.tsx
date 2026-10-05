@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
+import { requestFailure } from '@/lib/api-error';
 
 interface Coupon {
   coupon_id: number;
@@ -89,10 +90,10 @@ export default function CouponsPage() {
             : c
         )
       );
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
       logger.error('领取失败:', error);
-      const message = error.response?.data?.message || '领取失败';
+      const message = requestFailure(error).response?.data?.message || '领取失败';
       toast.error(t(message));
     } finally {
       if (isCurrentSession()) setReceivingIds(prev => {

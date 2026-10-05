@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { FiPackage } from 'react-icons/fi';
 import { useI18n } from '@/lib/i18n';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
+import { requestFailure } from '@/lib/api-error';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -93,10 +94,10 @@ export default function OrdersPage() {
         return;
       }
       setResult({ key: scopeKey, orders: data.orders || [], total: data.total || 0, totalPages: data.totalPages || 0 });
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentScope() || revision !== request.current) return;
       logger.error('加载订单失败:', error);
-      setResult({ key: scopeKey, orders: [], total: 0, totalPages: 0, error: error.response?.data?.error || error.response?.data?.message || '加载订单失败，请重试' });
+      setResult({ key: scopeKey, orders: [], total: 0, totalPages: 0, error: requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || '加载订单失败，请重试' });
     }
   };
 
@@ -117,9 +118,9 @@ export default function OrdersPage() {
       if (!isCurrentSession()) return;
       toast.success(t(action === 'pay' ? '模拟支付完成，未实际扣款' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
       await latestRefresh.current?.();
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(error.response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
+      toast.error(t(requestFailure(error).response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
     } finally {
       if (isCurrentSession() && mutation.current === operation) {
         mutation.current = null;

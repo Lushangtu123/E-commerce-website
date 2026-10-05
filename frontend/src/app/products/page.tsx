@@ -78,7 +78,7 @@ function ProductsList() {
         total: data.total,
         totalPages: data.totalPages,
       });
-    } catch (error: any) {
+    } catch (error) {
       if (!isCurrent()) return;
       setResult({ scope, rows: [] });
       setLoadError(true);

@@ -6,6 +6,7 @@ import { userApi } from '@/lib/api';
 import { passwordError } from '@/lib/password-validation';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/useAuthStore';
+import { requestFailure } from '@/lib/api-error';
 
 export default function ResetPasswordPage() {
   const { t } = useI18n();
@@ -42,10 +43,10 @@ export default function ResetPasswordPage() {
         } catch { /* Storage denial must not turn a successful reset into a failed reset. */ }
         setToken(null); setPassword(''); setConfirmation(''); setNotice({ success: '密码已重置，所有旧会话已失效，请使用新密码登录' });
       }
-    } catch (error: any) {
+    } catch (error) {
       if (mounted.current) {
-        if (error.response?.status === 400 && (error.response?.data?.code === 'INVALID_RESET_TOKEN' || error.response?.data?.error === '密码重置链接无效或已过期')) setToken(null);
-        setNotice({ error: error.response?.data?.error || '重置密码失败，请重新申请重置邮件' });
+        if (requestFailure(error).response?.status === 400 && (requestFailure(error).response?.data?.code === 'INVALID_RESET_TOKEN' || requestFailure(error).response?.data?.error === '密码重置链接无效或已过期')) setToken(null);
+        setNotice({ error: requestFailure(error).response?.data?.error || '重置密码失败，请重新申请重置邮件' });
       }
     } finally { if (mounted.current) { pending.current = false; setBusy(false); } }
   };
