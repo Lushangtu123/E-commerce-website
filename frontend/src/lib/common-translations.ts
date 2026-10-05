@@ -1,6 +1,10 @@
 export const commonTranslations: Record<string, string> = {
   '界面语言': 'Interface language',
   '页面不存在': 'Page not found',
+  '页面出错了': 'Something went wrong',
+  '页面暂时无法显示，请重试或返回首页。': 'This page could not be displayed. Try again or go back to the home page.',
+  '重试': 'Try again',
+  '错误编号：{digest}': 'Error ID: {digest}',
   '您访问的页面不存在或已移除': 'This page does not exist or has been removed',
   '返回首页': 'Back to home',
   '电商平台': 'Shop',
