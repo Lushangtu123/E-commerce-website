@@ -79,7 +79,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 ### Frontend
 - **Framework**: Next.js 16 + React 19
 - **Language**: TypeScript 5
-- **Styling**: TailwindCSS 3
+- **Styling**: TailwindCSS 4
 - **State Management**: Zustand 4
 - **HTTP Client**: Axios
 - **UI Components**: React Icons
