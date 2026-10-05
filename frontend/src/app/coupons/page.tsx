@@ -136,11 +136,9 @@ export default function CouponsPage() {
   const getCouponColor = (type: number) => {
     switch (type) {
       case 1:
-        return 'from-orange-500 to-red-500';
       case 2:
-        return 'from-blue-500 to-indigo-500';
       case 3:
-        return 'from-green-500 to-emerald-500';
+        return 'from-primary-500 to-primary-700';
       default:
         return 'from-gray-500 to-gray-600';
     }
@@ -151,7 +149,7 @@ export default function CouponsPage() {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
             <p className="mt-4 text-gray-600">{t("加载中...")}</p>
           </div>
         </div>
@@ -170,7 +168,7 @@ export default function CouponsPage() {
           <div className="mt-4 flex gap-4">
             <button
               onClick={() => router.push('/my/coupons')}
-              className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+              className="px-4 py-2 border border-primary-600 text-primary-600 rounded-lg hover:bg-primary-50 transition-colors"
             >
               {t("我的优惠券")}
             </button>
@@ -235,7 +233,7 @@ export default function CouponsPage() {
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : receivingIds.has(coupon.coupon_id)
                         ? 'bg-gray-400 text-white cursor-wait'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
                   >
                     {receivingIds.has(coupon.coupon_id)
