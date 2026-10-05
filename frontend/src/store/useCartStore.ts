@@ -10,7 +10,7 @@ export interface CartItem {
   stock: number;
   sku_id?: number | null;
   sku_code?: string | null;
-  sku_specs?: Record<string, string> | null;
+  sku_specs?: Record<string, string | number | boolean> | null;
   available?: boolean | 0 | 1;
   unavailable_reason?: string | null;
 }

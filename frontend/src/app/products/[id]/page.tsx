@@ -4,7 +4,7 @@ import { useI18n } from '@/lib/i18n';
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi } from '@/lib/api';
+import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi, type Product, type ProductReview } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
@@ -22,9 +22,9 @@ export default function ProductDetailPage() {
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
   const { addItem } = useCartStore();
   
-  const [product, setProduct] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -67,35 +67,35 @@ export default function ProductDetailPage() {
     addingRequest.current = null;
     setIsFavorited(false);
     setFavoriting(false);
-    productApi.getDetail(productId).then((data: any) => {
+    productApi.getDetail(productId).then((data) => {
       if (!isCurrentRequest()) return;
       setProduct(data.product);
       setLoadedContext(context);
-    }).catch((error: any) => {
+    }).catch((error) => {
       if (!isCurrentRequest()) return;
       logger.error('加载商品失败:', error);
       toast.error(t("商品不存在"));
       router.push('/products');
     }).finally(() => { if (isCurrentRequest()) setLoading(false); });
-    reviewApi.listByProduct(productId, { limit: 5 }).then((data: any) => {
+    reviewApi.listByProduct(productId, { limit: 5 }).then((data) => {
       if (isCurrentRequest()) setReviews(data.reviews || []);
-    }).catch((error: any) => { if (isCurrentRequest()) logger.error('加载评论失败:', error); });
+    }).catch((error) => { if (isCurrentRequest()) logger.error('加载评论失败:', error); });
     setLoadingRecommendations(true);
-    recommendationApi.getRelated(productId, 4).then((data: any) => {
+    recommendationApi.getRelated(productId, 4).then((data) => {
       if (isCurrentRequest()) setRelatedProducts(data.related_products || []);
-    }).catch((error: any) => { if (isCurrentRequest()) logger.error('加载相关推荐失败:', error); })
+    }).catch((error) => { if (isCurrentRequest()) logger.error('加载相关推荐失败:', error); })
       .finally(() => { if (isCurrentRequest()) setLoadingRecommendations(false); });
     if (isAuthenticated) {
-      favoriteApi.check(productId).then((data: any) => {
+      favoriteApi.check(productId).then((data) => {
         if (isCurrentRequest()) setIsFavorited(data.is_favorited);
-      }).catch((error: any) => { if (isCurrentRequest()) logger.error('检查收藏状态失败:', error); });
-      browseApi.record(productId).catch((error: any) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
+      }).catch((error) => { if (isCurrentRequest()) logger.error('检查收藏状态失败:', error); });
+      browseApi.record(productId).catch((error) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
     return () => { active = false; };
   }, [isHydrated, productId, isAuthenticated, token, user?.user_id, router]);
 
   const hasSku = !!product?.has_sku;
-  const skus: any[] = product?.skus || [];
+  const skus = product?.skus || [];
   const selectedSku = skus.find(sku => sku.sku_id === selectedSkuId);
   const stock = Number(hasSku ? selectedSku?.stock ?? 0 : product?.stock ?? 0);
   const price = selectedSku?.price ?? product?.price;
@@ -104,7 +104,7 @@ export default function ProductDetailPage() {
   const soldOut = hasSku ? (selectedSku ? stock <= 0 : !skus.some(sku => Number(sku.stock) > 0)) : stock <= 0;
 
   const handleAddToCart = async (): Promise<boolean> => {
-    if (!isHydrated || !isCurrentContext() || loadedContext !== context || addingRequest.current) return false;
+    if (!product || !isHydrated || !isCurrentContext() || loadedContext !== context || addingRequest.current) return false;
     if (!isAuthenticated) {
       toast.error(t("请先登录"));
       router.push('/login');
@@ -125,7 +125,7 @@ export default function ProductDetailPage() {
       if (!isCurrentContext()) return false;
       addItem({
         cart_id: Date.now(), product_id: productId, quantity, title: product.title,
-        price: Number(price), main_image: image, stock,
+        price: Number(price), main_image: image ?? undefined, stock,
         ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs }),
       });
       toast.success(t("已加入购物车"));
@@ -154,7 +154,7 @@ export default function ProductDetailPage() {
     }
     setFavoriting(true);
     try {
-      const data: any = await favoriteApi.toggle(productId);
+      const data = await favoriteApi.toggle(productId);
       if (!isCurrentContext()) return;
       setIsFavorited(data.is_favorited);
       toast.success(t(data.message));
@@ -218,7 +218,7 @@ export default function ProductDetailPage() {
                   <span className="text-3xl font-semibold text-primary-600">
                     ¥{price}
                   </span>
-                  {product.original_price && product.original_price > Number(price) && (
+                  {Number(product.original_price) > Number(price) && (
                     <span className="text-base text-gray-400 line-through">
                       ¥{product.original_price}
                     </span>

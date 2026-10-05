@@ -9,7 +9,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift, FiHeart, FiShoppingBag } from 'react-icons/fi';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { searchApi } from '@/lib/api';
+import { searchApi, type HotKeyword, type SearchKeyword } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
 export default function Header() {
@@ -17,8 +17,8 @@ export default function Header() {
   const { isAuthenticated, isHydrated, token, user, logout } = useAuthStore();
   const { getTotalCount } = useCartStore();
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [history, setHistory] = useState<{ scope: string | null; rows: any[] }>({ scope: null, rows: [] });
-  const [hotKeywords, setHotKeywords] = useState<any[]>([]);
+  const [history, setHistory] = useState<{ scope: string | null; rows: SearchKeyword[] }>({ scope: null, rows: [] });
+  const [hotKeywords, setHotKeywords] = useState<HotKeyword[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement>(null);
@@ -65,7 +65,7 @@ export default function Header() {
     if (!isCurrentSession()) return;
     const request = ++historyRequest.current;
     try {
-      const data: any = await searchApi.getHistory(10);
+      const data = await searchApi.getHistory(10);
       if (isCurrentSession() && request === historyRequest.current) {
         setHistory({ scope, rows: data.history || [] });
       }
@@ -76,7 +76,7 @@ export default function Header() {
 
   const fetchHotKeywords = async () => {
     try {
-      const data: any = await searchApi.getHot(7, 10);
+      const data = await searchApi.getHot(7, 10);
       if (mounted.current) setHotKeywords(data.keywords || []);
     } catch (error) {
       logger.error('获取热搜失败:', error);
@@ -170,7 +170,7 @@ export default function Header() {
                           {t("搜索历史")}</h4>
                       </div>
                       <div className="space-y-1">
-                        {searchHistory.slice(0, 5).map((item: any, index: number) => (
+                        {searchHistory.slice(0, 5).map((item, index) => (
                           <div
                             key={index}
                             className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-sm cursor-pointer group"
@@ -197,7 +197,7 @@ export default function Header() {
                         <FiTrendingUp size={14} />
                         {t("热门搜索")}</h4>
                       <div className="space-y-1">
-                        {hotKeywords.slice(0, 5).map((item: any, index: number) => (
+                        {hotKeywords.slice(0, 5).map((item, index) => (
                           <div
                             key={index}
                             className="flex items-center px-3 py-2 hover:bg-gray-50 rounded-sm cursor-pointer"

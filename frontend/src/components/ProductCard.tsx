@@ -13,9 +13,10 @@ import { FaStar } from 'react-icons/fa';
 import ProductImage from '@/components/ProductImage';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import type { Product } from '@/lib/api';
 
 interface ProductCardProps {
-  product: any;
+  product: Product;
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
