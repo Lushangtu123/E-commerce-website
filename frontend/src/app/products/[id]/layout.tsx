@@ -1,17 +1,31 @@
 import type { Metadata } from 'next';
-import { SITE_NAME, fetchApiJson, shareableImage, summarize, type PublicProduct } from '@/lib/site';
+import { notFound } from 'next/navigation';
+import { cache } from 'react';
+import { SITE_NAME, fetchApiResult, shareableImage, summarize, type ApiResult, type PublicProduct } from '@/lib/site';
 
 const FALLBACK_TITLE = '商品详情';
+const isProductId = (id: string) => /^[1-9]\d{0,9}$/.test(id);
+
+/** One backend read per request, shared by metadata and the layout. */
+const loadProduct = cache((id: string): Promise<ApiResult<{ product?: PublicProduct }>> =>
+  fetchApiResult<{ product?: PublicProduct }>(`/products/${id}`));
+
+/**
+ * Deleted, delisted and malformed product URLs return a real 404. An unreachable API
+ * renders the page normally, so an outage never removes real products from search.
+ */
+async function resolveProduct(id: string): Promise<PublicProduct | null> {
+  if (!isProductId(id)) notFound();
+  const result = await loadProduct(id);
+  if (result.kind === 'missing') notFound();
+  return result.kind === 'ok' && result.data.product?.title ? result.data.product : null;
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  if (!/^[1-9]\d{0,9}$/.test(id)) return { title: FALLBACK_TITLE, robots: { index: false, follow: false } };
-
+  const product = await resolveProduct(id);
   const canonical = `/products/${id}`;
-  const data = await fetchApiJson<{ product?: PublicProduct }>(`/products/${id}`);
-  const product = data?.product;
-  // Unavailable API (e.g. protected preview deployments) keeps the generic title.
-  if (!product?.title) return { title: FALLBACK_TITLE, alternates: { canonical } };
+  if (!product) return { title: FALLBACK_TITLE, alternates: { canonical } };
 
   const price = product.price !== undefined && product.price !== null ? `¥${product.price} · ` : '';
   const description = `${price}${summarize(product.description, `${product.title} - ${SITE_NAME}`)}`;
@@ -27,6 +41,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default function ProductLayout({ children }: { children: React.ReactNode }) {
+// Metadata may stream after the response starts; the layout renders before it, so its
+// notFound() is what gives browsers and crawlers an actual 404 status.
+export default async function ProductLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  await resolveProduct(id);
   return children;
 }

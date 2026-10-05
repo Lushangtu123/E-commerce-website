@@ -41,20 +41,37 @@ export function serverApiBase(env: Env = process.env): string | null {
   return null;
 }
 
-/** GET JSON from the backend with a short timeout; any failure resolves to null. */
-export async function fetchApiJson<T>(path: string, options: { revalidate?: number; env?: Env; fetcher?: typeof fetch } = {}): Promise<T | null> {
+export type ApiResult<T> =
+  | { kind: 'ok'; data: T }
+  /** The backend answered that the resource does not exist (404) or the id is invalid (400). */
+  | { kind: 'missing'; status: number }
+  /** No usable answer: no API base, network error, timeout or a server error. */
+  | { kind: 'unavailable' };
+
+/**
+ * GET JSON from the backend with a short timeout. Distinguishes a definite "missing"
+ * answer from an unavailable backend, so callers never treat an outage as a 404.
+ */
+export async function fetchApiResult<T>(path: string, options: { revalidate?: number; env?: Env; fetcher?: typeof fetch } = {}): Promise<ApiResult<T>> {
   const base = serverApiBase(options.env);
-  if (!base) return null;
+  if (!base) return { kind: 'unavailable' };
   try {
     const response = await (options.fetcher ?? fetch)(`${base}${path}`, {
       signal: AbortSignal.timeout(3000),
       next: { revalidate: options.revalidate ?? 300 },
     } as RequestInit);
-    if (!response.ok) return null;
-    return (await response.json()) as T;
+    if (response.status === 404 || response.status === 400) return { kind: 'missing', status: response.status };
+    if (!response.ok) return { kind: 'unavailable' };
+    return { kind: 'ok', data: (await response.json()) as T };
   } catch {
-    return null;
+    return { kind: 'unavailable' };
   }
+}
+
+/** GET JSON from the backend; anything but a successful answer resolves to null. */
+export async function fetchApiJson<T>(path: string, options: { revalidate?: number; env?: Env; fetcher?: typeof fetch } = {}): Promise<T | null> {
+  const result = await fetchApiResult<T>(path, options);
+  return result.kind === 'ok' ? result.data : null;
 }
 
 export interface PublicProduct {
