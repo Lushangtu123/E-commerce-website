@@ -81,24 +81,50 @@ test('robots blocks everything outside production and keeps private paths out of
   for (const path of ['/admin', '/api', '/cart', '/orders', '/profile', '/login']) assert.ok(prod.rules.disallow.includes(path), path);
 });
 
-test('product metadata uses the product and falls back without breaking the page', async () => {
-  const metadata = async (product, id = '7') => loadSource('src/app/products/[id]/layout.tsx', {}, {
-    '@/lib/site': { ...site(), fetchApiJson: async () => (product === undefined ? null : { product }) },
-  }).generateMetadata({ params: Promise.resolve({ id }) });
+test('API results separate definite misses from an unavailable backend', async () => {
+  const { fetchApiResult } = site();
+  const env = { INTERNAL_API_URL: 'http://backend/api' };
+  const kind = async (fetcher, e = env) => (await fetchApiResult('/products/1', { env: e, fetcher })).kind;
+  assert.equal(await kind(async () => jsonResponse({ product: {} })), 'ok');
+  assert.equal(await kind(async () => jsonResponse({ error: '商品不存在' }, 404)), 'missing');
+  assert.equal(await kind(async () => jsonResponse({ error: '商品ID无效' }, 400)), 'missing');
+  assert.equal(await kind(async () => jsonResponse({ error: 'down' }, 503)), 'unavailable');
+  assert.equal(await kind(async () => { throw new Error('timeout'); }), 'unavailable');
+  assert.equal(await kind(async () => jsonResponse({}), {}), 'unavailable');
+});
 
-  const full = await metadata({ product_id: 7, title: '红色外套', description: '保暖\n舒适', price: '99.00', main_image: 'https://img.example/a.png' });
+const NOT_FOUND = new Error('NEXT_NOT_FOUND');
+const productLayout = (result) => loadSource('src/app/products/[id]/layout.tsx', {}, {
+  react: { cache: (fn) => fn },
+  'next/navigation': { notFound: () => { throw NOT_FOUND; } },
+  '@/lib/site': { ...site(), fetchApiResult: async () => result },
+});
+
+test('product metadata uses the product and falls back only when the backend is unavailable', async () => {
+  const metadata = (result, id = '7') => productLayout(result).generateMetadata({ params: Promise.resolve({ id }) });
+  const full = await metadata({ kind: 'ok', data: { product: { product_id: 7, title: '红色外套', description: '保暖\n舒适', price: '99.00', main_image: 'https://img.example/a.png' } } });
   assert.equal(full.title, '红色外套');
   assert.equal(full.description, '¥99.00 · 保暖 舒适');
   assert.equal(full.alternates.canonical, '/products/7');
   assert.equal(full.openGraph.images[0].url, 'https://img.example/a.png');
   assert.equal(full.twitter.card, 'summary_large_image');
 
-  const offline = await metadata(undefined);
+  const offline = await metadata({ kind: 'unavailable' });
   assert.equal(offline.title, '商品详情');
   assert.equal(offline.alternates.canonical, '/products/7');
+  assert.equal(offline.robots, undefined);
 
-  const invalid = await metadata(undefined, '../admin');
-  assert.equal(invalid.robots.index, false);
+  await assert.rejects(metadata({ kind: 'missing', status: 404 }), NOT_FOUND);
+  await assert.rejects(metadata({ kind: 'ok', data: { product: { product_id: 1, title: 'x' } } }, '../admin'), NOT_FOUND);
+});
+
+test('product layout returns a real 404 for missing, delisted and malformed products only', async () => {
+  const render = (result, id = '7') => productLayout(result).default({ children: 'page', params: Promise.resolve({ id }) });
+  assert.equal(await render({ kind: 'ok', data: { product: { product_id: 7, title: 'A' } } }), 'page');
+  assert.equal(await render({ kind: 'unavailable' }), 'page');
+  await assert.rejects(render({ kind: 'missing', status: 404 }), NOT_FOUND);
+  await assert.rejects(render({ kind: 'missing', status: 400 }), NOT_FOUND);
+  for (const id of ['0', 'abc', '99999999999', '1.5']) await assert.rejects(render({ kind: 'unavailable' }, id), NOT_FOUND, id);
 });
 
 test('customer service pages only use translated copy and link to each other', () => {
