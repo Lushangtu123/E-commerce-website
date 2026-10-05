@@ -7,7 +7,8 @@ import { addressApi, cartApi, orderApi, type OrderPreview, type ShippingAddress 
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
-import { FiTrash2, FiShoppingBag } from 'react-icons/fi';
+import { FiTrash2, FiShoppingBag, FiShoppingCart } from 'react-icons/fi';
+import ProductImage from '@/components/ProductImage';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
 
@@ -248,9 +249,11 @@ export default function CartPage() {
     return (
       <div className="py-20">
         <div className="container-custom text-center">
-          <div className="text-6xl mb-4">🛒</div>
-          <h3 className="text-2xl font-medium text-gray-900 mb-2">{t("购物车是空的")}</h3>
-          <p className="text-gray-600 mb-6">{t("去逛逛，添加一些商品吧")}</p>
+          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+            <FiShoppingCart className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <h3 className="mb-1 text-lg font-medium text-gray-900">{t("购物车是空的")}</h3>
+          <p className="mb-6 text-sm text-gray-500">{t("去逛逛，添加一些商品吧")}</p>
           <button onClick={() => router.push('/products')} className="btn btn-primary">
             {t("去购物")}
           </button>
@@ -274,7 +277,7 @@ export default function CartPage() {
                 checked={availableItems.length > 0 && orderItems.length === availableItems.length}
                 disabled={submitting || availableItems.length === 0}
                 onChange={handleSelectAll}
-                className="w-5 h-5 text-primary-600 rounded-sm"
+                className="h-5 w-5 rounded-sm accent-primary-600"
               />
               <span className="ml-3 font-medium">{t("全选")}</span>
             </div>
@@ -282,31 +285,19 @@ export default function CartPage() {
             {/* 商品列表 */}
             {items.map((item) => (
               <div key={cartItemKey(item)} className="card p-4">
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-wrap items-center gap-4">
                   <input
                     type="checkbox"
                     checked={isAvailable(item) && selectedItems.includes(cartItemKey(item))}
                     disabled={submitting || !isAvailable(item)}
                     onChange={() => handleToggleSelect(item)}
-                    className="w-5 h-5 text-primary-600 rounded-sm"
+                    className="h-5 w-5 rounded-sm accent-primary-600"
                   />
 
-                  <div className="w-24 h-24 bg-gray-100 rounded-sm overflow-hidden shrink-0">
-                    {item.main_image ? (
-                      <img
-                        src={item.main_image}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        {t("无图")}
-                      </div>
-                    )}
-                  </div>
+                  <ProductImage src={item.main_image} alt={item.title} compact className="h-24 w-24 shrink-0 rounded-lg border border-gray-200" />
 
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 truncate">{item.title}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-medium text-gray-900">{item.title}</h3>
                     {item.sku_specs && <p className="text-sm text-gray-600 mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
                     {item.sku_code && <p className="text-xs text-gray-500 mt-1">{t("规格编号：")}{item.sku_code}</p>}
                     {!isAvailable(item) && (
@@ -321,37 +312,40 @@ export default function CartPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center border border-gray-300 rounded-sm">
+                  <div className="flex w-full items-center justify-end gap-4 sm:w-auto">
+                  <div className="flex items-center overflow-hidden rounded-lg border border-gray-300">
                     <button
                       onClick={() => handleQuantityChange(item, Math.min(item.quantity - 1, item.stock))}
                       disabled={submitting || !canReduce(item) || item.quantity <= 1}
-                      className="px-3 py-1 hover:bg-gray-100"
+                      className="h-9 w-9 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300"
                     >
                       -
                     </button>
-                    <span className="px-4 py-1 border-x border-gray-300 min-w-12 text-center">
+                    <span className="flex h-9 min-w-12 items-center justify-center border-x border-gray-300 px-3 text-sm">
                       {item.quantity}
                     </span>
                     <button
                       onClick={() => handleQuantityChange(item, item.quantity + 1)}
                       disabled={submitting || !isAvailable(item) || item.quantity >= item.stock}
-                      className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50"
+                      className="h-9 w-9 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300"
                     >
                       +
                     </button>
                   </div>
 
-                  <div className="text-right">
-                    <p className="font-bold text-lg">¥{(item.price * item.quantity).toFixed(2)}</p>
+                  <div className="min-w-20 text-right">
+                    <p className="text-lg font-semibold text-gray-900">¥{(item.price * item.quantity).toFixed(2)}</p>
                   </div>
 
                   <button
                     onClick={() => handleRemove(item)}
                     disabled={submitting}
-                    className="text-gray-400 hover:text-red-500 p-2"
+                    aria-label={t('删除')}
+                    className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-red-500"
                   >
-                    <FiTrash2 size={20} />
+                    <FiTrash2 size={18} />
                   </button>
+                  </div>
                 </div>
               </div>
             ))}

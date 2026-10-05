@@ -2,13 +2,14 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { productApi, recommendationApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import ProductCard from '@/components/ProductCard';
+import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { FiArrowRight, FiGift, FiRotateCcw, FiShield, FiTruck } from 'react-icons/fi';
 
 export default function Home() {
   const { t } = useI18n();
@@ -60,170 +61,111 @@ export default function Home() {
 
   return (
     <div>
-      {/* 优惠券横幅 - 始终显示 */}
-      <section className="bg-linear-to-r/srgb from-orange-500 to-red-500 text-white py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link href={isAuthenticated ? "/coupons" : "/login"} className="flex items-center justify-between hover:opacity-90 transition-opacity">
-            <div className="flex items-center gap-3">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-              </svg>
-              <div>
-                <div className="font-semibold text-lg">{t("🎁 领取优惠券，享更多优惠")}</div>
-                <div className="text-sm opacity-90">{isAuthenticated ? t("新用户专享优惠券等你来领") : t("登录即可领取专属优惠券")}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{isAuthenticated ? t("立即领取") : t("立即登录")}</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
+      {/* 优惠券公告栏 */}
+      <section className="bg-gray-900 text-white">
+        <div className="container-custom">
+          <Link
+            href={isAuthenticated ? "/coupons" : "/login"}
+            className="group flex flex-wrap items-center justify-center gap-x-3 gap-y-1 py-2.5 text-sm"
+          >
+            <FiGift className="h-4 w-4 text-primary-400" aria-hidden="true" />
+            <span className="font-medium">{t("领取优惠券，享更多优惠")}</span>
+            <span className="hidden text-gray-400 sm:inline">
+              {isAuthenticated ? t("新用户专享优惠券等你来领") : t("登录即可领取专属优惠券")}
+            </span>
+            <span className="inline-flex items-center gap-1 font-medium text-white underline-offset-4 group-hover:underline">
+              {isAuthenticated ? t("立即领取") : t("立即登录")}
+              <FiArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
           </Link>
         </div>
       </section>
-      
-      {/* 轮播图区域 */}
-      <section className="bg-linear-to-r/srgb from-primary-600 to-primary-800 text-white py-20">
-        <div className="container-custom">
+
+      {/* 首屏 */}
+      <section className="relative overflow-hidden border-b border-gray-200 bg-white">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-32 -top-40 h-[28rem] w-[28rem] rounded-full bg-primary-100/70 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 left-1/3 h-80 w-80 rounded-full bg-primary-50 blur-3xl" />
+        <div className="container-custom relative py-16 md:py-24">
           <div className="max-w-2xl">
-            <h1 className="text-5xl font-bold mb-4">{t("欢迎来到电商平台")}</h1>
-            <p className="text-xl mb-8">{t("发现优质商品，享受便捷购物")}</p>
-            <Link href="/products" className="btn btn-primary bg-white text-primary-600 hover:bg-gray-100 inline-block">
-              {t("立即购物")}</Link>
+            <h1 className="text-4xl font-semibold tracking-tight text-gray-900 md:text-5xl">{t("欢迎来到电商平台")}</h1>
+            <p className="mt-4 text-lg text-gray-600">{t("发现优质商品，享受便捷购物")}</p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/products" className="btn btn-primary inline-flex items-center gap-2 rounded-full px-6">
+                {t("立即购物")}
+                <FiArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <Link href={isAuthenticated ? "/coupons" : "/login"} className="btn btn-secondary rounded-full px-6">
+                {t("优惠券中心")}</Link>
+            </div>
           </div>
-        </div>
-      </section>
 
-      {/* 热门商品 */}
-      <section className="py-12">
-        <div className="container-custom">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold">{t("热门商品")}</h2>
-            <Link href="/products?sort=sales_count DESC" className="text-primary-600 hover:text-primary-700">
-              {t("查看更多 →")}</Link>
-          </div>
-          
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="card animate-pulse">
-                  <div className="bg-gray-300 h-64 w-full"></div>
-                  <div className="p-4 space-y-3">
-                    <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
-                    <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
-                  </div>
+          <dl className="mt-12 grid gap-6 sm:grid-cols-3">
+            {SERVICE_HIGHLIGHTS.map(({ icon: Icon, title, description }) => (
+              <div key={title} className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <dt className="text-sm font-medium text-gray-900">{t(title)}</dt>
+                  <dd className="mt-0.5 text-sm text-gray-500">{t(description)}</dd>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {hotProducts.map((product) => (
-                <ProductCard key={product.product_id} product={product} />
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
-      {/* 新品推荐 */}
-      <section className="py-12 bg-white">
-        <div className="container-custom">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold">{t("新品推荐")}</h2>
-            <Link href="/products?sort=created_at DESC" className="text-primary-600 hover:text-primary-700">
-              {t("查看更多 →")}</Link>
-          </div>
-          
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="card animate-pulse">
-                  <div className="bg-gray-300 h-64 w-full"></div>
-                  <div className="p-4 space-y-3">
-                    <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
-                    <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {newProducts.map((product) => (
-                <ProductCard key={product.product_id} product={product} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* 猜你喜欢 */}
+      <ProductSection title={t("热门商品")} href="/products?sort=sales_count DESC" products={hotProducts} loading={loading} />
+      <ProductSection title={t("新品推荐")} href="/products?sort=created_at DESC" products={newProducts} loading={loading} />
       {recommendations.length > 0 && (
-        <section className="py-12">
-          <div className="container-custom">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h2 className="text-3xl font-bold">{t("猜你喜欢")}</h2>
-                <p className="text-gray-600 mt-2">
-                  {isAuthenticated ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
-                </p>
-              </div>
-              <Link href="/products" className="text-primary-600 hover:text-primary-700">
-                {t("查看更多 →")}</Link>
-            </div>
-            
-            {loadingRecommendations ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="card animate-pulse">
-                    <div className="bg-gray-300 h-64 w-full"></div>
-                    <div className="p-4 space-y-3">
-                      <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
-                      <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {recommendations.map((product) => (
-                  <ProductCard key={product.product_id} product={product} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+        <ProductSection
+          title={t("猜你喜欢")}
+          subtitle={isAuthenticated ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
+          href="/products"
+          products={recommendations}
+          loading={loadingRecommendations}
+        />
       )}
-
-      {/* 优势特点 */}
-      <section className="py-12">
-        <div className="container-custom">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="bg-primary-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-primary-600 text-2xl">🚚</span>
-              </div>
-              <h3 className="font-bold text-xl mb-2">{t("快速配送")}</h3>
-              <p className="text-gray-600">{t("全国包邮，48小时送达")}</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-primary-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-primary-600 text-2xl">✓</span>
-              </div>
-              <h3 className="font-bold text-xl mb-2">{t("品质保证")}</h3>
-              <p className="text-gray-600">{t("正品保障，假一赔十")}</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-primary-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-primary-600 text-2xl">💬</span>
-              </div>
-              <h3 className="font-bold text-xl mb-2">{t("售后无忧")}</h3>
-              <p className="text-gray-600">{t("7天无理由退换货")}</p>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
 
+const SERVICE_HIGHLIGHTS = [
+  { icon: FiTruck, title: '快速配送', description: '全国包邮，48小时送达' },
+  { icon: FiShield, title: '品质保证', description: '正品保障，假一赔十' },
+  { icon: FiRotateCcw, title: '售后无忧', description: '7天无理由退换货' },
+] as const;
+
+interface ProductSectionProps {
+  title: string;
+  subtitle?: string;
+  href: string;
+  products: ComponentProps<typeof ProductCard>['product'][];
+  loading: boolean;
+}
+
+function ProductSection({ title, subtitle, href, products, loading }: ProductSectionProps) {
+  const { t } = useI18n();
+  return (
+    <section className="py-12 md:py-16">
+      <div className="container-custom">
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-gray-900">{title}</h2>
+            {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
+          </div>
+          <Link href={href} className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary-600">
+            {t("查看更多")}
+            <FiArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
+          {loading
+            ? [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />)
+            : products.map((product) => <ProductCard key={product.product_id} product={product} />)}
+        </div>
+      </div>
+    </section>
+  );
+}

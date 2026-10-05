@@ -8,7 +8,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 // 标记为动态页面
 export const dynamic = 'force-dynamic';
 import { productApi } from '@/lib/api';
-import ProductCard from '@/components/ProductCard';
+import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
+import { FiPackage } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 
@@ -96,20 +97,20 @@ function ProductsList() {
   };
 
   return (
-    <div className="py-8">
+    <div className="py-10">
       <div className="container-custom">
         {/* 头部 */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-4">
+        <div className="mb-8 border-b border-gray-200 pb-6">
+          <h1 className="mb-3 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
             {keyword ? t('搜索结果: {keyword}', { keyword }) : t("全部商品")}
           </h1>
           
-          <div className="flex items-center justify-between">
-            <div className="text-gray-600">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm text-gray-500">
               {t('共找到 {count} 件商品', { count: loading || loadError || result.scope !== scope ? '—' : pagination.total })}</div>
             
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-600">{t("排序:")}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">{t("排序:")}</span>
               <select
                 value={sort}
                 onChange={(e) => {
@@ -118,7 +119,7 @@ function ProductsList() {
                   params.delete('page');
                   router.push(`/products?${params.toString()}`);
                 }}
-                className="input w-auto"
+                className="input h-10 w-auto py-0 text-sm"
               >
                 <option value="created_at DESC">{t("最新")}</option>
                 <option value="sales_count DESC">{t("最热")}</option>
@@ -131,16 +132,8 @@ function ProductsList() {
 
         {/* 商品列表 */}
         {loading || result.scope !== scope ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {[...Array(12)].map((_, i) => (
-              <div key={i} className="card animate-pulse">
-                <div className="bg-gray-300 h-64 w-full"></div>
-                <div className="p-4 space-y-3">
-                  <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
-                  <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
+            {[...Array(12)].map((_, i) => <ProductCardSkeleton key={i} />)}
           </div>
         ) : loadError ? (
           <div className="text-center py-20" role="alert">
@@ -148,14 +141,16 @@ function ProductsList() {
             <button onClick={loadProducts} className="btn btn-secondary mt-4">{t('重新加载')}</button>
           </div>
         ) : products.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-xl font-medium text-gray-900 mb-2">{t("暂无商品")}</h3>
-            <p className="text-gray-600">{t("换个关键词试试吧")}</p>
+          <div className="flex flex-col items-center py-20 text-center">
+            <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+              <FiPackage className="h-7 w-7" aria-hidden="true" />
+            </span>
+            <h3 className="mb-1 text-lg font-medium text-gray-900">{t("暂无商品")}</h3>
+            <p className="text-sm text-gray-500">{t("换个关键词试试吧")}</p>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
               {products.map((product) => (
                 <ProductCard key={product.product_id} product={product} />
               ))}
@@ -191,7 +186,7 @@ function ProductsList() {
                         </button>
                       );
                     } else if (page === pagination.page - 3 || page === pagination.page + 3) {
-                      return <span key={page}>...</span>;
+                      return <span key={page} className="px-1 text-gray-400">...</span>;
                     }
                     return null;
                   })}
@@ -215,18 +210,10 @@ function ProductsList() {
 export default function ProductsPage() {
   return (
     <Suspense fallback={
-      <div className="py-8">
+      <div className="py-10">
         <div className="container-custom">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {[...Array(12)].map((_, i) => (
-              <div key={i} className="card animate-pulse">
-                <div className="bg-gray-300 h-64 w-full"></div>
-                <div className="p-4 space-y-3">
-                  <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
-                  <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
+            {[...Array(12)].map((_, i) => <ProductCardSkeleton key={i} />)}
           </div>
         </div>
       </div>

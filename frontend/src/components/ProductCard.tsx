@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { FiShoppingCart } from 'react-icons/fi';
+import { FaStar } from 'react-icons/fa';
+import ProductImage from '@/components/ProductImage';
 import { logger } from '@/lib/logger';
 
 interface ProductCardProps {
@@ -46,60 +48,62 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
+  const soldOut = Number(product.stock) <= 0;
+  const onSale = product.original_price && product.original_price > product.price;
+
   return (
-    <Link href={`/products/${product.product_id}`} className="card group hover:shadow-lg transition-shadow">
-      <div className="relative overflow-hidden bg-gray-200 h-64">
-        {product.main_image ? (
-          <img
-            src={product.main_image}
-            alt={product.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
-            {t("暂无图片")}</div>
-        )}
-        {product.original_price && product.original_price > product.price && (
-          <div className="absolute top-2 right-2 bg-primary-600 text-white px-2 py-1 rounded-sm text-sm">
-            {t("促销")}</div>
+    <Link
+      href={`/products/${product.product_id}`}
+      className="group flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+    >
+      <div className="relative">
+        <ProductImage
+          src={product.main_image}
+          alt={product.title}
+          className="aspect-square"
+          imageClassName="transition-transform duration-300 group-hover:scale-105"
+        />
+        {onSale && (
+          <span className="absolute left-3 top-3 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white">
+            {t("促销")}</span>
         )}
       </div>
-      
-      <div className="p-4">
-        <h3 className="font-medium text-gray-900 mb-2 line-clamp-2 min-h-12">
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-gray-900">
           {product.title}
         </h3>
-        
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <span className="text-primary-600 text-xl font-bold">¥{product.price}</span>
-            {product.original_price && product.original_price > product.price && (
-              <span className="text-gray-400 text-sm line-through ml-2">
-                ¥{product.original_price}
-              </span>
-            )}
-          </div>
-          <span className="text-gray-500 text-sm">{t('已售 {count}', { count: product.sales_count })}</span>
+
+        <div className="flex items-baseline gap-2">
+          <span className="text-lg font-semibold text-primary-600">¥{product.price}</span>
+          {onSale && (
+            <span className="text-xs text-gray-400 line-through">
+              ¥{product.original_price}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <span className="text-yellow-400 mr-1">★</span>
-            <span className="text-gray-600 text-sm">{product.rating}</span>
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+              <FaStar className="h-3 w-3 text-amber-400" aria-hidden="true" />
+              {product.rating}
+            </span>
+            <span className="hidden truncate sm:inline">{t('已售 {count}', { count: product.sales_count })}</span>
           </div>
-          
+
           <button
             onClick={handleAddToCart}
-            disabled={isAdding || Number(product.stock) <= 0}
-            className={`flex items-center space-x-1 px-3 py-1 rounded ${
-              Number(product.stock) <= 0
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            disabled={isAdding || soldOut}
+            className={`flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-medium transition-colors ${
+              soldOut
+                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
             }`}
           >
-            <FiShoppingCart />
-            <span className="text-sm">
-              {Number(product.stock) <= 0 ? t("已售罄") : isAdding ? t("处理中...") : product.has_sku ? t("选规格") : t("加入")}
+            <FiShoppingCart className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>
+              {soldOut ? t("已售罄") : isAdding ? t("处理中...") : product.has_sku ? t("选规格") : t("加入")}
             </span>
           </button>
         </div>
@@ -108,3 +112,14 @@ export default function ProductCard({ product }: ProductCardProps) {
   );
 }
 
+export function ProductCardSkeleton() {
+  return (
+    <div className="animate-pulse overflow-hidden rounded-xl border border-gray-200 bg-white" aria-hidden="true">
+      <div className="aspect-square bg-gray-100" />
+      <div className="space-y-3 p-4">
+        <div className="h-4 w-3/4 rounded bg-gray-100" />
+        <div className="h-4 w-1/3 rounded bg-gray-100" />
+      </div>
+    </div>
+  );
+}

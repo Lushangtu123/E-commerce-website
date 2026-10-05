@@ -6,6 +6,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import Header from '@/components/Header';
 import { Toaster } from 'react-hot-toast';
+import { FiShoppingBag } from 'react-icons/fi';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -62,34 +63,39 @@ export default function RootLayout({
           {children}
         </main>
         {!isAdminRoute && (
-          <footer className="bg-gray-800 text-white py-8">
-            <div className="container-custom">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div>
-                  <h3 className="font-bold text-lg mb-4">{t("关于我们")}</h3>
-                  <p className="text-gray-400">{t("专业的电商平台，为您提供优质的购物体验")}</p>
+          <footer className="border-t border-gray-200 bg-white">
+            <div className="container-custom py-12">
+              <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+                <div className="col-span-2 md:col-span-1">
+                  <div className="flex items-center gap-2 text-gray-900">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
+                      <FiShoppingBag size={16} aria-hidden="true" />
+                    </span>
+                    <span className="font-semibold tracking-tight">{t("电商平台")}</span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-gray-500">{t("专业的电商平台，为您提供优质的购物体验")}</p>
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg mb-4">{t("客户服务")}</h3>
-                  <ul className="space-y-2 text-gray-400">
+                  <h3 className="text-sm font-semibold text-gray-900">{t("客户服务")}</h3>
+                  <ul className="mt-3 space-y-2 text-sm text-gray-500">
                     <li>{t("帮助中心")}</li>
                     <li>{t("退换货政策")}</li>
                     <li>{t("配送说明")}</li>
                   </ul>
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg mb-4">{t("联系我们")}</h3>
-                  <ul className="space-y-2 text-gray-400">
+                  <h3 className="text-sm font-semibold text-gray-900">{t("联系我们")}</h3>
+                  <ul className="mt-3 space-y-2 text-sm text-gray-500">
                     <li>{t("客服电话: 400-123-4567")}</li>
                     <li>{t("邮箱: service@example.com")}</li>
                   </ul>
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg mb-4">{t("关注我们")}</h3>
-                  <p className="text-gray-400">{t("获取最新优惠信息")}</p>
+                  <h3 className="text-sm font-semibold text-gray-900">{t("关注我们")}</h3>
+                  <p className="mt-3 text-sm text-gray-500">{t("获取最新优惠信息")}</p>
                 </div>
               </div>
-              <div className="mt-8 pt-8 border-t border-gray-700 text-center text-gray-400">
+              <div className="mt-10 border-t border-gray-200 pt-6 text-sm text-gray-400">
                 <p>{t("© 2025 电商平台. All rights reserved.")}</p>
               </div>
             </div>
