@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { FiClock, FiShoppingCart, FiTrash } from 'react-icons/fi';
 import { canBuyActivityProduct, useCustomerActivity } from '@/hooks/use-customer-activity';
 import { quickAddToCart } from '@/lib/quick-cart';
+import ProductImage from '@/components/ProductImage';
 
 interface BrowseHistory {
   id: number;
@@ -117,11 +118,12 @@ export default function BrowseHistoryPage() {
                     className="relative cursor-pointer"
                     onClick={() => handleProductClick(item.product_id)}
                   >
-                    {item.main_image ? <img
+                    <ProductImage
                       src={item.main_image}
                       alt={(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
-                      className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
-                    /> : <div className="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400">{t("暂无图片")}</div>}
+                      className="h-64 w-full"
+                      imageClassName="transition duration-300 group-hover:scale-105"
+                    />
                     {Number(item.stock) <= 0 && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <span className="text-white text-xl font-bold">{t("已售罄")}</span>
