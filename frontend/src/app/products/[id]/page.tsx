@@ -250,7 +250,7 @@ export default function ProductDetailPage() {
 
             {/* 数量选择 */}
             <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-900">{t("数量:")}</span>
+              <label htmlFor="product-quantity" className="text-sm font-medium text-gray-900">{t("数量:")}</label>
               <div className="flex items-center overflow-hidden rounded-lg border border-gray-300">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -260,6 +260,7 @@ export default function ProductDetailPage() {
                   -
                 </button>
                 <input
+                  id="product-quantity"
                   type="number"
                   value={quantity}
                   onChange={(e) => setQuantity(Math.min(Math.max(1, stock), Math.max(1, parseInt(e.target.value) || 1)))}

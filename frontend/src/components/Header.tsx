@@ -139,11 +139,12 @@ export default function Header() {
           </Link>
 
           {/* 搜索框 */}
-          <form onSubmit={handleSearch} className="order-last w-full md:order-0 md:flex-1 md:w-auto md:max-w-xl md:min-w-32">
+          <form onSubmit={handleSearch} role="search" className="order-last w-full md:order-0 md:flex-1 md:w-auto md:max-w-xl md:min-w-32">
             <div className="relative" ref={searchRef}>
               <input
                 type="text"
                 placeholder={t("搜索商品...")}
+                aria-label={t("搜索商品")}
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 onFocus={() => setShowDropdown(true)}

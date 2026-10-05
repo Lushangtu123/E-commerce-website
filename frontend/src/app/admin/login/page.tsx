@@ -155,7 +155,7 @@ export default function AdminLoginPage() {
 
         {/* 底部信息 */}
         <div className="mt-8 text-center text-white text-sm">
-          <p>{t("© 2025 电商平台. All rights reserved.")}</p>
+          <p>{t("© {year} 电商平台. All rights reserved.", { year: new Date().getFullYear() })}</p>
         </div>
       </div>
     </div>

@@ -1,0 +1,99 @@
+// Server-side site helpers for metadata, robots and sitemap. Every URL comes from
+// trusted configuration, never from request headers, so a forged Host header cannot
+// redirect server-side fetches.
+
+export const SITE_NAME = '电商平台';
+export const SITE_DESCRIPTION = '专业的电商平台，为您提供优质的购物体验。精选商品，全国包邮，7天无理由退换货。';
+
+type Env = Record<string, string | undefined>;
+
+const trimSlash = (value: string) => value.replace(/\/+$/, '');
+const isHttpUrl = (value: string) => /^https?:\/\/[^/]+/.test(value);
+
+/** Public origin used for canonical URLs, Open Graph and the sitemap. */
+export function siteUrl(env: Env = process.env): string {
+  if (env.NEXT_PUBLIC_SITE_URL && isHttpUrl(env.NEXT_PUBLIC_SITE_URL)) return trimSlash(env.NEXT_PUBLIC_SITE_URL);
+  if (env.VERCEL_ENV === 'production' && env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${trimSlash(env.VERCEL_PROJECT_PRODUCTION_URL)}`;
+  if (env.VERCEL_URL) return `https://${trimSlash(env.VERCEL_URL)}`;
+  return 'http://localhost:3000';
+}
+
+/** Only production may be indexed; previews and local builds stay out of search engines. */
+export function isIndexable(env: Env = process.env): boolean {
+  if (env.VERCEL_ENV) return env.VERCEL_ENV === 'production';
+  return env.NODE_ENV === 'production' && Boolean(env.NEXT_PUBLIC_SITE_URL);
+}
+
+/**
+ * API base for server-side reads. INTERNAL_API_URL lets containers reach the backend
+ * by service name; otherwise an absolute NEXT_PUBLIC_API_URL is used, and the embedded
+ * Vercel API is reached through the public production domain. Preview deployment URLs
+ * sit behind Vercel authentication, so they return null and callers fall back.
+ */
+export function serverApiBase(env: Env = process.env): string | null {
+  for (const candidate of [env.INTERNAL_API_URL, env.NEXT_PUBLIC_API_URL]) {
+    if (candidate && isHttpUrl(candidate)) return trimSlash(candidate);
+  }
+  const relative = env.NEXT_PUBLIC_API_URL && env.NEXT_PUBLIC_API_URL.startsWith('/') ? env.NEXT_PUBLIC_API_URL : '/api';
+  if (env.VERCEL_ENV === 'production' && env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${trimSlash(env.VERCEL_PROJECT_PRODUCTION_URL)}${trimSlash(relative)}`;
+  }
+  return null;
+}
+
+/** GET JSON from the backend with a short timeout; any failure resolves to null. */
+export async function fetchApiJson<T>(path: string, options: { revalidate?: number; env?: Env; fetcher?: typeof fetch } = {}): Promise<T | null> {
+  const base = serverApiBase(options.env);
+  if (!base) return null;
+  try {
+    const response = await (options.fetcher ?? fetch)(`${base}${path}`, {
+      signal: AbortSignal.timeout(3000),
+      next: { revalidate: options.revalidate ?? 300 },
+    } as RequestInit);
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export interface PublicProduct {
+  product_id: number;
+  title: string;
+  description?: string | null;
+  price?: number | string;
+  main_image?: string | null;
+  status?: number;
+  updated_at?: string;
+}
+
+/** Plain-text summary for meta descriptions (search engines show roughly 120 CJK characters). */
+export function summarize(text: string | null | undefined, fallback: string, max = 120): string {
+  const clean = (text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return fallback;
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+/** Only absolute http(s) image URLs are safe to advertise in Open Graph tags. */
+export function shareableImage(url: string | null | undefined): string | undefined {
+  return url && /^https?:\/\//.test(url) ? url : undefined;
+}
+
+/** Paths that are personal, transactional or administrative and must not be crawled. */
+export const PRIVATE_PATHS = ['/admin', '/api', '/cart', '/orders', '/profile', '/my', '/favorites', '/history', '/login', '/register', '/forgot-password', '/reset-password'];
+
+/** Public pages that are always listed in the sitemap. */
+export const PUBLIC_STATIC_PATHS = ['/', '/products', '/coupons', '/help', '/returns', '/shipping'];
+
+/** Every listed product, page by page; stops at maxPages and on the first failed page. */
+export async function listPublicProducts(options: { env?: Env; fetcher?: typeof fetch; maxPages?: number } = {}): Promise<PublicProduct[]> {
+  const products: PublicProduct[] = [];
+  const maxPages = options.maxPages ?? 50;
+  for (let page = 1; page <= maxPages; page++) {
+    const data = await fetchApiJson<{ products?: PublicProduct[]; totalPages?: number }>(`/products?page=${page}&limit=100`, { env: options.env, fetcher: options.fetcher, revalidate: 3600 });
+    if (!data?.products) break;
+    products.push(...data.products);
+    if (!data.totalPages || page >= data.totalPages) break;
+  }
+  return products;
+}

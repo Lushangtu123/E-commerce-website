@@ -14,6 +14,9 @@ COPY . .
 # NEXT_PUBLIC values are embedded in the browser bundle at build time.
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Public site URL for canonical links, robots.txt and the sitemap; empty keeps the site noindex.
+ARG NEXT_PUBLIC_SITE_URL=
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 # 构建应用
 RUN npm run build
