@@ -187,7 +187,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       {/* 主内容区 */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
         {/* 顶部栏 */}
-        <div className="bg-white shadow-sm h-16 flex items-center justify-between px-6">
+        <div className="bg-white shadow-xs h-16 flex items-center justify-between px-6">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label={t('切换侧栏')}

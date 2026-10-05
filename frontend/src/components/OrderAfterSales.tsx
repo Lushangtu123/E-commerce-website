@@ -63,8 +63,8 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     {result?.key !== key ? <p role="status">{t('加载中...')}</p> : result.error ? <div role="alert"><p className="text-red-600">{t(result.error)}</p><button className="btn btn-secondary mt-3" onClick={load}>{t('重新加载')}</button></div> : value ? <div className="space-y-3">
       <p>{t('申请类型')}：{t(value.type === 'return' ? '退货申请' : '退款申请')}</p>
       <p>{t('审核状态')}：{t(AFTER_SALES_STATUS[value.status])}</p>
-      <p className="whitespace-pre-wrap break-words">{t('申请原因')}：{value.reason}</p>
-      {value.review_note && <p className="whitespace-pre-wrap break-words">{t('审核说明')}：{value.review_note}</p>}
+      <p className="whitespace-pre-wrap wrap-break-word">{t('申请原因')}：{value.reason}</p>
+      {value.review_note && <p className="whitespace-pre-wrap wrap-break-word">{t('审核说明')}：{value.review_note}</p>}
       <p className="text-sm text-gray-500">{t('申请时间')}：{formatDate(value.created_at)}</p>
       {value.status === 'requested' && <button disabled={busy} onClick={() => mutate(true)} className="btn btn-secondary">{t('撤回申请')}</button>}
     </div> : <form className="space-y-4" onSubmit={event => { event.preventDefault(); void mutate(false); }}>

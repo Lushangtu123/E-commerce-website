@@ -60,13 +60,13 @@ export default function ProductCard({ product }: ProductCardProps) {
             {t("暂无图片")}</div>
         )}
         {product.original_price && product.original_price > product.price && (
-          <div className="absolute top-2 right-2 bg-primary-600 text-white px-2 py-1 rounded text-sm">
+          <div className="absolute top-2 right-2 bg-primary-600 text-white px-2 py-1 rounded-sm text-sm">
             {t("促销")}</div>
         )}
       </div>
       
       <div className="p-4">
-        <h3 className="font-medium text-gray-900 mb-2 line-clamp-2 min-h-[3rem]">
+        <h3 className="font-medium text-gray-900 mb-2 line-clamp-2 min-h-12">
           {product.title}
         </h3>
         

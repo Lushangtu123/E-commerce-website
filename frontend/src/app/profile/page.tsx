@@ -142,7 +142,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 用户信息卡片 */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl shadow-xl p-8 mb-8 text-white">
+        <div className="bg-linear-to-r/srgb from-blue-600 to-blue-800 rounded-2xl shadow-xl p-8 mb-8 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
               <div className="w-20 h-20 shrink-0 bg-white rounded-full flex items-center justify-center overflow-hidden">
@@ -156,7 +156,7 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-6 py-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
             >
               <FiLogOut size={20} />
               <span>{t("退出登录")}</span>
@@ -164,7 +164,7 @@ export default function ProfilePage() {
           </div>
 
           {/* 快速统计 */}
-          <div className="grid grid-cols-4 gap-4 mt-8 pt-8 border-t border-white border-opacity-20">
+          <div className="grid grid-cols-4 gap-4 mt-8 pt-8 border-t border-white/20">
             <div className="text-center">
               <div className="text-3xl font-bold mb-1">{stats?.totalOrders ?? '—'}</div>
               <div className="text-sm text-blue-100">{t("我的订单")}</div>
@@ -177,7 +177,7 @@ export default function ProfilePage() {
               <div className="text-3xl font-bold mb-1">{stats?.favoriteCount ?? '—'}</div>
               <div className="text-sm text-blue-100">{t("我的收藏")}</div>
             </div>
-            <Link href="/orders?status=0" className="text-center rounded hover:bg-white/10">
+            <Link href="/orders?status=0" className="text-center rounded-sm hover:bg-white/10">
               <div className="text-3xl font-bold mb-1">{stats?.pendingOrders ?? '—'}</div>
               <div className="text-sm text-blue-100">{t("待支付")}</div>
             </Link>
@@ -190,10 +190,10 @@ export default function ProfilePage() {
         </div>}
 
         {/* 优惠券快捷入口 - 突出显示 */}
-        <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl shadow-lg p-6 mb-8">
+        <div className="bg-linear-to-r/srgb from-orange-500 to-red-500 rounded-xl shadow-lg p-6 mb-8">
           <div className="flex items-center justify-between text-white">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
                 <FiGift size={32} />
               </div>
               <div>
@@ -212,7 +212,7 @@ export default function ProfilePage() {
               </Link>
               <Link
                 href="/my/coupons"
-                className="px-6 py-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors font-medium"
+                className="px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors font-medium"
               >
                 {t("我的优惠券")}
               </Link>
@@ -227,7 +227,7 @@ export default function ProfilePage() {
               key={index}
               href={item.link}
               className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 ${
-                item.highlight ? 'ring-2 ring-orange-500 ring-opacity-50' : ''
+                item.highlight ? 'ring-2 ring-orange-500/50' : ''
               }`}
             >
               <div className="flex items-start justify-between">
@@ -289,26 +289,26 @@ export default function ProfilePage() {
         </div>
 
         {/* 快速操作 */}
-        <div className="mt-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-lg p-6 text-white">
+        <div className="mt-8 bg-linear-to-r/srgb from-purple-500 to-pink-500 rounded-xl shadow-lg p-6 text-white">
           <h3 className="text-xl font-bold mb-4">{t("💎 会员专享")}</h3>
           <div className="grid grid-cols-3 gap-4">
             <Link
               href="/coupons"
-              className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
+              className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
             >
               <div className="text-2xl mb-2">🎁</div>
               <div className="font-medium">{t("领取优惠券")}</div>
             </Link>
             <Link
               href="/products"
-              className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
+              className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
             >
               <div className="text-2xl mb-2">🛍️</div>
               <div className="font-medium">{t("继续购物")}</div>
             </Link>
             <Link
               href="/orders"
-              className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
+              className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
             >
               <div className="text-2xl mb-2">📦</div>
               <div className="font-medium">{t("查看订单")}</div>

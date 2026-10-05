@@ -165,7 +165,7 @@ export default function AdminCouponsPage() {
 
         {/* Create Form Modal */}
         {showCreateForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">{t("创建优惠券")}</h2>
@@ -188,7 +188,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                       placeholder={t("例如: SUMMER2024")}
                     />
                   </div>
@@ -199,7 +199,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                       placeholder={t("例如: 夏季促销券")}
                     />
                   </div>
@@ -210,7 +210,7 @@ export default function AdminCouponsPage() {
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     rows={2}
                     placeholder={t("优惠券说明")}
                   />
@@ -222,7 +222,7 @@ export default function AdminCouponsPage() {
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     >
                       <option value={1}>{t("满减券")}</option>
                       <option value={2}>{t("折扣券")}</option>
@@ -240,7 +240,7 @@ export default function AdminCouponsPage() {
                       step="0.01"
                       value={formData.discount_value}
                       onChange={(e) => setFormData({ ...formData, discount_value: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -254,7 +254,7 @@ export default function AdminCouponsPage() {
                       step="0.01"
                       value={formData.min_amount}
                       onChange={(e) => setFormData({ ...formData, min_amount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -265,7 +265,7 @@ export default function AdminCouponsPage() {
                       step="0.01"
                       value={formData.max_discount}
                       onChange={(e) => setFormData({ ...formData, max_discount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -279,7 +279,7 @@ export default function AdminCouponsPage() {
                       min="1"
                       value={formData.total_quantity}
                       onChange={(e) => setFormData({ ...formData, total_quantity: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -290,7 +290,7 @@ export default function AdminCouponsPage() {
                       min="1"
                       value={formData.per_user_limit}
                       onChange={(e) => setFormData({ ...formData, per_user_limit: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -303,7 +303,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.start_time}
                       onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -313,7 +313,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.end_time}
                       onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -339,7 +339,7 @@ export default function AdminCouponsPage() {
         )}
 
         {/* Coupons Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           {coupons.length === 0 ? (
             <div className="text-center py-12">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

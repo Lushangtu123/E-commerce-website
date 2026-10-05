@@ -180,7 +180,7 @@ export default function OrdersPage() {
             >
               {t("已完成")}
             </button>
-            <button onClick={() => { setActiveTab(4); setPage(1); }} className={`px-4 py-2 rounded ${activeTab === 4 ? 'bg-primary-600 text-white' : 'bg-gray-100'}`}>{t("已取消")}</button>
+            <button onClick={() => { setActiveTab(4); setPage(1); }} className={`px-4 py-2 rounded-sm ${activeTab === 4 ? 'bg-primary-600 text-white' : 'bg-gray-100'}`}>{t("已取消")}</button>
           </div>
         </div>
 
@@ -189,8 +189,8 @@ export default function OrdersPage() {
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="card p-6 animate-pulse">
-                <div className="h-6 bg-gray-300 rounded w-1/4 mb-4"></div>
-                <div className="h-24 bg-gray-300 rounded"></div>
+                <div className="h-6 bg-gray-300 rounded-sm w-1/4 mb-4"></div>
+                <div className="h-24 bg-gray-300 rounded-sm"></div>
               </div>
             ))}
           </div>

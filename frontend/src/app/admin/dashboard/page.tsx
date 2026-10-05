@@ -20,7 +20,7 @@ interface StatCardProps {
 function StatCard({ icon, title, value, growth, color }: StatCardProps) {
   const { t } = useI18n();
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow-sm p-6">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-gray-500 text-sm mb-1">{title}</p>
@@ -146,7 +146,7 @@ export default function AdminDashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 销售趋势图 */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("销售趋势（最近7天）")}</h3>
             {salesTrend && salesTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* 热门商品 */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("热门商品（最近7天）")}</h3>
             <div className="space-y-3">
               {topProducts && topProducts.length > 0 ? topProducts.map((product, index) => (
@@ -191,7 +191,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* 最近订单 */}
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-lg shadow-sm">
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">{t("最近订单")}</h3>
           </div>
