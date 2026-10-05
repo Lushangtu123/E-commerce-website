@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
+import { TITLE_TEMPLATE } from '@/lib/site';
 
-export const metadata: Metadata = { title: '个人中心', robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: { default: '个人中心', template: TITLE_TEMPLATE }, robots: { index: false, follow: false } };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;

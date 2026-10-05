@@ -3,6 +3,8 @@
 // redirect server-side fetches.
 
 export const SITE_NAME = '电商平台';
+/** A layout with a plain string title drops this template for its children, so they repeat it. */
+export const TITLE_TEMPLATE = `%s | ${SITE_NAME}`;
 export const SITE_DESCRIPTION = '专业的电商平台，为您提供优质的购物体验。精选商品，全国包邮，7天无理由退换货。';
 
 type Env = Record<string, string | undefined>;
