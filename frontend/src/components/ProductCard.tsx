@@ -79,7 +79,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         <div className="flex items-baseline gap-2">
           <span className="text-lg font-semibold text-primary-600">¥{product.price}</span>
           {onSale && (
-            <span className="text-xs text-gray-400 line-through">
+            <span className="text-xs text-gray-500 line-through">
               ¥{product.original_price}
             </span>
           )}

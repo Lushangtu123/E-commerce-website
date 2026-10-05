@@ -44,7 +44,7 @@ export default function ProductImage({ src, alt, className = '', fit = 'cover', 
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-gray-300" role="img" aria-label={alt}>
           <FiImage className={compact ? 'h-6 w-6' : 'h-10 w-10'} aria-hidden="true" />
-          {!compact && <span className="text-xs text-gray-400">{t('暂无图片')}</span>}
+          {!compact && <span className="text-xs text-gray-500">{t('暂无图片')}</span>}
         </div>
       )}
     </div>

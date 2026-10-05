@@ -146,11 +146,13 @@ function ProductsList() {
             <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
               <FiPackage className="h-7 w-7" aria-hidden="true" />
             </span>
-            <h3 className="mb-1 text-lg font-medium text-gray-900">{t("暂无商品")}</h3>
+            <h2 className="mb-1 text-lg font-medium text-gray-900">{t("暂无商品")}</h2>
             <p className="text-sm text-gray-500">{t("换个关键词试试吧")}</p>
           </div>
         ) : (
           <>
+            {/* Product cards use <h3>; this keeps the outline h1 > h2 > h3 for screen readers. */}
+            <h2 className="sr-only">{t('商品列表')}</h2>
             <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
               {products.map((product) => (
                 <ProductCard key={product.product_id} product={product} />
@@ -187,7 +189,7 @@ function ProductsList() {
                         </button>
                       );
                     } else if (page === pagination.page - 3 || page === pagination.page + 3) {
-                      return <span key={page} className="px-1 text-gray-400">...</span>;
+                      return <span key={page} className="px-1 text-gray-500">...</span>;
                     }
                     return null;
                   })}

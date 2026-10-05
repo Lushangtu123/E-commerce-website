@@ -219,7 +219,7 @@ export default function ProductDetailPage() {
                     ¥{price}
                   </span>
                   {Number(product.original_price) > Number(price) && (
-                    <span className="text-base text-gray-400 line-through">
+                    <span className="text-base text-gray-500 line-through">
                       ¥{product.original_price}
                     </span>
                   )}
@@ -315,7 +315,7 @@ export default function ProductDetailPage() {
 
             {/* 商品描述 */}
             <div className="border-t border-gray-200 pt-6">
-              <h3 className="mb-3 text-base font-semibold text-gray-900">{t("商品详情")}</h3>
+              <h2 className="mb-3 text-base font-semibold text-gray-900">{t("商品详情")}</h2>
               <p className="whitespace-pre-wrap text-sm leading-6 text-gray-600">
                 {product.description || t("暂无描述")}
               </p>

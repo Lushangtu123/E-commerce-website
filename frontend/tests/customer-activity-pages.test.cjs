@@ -7,7 +7,7 @@ const secondUser = { user_id: 2, username: 'second', email: 'second@test' };
 const text = tree => Array.isArray(tree) ? tree.map(text).join('') : tree?.props ? text(tree.props.children) : typeof tree === 'string' || typeof tree === 'number' ? String(tree) : '';
 const button = (tree, label) => findElements(tree, element => element.type === 'button' && text(element) === label)[0];
 const removeButton = (tree, kind) => findElements(tree, element => element.type === 'button' && element.props.title === (kind === 'favorites' ? '取消收藏' : '删除记录'))[0];
-const titles = tree => findElements(tree, element => element.type === 'h3').map(text);
+const titles = tree => findElements(tree, element => element.type === 'h2').map(text);
 const product = (id, title = `Product ${id}`) => ({ favorite_id: id, id, product_id: id, title, price: '10.00', stock: 3, status: 1, has_sku: false, browsed_at: '2026-10-02T00:00:00Z' });
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 function setup(kind, { list, remove = async () => ({}), clear = async () => ({}), detail = async id => ({ product: product(id) }), add = async () => ({}), confirm = () => true, rows = Array.from({ length: 21 }, (_, index) => product(index + 1)) } = {}) {

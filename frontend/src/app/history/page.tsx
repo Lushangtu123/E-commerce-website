@@ -138,12 +138,12 @@ export default function BrowseHistoryPage() {
                   </div>
 
                   <div className="p-4">
-                    <h3
+                    <h2
                       className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-primary-600"
                       onClick={() => handleProductClick(item.product_id)}
                     >
                       {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
-                    </h3>
+                    </h2>
 
                     <div className="flex items-baseline gap-2 mb-2">
                       <span className="text-2xl font-bold text-red-600">
@@ -151,7 +151,7 @@ export default function BrowseHistoryPage() {
                       </span>
                     </div>
 
-                    <div className="text-xs text-gray-400 mb-4">
+                    <div className="text-xs text-gray-500 mb-4">
                       {t('浏览时间：{date}', { date: formatDate(item.browsed_at) })}
                     </div>
 

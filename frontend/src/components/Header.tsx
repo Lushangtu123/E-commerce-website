@@ -207,12 +207,12 @@ export default function Header() {
                               index === 0 ? 'text-red-500' :
                               index === 1 ? 'text-orange-500' :
                               index === 2 ? 'text-yellow-600' :
-                              'text-gray-400'
+                              'text-gray-500'
                             }`}>
                               {index + 1}
                             </span>
                             <span className="text-sm text-gray-700">{item.keyword}</span>
-                            <span className="ml-auto text-xs text-gray-400">{t('{count}次', { count: item.search_count })}</span>
+                            <span className="ml-auto text-xs text-gray-500">{t('{count}次', { count: item.search_count })}</span>
                           </div>
                         ))}
                       </div>
