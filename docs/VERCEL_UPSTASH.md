@@ -30,6 +30,14 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 连接初始化可复用并在失败后重试，MySQL 与 Redis 均保留 TLS 验证。Vercel API 不启动监听器、RabbitMQ 消费者或后台定时器；`/api/health` 检查 MySQL 和 Redis，`/api/openapi.json` 提供接口定义。
 
+## Web Analytics 与 Speed Insights
+
+根布局接入 `@vercel/analytics/next` 和 `@vercel/speed-insights/next`，覆盖首次访问和 Next.js 路由切换。两个 SDK 通过 `beforeSend` 去掉 URL 的查询参数、片段和内嵌凭据，保留页面路径及动态路由分组；不添加账户、订单内容或自定义业务事件。
+
+在 Vercel 项目的 Analytics 页面启用 Web Analytics，然后重新部署。Speed Insights 免费版在安装 SDK 并部署后开始收集，无需开通 Plus。SDK 使用平台自动生成的脚本和上报路径，不需客户端密钥。查看当前分支数据时，将两个面板的环境筛选设为 Preview 或 All Environments。
+
+访问部署并切换页面后检查浏览器 Network 中的脚本和上报请求，再等待面板聚合数据。开发模式不收集 Analytics 正式访问数据，访问统计和性能评分不会追溯 SDK 接入前的历史。免费 Speed Insights 提供 Real Experience Score；各项 Core Web Vitals 的详细面板属于 Plus，当前部署使用免费版。额度和功能以 [Analytics 官方说明](https://vercel.com/docs/analytics/limits-and-pricing) 与 [Speed Insights 官方说明](https://vercel.com/docs/speed-insights/limits-and-pricing) 为准。
+
 ## 初始化数据库
 
 先配置云数据库变量，在本地运行 `npm --prefix backend run build`，然后运行 `backend/dist/database/migrate.js` 及 `backend/dist/database/admin-migrate.js`。管理员初始化还需临时设置至少 16 字符的 `ADMIN_BOOTSTRAP_PASSWORD`；生产环境不会创建默认弱密码账户。迁移不会在每次函数请求中运行。

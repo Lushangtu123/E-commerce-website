@@ -10,6 +10,9 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LOCALE_STORAGE_KEY, useLocaleStore } from '@/store/useLocaleStore';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+import { redactTelemetryUrl } from '@/lib/telemetry';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -93,6 +96,8 @@ export default function RootLayout({
           </footer>
         )}
         <Toaster position="top-center" />
+        <Analytics beforeSend={redactTelemetryUrl} />
+        <SpeedInsights beforeSend={redactTelemetryUrl} />
       </body>
     </html>
   );
