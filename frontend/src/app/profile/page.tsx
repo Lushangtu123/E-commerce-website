@@ -16,7 +16,10 @@ import {
   FiGift,
   FiCreditCard,
   FiMapPin,
-  FiPhone
+  FiPhone,
+  FiTrendingUp,
+  FiAward,
+  FiPackage
 } from 'react-icons/fi';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
@@ -197,7 +200,7 @@ export default function ProfilePage() {
                 <FiGift size={32} />
               </div>
               <div>
-                <h2 className="text-2xl font-bold mb-1">{t("🎁 优惠券中心")}</h2>
+                <h2 className="text-2xl font-bold mb-1">{t("优惠券中心")}</h2>
                 <p className="text-orange-100">
                   {stats ? <>{t('您有')} <span className="font-bold text-xl">{stats.availableCoupons}</span> {t('张可用优惠券')}</> : t('查看或领取优惠券')}
                 </p>
@@ -238,7 +241,7 @@ export default function ProfilePage() {
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
                       {t(item.title)}
-                      {item.highlight && <span className="ml-2 text-orange-500">🔥</span>}
+                      {item.highlight && <FiTrendingUp className="ml-2 inline h-4 w-4 align-[-2px] text-orange-500" aria-hidden="true" />}
                     </h3>
                     <p className="text-sm text-gray-500">{t(item.description)}</p>
                   </div>
@@ -290,27 +293,27 @@ export default function ProfilePage() {
 
         {/* 快速操作 */}
         <div className="mt-8 bg-linear-to-r/srgb from-purple-500 to-pink-500 rounded-xl shadow-lg p-6 text-white">
-          <h3 className="text-xl font-bold mb-4">{t("💎 会员专享")}</h3>
+          <h3 className="mb-4 flex items-center gap-2 text-xl font-bold"><FiAward className="h-5 w-5" aria-hidden="true" />{t("会员专享")}</h3>
           <div className="grid grid-cols-3 gap-4">
             <Link
               href="/coupons"
               className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
             >
-              <div className="text-2xl mb-2">🎁</div>
+              <FiGift className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
               <div className="font-medium">{t("领取优惠券")}</div>
             </Link>
             <Link
               href="/products"
               className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
             >
-              <div className="text-2xl mb-2">🛍️</div>
+              <FiShoppingBag className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
               <div className="font-medium">{t("继续购物")}</div>
             </Link>
             <Link
               href="/orders"
               className="bg-white/20 hover:bg-white/30 rounded-lg p-4 text-center transition-colors"
             >
-              <div className="text-2xl mb-2">📦</div>
+              <FiPackage className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
               <div className="font-medium">{t("查看订单")}</div>
             </Link>
           </div>

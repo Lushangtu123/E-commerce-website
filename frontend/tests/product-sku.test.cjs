@@ -59,7 +59,8 @@ test('SKU purchase requires explicit selection and uses that variant price, imag
   tree = await runtime.flush();
   assert.ok(textContent(tree).includes('¥20'));
   assert.ok(textContent(tree).includes('库存 2 件'));
-  assert.equal(findElements(tree, element => element.type === 'img')[0].props.src, '/red.jpg');
+  const mainImage = findElements(tree, element => element.type === 'img' || element.type?.name === 'ProductImage')[0];
+  assert.equal(mainImage.props.src, '/red.jpg');
   const quantity = findElements(tree, element => element.type === 'input' && element.props.type === 'number')[0];
   assert.equal(quantity.props.max, 2);
   quantity.props.onChange({ target: { value: '99' } });

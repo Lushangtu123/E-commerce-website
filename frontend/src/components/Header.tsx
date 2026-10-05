@@ -6,8 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift } from 'react-icons/fi';
-import { FaHeart } from 'react-icons/fa';
+import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift, FiHeart, FiShoppingBag } from 'react-icons/fi';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api';
@@ -128,12 +127,16 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-xs sticky top-0 z-50">
-      <div className="container-custom py-4">
+    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur-md">
+      <div className="container-custom py-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Logo */}
-          <Link href="/" className="text-2xl font-bold text-primary-600">
-            {t("电商平台")}</Link>
+          <Link href="/" className="flex items-center gap-2 rounded-lg text-gray-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
+              <FiShoppingBag size={18} aria-hidden="true" />
+            </span>
+            <span className="text-lg font-semibold tracking-tight">{t("电商平台")}</span>
+          </Link>
 
           {/* 搜索框 */}
           <form onSubmit={handleSearch} className="order-last w-full md:order-0 md:flex-1 md:w-auto md:max-w-xl md:min-w-32">
@@ -144,19 +147,19 @@ export default function Header() {
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
-                className="input pr-12"
+                className="input h-10 rounded-full bg-gray-50 pr-12 text-sm focus:bg-white"
               />
               <button
                 type="submit"
                 aria-label={t('搜索')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-primary-600"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
               >
-                <FiSearch size={20} />
+                <FiSearch size={18} />
               </button>
 
               {/* 搜索下拉菜单 */}
               {showDropdown && (searchHistory.length > 0 || hotKeywords.length > 0) && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 max-h-96 overflow-y-auto z-50">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg ring-1 ring-gray-200 max-h-96 overflow-y-auto z-50">
                   {/* 搜索历史 */}
                   {isAuthenticated && searchHistory.length > 0 && (
                     <div className="p-3 border-b border-gray-100">
@@ -219,25 +222,27 @@ export default function Header() {
             </div>
           </form>
           {/* 右侧菜单 */}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
             <LanguageSwitcher />
             {/* 优惠券 - 始终显示 */}
             <Link
               href={isAuthenticated ? "/coupons" : "/login"}
-              className="flex items-center text-gray-700 hover:text-orange-500 transition"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
               title={isAuthenticated ? t("优惠券") : t("登录领取优惠券")}
+              aria-label={isAuthenticated ? t("优惠券") : t("登录领取优惠券")}
             >
-              <FiGift size={22} />
+              <FiGift size={20} />
             </Link>
             
             {/* 收藏 */}
             {isAuthenticated && (
               <Link
                 href="/favorites"
-                className="flex items-center text-gray-700 hover:text-red-500 transition"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 title={t("我的收藏")}
+                aria-label={t("我的收藏")}
               >
-                <FaHeart size={22} />
+                <FiHeart size={20} />
               </Link>
             )}
 
@@ -245,56 +250,55 @@ export default function Header() {
             <Link
               href="/cart"
               aria-label={t('购物车')}
-              className="relative flex items-center text-gray-700 hover:text-primary-600"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
             >
-              <FiShoppingCart size={24} />
+              <FiShoppingCart size={20} />
               {getTotalCount() > 0 && (
-                <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="absolute right-0.5 top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-600 px-1 text-[11px] font-semibold text-white ring-2 ring-white">
                   {getTotalCount()}
                 </span>
               )}
             </Link>
 
             {isAuthenticated ? (
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                 <Link
                   href="/profile"
-                  className="px-4 py-2 bg-linear-to-r/srgb from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="ml-1 flex h-10 items-center gap-2 rounded-full px-4 text-sm font-medium text-gray-800 ring-1 ring-inset ring-gray-300 transition-colors hover:bg-gray-50"
                 >
-                  <FiUser size={18} />
+                  <FiUser size={16} />
                   {t("我的")}</Link>
                 <Link
                   href="/orders"
-                  className="text-gray-700 hover:text-primary-600"
+                  className="rounded-full px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 >
                   {t("订单")}</Link>
                 <Link
                   href="/history"
-                  className="text-gray-700 hover:text-primary-600 flex items-center gap-1"
+                  className="flex items-center gap-1 rounded-full px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 >
-                  <FiClock size={16} />
+                  <FiClock size={15} />
                   {t("足迹")}</Link>
-                <div className="flex items-center space-x-2 text-gray-700">
-                  <span>{user?.username}</span>
-                </div>
+                <span className="hidden max-w-32 truncate px-1 text-sm text-gray-500 lg:inline">{user?.username}</span>
                 <button
                   onClick={handleLogout}
-                  className="text-gray-700 hover:text-primary-600"
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                   title={t("退出登录")}
+                  aria-label={t("退出登录")}
                 >
-                  <FiLogOut size={20} />
+                  <FiLogOut size={18} />
                 </button>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="ml-1 flex flex-wrap items-center gap-2">
                 <Link
                   href="/login"
-                  className="text-gray-700 hover:text-primary-600"
+                  className="rounded-full px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 >
                   {t("登录")}</Link>
                 <Link
                   href="/register"
-                  className="btn btn-primary"
+                  className="btn btn-primary rounded-full text-sm"
                 >
                   {t("注册")}</Link>
               </div>

@@ -6,6 +6,8 @@ import { orderApi, orderTimeoutApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { FiAlertTriangle, FiClock } from 'react-icons/fi';
+import ProductImage from '@/components/ProductImage';
 import { useI18n } from '@/lib/i18n';
 import OrderReviews from '@/components/OrderReviews';
 import OrderAfterSales from '@/components/OrderAfterSales';
@@ -196,13 +198,15 @@ export default function OrderDetailPage() {
                 {t(ORDER_STATUS[order.status as keyof typeof ORDER_STATUS].text)}
               </div>
               {order.status === 0 && remainingTime !== null && remainingTime > 0 && (
-                <div className="mt-2 text-orange-600 text-sm">
-                  {t('⏰ 剩余支付时间: {minutes} 分钟', { minutes: remainingTime })}
+                <div className="mt-2 flex items-center gap-1.5 text-sm text-orange-600">
+                  <FiClock className="h-4 w-4" aria-hidden="true" />
+                  {t('剩余支付时间: {minutes} 分钟', { minutes: remainingTime })}
                 </div>
               )}
               {order.status === 0 && remainingTime === 0 && (
-                <div className="mt-2 text-red-600 text-sm">
-                  {t("⚠️ 订单已超时，即将自动取消")}
+                <div className="mt-2 flex items-center gap-1.5 text-sm text-red-600" role="alert">
+                  <FiAlertTriangle className="h-4 w-4" aria-hidden="true" />
+                  {t("订单已超时，即将自动取消")}
                 </div>
               )}
             </div>
@@ -232,19 +236,7 @@ export default function OrderDetailPage() {
           <div className="space-y-4">
             {items.map((item) => (
               <div key={item.item_id} className="flex items-center space-x-4 pb-4 border-b last:border-0">
-                <div className="w-20 h-20 bg-gray-100 rounded-sm overflow-hidden shrink-0">
-                  {item.product_image ? (
-                    <img
-                      src={item.product_image}
-                      alt={item.product_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                      {t("无图")}
-                    </div>
-                  )}
-                </div>
+                <ProductImage src={item.product_image} alt={item.product_name} compact className="h-20 w-20 shrink-0 rounded-lg border border-gray-200" />
                 <div className="flex-1">
                   <h3 className="font-medium">{item.product_name}</h3>
                   {item.sku_specs && <p className="text-gray-600 text-sm mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}

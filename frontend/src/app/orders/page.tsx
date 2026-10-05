@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
+import { FiPackage } from 'react-icons/fi';
 import { useI18n } from '@/lib/i18n';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
 
@@ -201,9 +202,11 @@ export default function OrdersPage() {
           </div>
         ) : orders.length === 0 ? (
           <div className="text-center py-20">
-            <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-2xl font-medium text-gray-900 mb-2">{t("暂无订单")}</h3>
-            <p className="text-gray-600 mb-6">{t("快去购物吧")}</p>
+            <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+              <FiPackage className="h-7 w-7" aria-hidden="true" />
+            </span>
+            <h3 className="mb-1 text-lg font-medium text-gray-900">{t("暂无订单")}</h3>
+            <p className="mb-6 text-sm text-gray-500">{t("快去购物吧")}</p>
             <Link href="/products" className="btn btn-primary">
               {t("去购物")}
             </Link>
