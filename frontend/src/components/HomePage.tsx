@@ -2,7 +2,7 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useEffect, useState, type ComponentProps } from 'react';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { productApi, recommendationApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
@@ -16,7 +16,9 @@ export default function Home() {
   const { isAuthenticated } = useAuthStore();
   const [hotProducts, setHotProducts] = useState<any[]>([]);
   const [newProducts, setNewProducts] = useState<any[]>([]);
-  const [recommendations, setRecommendations] = useState<any[]>([]);
+  // The subtitle must describe the session the recommendations were fetched for.
+  const [recommendations, setRecommendations] = useState<{ products: any[]; personalized: boolean }>({ products: [], personalized: false });
+  const recommendationRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
@@ -28,34 +30,35 @@ export default function Home() {
     loadRecommendations();
   }, [isAuthenticated]);
 
+  // Hot and new products load independently, so one failing request cannot blank both sections.
   const loadData = async () => {
-    try {
-      setLoading(true);
-      
-      // 加载热门商品
-      const hotData: any = await productApi.getHotProducts(8);
-      setHotProducts(hotData.products || []);
-
-      // 加载新品
-      const newData: any = await productApi.list({ sort: 'created_at DESC', limit: 8 });
-      setNewProducts(newData.products || []);
-    } catch (error: any) {
-      logger.error('加载数据失败:', error);
-      toast.error(t("加载数据失败"));
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    const [hot, latest] = await Promise.allSettled([
+      productApi.getHotProducts(8),
+      productApi.list({ sort: 'created_at DESC', limit: 8 }),
+    ]);
+    if (hot.status === 'fulfilled') setHotProducts((hot.value as any).products || []);
+    if (latest.status === 'fulfilled') setNewProducts((latest.value as any).products || []);
+    const failures = [hot, latest].filter((result) => result.status === 'rejected');
+    failures.forEach((failure) => logger.error('加载数据失败:', failure.reason));
+    if (failures.length) toast.error(t("加载数据失败"));
+    setLoading(false);
   };
 
+  // Login state hydrates after mount, so requests can overlap; only the latest one may update the page.
   const loadRecommendations = async () => {
+    const request = ++recommendationRequest.current;
+    const personalized = isAuthenticated;
+    setLoadingRecommendations(true);
     try {
-      setLoadingRecommendations(true);
       const data: any = await recommendationApi.getGuessYouLike(8);
-      setRecommendations(data.recommendations || []);
+      if (request === recommendationRequest.current) setRecommendations({ products: data.recommendations || [], personalized });
     } catch (error: any) {
+      if (request !== recommendationRequest.current) return;
       logger.error('加载推荐失败:', error);
+      setRecommendations({ products: [], personalized });
     } finally {
-      setLoadingRecommendations(false);
+      if (request === recommendationRequest.current) setLoadingRecommendations(false);
     }
   };
 
@@ -117,12 +120,12 @@ export default function Home() {
 
       <ProductSection title={t("热门商品")} href="/products?sort=sales_count DESC" products={hotProducts} loading={loading} />
       <ProductSection title={t("新品推荐")} href="/products?sort=created_at DESC" products={newProducts} loading={loading} />
-      {recommendations.length > 0 && (
+      {recommendations.products.length > 0 && (
         <ProductSection
           title={t("猜你喜欢")}
-          subtitle={isAuthenticated ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
+          subtitle={recommendations.personalized ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
           href="/products"
-          products={recommendations}
+          products={recommendations.products}
           loading={loadingRecommendations}
         />
       )}
