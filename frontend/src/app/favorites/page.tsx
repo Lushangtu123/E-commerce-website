@@ -121,19 +121,19 @@ export default function FavoritesPage() {
                   </div>
 
                   <div className="p-4">
-                    <h3
+                    <h2
                       className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-primary-600"
                       onClick={() => handleProductClick(item.product_id)}
                     >
                       {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
-                    </h3>
+                    </h2>
 
                     <div className="flex items-baseline gap-2 mb-4">
                       <span className="text-2xl font-bold text-red-600">
                         ¥{item.price ?? 0}
                       </span>
                       {Number(item.original_price) > Number(item.price) && (
-                        <span className="text-sm text-gray-400 line-through">
+                        <span className="text-sm text-gray-500 line-through">
                           ¥{item.original_price}
                         </span>
                       )}

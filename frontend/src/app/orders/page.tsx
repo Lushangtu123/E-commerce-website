@@ -219,7 +219,7 @@ export default function OrdersPage() {
                 <div className="flex justify-between items-center mb-4 pb-4 border-b">
                   <div className="flex items-center space-x-4">
                     <span className="text-gray-600">{t("订单号:")} {order.order_no}</span>
-                    <span className="text-gray-400">
+                    <span className="text-gray-500">
                       {formatDate(order.created_at)}
                     </span>
                   </div>

@@ -44,7 +44,7 @@ export default function SiteFooter() {
             <Link href="/coupons" className={`mt-3 block text-sm text-gray-500 ${linkClass}`}>{t("获取最新优惠信息")}</Link>
           </div>
         </div>
-        <div className="mt-10 border-t border-gray-200 pt-6 text-sm text-gray-400">
+        <div className="mt-10 border-t border-gray-200 pt-6 text-sm text-gray-500">
           <p>{t("© {year} 电商平台. All rights reserved.", { year })}</p>
         </div>
       </div>

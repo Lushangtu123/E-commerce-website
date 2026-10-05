@@ -102,19 +102,19 @@ export default function Home() {
             </div>
           </div>
 
-          <dl className="mt-12 grid gap-6 sm:grid-cols-3">
+          <ul className="mt-12 grid gap-6 sm:grid-cols-3">
             {SERVICE_HIGHLIGHTS.map(({ icon: Icon, title, description }) => (
-              <div key={title} className="flex items-start gap-3">
+              <li key={title} className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <dt className="text-sm font-medium text-gray-900">{t(title)}</dt>
-                  <dd className="mt-0.5 text-sm text-gray-500">{t(description)}</dd>
+                  <p className="text-sm font-medium text-gray-900">{t(title)}</p>
+                  <p className="mt-0.5 text-sm text-gray-500">{t(description)}</p>
                 </div>
-              </div>
+              </li>
             ))}
-          </dl>
+          </ul>
         </div>
       </section>
 
