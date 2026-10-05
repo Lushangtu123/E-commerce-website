@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { requestFailure } from '@/lib/api-error';
+import type { ActivityPage } from '@/lib/api';
 
 interface ActivityResult<T> {
   key: string;
@@ -18,7 +19,7 @@ interface MutationOptions<T> {
   productId?: number;
   confirm?: () => boolean;
   onSuccess: (value: T) => void;
-  onError: (error: any) => void;
+  onError: (error: unknown) => void;
   refresh?: boolean;
 }
 
@@ -30,7 +31,7 @@ export function canBuyActivityProduct(product: { status: number | null; stock: n
 /** Keeps each account's paginated collection and request results in their own scope. */
 export function useCustomerActivity<T extends { product_id: number }>(
   collection: 'favorites' | 'history',
-  load: (params: { page: number; limit: number }) => Promise<any>,
+  load: (params: { page: number; limit: number }) => Promise<ActivityPage<T>>,
   errorMessage: string,
 ) {
   const router = useRouter();

@@ -9,6 +9,7 @@ import { FiClock, FiShoppingCart, FiTrash } from 'react-icons/fi';
 import { canBuyActivityProduct, useCustomerActivity } from '@/hooks/use-customer-activity';
 import { quickAddToCart } from '@/lib/quick-cart';
 import ProductImage from '@/components/ProductImage';
+import { requestFailure } from '@/lib/api-error';
 
 interface BrowseHistory {
   id: number;
@@ -32,13 +33,13 @@ export default function BrowseHistoryPage() {
   const handleRemove = (productId: number) => runMutation(() => browseApi.deleteRecord(productId), {
     productId, refresh: true,
     onSuccess: () => toast.success(t("删除成功")),
-    onError: error => toast.error(t(error.response?.data?.message || "删除失败")),
+    onError: error => toast.error(t(requestFailure(error).response?.data?.message || "删除失败")),
   });
 
   const handleClearAll = () => runMutation(() => browseApi.clearHistory(), {
     confirm: () => confirm(t("确定要清空所有浏览历史吗？")), refresh: true,
     onSuccess: () => toast.success(t("已清空浏览历史")),
-    onError: error => toast.error(t(error.response?.data?.message || "清空失败")),
+    onError: error => toast.error(t(requestFailure(error).response?.data?.message || "清空失败")),
   });
 
   const handleAddToCart = async (productId: number) => {
@@ -50,7 +51,7 @@ export default function BrowseHistoryPage() {
         if (result === 'select') router.push(`/products/${productId}`);
         if (result === 'added') toast.success(t("已添加到购物车"));
       },
-      onError: error => toast.error(t(error.response?.data?.error || error.message || "添加失败")),
+      onError: error => toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).message || "添加失败")),
     });
   };
 

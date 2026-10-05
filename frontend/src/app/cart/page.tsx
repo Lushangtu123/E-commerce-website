@@ -144,7 +144,7 @@ export default function CartPage() {
   const loadCart = async () => {
     try {
       setLoading(true);
-      const data: any = await cartApi.list();
+      const data = await cartApi.list();
       if (!isCurrentSession()) return;
       setItems(data.items || []);
       setSelectedItems((data.items || []).filter(isAvailable).map(cartItemKey));
@@ -166,7 +166,7 @@ export default function CartPage() {
       await cartApi.updateQuantity({ product_id: item.product_id, quantity: newQuantity, ...(item.sku_id != null && { sku_id: item.sku_id }) });
       if (!isCurrentSession()) return;
       if (!isAvailable(item)) {
-        const refreshed: any = await cartApi.list();
+        const refreshed = await cartApi.list();
         if (!isCurrentSession()) return;
         setItems(refreshed.items || []);
       } else updateQuantity(item.product_id, newQuantity, item.sku_id);
@@ -212,7 +212,7 @@ export default function CartPage() {
     submittingRequest.current = true;
     setSubmitting(true);
     try {
-      const data: any = await orderApi.create({ items: orderItems, shipping_address_id: selectedAddress.address_id, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
+      const data = await orderApi.create({ items: orderItems, shipping_address_id: selectedAddress.address_id, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
       if (!isCurrentSession()) return;
       orderItems.forEach(item => removeItem(item.product_id, item.sku_id));
       setSelectedItems([]);
@@ -335,7 +335,7 @@ export default function CartPage() {
                   </div>
 
                   <div className="min-w-20 text-right">
-                    <p className="text-lg font-semibold text-gray-900">¥{(item.price * item.quantity).toFixed(2)}</p>
+                    <p className="text-lg font-semibold text-gray-900">¥{(Number(item.price) * item.quantity).toFixed(2)}</p>
                   </div>
 
                   <button

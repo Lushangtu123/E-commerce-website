@@ -5,8 +5,9 @@ export interface CartItem {
   product_id: number;
   quantity: number;
   title: string;
-  price: number;
-  main_image?: string;
+  /** MySQL DECIMAL: the server sends a string, local additions a number. */
+  price: number | string;
+  main_image?: string | null;
   stock: number;
   sku_id?: number | null;
   sku_code?: string | null;
@@ -60,7 +61,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   clearCart: () => set({ items: [] }),
   getTotalPrice: () => {
     const state = get();
-    return state.items.reduce((total, item) => total + item.price * item.quantity, 0);
+    return state.items.reduce((total, item) => total + Number(item.price) * item.quantity, 0);
   },
   getTotalCount: () => {
     const state = get();

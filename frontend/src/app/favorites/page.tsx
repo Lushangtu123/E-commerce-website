@@ -9,6 +9,7 @@ import { FaHeart, FaShoppingCart, FaTrash } from 'react-icons/fa';
 import { canBuyActivityProduct, useCustomerActivity } from '@/hooks/use-customer-activity';
 import { quickAddToCart } from '@/lib/quick-cart';
 import ProductImage from '@/components/ProductImage';
+import { requestFailure } from '@/lib/api-error';
 
 interface FavoriteProduct {
   favorite_id: number;
@@ -33,7 +34,7 @@ export default function FavoritesPage() {
   const handleRemove = (productId: number) => runMutation(() => favoriteApi.remove(productId), {
     productId, refresh: true,
     onSuccess: () => toast.success(t("取消收藏成功")),
-    onError: error => toast.error(t(error.response?.data?.message || "取消收藏失败")),
+    onError: error => toast.error(t(requestFailure(error).response?.data?.message || "取消收藏失败")),
   });
 
   const handleAddToCart = async (productId: number) => {
@@ -45,7 +46,7 @@ export default function FavoritesPage() {
         if (result === 'select') router.push(`/products/${productId}`);
         if (result === 'added') toast.success(t("已添加到购物车"));
       },
-      onError: error => toast.error(t(error.response?.data?.error || error.message || "添加失败")),
+      onError: error => toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).message || "添加失败")),
     });
   };
 

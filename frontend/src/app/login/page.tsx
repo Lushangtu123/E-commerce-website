@@ -31,7 +31,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const data: any = await userApi.login({ email, password });
+      const data = await userApi.login({ email, password });
       login(data.user, data.token);
       toast.success(t("登录成功"));
       router.push('/');

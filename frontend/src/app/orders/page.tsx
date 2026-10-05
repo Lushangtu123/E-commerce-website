@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { orderApi } from '@/lib/api';
+import { orderApi, type Order } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -28,7 +28,7 @@ export default function OrdersPage() {
   const [tabState, setActiveTab] = useState<number | undefined>(undefined);
   const [querySession, setQuerySession] = useState<string | null>(null);
   const [queryReady, setQueryReady] = useState(false);
-  const [result, setResult] = useState<{ key: string; orders: any[]; total: number; totalPages: number; error?: string } | null>(null);
+  const [result, setResult] = useState<{ key: string; orders: Order[]; total: number; totalPages: number; error?: string } | null>(null);
   const mounted = useRef(true);
   const request = useRef(0);
   const mutation = useRef<object | null>(null);
@@ -87,7 +87,7 @@ export default function OrdersPage() {
     const revision = ++request.current;
     setResult(null);
     try {
-      const data: any = await orderApi.list({ page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) });
+      const data = await orderApi.list({ page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) });
       if (!isCurrentScope() || revision !== request.current) return;
       if (page > Math.max(1, Number(data.totalPages) || 0)) {
         setPage(Math.max(1, Number(data.totalPages) || 0));
