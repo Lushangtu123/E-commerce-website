@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
+import type { AdminOrderRow, AdminPage } from '@/lib/api';
 import { useAdminSession } from '@/hooks/use-admin-session';
 import { useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
@@ -14,7 +15,7 @@ const STATUS = ['待支付', '已支付', '已发货', '已完成', '已取消']
 export default function AdminOrdersPage() {
   const { t, formatDate } = useI18n(), session = useAdminSession();
   const [page, setPage] = useState(1), [filters, setFilters] = useState({ orderNo: '', status: '' });
-  const [result, setResult] = useState<{ key: string; orders: any[]; total: number; error?: string } | null>(null);
+  const [result, setResult] = useState<{ key: string; orders: AdminOrderRow[]; total: number; error?: string } | null>(null);
   const [shipment, setShipment] = useState<{ key: string; id: number; company: string; tracking: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const request = useRef(0), mutation = useRef<object | null>(null), latestLoad = useRef<(() => Promise<void>) | null>(null);
@@ -27,7 +28,7 @@ export default function AdminOrdersPage() {
     if (!active()) return;
     const revision = ++request.current; setResult(null);
     try {
-      const data: any = await api.get('/admin/orders', { params: { page, limit: 20, ...(filters.orderNo && { orderNo: filters.orderNo }), ...(filters.status !== '' && { status: filters.status }) } });
+      const data = await api.get<unknown, AdminPage & { orders?: AdminOrderRow[] }>('/admin/orders', { params: { page, limit: 20, ...(filters.orderNo && { orderNo: filters.orderNo }), ...(filters.status !== '' && { status: filters.status }) } });
       if (!active() || revision !== request.current) return;
       const total = Number(data.pagination?.total) || 0;
       if (page > Math.max(1, Math.ceil(total / 20))) { setPage(Math.max(1, Math.ceil(total / 20))); return; }

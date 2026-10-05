@@ -7,7 +7,8 @@ export default defineConfig([
   ...nextTs,
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // Every `any` has been replaced by API types; keep it that way.
+      '@typescript-eslint/no-explicit-any': 'error',
       // Product images are arbitrary admin-entered URLs, so next/image host allowlists do not fit.
       '@next/next/no-img-element': 'off',
       // React Compiler rules added by react-hooks v7 (eslint-config-next 16). They flag deliberate

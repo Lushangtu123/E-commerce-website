@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useState, useEffect, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
+import type { DashboardStats, RecentOrder, SalesTrendPoint, TopProduct } from '@/lib/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { logger } from '@/lib/logger';
 
@@ -44,10 +45,10 @@ function StatCard({ icon, title, value, growth, color }: StatCardProps) {
 
 export default function AdminDashboardPage() {
   const { t, formatDate } = useI18n();
-  const [stats, setStats] = useState<any>(null);
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [salesTrend, setSalesTrend] = useState<any[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [salesTrend, setSalesTrend] = useState<SalesTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -62,11 +63,11 @@ export default function AdminDashboardPage() {
   const fetchDashboardData = async () => {
     try {
       // 获取统计数据
-      const [statsData, ordersData, productsData, trendData]: any[] = await Promise.all([
-        api.get('/admin/dashboard/stats'),
-        api.get('/admin/dashboard/recent-orders', { params: { limit: 5 } }),
-        api.get('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } }),
-        api.get('/admin/dashboard/sales-trend', { params: { days: 7 } })
+      const [statsData, ordersData, productsData, trendData] = await Promise.all([
+        api.get<unknown, DashboardStats>('/admin/dashboard/stats'),
+        api.get<unknown, RecentOrder[] | { orders?: RecentOrder[] }>('/admin/dashboard/recent-orders', { params: { limit: 5 } }),
+        api.get<unknown, TopProduct[] | { products?: TopProduct[] }>('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } }),
+        api.get<unknown, SalesTrendPoint[] | { trend?: SalesTrendPoint[] }>('/admin/dashboard/sales-trend', { params: { days: 7 } })
       ]);
 
       setStats(statsData);
@@ -81,7 +82,7 @@ export default function AdminDashboardPage() {
   };
 
   const getStatusBadge = (status: number) => {
-    const statusMap: any = {
+    const statusMap: Record<number, { text: string; class: string }> = {
       0: { text: t("待支付"), class: 'bg-yellow-100 text-yellow-700' },
       1: { text: t("已支付"), class: 'bg-blue-100 text-blue-700' },
       2: { text: t("已发货"), class: 'bg-indigo-100 text-indigo-700' },
@@ -212,7 +213,7 @@ export default function AdminDashboardPage() {
                     <tr key={order.order_id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.order_no}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.username || t("未知用户")}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{order.total_amount ? parseFloat(order.total_amount).toFixed(2) : '0.00'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{order.total_amount ? Number(order.total_amount).toFixed(2) : '0.00'}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(order.status)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(order.created_at)}</td>
                     </tr>
