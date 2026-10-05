@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/Node.js-24_LTS-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 
 A modern, full-featured e-commerce platform built with a microservices architecture, implementing complete core e-commerce functionalities with a separation of frontend and backend.
 
@@ -77,7 +77,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 ## 🛠️ Technology Stack
 
 ### Frontend
-- **Framework**: Next.js 15.5 + React 18
+- **Framework**: Next.js 16 + React 19
 - **Language**: TypeScript 5
 - **Styling**: TailwindCSS 3
 - **State Management**: Zustand 4
