@@ -37,7 +37,8 @@ export default function AdminLoginPage() {
 
       const data = await response.json();
 
-      if (response.ok) {
+      // A success response without a session would otherwise store "undefined" as the token.
+      if (response.ok && typeof data?.token === 'string' && data.token && data.admin) {
         // 保存token和管理员信息
         localStorage.setItem('admin_token', data.token);
         localStorage.setItem('admin_user', JSON.stringify(data.admin));
@@ -45,7 +46,7 @@ export default function AdminLoginPage() {
         toast.success(t('登录成功'));
         router.push('/admin/dashboard');
       } else {
-        toast.error(t(data.error || '登录失败'));
+        toast.error(t(data?.error || '登录失败'));
       }
     } catch (error) {
       logger.error('登录失败:', error);
@@ -75,7 +76,7 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 用户名 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="admin-username" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("用户名")}
               </label>
               <div className="relative">
@@ -85,7 +86,9 @@ export default function AdminLoginPage() {
                   </svg>
                 </div>
                 <input
+                  id="admin-username"
                   type="text"
+                  autoComplete="username"
                   required
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -97,7 +100,7 @@ export default function AdminLoginPage() {
 
             {/* 密码 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="admin-password" className="block text-sm font-medium text-gray-700 mb-2">
                 {t("密码")}
               </label>
               <div className="relative">
@@ -107,7 +110,9 @@ export default function AdminLoginPage() {
                   </svg>
                 </div>
                 <input
+                  id="admin-password"
                   type="password"
+                  autoComplete="current-password"
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
