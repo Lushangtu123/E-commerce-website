@@ -318,11 +318,13 @@ export default function AdminProductsPage() {
             <input
               type="text"
               placeholder={t("搜索商品名称...")}
+              aria-label={t("搜索商品")}
               value={filters.keyword}
               onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <select
+              aria-label={t("商品状态")}
               value={filters.status}
               onChange={(e) => changeFilters({ ...filters, status: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -399,6 +401,7 @@ export default function AdminProductsPage() {
                     <th className="px-6 py-3 text-left">
                       <input
                         type="checkbox"
+                        aria-label={t("全选")}
                         checked={allSelected}
                         onChange={toggleSelectAll}
                         disabled={busy}
@@ -419,6 +422,7 @@ export default function AdminProductsPage() {
                       <td className="px-6 py-4">
                         <input
                           type="checkbox"
+                          aria-label={t("选择 {title}", { title: product.title })}
                           checked={selectedIds.includes(product.product_id)}
                           onChange={() => toggleSelect(product.product_id)}
                           disabled={busy}
@@ -527,10 +531,10 @@ export default function AdminProductsPage() {
                 <div className="space-y-4">
                   {/* 商品标题 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="newProduct-title" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("商品标题")} <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <input id="newProduct-title"
                       type="text"
                       value={newProduct.title}
                       onChange={(e) => updateNewProduct({ ...newProduct, title: e.target.value })}
@@ -541,10 +545,10 @@ export default function AdminProductsPage() {
 
                   {/* 商品描述 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="newProduct-description" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("商品描述")}
                     </label>
-                    <textarea
+                    <textarea id="newProduct-description"
                       value={newProduct.description}
                       onChange={(e) => updateNewProduct({ ...newProduct, description: e.target.value })}
                       rows={3}
@@ -556,10 +560,10 @@ export default function AdminProductsPage() {
                   {/* 价格和库存 */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="newProduct-price" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("价格 (元)")} <span className="text-red-500">*</span>
                       </label>
-                      <input
+                      <input id="newProduct-price"
                         type="number"
                         step="0.01"
                         value={newProduct.price}
@@ -569,10 +573,10 @@ export default function AdminProductsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="newProduct-stock" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("库存")}
                       </label>
-                      <input
+                      <input id="newProduct-stock"
                         type="number"
                         value={newProduct.stock}
                         onChange={(e) => updateNewProduct({ ...newProduct, stock: e.target.value })}
@@ -585,10 +589,10 @@ export default function AdminProductsPage() {
                   {/* 分类和品牌 */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="newProduct-category-id" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("分类")} <span className="text-red-500">*</span>
                       </label>
-                      <select
+                      <select id="newProduct-category-id"
                         value={newProduct.category_id}
                         onChange={(e) => updateNewProduct({ ...newProduct, category_id: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -602,10 +606,10 @@ export default function AdminProductsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="newProduct-brand" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("品牌")}
                       </label>
-                      <input
+                      <input id="newProduct-brand"
                         type="text"
                         value={newProduct.brand}
                         onChange={(e) => updateNewProduct({ ...newProduct, brand: e.target.value })}
@@ -617,10 +621,10 @@ export default function AdminProductsPage() {
 
                   {/* 图片URL */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="newProduct-main-image" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("商品图片URL")}
                     </label>
-                    <input
+                    <input id="newProduct-main-image"
                       type="text"
                       value={newProduct.main_image}
                       onChange={(e) => updateNewProduct({ ...newProduct, main_image: e.target.value })}
@@ -635,10 +639,10 @@ export default function AdminProductsPage() {
 
                   {/* 状态 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="newProduct-status" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("状态")}
                     </label>
-                    <select
+                    <select id="newProduct-status"
                       value={newProduct.status}
                       onChange={(e) => updateNewProduct({ ...newProduct, status: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -693,10 +697,10 @@ export default function AdminProductsPage() {
                 <div className="space-y-4">
                   {/* 商品标题 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="editProduct-title" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("商品标题")} <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <input id="editProduct-title"
                       type="text"
                       value={editProduct.title}
                       onChange={(e) => updateEditProduct({ ...editProduct, title: e.target.value })}
@@ -707,10 +711,10 @@ export default function AdminProductsPage() {
 
                   {/* 商品描述 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="editProduct-description" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("商品描述")}
                     </label>
-                    <textarea
+                    <textarea id="editProduct-description"
                       value={editProduct.description}
                       onChange={(e) => updateEditProduct({ ...editProduct, description: e.target.value })}
                       rows={3}
@@ -722,10 +726,10 @@ export default function AdminProductsPage() {
                   {/* 价格和库存 */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="editProduct-price" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("价格 (元)")} <span className="text-red-500">*</span>
                       </label>
-                      <input
+                      <input id="editProduct-price"
                         type="number"
                         step="0.01"
                         value={editProduct.price}
@@ -735,10 +739,10 @@ export default function AdminProductsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="editProduct-stock" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("库存")}
                       </label>
-                      <input
+                      <input id="editProduct-stock"
                         type="number"
                         value={editProduct.stock}
                         onChange={(e) => updateEditProduct({ ...editProduct, stock: e.target.value })}
@@ -751,10 +755,10 @@ export default function AdminProductsPage() {
                   {/* 分类和品牌 */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="editProduct-category-id" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("分类")} <span className="text-red-500">*</span>
                       </label>
-                      <select
+                      <select id="editProduct-category-id"
                         value={editProduct.category_id}
                         onChange={(e) => updateEditProduct({ ...editProduct, category_id: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -768,10 +772,10 @@ export default function AdminProductsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="editProduct-brand" className="block text-sm font-medium text-gray-700 mb-1">
                         {t("品牌")}
                       </label>
-                      <input
+                      <input id="editProduct-brand"
                         type="text"
                         value={editProduct.brand}
                         onChange={(e) => updateEditProduct({ ...editProduct, brand: e.target.value })}
@@ -783,10 +787,10 @@ export default function AdminProductsPage() {
 
                   {/* 图片URL */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="editProduct-main-image" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("商品图片URL")}
                     </label>
-                    <input
+                    <input id="editProduct-main-image"
                       type="text"
                       value={editProduct.main_image}
                       onChange={(e) => updateEditProduct({ ...editProduct, main_image: e.target.value })}
@@ -801,10 +805,10 @@ export default function AdminProductsPage() {
 
                   {/* 状态 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="editProduct-status" className="block text-sm font-medium text-gray-700 mb-1">
                       {t("状态")}
                     </label>
-                    <select
+                    <select id="editProduct-status"
                       value={editProduct.status}
                       onChange={(e) => updateEditProduct({ ...editProduct, status: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"

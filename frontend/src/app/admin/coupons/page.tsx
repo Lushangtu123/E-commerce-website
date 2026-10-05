@@ -183,8 +183,8 @@ export default function AdminCouponsPage() {
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("优惠券代码 *")}</label>
-                    <input
+                    <label htmlFor="formData-code" className="block text-sm font-medium text-gray-700 mb-1">{t("优惠券代码 *")}</label>
+                    <input id="formData-code"
                       type="text"
                       required
                       value={formData.code}
@@ -194,8 +194,8 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("优惠券名称 *")}</label>
-                    <input
+                    <label htmlFor="formData-name" className="block text-sm font-medium text-gray-700 mb-1">{t("优惠券名称 *")}</label>
+                    <input id="formData-name"
                       type="text"
                       required
                       value={formData.name}
@@ -207,8 +207,8 @@ export default function AdminCouponsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("描述")}</label>
-                  <textarea
+                  <label htmlFor="formData-description" className="block text-sm font-medium text-gray-700 mb-1">{t("描述")}</label>
+                  <textarea id="formData-description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
@@ -219,8 +219,8 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("类型 *")}</label>
-                    <select
+                    <label htmlFor="formData-type" className="block text-sm font-medium text-gray-700 mb-1">{t("类型 *")}</label>
+                    <select id="formData-type"
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: Number(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
@@ -231,10 +231,10 @@ export default function AdminCouponsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="formData-discount-value" className="block text-sm font-medium text-gray-700 mb-1">
                       {formData.type === 2 ? t("减免比例 (%)，20表示8折 *") : t("优惠值 (元) *")}
                     </label>
-                    <input
+                    <input id="formData-discount-value"
                       type="number"
                       required
                       min="0"
@@ -248,8 +248,8 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("最低消费金额 (元)")}</label>
-                    <input
+                    <label htmlFor="formData-min-amount" className="block text-sm font-medium text-gray-700 mb-1">{t("最低消费金额 (元)")}</label>
+                    <input id="formData-min-amount"
                       type="number"
                       min="0"
                       step="0.01"
@@ -259,8 +259,8 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("最大优惠金额 (元)")}</label>
-                    <input
+                    <label htmlFor="formData-max-discount" className="block text-sm font-medium text-gray-700 mb-1">{t("最大优惠金额 (元)")}</label>
+                    <input id="formData-max-discount"
                       type="number"
                       min="0"
                       step="0.01"
@@ -273,8 +273,8 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("发行总量 *")}</label>
-                    <input
+                    <label htmlFor="formData-total-quantity" className="block text-sm font-medium text-gray-700 mb-1">{t("发行总量 *")}</label>
+                    <input id="formData-total-quantity"
                       type="number"
                       required
                       min="1"
@@ -284,8 +284,8 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("每人限领 *")}</label>
-                    <input
+                    <label htmlFor="formData-per-user-limit" className="block text-sm font-medium text-gray-700 mb-1">{t("每人限领 *")}</label>
+                    <input id="formData-per-user-limit"
                       type="number"
                       required
                       min="1"
@@ -298,8 +298,8 @@ export default function AdminCouponsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("生效时间 *")}</label>
-                    <input
+                    <label htmlFor="formData-start-time" className="block text-sm font-medium text-gray-700 mb-1">{t("生效时间 *")}</label>
+                    <input id="formData-start-time"
                       type="datetime-local"
                       required
                       value={formData.start_time}
@@ -308,8 +308,8 @@ export default function AdminCouponsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t("失效时间 *")}</label>
-                    <input
+                    <label htmlFor="formData-end-time" className="block text-sm font-medium text-gray-700 mb-1">{t("失效时间 *")}</label>
+                    <input id="formData-end-time"
                       type="datetime-local"
                       required
                       value={formData.end_time}

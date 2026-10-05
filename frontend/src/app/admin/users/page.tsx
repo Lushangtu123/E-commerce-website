@@ -155,11 +155,13 @@ export default function AdminUsersPage() {
             <input
               type="text"
               placeholder={t("搜索用户名、邮箱、手机号...")}
+              aria-label={t("搜索用户")}
               value={filters.keyword}
               onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <select
+              aria-label={t("用户状态")}
               value={filters.status}
               onChange={(e) => changeFilters({ ...filters, status: e.target.value })}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
