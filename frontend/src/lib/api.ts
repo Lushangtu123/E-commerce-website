@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore, type User } from '@/store/useAuthStore';
+import type { CartItem } from '@/store/useCartStore';
 import { clearAdminSession } from '@/lib/admin-session';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -107,11 +108,17 @@ export interface ProfileInput {
   avatar_url: string | null;
 }
 
+export interface AuthSession {
+  message?: string;
+  token: string;
+  user: User;
+}
+
 export const userApi = {
   register: (data: { username: string; email: string; password: string }) =>
-    api.post('/users/register', data),
+    api.post<unknown, AuthSession>('/users/register', data),
   login: (data: { email: string; password: string }) =>
-    api.post('/users/login', data),
+    api.post<unknown, AuthSession>('/users/login', data),
   getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
   getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
   updateProfile: (data: ProfileInput) => api.put<unknown, { message: string; user: User }>('/users/profile', data),
@@ -198,7 +205,7 @@ export interface CartInput {
 }
 
 export const cartApi = {
-  list: () => api.get('/cart'),
+  list: () => api.get<unknown, { items: CartItem[] }>('/cart'),
   add: (data: CartInput) => api.post('/cart', data),
   updateQuantity: (data: CartInput) => api.put('/cart', data),
   remove: (productId: number, skuId?: number | null) =>
@@ -250,11 +257,53 @@ export interface OrderPreview {
   available_coupons: { user_coupon_id: number; name: string; code: string; discount_amount: number }[];
 }
 
+export interface AddressSnapshot {
+  receiver_name: string;
+  phone: string;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  detail_address: string | null;
+}
+
+export interface Order {
+  order_id: number;
+  order_no: string;
+  total_amount: Money;
+  original_amount?: Money | null;
+  discount_amount?: Money | null;
+  user_coupon_id?: number | null;
+  coupon_name?: string | null;
+  coupon_code?: string | null;
+  status: number;
+  payment_method?: string | null;
+  shipping_company?: string | null;
+  tracking_number?: string | null;
+  shipping_address_snapshot?: AddressSnapshot | null;
+  created_at: string;
+  paid_at?: string | null;
+  shipped_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface OrderItem {
+  item_id: number;
+  order_id: number;
+  product_id: number;
+  product_name: string;
+  product_image?: string | null;
+  sku_id?: number | null;
+  sku_code?: string | null;
+  sku_specs?: Record<string, string | number | boolean> | null;
+  quantity: number;
+  price: Money;
+}
+
 export const orderApi = {
   preview: (data: OrderInput) => api.post<unknown, OrderPreview>('/orders/preview', data),
-  create: (data: OrderCreateInput) => api.post('/orders', data),
-  list: (params?: object) => api.get('/orders', { params }),
-  getDetail: (id: number) => api.get(`/orders/${id}`),
+  create: (data: OrderCreateInput) => api.post<unknown, { message: string; order_id: number }>('/orders', data),
+  list: (params?: object) => api.get<unknown, { orders: Order[]; total: number; page: number; limit: number; totalPages: number }>('/orders', { params }),
+  getDetail: (id: number) => api.get<unknown, { order: Order; items: OrderItem[] }>(`/orders/${id}`),
   cancel: (id: number) => api.post(`/orders/${id}/cancel`),
   pay: (id: number) => api.post(`/orders/${id}/pay`),
   confirm: (id: number) => api.post(`/orders/${id}/confirm`),
@@ -305,13 +354,20 @@ export const reviewApi = {
 };
 
 // 收藏相关API
+/** Paginated customer activity; the row type is the page's own view of a product. */
+export interface ActivityPage<T> {
+  favorites?: T[];
+  history?: T[];
+  pagination?: { page?: number; limit?: number; total?: number; total_pages?: number };
+}
+
 export const favoriteApi = {
   add: (productId: number) => api.post('/favorites', { product_id: productId }),
   remove: (productId: number) => api.delete(`/favorites/${productId}`),
   toggle: (productId: number) => api.post<unknown, { message: string; is_favorited: boolean; favorite_id?: number }>('/favorites/toggle', { product_id: productId }),
   check: (productId: number) => api.get<unknown, { is_favorited: boolean }>(`/favorites/check/${productId}`),
   checkMultiple: (productIds: number[]) => api.post('/favorites/check-multiple', { product_ids: productIds }),
-  list: (params?: object) => api.get('/favorites/my', { params }),
+  list: <T,>(params?: object) => api.get<unknown, ActivityPage<T>>('/favorites/my', { params }),
   getCount: () => api.get('/favorites/count'),
 };
 
@@ -339,7 +395,7 @@ export const searchApi = {
 // 浏览历史相关API
 export const browseApi = {
   record: (productId: number) => api.post('/browse/record', { product_id: productId }),
-  getHistory: (params?: object) => api.get('/browse/history', { params }),
+  getHistory: <T,>(params?: object) => api.get<unknown, ActivityPage<T>>('/browse/history', { params }),
   clearHistory: () => api.delete('/browse/history'),
   deleteRecord: (productId: number) => api.delete(`/browse/history/${productId}`),
 };
@@ -362,8 +418,8 @@ export const recommendationApi = {
 // 订单超时相关API
 export const orderTimeoutApi = {
   // 获取订单剩余支付时间
-  getRemainingTime: (orderId: number) => 
-    api.get(`/orders/${orderId}/remaining-time`),
+  getRemainingTime: (orderId: number) =>
+    api.get<unknown, { remaining_minutes: number; timeout_at?: string; message?: string }>(`/orders/${orderId}/remaining-time`),
 };
 
 // 优惠券相关API

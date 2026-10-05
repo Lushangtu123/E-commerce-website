@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { orderApi, orderTimeoutApi } from '@/lib/api';
+import { orderApi, orderTimeoutApi, type Order, type OrderItem } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
@@ -27,8 +27,8 @@ export default function OrderDetailPage() {
   const router = useRouter();
   const { t, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, token, user } = useAuthStore();
-  const [order, setOrder] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export default function OrderDetailPage() {
     const request = ++detailRequest.current;
     try {
       setLoading(true);
-      const data: any = await orderApi.getDetail(orderId);
+      const data = await orderApi.getDetail(orderId);
       if (!isCurrentSession() || request !== detailRequest.current) return;
       setOrder(data.order);
       setItems(data.items || []);
@@ -100,7 +100,7 @@ export default function OrderDetailPage() {
   const loadRemainingTime = async (isActive: () => boolean) => {
     if (!isActive() || !isCurrentSession()) return;
     try {
-      const data: any = await orderTimeoutApi.getRemainingTime(orderId);
+      const data = await orderTimeoutApi.getRemainingTime(orderId);
       if (!isActive() || !isCurrentSession()) return;
       setRemainingTime(data.remaining_minutes);
       
@@ -245,7 +245,7 @@ export default function OrderDetailPage() {
                   <p className="text-gray-600 text-sm mt-1">¥{item.price} × {item.quantity}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold">¥{(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="font-bold">¥{(Number(item.price) * item.quantity).toFixed(2)}</p>
                 </div>
               </div>
             ))}
