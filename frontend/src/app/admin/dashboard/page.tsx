@@ -2,11 +2,45 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { logger } from '@/lib/logger';
+
+interface StatCardProps {
+  icon: ReactNode;
+  title: string;
+  value: ReactNode;
+  growth?: number;
+  color: string;
+}
+
+// Module scope keeps the component identity stable across dashboard renders.
+function StatCard({ icon, title, value, growth, color }: StatCardProps) {
+  const { t } = useI18n();
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="text-gray-500 text-sm mb-1">{title}</p>
+          <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
+          {growth !== undefined && (
+            <div className="flex items-center mt-2">
+              <span className={`text-sm font-medium ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {growth >= 0 ? '↑' : '↓'} {Math.abs(growth)}%
+              </span>
+              <span className="text-gray-400 text-xs ml-2">{t("较昨日")}</span>
+            </div>
+          )}
+        </div>
+        <div className={`${color} p-4 rounded-full`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminDashboardPage() {
   const { t, formatDate } = useI18n();
@@ -45,28 +79,6 @@ export default function AdminDashboardPage() {
       setLoading(false);
     }
   };
-
-  const StatCard = ({ icon, title, value, growth, color }: any) => (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-gray-500 text-sm mb-1">{title}</p>
-          <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
-          {growth !== undefined && (
-            <div className="flex items-center mt-2">
-              <span className={`text-sm font-medium ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {growth >= 0 ? '↑' : '↓'} {Math.abs(growth)}%
-              </span>
-              <span className="text-gray-400 text-xs ml-2">{t("较昨日")}</span>
-            </div>
-          )}
-        </div>
-        <div className={`${color} p-4 rounded-full`}>
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
 
   const getStatusBadge = (status: number) => {
     const statusMap: any = {

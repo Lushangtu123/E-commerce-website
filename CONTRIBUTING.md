@@ -529,7 +529,7 @@ Closes #123
 
 #### 前置要求
 
-- Node.js 18+
+- Node.js 24 LTS（项目根目录提供 `.nvmrc`）
 - npm 或 yarn
 - Docker & Docker Compose
 - Git

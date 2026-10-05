@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/Node.js-24_LTS-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 
 这是一个基于微服务架构的现代化电商平台，采用前后端分离设计，实现了完整的电商核心功能和管理后台。
 
@@ -79,7 +79,7 @@
 ## 🛠️ 技术栈
 
 ### 前端
-- **框架**: Next.js 15.5 + React 18
+- **框架**: Next.js 16 + React 19
 - **语言**: TypeScript
 - **样式**: TailwindCSS
 - **状态管理**: Zustand
