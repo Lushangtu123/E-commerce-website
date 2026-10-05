@@ -147,3 +147,16 @@ test('footer links the service pages, contact details and coupon center', async 
     assert.ok(hrefs.includes(href), `missing ${href} in ${hrefs.join(', ')}`);
   }
 });
+
+test('public pages declare their own canonical and the root layout never sets one', () => {
+  const stubs = { '@/components/HomePage': function HomePage() { return null; } };
+  const routes = { 'src/app/page.tsx': '/', 'src/app/products/layout.tsx': '/products', 'src/app/coupons/layout.tsx': '/coupons', 'src/app/help/layout.tsx': '/help', 'src/app/returns/layout.tsx': '/returns', 'src/app/shipping/layout.tsx': '/shipping' };
+  for (const [file, canonical] of Object.entries(routes)) assert.equal(loadSource(file, {}, stubs).metadata.alternates?.canonical, canonical, file);
+  const root = loadSource('src/app/layout.tsx', { URL }, {
+    'next/font/google': { Inter: () => ({ className: 'inter' }) },
+    './globals.css': {},
+    '@/components/AppShell': function AppShell() { return null; },
+    '@/lib/site': { ...site(), siteUrl: () => 'https://shop.example' },
+  });
+  assert.equal(root.metadata.alternates, undefined);
+});
