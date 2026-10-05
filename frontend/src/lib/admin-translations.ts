@@ -6,8 +6,6 @@ export const adminTranslations: Record<string, string> = {
   '用户管理': 'Users',
   '操作日志': 'Activity logs',
   '管理后台': 'Admin console',
-  '管理后台 - 电商平台': 'Admin Console - Store',
-  '管理员登录 - 电商平台': 'Admin Sign In - Store',
   '管理员登录': 'Admin sign in',
   '电商平台后台管理系统': 'Store administration',
   '加载中...': 'Loading...',

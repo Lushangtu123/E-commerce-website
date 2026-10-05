@@ -13,17 +13,13 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname() || '';
   const [storedAdmin, setAdmin] = useState<AdminSession['admin'] | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionToken, setSessionToken] = useState<string | null>(() => getAdminSessionToken());
   const mounted = useRef(false);
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') document.title = t('管理后台 - 电商平台');
-  }, [locale, t]);
 
   useEffect(() => {
     let active = true;
@@ -145,26 +141,30 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* 导航菜单 */}
         <nav className="mt-6 px-3">
-          {menuItems.map((item) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
-                pathname === item.path || pathname.startsWith(`${item.path}/`)
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              {item.icon}
-              <span className="ml-3">{item.name}</span>
-            </Link>
-          ))}
+          {menuItems.map((item) => {
+            const active = pathname === item.path || pathname.startsWith(`${item.path}/`);
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                aria-current={active ? 'page' : undefined}
+                className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
+                  active
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                }`}
+              >
+                {item.icon}
+                <span className="ml-3">{item.name}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* 底部用户信息 */}
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gray-800">
           <div className="flex items-center mb-2">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
+            <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold">
               {admin.real_name?.[0] || admin.username[0].toUpperCase()}
             </div>
             <div className="ml-3 flex-1">

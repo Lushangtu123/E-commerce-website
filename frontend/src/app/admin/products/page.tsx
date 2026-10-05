@@ -285,7 +285,7 @@ export default function AdminProductsPage() {
           <button 
             onClick={() => { if (isDisplayedScope() && !mutation.current) { setFormScope(scopeKey); setShowAddModal(true); } }}
             disabled={busy || loading || !!loadError}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             <span className="flex items-center">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -304,12 +304,12 @@ export default function AdminProductsPage() {
               placeholder={t("搜索商品名称...")}
               value={filters.keyword}
               onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <select
               value={filters.status}
               onChange={(e) => changeFilters({ ...filters, status: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">{t("全部状态")}</option>
               <option value="1">{t("已上架")}</option>
@@ -332,9 +332,9 @@ export default function AdminProductsPage() {
 
         {/* 批量操作 */}
         {selectedIds.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
-              <span className="text-blue-800">{t("已选择 {count} 个商品", { count: selectedIds.length })}</span>
+              <span className="text-gray-700">{t("已选择 {count} 个商品", { count: selectedIds.length })}</span>
               <div className="space-x-2">
                 <button
                   onClick={() => handleBatchStatusChange(1)}
@@ -366,7 +366,7 @@ export default function AdminProductsPage() {
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">{t("加载中...")}</p>
               </div>
             </div>
@@ -455,11 +455,11 @@ export default function AdminProductsPage() {
                         <button 
                           onClick={() => openEditModal(product)}
                           disabled={busy}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-primary-600 hover:text-primary-800"
                         >
                           {t("编辑")}
                         </button>
-                        <Link href={`/admin/products/${product.product_id}/skus`} className="text-blue-600 hover:text-blue-900" onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}>{t('管理规格')}</Link>
+                        <Link href={`/admin/products/${product.product_id}/skus`} className="text-primary-600 hover:text-primary-800" onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}>{t('管理规格')}</Link>
                       </td>
                     </tr>
                   ))}
@@ -522,7 +522,7 @@ export default function AdminProductsPage() {
                       type="text"
                       value={newProduct.title}
                       onChange={(e) => updateNewProduct({ ...newProduct, title: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder={t("请输入商品标题")}
                     />
                   </div>
@@ -536,7 +536,7 @@ export default function AdminProductsPage() {
                       value={newProduct.description}
                       onChange={(e) => updateNewProduct({ ...newProduct, description: e.target.value })}
                       rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder={t("请输入商品描述")}
                     />
                   </div>
@@ -552,7 +552,7 @@ export default function AdminProductsPage() {
                         step="0.01"
                         value={newProduct.price}
                         onChange={(e) => updateNewProduct({ ...newProduct, price: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         placeholder="0.00"
                       />
                     </div>
@@ -564,7 +564,7 @@ export default function AdminProductsPage() {
                         type="number"
                         value={newProduct.stock}
                         onChange={(e) => updateNewProduct({ ...newProduct, stock: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         placeholder="0"
                       />
                     </div>
@@ -579,7 +579,7 @@ export default function AdminProductsPage() {
                       <select
                         value={newProduct.category_id}
                         onChange={(e) => updateNewProduct({ ...newProduct, category_id: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       >
                         <option value="">{t("请选择分类")}</option>
                         {categories.map((cat) => (
@@ -597,7 +597,7 @@ export default function AdminProductsPage() {
                         type="text"
                         value={newProduct.brand}
                         onChange={(e) => updateNewProduct({ ...newProduct, brand: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         placeholder={t("请输入品牌")}
                       />
                     </div>
@@ -612,7 +612,7 @@ export default function AdminProductsPage() {
                       type="text"
                       value={newProduct.main_image}
                       onChange={(e) => updateNewProduct({ ...newProduct, main_image: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder="https://example.com/image.jpg"
                     />
                     {newProduct.main_image && (
@@ -635,7 +635,7 @@ export default function AdminProductsPage() {
                     <select
                       value={newProduct.status}
                       onChange={(e) => updateNewProduct({ ...newProduct, status: parseInt(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     >
                       <option value={1}>{t("上架")}</option>
                       <option value={0}>{t("下架")}</option>
@@ -654,7 +654,7 @@ export default function AdminProductsPage() {
                   <button
                     onClick={handleAddProduct}
                     disabled={busy}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     {t("添加商品")}
                   </button>
@@ -694,7 +694,7 @@ export default function AdminProductsPage() {
                       type="text"
                       value={editProduct.title}
                       onChange={(e) => updateEditProduct({ ...editProduct, title: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder={t("请输入商品标题")}
                     />
                   </div>
@@ -708,7 +708,7 @@ export default function AdminProductsPage() {
                       value={editProduct.description}
                       onChange={(e) => updateEditProduct({ ...editProduct, description: e.target.value })}
                       rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder={t("请输入商品描述")}
                     />
                   </div>
@@ -724,7 +724,7 @@ export default function AdminProductsPage() {
                         step="0.01"
                         value={editProduct.price}
                         onChange={(e) => updateEditProduct({ ...editProduct, price: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         placeholder="0.00"
                       />
                     </div>
@@ -736,7 +736,7 @@ export default function AdminProductsPage() {
                         type="number"
                         value={editProduct.stock}
                         onChange={(e) => updateEditProduct({ ...editProduct, stock: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         placeholder="0"
                       />
                     </div>
@@ -751,7 +751,7 @@ export default function AdminProductsPage() {
                       <select
                         value={editProduct.category_id}
                         onChange={(e) => updateEditProduct({ ...editProduct, category_id: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       >
                         <option value="">{t("请选择分类")}</option>
                         {categories.map((cat) => (
@@ -769,7 +769,7 @@ export default function AdminProductsPage() {
                         type="text"
                         value={editProduct.brand}
                         onChange={(e) => updateEditProduct({ ...editProduct, brand: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         placeholder={t("请输入品牌")}
                       />
                     </div>
@@ -784,7 +784,7 @@ export default function AdminProductsPage() {
                       type="text"
                       value={editProduct.main_image}
                       onChange={(e) => updateEditProduct({ ...editProduct, main_image: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder="https://example.com/image.jpg"
                     />
                     {editProduct.main_image && (
@@ -807,7 +807,7 @@ export default function AdminProductsPage() {
                     <select
                       value={editProduct.status}
                       onChange={(e) => updateEditProduct({ ...editProduct, status: parseInt(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     >
                       <option value={1}>{t("上架")}</option>
                       <option value={0}>{t("下架")}</option>
@@ -829,7 +829,7 @@ export default function AdminProductsPage() {
                   <button
                     onClick={handleEditProduct}
                     disabled={busy}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     {t("保存修改")}
                   </button>

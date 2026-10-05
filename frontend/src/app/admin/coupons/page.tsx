@@ -136,7 +136,7 @@ export default function AdminCouponsPage() {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
             <p className="mt-4 text-gray-600">{t("加载中...")}</p>
           </div>
         </div>
@@ -157,7 +157,7 @@ export default function AdminCouponsPage() {
           </div>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
           >
             {t("+ 创建优惠券")}
           </button>
@@ -188,7 +188,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                       placeholder={t("例如: SUMMER2024")}
                     />
                   </div>
@@ -199,7 +199,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                       placeholder={t("例如: 夏季促销券")}
                     />
                   </div>
@@ -210,7 +210,7 @@ export default function AdminCouponsPage() {
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     rows={2}
                     placeholder={t("优惠券说明")}
                   />
@@ -222,7 +222,7 @@ export default function AdminCouponsPage() {
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     >
                       <option value={1}>{t("满减券")}</option>
                       <option value={2}>{t("折扣券")}</option>
@@ -240,7 +240,7 @@ export default function AdminCouponsPage() {
                       step="0.01"
                       value={formData.discount_value}
                       onChange={(e) => setFormData({ ...formData, discount_value: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                 </div>
@@ -254,7 +254,7 @@ export default function AdminCouponsPage() {
                       step="0.01"
                       value={formData.min_amount}
                       onChange={(e) => setFormData({ ...formData, min_amount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                   <div>
@@ -265,7 +265,7 @@ export default function AdminCouponsPage() {
                       step="0.01"
                       value={formData.max_discount}
                       onChange={(e) => setFormData({ ...formData, max_discount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                 </div>
@@ -279,7 +279,7 @@ export default function AdminCouponsPage() {
                       min="1"
                       value={formData.total_quantity}
                       onChange={(e) => setFormData({ ...formData, total_quantity: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                   <div>
@@ -290,7 +290,7 @@ export default function AdminCouponsPage() {
                       min="1"
                       value={formData.per_user_limit}
                       onChange={(e) => setFormData({ ...formData, per_user_limit: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                 </div>
@@ -303,7 +303,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.start_time}
                       onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                   <div>
@@ -313,7 +313,7 @@ export default function AdminCouponsPage() {
                       required
                       value={formData.end_time}
                       onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                 </div>
@@ -328,7 +328,7 @@ export default function AdminCouponsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     {t("创建")}
                   </button>
@@ -348,7 +348,7 @@ export default function AdminCouponsPage() {
               <p className="mt-4 text-gray-500">{t("暂无优惠券")}</p>
               <button
                 onClick={() => setShowCreateForm(true)}
-                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
                 {t("创建第一个优惠券")}
               </button>

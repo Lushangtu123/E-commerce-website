@@ -129,6 +129,6 @@ test('authenticated admins can navigate to coupon management from the sidebar', 
   const links = findElements(tree, (element) => element.props.href === '/admin/coupons');
 
   assert.equal(links.length, 1);
-  assert.ok(links[0].props.className.includes('bg-blue-600'));
+  assert.equal(links[0].props['aria-current'], 'page');
   assert.ok(findElements(links[0], (element) => element.props.children === '优惠券管理').length > 0);
 });

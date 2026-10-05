@@ -131,11 +131,11 @@ export default function AdminSKUPage() {
 
   const active = data?.skus.filter(sku => sku.status === 1) ?? [];
   return <AdminLayout><div className="space-y-6">
-    <Link href="/admin/products" className="block w-fit text-blue-600 underline">{t('返回商品管理')}</Link>
+    <Link href="/admin/products" className="block w-fit text-primary-600 underline">{t('返回商品管理')}</Link>
     <div><h1 className="text-2xl font-bold text-gray-900">{t('SKU 管理')}</h1>{data && <p className="mt-2 text-gray-600">{data.product.title} · #{productId}</p>}</div>
     {notice?.key === key && isCurrent() && <div role={notice.error ? 'alert' : 'status'} className={notice.error ? 'text-red-600' : 'text-green-700'}>{t(notice.error || notice.success || '')}</div>}
     {!validId ? <p role="alert">{t('商品ID无效')}</p> : !displayed ? <p role="status">{t('加载中...')}</p> : result.error ? <div role="alert" className="bg-white rounded-lg p-6 shadow-sm"><p className="text-red-600">{t(result.error)}</p><button type="button" onClick={() => load()} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
         {data.product.status === 0 && <p className="font-medium text-amber-800">{t('商品已下架，需上架商品后才能购买')}</p>}
         <p>{t(data.product.status === 1 ? '可售库存：{stock}' : '启用规格库存：{stock}', { stock: active.reduce((sum, sku) => sum + sku.stock, 0) })}</p>
         <p>{active.length ? t('最低售价：¥{price}', { price: Math.min(...active.map(sku => Number(sku.price))).toFixed(2) }) : t('暂无启用规格')}</p>
@@ -169,8 +169,8 @@ export default function AdminSKUPage() {
         <div className="flex justify-between gap-3"><h2 className="font-semibold break-all">{sku.sku_code}</h2><span className={sku.status === 1 ? 'text-green-700' : 'text-gray-500'}>{t(sku.status === 1 ? '已启用' : '已停用')}</span></div>
         <p className="text-sm text-gray-600 wrap-break-word">{Object.entries(sku.specs).map(([name, value]) => `${name}: ${value}`).join(' / ') || '—'}</p>
         <p>{t('售价')}：¥{Number(sku.price).toFixed(2)} · {t('库存')}：{sku.stock}</p>
-        <div className="flex gap-4 flex-wrap"><button type="button" disabled={busy || !!editor} onClick={() => open(sku)} className="text-blue-600 disabled:opacity-50">{t('编辑规格')}</button>
-          <button type="button" disabled={busy || !!editor} onClick={() => toggle(sku.sku_id)} className="text-blue-600 disabled:opacity-50">{t(sku.status === 1 ? '停用规格' : '启用规格')}</button></div>
+        <div className="flex gap-4 flex-wrap"><button type="button" disabled={busy || !!editor} onClick={() => open(sku)} className="text-primary-600 disabled:opacity-50">{t('编辑规格')}</button>
+          <button type="button" disabled={busy || !!editor} onClick={() => toggle(sku.sku_id)} className="text-primary-600 disabled:opacity-50">{t(sku.status === 1 ? '停用规格' : '启用规格')}</button></div>
       </article>)}</div>}
     </>}
   </div></AdminLayout>;
