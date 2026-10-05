@@ -245,7 +245,7 @@ export default function Header() {
             <Link
               href="/cart"
               aria-label={t('购物车')}
-              className="relative flex items-center space-x-1 text-gray-700 hover:text-primary-600"
+              className="relative flex items-center text-gray-700 hover:text-primary-600"
             >
               <FiShoppingCart size={24} />
               {getTotalCount() > 0 && (

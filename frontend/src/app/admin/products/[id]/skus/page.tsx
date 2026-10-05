@@ -131,7 +131,7 @@ export default function AdminSKUPage() {
 
   const active = data?.skus.filter(sku => sku.status === 1) ?? [];
   return <AdminLayout><div className="space-y-6">
-    <Link href="/admin/products" className="text-blue-600 underline">{t('返回商品管理')}</Link>
+    <Link href="/admin/products" className="block w-fit text-blue-600 underline">{t('返回商品管理')}</Link>
     <div><h1 className="text-2xl font-bold text-gray-900">{t('SKU 管理')}</h1>{data && <p className="mt-2 text-gray-600">{data.product.title} · #{productId}</p>}</div>
     {notice?.key === key && isCurrent() && <div role={notice.error ? 'alert' : 'status'} className={notice.error ? 'text-red-600' : 'text-green-700'}>{t(notice.error || notice.success || '')}</div>}
     {!validId ? <p role="alert">{t('商品ID无效')}</p> : !displayed ? <p role="status">{t('加载中...')}</p> : result.error ? <div role="alert" className="bg-white rounded-lg p-6 shadow"><p className="text-red-600">{t(result.error)}</p><button type="button" onClick={() => load()} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
