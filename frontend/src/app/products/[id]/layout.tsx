@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
+import { preload } from 'react-dom';
 import { SITE_NAME, fetchApiResult, shareableImage, summarize, type ApiResult, type PublicProduct } from '@/lib/site';
 
 const FALLBACK_TITLE = '商品详情';
@@ -45,6 +46,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 // notFound() is what gives browsers and crawlers an actual 404 status.
 export default async function ProductLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await resolveProduct(id);
+  const product = await resolveProduct(id);
+  // The main image is the page's largest paint; start fetching it from the server HTML
+  // instead of after hydration and the client-side product request.
+  const image = shareableImage(product?.main_image);
+  if (image) preload(image, { as: 'image', fetchPriority: 'high' });
   return children;
 }
