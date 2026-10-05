@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --test tests/*.test.cjs",
+    "test": "npm run test:legacy && npm run test:unit",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:legacy": "node --test tests/*.test.cjs",
     "test:e2e": "node tests/e2e/commerce.cjs",
     "typecheck": "tsc --noEmit --incremental false"
   },
@@ -26,15 +29,21 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^24.19.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.8",
+    "happy-dom": "^20.14.5",
     "playwright": "1.63.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^5.0.3"
   },
   "overrides": {
     "postcss": "$postcss"

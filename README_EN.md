@@ -443,10 +443,14 @@ The browser regression uses an isolated local MySQL database for registration, a
 cd backend
 npm test
 
-# Frontend tests
+# Frontend tests (legacy node:test, then Vitest)
 cd frontend
 npm test
+npm run test:unit     # Vitest only
+npm run test:watch    # Vitest in watch mode
 ```
+
+Frontend tests are moving from `tests/*.test.cjs` (React hooks simulated by `tests/runtime.cjs`) to Vitest + React Testing Library + happy-dom. Write new tests as `tests/*.test.ts(x)`: they render real components and are type-checked by `npm run typecheck`. Shared setup (clearing localStorage, resetting the Zustand stores) lives in `tests/setup.ts`.
 
 ## 📈 Development Roadmap
 

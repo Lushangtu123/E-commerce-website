@@ -456,13 +456,17 @@ E-commerce-website/
 cd backend
 npm test
 
-# 前端测试
+# 前端测试（依次运行旧版 node:test 和 Vitest）
 cd frontend
 npm test
+npm run test:unit     # 只运行 Vitest
+npm run test:watch    # Vitest 监听模式
 
 # 搜索、管理员会话与列表回归（在 frontend 目录运行）
 node --test tests/search-pages.test.cjs tests/admin-session.test.cjs tests/admin-lists.test.cjs
 ```
+
+前端测试正在从 `tests/*.test.cjs`（`tests/runtime.cjs` 模拟 React hooks）迁移到 Vitest + React Testing Library + happy-dom。新测试写成 `tests/*.test.ts(x)`，渲染真实组件，并参与 `npm run typecheck` 类型检查；共享的初始化（清空 localStorage、重置 Zustand store）在 `tests/setup.ts`。
 
 完整浏览器交易回归使用真实本机 MySQL 测试库，覆盖注册、地址、演示支付、发货、收货、售后审核及修改密码。运行方式及新数据库迁移见 [Vercel / Upstash 部署文档](./docs/VERCEL_UPSTASH.md)。
 
