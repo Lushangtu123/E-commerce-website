@@ -148,7 +148,7 @@ export default function AdminUsersPage() {
         </div>
 
         {/* 搜索和筛选 */}
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
@@ -182,7 +182,7 @@ export default function AdminUsersPage() {
         </div>
 
         {/* 用户列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">

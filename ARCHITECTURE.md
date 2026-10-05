@@ -105,7 +105,7 @@
 │  • React Hooks (Local State)            │
 ├─────────────────────────────────────────┤
 │ 样式层                                   │
-│  • TailwindCSS 3 (Utility CSS)          │
+│  • TailwindCSS 4 (Utility CSS)          │
 │  • PostCSS (CSS Processing)             │
 ├─────────────────────────────────────────┤
 │ 数据请求                                 │

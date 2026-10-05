@@ -135,7 +135,7 @@ export default function AdminLogsPage() {
         </div>
 
         {/* 日志列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           {loading || !resultCurrent ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">

@@ -297,7 +297,7 @@ export default function AdminProductsPage() {
         </div>
 
         {/* 搜索和筛选 */}
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
@@ -362,7 +362,7 @@ export default function AdminProductsPage() {
         )}
 
         {/* 商品列表 */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -386,7 +386,7 @@ export default function AdminProductsPage() {
                         checked={allSelected}
                         onChange={toggleSelectAll}
                         disabled={busy}
-                        className="rounded border-gray-300"
+                        className="rounded-sm border-gray-300"
                       />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("商品")}</th>
@@ -406,7 +406,7 @@ export default function AdminProductsPage() {
                           checked={selectedIds.includes(product.product_id)}
                           onChange={() => toggleSelect(product.product_id)}
                           disabled={busy}
-                          className="rounded border-gray-300"
+                          className="rounded-sm border-gray-300"
                         />
                       </td>
                       <td className="px-6 py-4">
@@ -497,7 +497,7 @@ export default function AdminProductsPage() {
 
         {/* 添加商品模态框 */}
         {ownsQuery && formScope === scopeKey && showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -666,7 +666,7 @@ export default function AdminProductsPage() {
 
         {/* 编辑商品模态框 */}
         {ownsQuery && formScope === scopeKey && showEditModal && editProduct && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">

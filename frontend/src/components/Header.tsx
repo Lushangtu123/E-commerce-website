@@ -128,7 +128,7 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-sm sticky top-0 z-50">
+    <header className="bg-white shadow-xs sticky top-0 z-50">
       <div className="container-custom py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Logo */}
@@ -136,7 +136,7 @@ export default function Header() {
             {t("电商平台")}</Link>
 
           {/* 搜索框 */}
-          <form onSubmit={handleSearch} className="order-last w-full md:order-none md:flex-1 md:w-auto md:max-w-xl md:min-w-32">
+          <form onSubmit={handleSearch} className="order-last w-full md:order-0 md:flex-1 md:w-auto md:max-w-xl md:min-w-32">
             <div className="relative" ref={searchRef}>
               <input
                 type="text"
@@ -169,13 +169,13 @@ export default function Header() {
                         {searchHistory.slice(0, 5).map((item: any, index: number) => (
                           <div
                             key={index}
-                            className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded cursor-pointer group"
+                            className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-sm cursor-pointer group"
                             onClick={() => handleHistoryClick(item.keyword, true)}
                           >
                             <span className="text-sm text-gray-700">{item.keyword}</span>
                             <button
                               onClick={(e) => handleDeleteHistory(item.keyword, e)}
-                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded"
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded-sm"
                               title={t("删除")}
                             >
                               <FiX size={14} className="text-gray-400" />
@@ -196,7 +196,7 @@ export default function Header() {
                         {hotKeywords.slice(0, 5).map((item: any, index: number) => (
                           <div
                             key={index}
-                            className="flex items-center px-3 py-2 hover:bg-gray-50 rounded cursor-pointer"
+                            className="flex items-center px-3 py-2 hover:bg-gray-50 rounded-sm cursor-pointer"
                             onClick={() => handleHistoryClick(item.keyword)}
                           >
                             <span className={`text-xs font-bold mr-2 ${
@@ -245,7 +245,7 @@ export default function Header() {
             <Link
               href="/cart"
               aria-label={t('购物车')}
-              className="relative flex items-center space-x-1 text-gray-700 hover:text-primary-600"
+              className="relative flex items-center text-gray-700 hover:text-primary-600"
             >
               <FiShoppingCart size={24} />
               {getTotalCount() > 0 && (
@@ -259,7 +259,7 @@ export default function Header() {
               <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href="/profile"
-                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="px-4 py-2 bg-linear-to-r/srgb from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
                   <FiUser size={18} />
                   {t("我的")}</Link>

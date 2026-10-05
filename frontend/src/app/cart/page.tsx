@@ -274,7 +274,7 @@ export default function CartPage() {
                 checked={availableItems.length > 0 && orderItems.length === availableItems.length}
                 disabled={submitting || availableItems.length === 0}
                 onChange={handleSelectAll}
-                className="w-5 h-5 text-primary-600 rounded"
+                className="w-5 h-5 text-primary-600 rounded-sm"
               />
               <span className="ml-3 font-medium">{t("全选")}</span>
             </div>
@@ -288,10 +288,10 @@ export default function CartPage() {
                     checked={isAvailable(item) && selectedItems.includes(cartItemKey(item))}
                     disabled={submitting || !isAvailable(item)}
                     onChange={() => handleToggleSelect(item)}
-                    className="w-5 h-5 text-primary-600 rounded"
+                    className="w-5 h-5 text-primary-600 rounded-sm"
                   />
 
-                  <div className="w-24 h-24 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                  <div className="w-24 h-24 bg-gray-100 rounded-sm overflow-hidden shrink-0">
                     {item.main_image ? (
                       <img
                         src={item.main_image}
@@ -321,7 +321,7 @@ export default function CartPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center border border-gray-300 rounded">
+                  <div className="flex items-center border border-gray-300 rounded-sm">
                     <button
                       onClick={() => handleQuantityChange(item, Math.min(item.quantity - 1, item.stock))}
                       disabled={submitting || !canReduce(item) || item.quantity <= 1}
@@ -329,7 +329,7 @@ export default function CartPage() {
                     >
                       -
                     </button>
-                    <span className="px-4 py-1 border-x border-gray-300 min-w-[3rem] text-center">
+                    <span className="px-4 py-1 border-x border-gray-300 min-w-12 text-center">
                       {item.quantity}
                     </span>
                     <button
@@ -371,7 +371,7 @@ export default function CartPage() {
                 ) : addresses.length === 0 ? <p className="text-sm text-gray-600">{t("请先添加收货地址")}</p> : (
                   <select id="shipping-address" value={selectedAddress?.address_id ?? ''} disabled={submitting}
                     onChange={event => setAddressSelection({ key: sessionKey, id: Number(event.target.value) })}
-                    className="w-full border border-gray-300 rounded px-3 py-2">
+                    className="w-full border border-gray-300 rounded-sm px-3 py-2">
                     <option value="" disabled>{t("请选择收货地址")}</option>
                     {addresses.map(address => <option key={address.address_id} value={address.address_id}>
                       {address.receiver_name} {address.phone} · {address.province}{address.city}{address.district}{address.detail_address}
@@ -397,7 +397,7 @@ export default function CartPage() {
                     value={selectedCouponId ?? ''}
                     disabled={submitting || quoteLoading || !quote}
                     onChange={(event) => setSelectedCouponId(event.target.value ? Number(event.target.value) : undefined)}
-                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    className="w-full border border-gray-300 rounded-sm px-3 py-2"
                   >
                     <option value="">{t("不使用优惠券")}</option>
                     {quote?.available_coupons.map(coupon => (

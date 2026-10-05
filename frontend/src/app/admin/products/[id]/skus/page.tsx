@@ -131,10 +131,10 @@ export default function AdminSKUPage() {
 
   const active = data?.skus.filter(sku => sku.status === 1) ?? [];
   return <AdminLayout><div className="space-y-6">
-    <Link href="/admin/products" className="text-blue-600 underline">{t('返回商品管理')}</Link>
+    <Link href="/admin/products" className="block w-fit text-blue-600 underline">{t('返回商品管理')}</Link>
     <div><h1 className="text-2xl font-bold text-gray-900">{t('SKU 管理')}</h1>{data && <p className="mt-2 text-gray-600">{data.product.title} · #{productId}</p>}</div>
     {notice?.key === key && isCurrent() && <div role={notice.error ? 'alert' : 'status'} className={notice.error ? 'text-red-600' : 'text-green-700'}>{t(notice.error || notice.success || '')}</div>}
-    {!validId ? <p role="alert">{t('商品ID无效')}</p> : !displayed ? <p role="status">{t('加载中...')}</p> : result.error ? <div role="alert" className="bg-white rounded-lg p-6 shadow"><p className="text-red-600">{t(result.error)}</p><button type="button" onClick={() => load()} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
+    {!validId ? <p role="alert">{t('商品ID无效')}</p> : !displayed ? <p role="status">{t('加载中...')}</p> : result.error ? <div role="alert" className="bg-white rounded-lg p-6 shadow-sm"><p className="text-red-600">{t(result.error)}</p><button type="button" onClick={() => load()} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
         {data.product.status === 0 && <p className="font-medium text-amber-800">{t('商品已下架，需上架商品后才能购买')}</p>}
         <p>{t(data.product.status === 1 ? '可售库存：{stock}' : '启用规格库存：{stock}', { stock: active.reduce((sum, sku) => sum + sku.stock, 0) })}</p>
@@ -142,7 +142,7 @@ export default function AdminSKUPage() {
         <p className="text-sm text-gray-600">{t('添加首个规格后，购买使用规格价格和库存；全部停用后无法购买')}</p>
       </div>
       <button type="button" disabled={busy || !!editor} onClick={() => open()} className="btn btn-primary disabled:opacity-50">{t('新增规格')}</button>
-      {editor?.key === key && <form onSubmit={save} className="bg-white p-6 rounded-lg shadow space-y-5">
+      {editor?.key === key && <form onSubmit={save} className="bg-white p-6 rounded-lg shadow-sm space-y-5">
         <h2 className="font-bold text-lg">{t(editor.id === null ? '新增规格' : '编辑规格')}</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           {(['sku_code', 'price', 'original_price', 'stock', 'image'] as const).map(name => {
@@ -165,9 +165,9 @@ export default function AdminSKUPage() {
         <p className="text-sm text-gray-500">{t('原价和图片地址留空可清除；规格名称不可重复，最多20项')}</p>
         <div className="flex flex-wrap gap-3"><button type="submit" disabled={busy} className="btn btn-primary disabled:opacity-50">{t(busy ? '保存中...' : '保存规格')}</button><button type="button" disabled={busy} className="btn btn-outline" onClick={() => { if (isDisplayed() && !mutation.current) { replaceEditor(null); setNotice(null); } }}>{t('取消')}</button></div>
       </form>}
-      {!data.skus.length ? <p className="bg-white p-6 rounded-lg shadow">{t('暂无规格')}</p> : <div className="grid gap-4 xl:grid-cols-2">{data.skus.map(sku => <article key={sku.sku_id} className="bg-white rounded-lg shadow p-5 space-y-3">
+      {!data.skus.length ? <p className="bg-white p-6 rounded-lg shadow-sm">{t('暂无规格')}</p> : <div className="grid gap-4 xl:grid-cols-2">{data.skus.map(sku => <article key={sku.sku_id} className="bg-white rounded-lg shadow-sm p-5 space-y-3">
         <div className="flex justify-between gap-3"><h2 className="font-semibold break-all">{sku.sku_code}</h2><span className={sku.status === 1 ? 'text-green-700' : 'text-gray-500'}>{t(sku.status === 1 ? '已启用' : '已停用')}</span></div>
-        <p className="text-sm text-gray-600 break-words">{Object.entries(sku.specs).map(([name, value]) => `${name}: ${value}`).join(' / ') || '—'}</p>
+        <p className="text-sm text-gray-600 wrap-break-word">{Object.entries(sku.specs).map(([name, value]) => `${name}: ${value}`).join(' / ') || '—'}</p>
         <p>{t('售价')}：¥{Number(sku.price).toFixed(2)} · {t('库存')}：{sku.stock}</p>
         <div className="flex gap-4 flex-wrap"><button type="button" disabled={busy || !!editor} onClick={() => open(sku)} className="text-blue-600 disabled:opacity-50">{t('编辑规格')}</button>
           <button type="button" disabled={busy || !!editor} onClick={() => toggle(sku.sku_id)} className="text-blue-600 disabled:opacity-50">{t(sku.status === 1 ? '停用规格' : '启用规格')}</button></div>

@@ -13,7 +13,7 @@ export default function LanguageSwitcher() {
       title={t('界面语言')}
       value={locale}
       onChange={(event) => setLocale(event.target.value as Locale)}
-      className="shrink-0 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+      className="shrink-0 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700 focus:border-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
     >
       <option value="zh-CN" lang="zh-CN">中文</option>
       <option value="en" lang="en">English</option>

@@ -74,12 +74,12 @@ export default function FavoritesPage() {
         </div>
 
         {loadError ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center" role="alert">
+          <div className="bg-white rounded-lg shadow-xs p-12 text-center" role="alert">
             <p className="text-red-600">{t(loadError)}</p>
             <button onClick={fetchFavorites} className="mt-4 px-4 py-2 border rounded-lg">{t("重新加载")}</button>
           </div>
         ) : favorites.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+          <div className="bg-white rounded-lg shadow-xs p-12 text-center">
             <FaHeart className="text-6xl text-gray-300 mx-auto mb-4" />
             <p className="text-xl text-gray-600 mb-4">{t("暂无收藏商品")}</p>
             <button
@@ -94,7 +94,7 @@ export default function FavoritesPage() {
               {favorites.map((item) => (
                 <div
                   key={item.favorite_id}
-                  className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition group"
+                  className="bg-white rounded-lg shadow-xs overflow-hidden hover:shadow-md transition group"
                 >
                   <div
                     className="relative cursor-pointer"
@@ -106,12 +106,12 @@ export default function FavoritesPage() {
                       className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
                     /> : <div className="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400">{t("暂无图片")}</div>}
                     {Number(item.stock) <= 0 && (
-                      <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <span className="text-white text-xl font-bold">{t("已售罄")}</span>
                       </div>
                     )}
                     {item.status !== 1 && (
-                      <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <span className="text-white text-xl font-bold">{t("已下架")}</span>
                       </div>
                     )}

@@ -127,7 +127,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
           <h3 className="font-medium mb-3">{item.product_name}</h3>
           {review ? <div>
             <p className="text-green-700">{t('已评价')} · {t('{rating}分', { rating: review.rating })}</p>
-            {review.content && <p className="mt-2 whitespace-pre-wrap break-words text-gray-700">{review.content}</p>}
+            {review.content && <p className="mt-2 whitespace-pre-wrap wrap-break-word text-gray-700">{review.content}</p>}
             {review.created_at && <p className="mt-2 text-xs text-gray-500">{formatDate(review.created_at)}</p>}
           </div> : <form onSubmit={event => submit(event, item.product_id)} className="space-y-3">
             <label className="block" htmlFor={`review-rating-${item.product_id}`}><span className="block mb-1 text-sm font-medium">{t('评分')}</span>

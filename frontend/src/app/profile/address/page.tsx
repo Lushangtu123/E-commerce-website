@@ -148,7 +148,7 @@ export default function AddressPage() {
               {fields.map(field => <label key={field.name} className={field.name === 'detail_address' ? 'md:col-span-2' : ''}>
                 <span className="block mb-2 text-sm">{t(field.label)}</span>
                 <input name={field.name} required maxLength={field.max} inputMode={field.name === 'phone' ? 'tel' : undefined} value={form[field.name]} disabled={isBusy}
-                  onChange={event => setForm(previous => ({ ...previous, [field.name]: event.target.value }))} className="w-full border rounded px-3 py-2" />
+                  onChange={event => setForm(previous => ({ ...previous, [field.name]: event.target.value }))} className="w-full border rounded-sm px-3 py-2" />
               </label>)}
             </div>
             <label className="flex gap-2 items-center"><input name="is_default" type="checkbox" checked={!!form.is_default} disabled={isBusy} onChange={event => setForm(previous => ({ ...previous, is_default: event.target.checked }))} />{t("设为默认收货地址")}</label>

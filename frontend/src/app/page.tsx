@@ -61,7 +61,7 @@ export default function Home() {
   return (
     <div>
       {/* 优惠券横幅 - 始终显示 */}
-      <section className="bg-gradient-to-r from-orange-500 to-red-500 text-white py-4">
+      <section className="bg-linear-to-r/srgb from-orange-500 to-red-500 text-white py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href={isAuthenticated ? "/coupons" : "/login"} className="flex items-center justify-between hover:opacity-90 transition-opacity">
             <div className="flex items-center gap-3">
@@ -84,7 +84,7 @@ export default function Home() {
       </section>
       
       {/* 轮播图区域 */}
-      <section className="bg-gradient-to-r from-primary-600 to-primary-800 text-white py-20">
+      <section className="bg-linear-to-r/srgb from-primary-600 to-primary-800 text-white py-20">
         <div className="container-custom">
           <div className="max-w-2xl">
             <h1 className="text-5xl font-bold mb-4">{t("欢迎来到电商平台")}</h1>
@@ -110,8 +110,8 @@ export default function Home() {
                 <div key={i} className="card animate-pulse">
                   <div className="bg-gray-300 h-64 w-full"></div>
                   <div className="p-4 space-y-3">
-                    <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                    <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
+                    <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
                   </div>
                 </div>
               ))}
@@ -141,8 +141,8 @@ export default function Home() {
                 <div key={i} className="card animate-pulse">
                   <div className="bg-gray-300 h-64 w-full"></div>
                   <div className="p-4 space-y-3">
-                    <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                    <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
+                    <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
                   </div>
                 </div>
               ))}
@@ -178,8 +178,8 @@ export default function Home() {
                   <div key={i} className="card animate-pulse">
                     <div className="bg-gray-300 h-64 w-full"></div>
                     <div className="p-4 space-y-3">
-                      <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                      <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                      <div className="h-4 bg-gray-300 rounded-sm w-3/4"></div>
+                      <div className="h-4 bg-gray-300 rounded-sm w-1/2"></div>
                     </div>
                   </div>
                 ))}

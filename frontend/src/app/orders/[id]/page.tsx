@@ -167,9 +167,9 @@ export default function OrderDetailPage() {
       <div className="py-8">
         <div className="container-custom">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-300 rounded w-1/4"></div>
+            <div className="h-8 bg-gray-300 rounded-sm w-1/4"></div>
             <div className="card p-6">
-              <div className="h-32 bg-gray-300 rounded"></div>
+              <div className="h-32 bg-gray-300 rounded-sm"></div>
             </div>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function OrderDetailPage() {
           <div className="space-y-4">
             {items.map((item) => (
               <div key={item.item_id} className="flex items-center space-x-4 pb-4 border-b last:border-0">
-                <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                <div className="w-20 h-20 bg-gray-100 rounded-sm overflow-hidden shrink-0">
                   {item.product_image ? (
                     <img
                       src={item.product_image}
