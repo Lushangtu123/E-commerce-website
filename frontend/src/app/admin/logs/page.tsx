@@ -7,92 +7,38 @@ import AdminLayout from '@/components/AdminLayout';
 import { logger } from '@/lib/logger';
 import api from '@/lib/api';
 import type { AdminLog } from '@/lib/api';
-import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
+import { useAdminQuery, useAdminSessionToken } from '@/hooks/use-admin-query';
 import { requestFailure } from '@/lib/api-error';
 
 export default function AdminLogsPage() {
   const { t, formatDate } = useI18n();
-  const [logs, setLogs] = useState<AdminLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
-  const [sessionToken, setSessionToken] = useState<string | null>(() => getAdminSessionToken());
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const mounted = useRef(false);
-  const requestId = useRef(0);
-  const tokenRef = useRef(sessionToken);
-  const queryRef = useRef({ sessionToken, page, retry });
-  tokenRef.current = sessionToken;
-  queryRef.current = { sessionToken, page, retry };
+  const token = useAdminSessionToken();
+  // The page belongs to the administrator who chose it; another administrator starts on page one.
+  const [pageState, setPageState] = useState({ token, page: 1 });
+  const page = pageState.token === token ? pageState.page : 1;
+  const viewKey = JSON.stringify([token, page]);
+  const currentView = useRef(viewKey);
+  currentView.current = viewKey;
+  const query = useAdminQuery({
+    name: 'logs',
+    params: [page],
+    load: () => api.get<unknown, { logs: AdminLog[]; pagination: { total: number } }>('/admin/logs', { params: { page, limit: 20 } }),
+  });
+  const logs = query.data?.logs ?? [];
+  const total = query.data?.pagination.total ?? 0;
+  const error = query.error
+    ? requestFailure(query.error).response?.data?.error || requestFailure(query.error).message || '获取日志失败'
+    : undefined;
+  const loading = !query.data && !error;
+  const isCurrentView = () => query.isCurrentSession() && currentView.current === viewKey;
 
   useEffect(() => {
-    mounted.current = true;
-    const syncSession = () => {
-      if (!mounted.current) return;
-      const next = getAdminSessionToken();
-      if (next === tokenRef.current) return;
-      tokenRef.current = next;
-      requestId.current += 1;
-      setSessionToken(next);
-      setPage(1);
-      setLogs([]);
-      setTotal(0);
-      setError(null);
-      setLoadedKey(null);
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === 'admin_token' || event.key === 'admin_user') syncSession();
-    };
-    syncSession();
-    window.addEventListener('storage', onStorage);
-    window.addEventListener(ADMIN_SESSION_EVENT, syncSession);
-    return () => {
-      mounted.current = false;
-      requestId.current += 1;
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener(ADMIN_SESSION_EVENT, syncSession);
-    };
-  }, []);
+    if (query.error) logger.error('获取日志失败:', query.error);
+  }, [query.error]);
 
-  useEffect(() => {
-    let active = true;
-    const id = ++requestId.current;
-    const key = `${sessionToken}:${page}`;
-    const isCurrent = () => active && mounted.current && id === requestId.current && !!sessionToken && getAdminSessionToken() === sessionToken;
-    setLoading(true);
-    setError(null);
-    setLoadedKey(null);
-    if (!isCurrent()) return () => { active = false; };
-    const fetchLogs = async () => {
-      try {
-        const data = await api.get<unknown, { logs: AdminLog[]; pagination: { total: number } }>('/admin/logs', { params: { page, limit: 20 } });
-        if (!isCurrent()) return;
-        setLogs(data.logs);
-        setTotal(data.pagination.total);
-        setLoadedKey(key);
-      } catch (error) {
-        if (!isCurrent()) return;
-        logger.error('获取日志失败:', error);
-        setLogs([]);
-        setTotal(0);
-        setError(requestFailure(error).response?.data?.error || requestFailure(error).message || '获取日志失败');
-        setLoadedKey(key);
-      } finally {
-        if (isCurrent()) setLoading(false);
-      }
-    };
-    void fetchLogs();
-    return () => { active = false; };
-  }, [sessionToken, page, retry]);
-
-  const resultCurrent = !!sessionToken && getAdminSessionToken() === sessionToken && loadedKey === `${sessionToken}:${page}`;
-  const isCurrentView = () => mounted.current && queryRef.current.sessionToken === sessionToken && queryRef.current.page === page && queryRef.current.retry === retry && getAdminSessionToken() === sessionToken;
   const changePage = (next: number) => {
-    if (!isCurrentView() || !resultCurrent || error || loading) return;
-    requestId.current += 1;
-    setPage(next);
+    if (!isCurrentView() || !query.data) return;
+    setPageState({ token, page: next });
   };
 
   const getActionBadge = (action: string) => {
@@ -138,7 +84,7 @@ export default function AdminLogsPage() {
 
         {/* 日志列表 */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          {loading || !resultCurrent ? (
+          {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
@@ -149,12 +95,7 @@ export default function AdminLogsPage() {
             <div role="alert" className="p-8 text-center">
               <p className="text-red-600">{t(error)}</p>
               <button
-                onClick={() => {
-                  if (isCurrentView()) {
-                    requestId.current += 1;
-                    setRetry(value => value + 1);
-                  }
-                }}
+                onClick={() => { if (isCurrentView()) void query.refetch(); }}
                 className="mt-4 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
               >
                 {t('重新加载')}

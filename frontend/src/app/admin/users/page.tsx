@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import type { AdminPage, AdminUserRow } from '@/lib/api';
-import { getAdminSessionToken } from '@/lib/admin-session';
+import { useAdminQuery, useAdminSessionToken } from '@/hooks/use-admin-query';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
@@ -13,102 +13,71 @@ import { requestFailure } from '@/lib/api-error';
 
 export default function AdminUsersPage() {
   const { t, formatDate } = useI18n();
-  const [result, setResult] = useState<{ key: string; revision: number; rows: AdminUserRow[]; total: number; error?: string } | null>(null);
-  const [pageState, setPage] = useState(1);
-  const [filtersState, setFilters] = useState({
-    keyword: '',
-    status: ''
-  });
-
-  const [, notifySessionChange] = useState(0);
-  const [queryToken, setQueryToken] = useState(getAdminSessionToken);
-  const token = getAdminSessionToken();
-  const ownsQuery = queryToken === token;
-  const page = ownsQuery ? pageState : 1;
-  const filters = ownsQuery ? filtersState : { keyword: '', status: '' };
+  const token = useAdminSessionToken();
+  // The page and filters belong to the administrator who chose them; another one starts unfiltered on page one.
+  const [view, setView] = useState({ token, page: 1, filters: { keyword: '', status: '' } });
+  const ownsView = view.token === token;
+  const page = ownsView ? view.page : 1;
+  const filters = ownsView ? view.filters : { keyword: '', status: '' };
   const scopeKey = JSON.stringify([token, page, filters.keyword, filters.status]);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
-  const mounted = useRef(true);
-  const request = useRef(0);
   const mutation = useRef<object | null>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
-  const latestRefresh = useRef<(() => Promise<void>) | null>(null);
-  const isCurrentSession = () => mounted.current && !!token && getAdminSessionToken() === token;
-  const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey;
-  const ownsResult = isCurrentScope() && result?.key === scopeKey;
-  const users = ownsResult ? result.rows : [];
-  const total = ownsResult ? result.total : 0;
-  const loading = !ownsResult;
-  const loadError = ownsResult ? result.error : undefined;
+  const query = useAdminQuery({
+    name: 'users',
+    params: [page, filters.keyword, filters.status],
+    load: () => api.get<unknown, AdminPage & { users?: AdminUserRow[] }>('/admin/users', { params: {
+      page, limit: 20,
+      ...(filters.keyword && { keyword: filters.keyword }),
+      ...(filters.status !== '' && { status: filters.status }),
+    } }),
+  });
+  const lastPage = Math.max(1, Number(query.data?.pagination?.totalPages) || Math.ceil((Number(query.data?.pagination?.total) || 0) / 20));
+  const beyondLastPage = query.data !== undefined && page > lastPage;
+  const shown = beyondLastPage ? undefined : query.data;
+  // Handlers act only on the rows they were rendered with, not on rows a refresh has since replaced.
+  const displayed = useRef(shown);
+  displayed.current = shown;
+  const users = shown?.users || [];
+  const total = Number(shown?.pagination?.total) || 0;
+  const loadError = query.error ? requestFailure(query.error).response?.data?.error || '获取用户列表失败' : undefined;
+  const loading = !shown && !loadError;
   const busy = !!token && pendingToken === token;
-  const isDisplayedScope = () => isCurrentScope() && ownsResult && !loadError && result?.revision === request.current;
+  const isCurrentScope = () => query.isCurrentSession() && currentScope.current === scopeKey;
+  const isDisplayedScope = () => isCurrentScope() && shown !== undefined && displayed.current === shown;
+  const reload = () => { if (isCurrentScope()) void query.refetch(); };
 
+  // A pending action belongs to the administrator who started it; the next one may act at once.
   useEffect(() => {
-    mounted.current = true;
-    const onStorage = (event: StorageEvent) => {
-      if ((event.storageArea === null || event.storageArea === localStorage) &&
-        (event.key === null || event.key === 'admin_token' || event.key === 'admin_user')) notifySessionChange(value => value + 1);
-    };
-    window.addEventListener('storage', onStorage);
-    return () => { mounted.current = false; request.current++; window.removeEventListener('storage', onStorage); };
-  }, []);
-
-  useEffect(() => {
-    if (!ownsQuery) {
-      setPage(1);
-      setFilters({ keyword: '', status: '' });
-      setQueryToken(token);
-      mutation.current = null;
-      setPendingToken(null);
-    }
+    mutation.current = null;
+    setPendingToken(null);
   }, [token]);
 
-  const fetchUsers = async () => {
-    if (!isCurrentScope()) return;
-    const revision = ++request.current;
-    setResult(null);
-    try {
-      const data = await api.get<unknown, AdminPage & { users?: AdminUserRow[] }>('/admin/users', { params: {
-        page, limit: 20,
-        ...(filters.keyword && { keyword: filters.keyword }),
-        ...(filters.status !== '' && { status: filters.status }),
-      } });
-      if (!isCurrentScope() || revision !== request.current) return;
-      const lastPage = Math.max(1, Number(data.pagination?.totalPages) || Math.ceil((Number(data.pagination?.total) || 0) / 20));
-      if (page > lastPage) { setPage(lastPage); return; }
-      setResult({ key: scopeKey, revision, rows: data.users || [], total: Number(data.pagination?.total) || 0 });
-    } catch (error) {
-      if (!isCurrentScope() || revision !== request.current) return;
-      logger.error('获取用户列表失败:', error);
-      setResult({ key: scopeKey, revision, rows: [], total: 0, error: requestFailure(error).response?.data?.error || '获取用户列表失败' });
-    }
-  };
+  // Disabling the only user on the final filtered page leaves that page empty; show the new last page.
+  useEffect(() => {
+    if (beyondLastPage) setView({ token, page: lastPage, filters });
+  }, [beyondLastPage]);
 
   useEffect(() => {
-    fetchUsers();
-    return () => { request.current++; };
-  }, [scopeKey]);
+    if (query.error) logger.error('获取用户列表失败:', query.error);
+  }, [query.error]);
 
-  latestRefresh.current = fetchUsers;
-
-  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string, afterSuccess?: () => void) => {
+  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string) => {
     if (!isDisplayedScope() || mutation.current) return;
     const operation = {};
     mutation.current = operation;
     setPendingToken(token);
     try {
       await perform();
-      if (!isCurrentSession()) return;
-      if (isDisplayedScope()) {
-        afterSuccess?.();
-        toast.success(t(success));
-      }
-      await latestRefresh.current?.();
+      if (isDisplayedScope()) toast.success(t(success));
+      // The page or filters may have changed meanwhile; this reloads whichever rows are displayed now.
+      // After a session change it sends nothing: the old administrator's queries are gone or fail their session check.
+      await query.invalidate();
     } catch (error) {
       if (isDisplayedScope()) toast.error(t(requestFailure(error).response?.data?.error || failure));
     } finally {
-      if (isCurrentSession() && mutation.current === operation) {
+      if (mutation.current === operation) {
         mutation.current = null;
         setPendingToken(null);
       }
@@ -117,11 +86,9 @@ export default function AdminUsersPage() {
 
   const changeFilters = (next: { keyword: string; status: string }) => {
     if (!isCurrentScope() || (page === 1 && next.keyword === filters.keyword && next.status === filters.status)) return;
+    // Retire this scope's handlers now, before React commits the new query.
     currentScope.current = JSON.stringify([token, 1, next.keyword, next.status]);
-    request.current++;
-    setResult(null);
-    setPage(1);
-    setFilters(next);
+    setView({ token, page: 1, filters: next });
   };
 
   const changePage = (next: number) => {
@@ -129,13 +96,11 @@ export default function AdminUsersPage() {
     const target = Math.max(1, Math.min(next, Math.max(1, Math.ceil(total / 20))));
     if (target === page) return;
     currentScope.current = JSON.stringify([token, target, filters.keyword, filters.status]);
-    request.current++;
-    setResult(null);
-    setPage(target);
+    setView({ token, page: target, filters });
   };
 
   const handleStatusChange = (userId: number, newStatus: number) => {
-    if (!isDisplayedScope() || !users.some(row => row.user_id === userId)) return;
+    if (!users.some(row => row.user_id === userId)) return;
     return runMutation(() => api.put(`/admin/users/${userId}/status`, { status: newStatus }),
       newStatus === 1 ? '用户已启用' : '用户已禁用', '更新状态失败');
   };
@@ -171,7 +136,7 @@ export default function AdminUsersPage() {
               <option value="0">{t("已禁用")}</option>
             </select>
             <button
-              onClick={fetchUsers}
+              onClick={reload}
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               {t("搜索")}
@@ -197,7 +162,7 @@ export default function AdminUsersPage() {
           ) : loadError ? (
             <div role="alert" className="p-8 text-center">
               <p className="text-red-600">{t(loadError)}</p>
-              <button onClick={fetchUsers} className="mt-4 px-4 py-2 border rounded-lg">{t('重新加载')}</button>
+              <button onClick={reload} className="mt-4 px-4 py-2 border rounded-lg">{t('重新加载')}</button>
             </div>
           ) : (
             <>
