@@ -7,7 +7,7 @@ import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, SESSION_KEY } from '@/store/useAuthStore';
 import { LOCALE_STORAGE_KEY, useLocaleStore } from '@/store/useLocaleStore';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
@@ -61,7 +61,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     hydrate();
     const syncSession = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && (event.key === null || event.key === 'token' || event.key === 'user')) {
+      if (event.storageArea === localStorage && (event.key === null || event.key === SESSION_KEY || event.key === 'user')) {
         hydrate();
       }
     };

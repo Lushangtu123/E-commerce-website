@@ -146,7 +146,7 @@ describe('address management', () => {
       act(() => useAuthStore.getState().login({ ...customer, user_id: 2 }, 'two'));
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'two');
+    if (change === 'storage') localStorage.setItem('session', 'two');
     if (change === 'unmount') view.unmount();
     const lists = vi.mocked(addressApi.list).mock.calls.length;
     await act(async () => {
@@ -163,7 +163,7 @@ describe('address management', () => {
     await setup();
     await click('编辑');
     const staleSubmit = captureHandler(form(), 'onSubmit');
-    localStorage.setItem('token', 'two');
+    localStorage.setItem('session', 'two');
 
     await staleSubmit();
 
@@ -244,7 +244,7 @@ describe('address management', () => {
   it("neither opens a form, asks, nor sends a change for the customer another tab signed in", async () => {
     const confirm = vi.fn(() => true);
     await setup(undefined, confirm);
-    localStorage.setItem('token', 'two');
+    localStorage.setItem('session', 'two');
 
     for (const name of ['新增地址', '编辑']) {
       fireEvent.click(screen.getByRole('button', { name }));

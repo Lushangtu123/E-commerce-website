@@ -82,12 +82,12 @@ describe('change password', () => {
     expect(payloads).toEqual([{ currentPassword: ' previous password ', newPassword: ' next password 123 ' }]);
     await settle();
     for (const input of passwordFields()) expect(input).toBeDisabled();
-    expect(useAuthStore.getState().token).toBe('session-a');
+    expect(useAuthStore.getState().sessionId).toBe('session-a');
 
     await act(async () => pending.resolve({}));
     await settle();
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
-    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('session')).toBeNull();
     expect(useCartStore.getState().getTotalCount()).toBe(0);
     expect(router.push.mock.calls).toEqual([['/login?passwordChanged=1']]);
   });
@@ -136,7 +136,7 @@ describe('change password', () => {
       act(() => useAuthStore.getState().login(replacement, 'session-b'));
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'session-b');
+    if (change === 'storage') localStorage.setItem('session', 'session-b');
     if (change === 'unmount') view.unmount();
     await act(async () => {
       if (outcome === 'success') pending.resolve({});
@@ -209,7 +209,7 @@ describe('reset password', () => {
     expect(replaceState.mock.calls.map(([, , url]) => url)).toEqual(['/reset-password']);
     expect(window.location.hash).toBe('');
     expect(document.body.textContent).not.toContain(resetToken);
-    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('session')).toBeNull();
 
     fill();
     fireEvent.submit(form()!);
@@ -243,8 +243,8 @@ describe('reset password', () => {
     await act(async () => pending.resolve({}));
     await settle();
 
-    expect(useAuthStore.getState().token).toBe('session-b');
-    expect(localStorage.getItem('token')).toBe('session-b');
+    expect(useAuthStore.getState().sessionId).toBe('session-b');
+    expect(localStorage.getItem('session')).toBe('session-b');
   });
 
   it('discards an invalid token and offers a fresh request instead of resubmitting it', async () => {
@@ -271,11 +271,11 @@ describe('password rules and credentials', () => {
   });
 
   it('keeps recovery and capability requests anonymous while a password change needs the invoking customer', async () => {
-    localStorage.setItem('token', 'customer-a');
+    localStorage.setItem('session', 'customer-a');
     localStorage.setItem('user', JSON.stringify(customer));
     localStorage.setItem('admin_token', 'admin-a');
     useAuthStore.getState().hydrate();
-    localStorage.setItem('token', 'other-tab-customer');
+    localStorage.setItem('session', 'other-tab-customer');
     serve({
       'GET /users/password/capabilities': () => ({ passwordResetAvailable: true }), 'POST /users/password/forgot': () => ({}),
       'POST /users/password/reset': () => ({}), 'GET /payments/settings': () => ({ mode: 'disabled', canPay: false, isDemo: false }),

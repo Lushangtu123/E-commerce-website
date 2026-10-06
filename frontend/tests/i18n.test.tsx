@@ -69,14 +69,14 @@ const dictionaries: Record<string, string> = { ...errorTranslations, ...accountT
 describe('language preference', () => {
   it('hydrates independently of authentication and persists for the next page load', () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'en');
-    localStorage.setItem('token', 'customer-session');
+    localStorage.setItem('session', 'customer-session');
     expect(useLocaleStore.getState().locale, 'the first render matches the Chinese server render').toBe('zh-CN');
 
     useLocaleStore.getState().hydrate();
     expect(useLocaleStore.getState().locale).toBe('en');
     useLocaleStore.getState().setLocale('zh-CN');
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('zh-CN');
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
 
     useLocaleStore.setState(useLocaleStore.getInitialState(), true);
     useLocaleStore.getState().hydrate();
@@ -202,7 +202,7 @@ describe('language changes on rendered pages', () => {
 
   it('keeps html lang and titles in step with the preference across tabs without touching sessions', async () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'en');
-    localStorage.setItem('token', 'customer-session');
+    localStorage.setItem('session', 'customer-session');
     document.documentElement.lang = 'zh-CN';
     document.title = '全部商品 | 电商平台';
     // Counts title observers and caps their callbacks: two live observers translating the title
@@ -238,7 +238,7 @@ describe('language changes on rendered pages', () => {
     await settle();
     expect(document.documentElement.lang).toBe('zh-CN');
     expect(document.title).toBe('iPhone 15 Pro | 电商平台');
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
 
     view.unmount();
     const storageListeners = (spy: typeof added) => spy.mock.calls.filter(([type]) => type === 'storage').map(([, listener]) => listener);

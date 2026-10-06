@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FiUser } from 'react-icons/fi';
-import { useAuthStore, type User } from '@/store/useAuthStore';
+import { useAuthStore, type User, storedSessionId } from '@/store/useAuthStore';
 import { userApi, type ProfileInput } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ChangePassword from '@/components/ChangePassword';
@@ -23,8 +23,8 @@ function validProfile(value: User, userId: number | undefined): boolean {
 export default function ProfileSettingsPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user, token, isAuthenticated, isHydrated } = useAuthStore();
-  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const { user, sessionId, isAuthenticated, isHydrated } = useAuthStore();
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const currentKey = useRef(sessionKey);
   currentKey.current = sessionKey;
   const [result, setResult] = useState<Loaded | null>(null);
@@ -44,7 +44,7 @@ export default function ProfileSettingsPage() {
     const state = useAuthStore.getState();
     try {
       return mounted.current && currentKey.current === sessionKey && state.isHydrated && state.isAuthenticated &&
-        state.token === token && state.user?.user_id === user?.user_id && localStorage.getItem('token') === token &&
+        state.sessionId === sessionId && state.user?.user_id === user?.user_id && storedSessionId() === sessionId &&
         JSON.parse(localStorage.getItem('user') || 'null')?.user_id === user?.user_id;
     } catch { return false; }
   };
@@ -71,7 +71,7 @@ export default function ProfileSettingsPage() {
       if (!validProfile(data.user, user?.user_id)) {
         setResult({ key: sessionKey, error: '用户资料响应无效，请重新加载' }); return;
       }
-      if (!useAuthStore.getState().updateUser(data.user, token!)) {
+      if (!useAuthStore.getState().updateUser(data.user, sessionId!)) {
         setResult({ key: sessionKey, error: '无法同步个人资料，请重新加载' }); return;
       }
       accept(data.user);
@@ -87,7 +87,7 @@ export default function ProfileSettingsPage() {
     passwordChanged.current = false;
     loadProfile();
     return () => { revision.current += 1; };
-  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
 
   const handleChange = (name: keyof Draft, value: string) => {
     if (!isCurrent() || mutation.current || !draftRef.current) return;
@@ -121,7 +121,7 @@ export default function ProfileSettingsPage() {
       if (!validProfile(data.user, user?.user_id)) {
         setNotice({ key: sessionKey, error: '用户资料响应无效，请重新加载', reload: true }); return;
       }
-      if (!useAuthStore.getState().updateUser(data.user, token!)) {
+      if (!useAuthStore.getState().updateUser(data.user, sessionId!)) {
         setNotice({ key: sessionKey, error: '资料已保存，但本地同步失败，请重新加载', reload: true }); return;
       }
       accept(data.user);

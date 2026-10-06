@@ -80,7 +80,12 @@ describe('registration errors', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].body).toEqual({ username: '单', email: 'customer@example.test', password });
     expect(errors).toHaveLength(0);
-    expect(useAuthStore.getState().token).toBe('new-session');
+    // The server's token stays in its httpOnly cookie; the page keeps only its own session id.
+    const { sessionId } = useAuthStore.getState();
+    expect(sessionId).toEqual(expect.any(String));
+    expect(sessionId).not.toBe('new-session');
+    expect(localStorage.getItem('session')).toBe(sessionId);
+    expect(Object.values(localStorage).join()).not.toContain('new-session');
     expect(router.push.mock.calls).toEqual([['/']]);
   });
 

@@ -13,7 +13,7 @@ async function setupApi(storage: Storage, apiUrl = 'http://localhost:3001/api') 
   vi.stubEnv('NEXT_PUBLIC_API_URL', apiUrl);
   vi.resetModules();
   const entries = { ...storage };
-  if (entries.token && !Object.hasOwn(entries, 'user')) entries.user = '{"user_id":1,"username":"customer","email":"customer@example.test"}';
+  if (entries.session && !Object.hasOwn(entries, 'user')) entries.user = '{"user_id":1,"username":"customer","email":"customer@example.test"}';
   for (const [key, value] of Object.entries(entries)) localStorage.setItem(key, value);
   const { useAuthStore } = await import('@/store/useAuthStore');
   useAuthStore.getState().hydrate();
@@ -35,7 +35,11 @@ async function setupApi(storage: Storage, apiUrl = 'http://localhost:3001/api') 
 }
 
 const authorization = (config: InternalAxiosRequestConfig) => config.headers.get('Authorization');
-const both = { token: 'customer-session', admin_token: 'admin-session' };
+/** How a request authenticates: customers by the httpOnly cookie plus the CSRF header, never a token. */
+const credentials = (config: InternalAxiosRequestConfig) =>
+  ({ authorization: authorization(config), cookie: config.withCredentials, csrf: config.headers.get('X-Requested-With') });
+const asCustomer = { authorization: undefined, cookie: true, csrf: 'XMLHttpRequest' };
+const both = { session: 'customer-session', admin_token: 'admin-session' };
 
 describe('API client requests', () => {
   it('reads profile statistics as the signed-in customer and returns the server counters', async () => {
@@ -51,7 +55,7 @@ describe('API client requests', () => {
     expect(requests[0]).toMatchObject({ method: 'get', url: '/users/stats' });
     expect(requests[0].params).toBeUndefined();
     expect(requests[0].data).toBeUndefined();
-    expect(authorization(requests[0])).toBe('Bearer customer-session');
+    expect(credentials(requests[0])).toEqual(asCustomer);
   });
 
   it('sends full address fields with customer credentials and separate resource IDs', async () => {
@@ -66,11 +70,11 @@ describe('API client requests', () => {
     expect(requests.map(config => [config.method, config.url])).toEqual([['get', '/addresses'], ['post', '/addresses'], ['put', '/addresses/41'], ['delete', '/addresses/41']]);
     expect(JSON.parse(requests[1].data)).toEqual(body);
     expect(JSON.parse(requests[2].data)).toEqual(body);
-    for (const config of requests) expect(authorization(config)).toBe('Bearer customer-session');
+    for (const config of requests) expect(credentials(config)).toEqual(asCustomer);
   });
 
   it('targets a SKU when removing a variant and only the base row without one', async () => {
-    const { cartApi, requests } = await setupApi({ token: 'customer-session' });
+    const { cartApi, requests } = await setupApi({ session: 'customer-session' });
 
     await cartApi.remove(12, 101);
     await cartApi.remove(12);
@@ -92,22 +96,22 @@ describe('API client requests', () => {
     expect(requests[0].params).toEqual({ page: 2, page_size: 50, status: 1 });
   });
 
-  it("keeps a customer request's token, body, params and response", async () => {
+  it("keeps a customer request's cookie session, body, params and response", async () => {
     const { cartApi, couponApi, requests } = await setupApi(both);
 
     await cartApi.add({ product_id: 12, quantity: 3 });
     const result = await couponApi.getMyCoupons(1);
 
-    expect(authorization(requests[0])).toBe('Bearer customer-session');
+    expect(credentials(requests[0])).toEqual(asCustomer);
     expect(JSON.parse(requests[0].data)).toEqual({ product_id: 12, quantity: 3 });
-    expect(authorization(requests[1])).toBe('Bearer customer-session');
+    expect(credentials(requests[1])).toEqual(asCustomer);
     expect(requests[1].params.status).toBe(1);
     expect(result).toEqual({ data: [] });
   });
 
   it.each([
-    ['customer', { token: 'customer-session' }, '/admin/coupons', 'Authorization'],
-    ['customer', { token: 'customer-session' }, '/admin/coupons', 'authorization'],
+    ['customer', { session: 'customer-session' }, '/admin/coupons', 'Authorization'],
+    ['customer', { session: 'customer-session' }, '/admin/coupons', 'authorization'],
     ['admin', { admin_token: 'admin-session' }, '/coupons/my/list', 'Authorization'],
     ['admin', { admin_token: 'admin-session' }, '/coupons/my/list', 'authorization'],
   ] as [string, Storage, string, string][])('with only a %s session, never falls back to it for %s or keeps a supplied %s header', async (_, storage, url, header) => {
@@ -126,7 +130,8 @@ describe('API client requests', () => {
     await api.get('/administrator');
     await api.get('/coupons/available', { params: { next: '/admin/coupons' } });
 
-    expect(requests.map(authorization)).toEqual(['Bearer admin-session', 'Bearer admin-session', 'Bearer customer-session', 'Bearer customer-session']);
+    expect(requests.map(authorization)).toEqual(['Bearer admin-session', 'Bearer admin-session', undefined, undefined]);
+    expect(requests.slice(2).map(credentials)).toEqual([asCustomer, asCustomer]);
   });
 
   it('keeps customer and admin sessions apart with a relative API base URL', async () => {
@@ -135,7 +140,8 @@ describe('API client requests', () => {
     await adminCouponApi.getList();
     await userApi.getProfile();
 
-    expect(requests.map(authorization)).toEqual(['Bearer admin-session', 'Bearer customer-session']);
+    expect(requests.map(authorization)).toEqual(['Bearer admin-session', undefined]);
+    expect(credentials(requests[1])).toEqual(asCustomer);
   });
 
   it('sends selected quantities and an optional coupon ID with customer credentials for an order preview', async () => {
@@ -144,23 +150,24 @@ describe('API client requests', () => {
     await orderApi.preview({ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7 });
 
     expect(requests[0]).toMatchObject({ url: '/orders/preview', method: 'post' });
-    expect(authorization(requests[0])).toBe('Bearer customer-session');
+    expect(credentials(requests[0])).toEqual(asCustomer);
     expect(JSON.parse(requests[0].data)).toEqual({ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7 });
   });
 
-  it("captures the invoking customer's token before another tab changes storage", async () => {
-    const { orderApi, requests } = await setupApi({ token: 'customer-A' });
+  it("checks the invoking customer's session when the request starts, not after another tab changes storage", async () => {
+    const { orderApi, requests } = await setupApi({ session: 'customer-A' });
 
     const request = orderApi.create({ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 1 });
-    localStorage.setItem('token', 'customer-B');
+    localStorage.setItem('session', 'customer-B');
     await request;
 
-    expect(authorization(requests[0])).toBe('Bearer customer-A');
+    expect(requests).toHaveLength(1);
+    expect(credentials(requests[0])).toEqual(asCustomer);
   });
 
   it("refuses to send an order with another tab's identity until the store hydrates it", async () => {
-    const { orderApi, useAuthStore, requests } = await setupApi({ token: 'customer-A' });
-    localStorage.setItem('token', 'customer-B');
+    const { orderApi, useAuthStore, requests } = await setupApi({ session: 'customer-A' });
+    localStorage.setItem('session', 'customer-B');
     localStorage.setItem('user', '{"user_id":2,"username":"second","email":"second@example.test"}');
 
     await expect(orderApi.create({ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 1 })).rejects.toThrow(/登录状态已变化/);
@@ -168,33 +175,34 @@ describe('API client requests', () => {
 
     useAuthStore.getState().hydrate();
     await orderApi.create({ items: [{ product_id: 22, quantity: 1 }], shipping_address_id: 1 });
-    expect(authorization(requests[0])).toBe('Bearer customer-B');
+    expect(requests).toHaveLength(1);
+    expect(JSON.parse(requests[0].data).items).toEqual([{ product_id: 22, quantity: 1 }]);
   });
 });
 
 describe('API client sign-out on 401', () => {
   it('clears only the admin identity and opens admin login after an admin 401', async () => {
-    const { adminCouponApi, fail } = await setupApi({ token: 'customer-session', user: '{"user_id":1}', admin_token: 'expired-admin-session', admin_user: '{"admin_id":2}' });
+    const { adminCouponApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_token: 'expired-admin-session', admin_user: '{"admin_id":2}' });
     fail(401, 'Unauthorized');
 
     await expect(adminCouponApi.getList()).rejects.toThrow(/Unauthorized/);
 
     expect(localStorage.getItem('admin_token')).toBeNull();
     expect(localStorage.getItem('admin_user')).toBeNull();
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
     expect(localStorage.getItem('user')).toBe('{"user_id":1}');
     expect(window.location.pathname).toBe('/admin/login');
   });
 
   it.each([401, 403, 500])('keeps the admin identity after a customer %i, and signs the customer out only on 401', async (status) => {
-    const { userApi, fail } = await setupApi({ token: 'customer-session', user: '{"user_id":1}', admin_token: 'admin-session', admin_user: '{"admin_id":2}' });
+    const { userApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_token: 'admin-session', admin_user: '{"admin_id":2}' });
     fail(status);
 
     await expect(userApi.getProfile()).rejects.toThrow(/Request failed/);
 
     expect(localStorage.getItem('admin_token')).toBe('admin-session');
     expect(localStorage.getItem('admin_user')).toBe('{"admin_id":2}');
-    expect(localStorage.getItem('token')).toBe(status === 401 ? null : 'customer-session');
+    expect(localStorage.getItem('session')).toBe(status === 401 ? null : 'customer-session');
     expect(localStorage.getItem('user')).toBe(status === 401 ? null : '{"user_id":1}');
     expect(window.location.pathname).toBe(status === 401 ? '/login' : '/');
   });
@@ -207,13 +215,13 @@ describe('API client sign-out on 401', () => {
 
     fail(401, 'Unauthorized');
     await expect(api.get(url)).rejects.toThrow(/Unauthorized/);
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
     expect(localStorage.getItem('admin_token')).toBe('admin-session');
     expect(window.location.pathname).toBe('/');
   });
 
   it.each(['customer', 'admin'] as const)('cannot clear a newly signed-in %s with a late 401 from the earlier session', async (identity) => {
-    const tokenKey = identity === 'admin' ? 'admin_token' : 'token';
+    const tokenKey = identity === 'admin' ? 'admin_token' : 'session';
     const userKey = identity === 'admin' ? 'admin_user' : 'user';
     const loaded = await setupApi({ [tokenKey]: 'old-session', [userKey]: '{"id":1}' });
     const started = deferred<() => void>();
@@ -245,7 +253,7 @@ describe('API client sign-in routes', () => {
     await expect(api.post(path, { password: 'test-password' }, { headers: { Authorization: 'Bearer supplied-session' } })).rejects.toThrow(/Incorrect credentials/);
 
     expect(authorization(requests[0])).toBeUndefined();
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
     expect(localStorage.getItem('user')).toBe(customer);
     expect(localStorage.getItem('admin_token')).toBe('admin-session');
     expect(localStorage.getItem('admin_user')).toBe(admin);
@@ -253,7 +261,7 @@ describe('API client sign-in routes', () => {
   });
 
   it('keeps only POST sign-in routes anonymous; other methods and similar paths keep their guarded identity', async () => {
-    const { api, userApi, requests } = await setupApi({ token: 'customer-a', admin_token: 'admin-a' });
+    const { api, userApi, requests } = await setupApi({ session: 'customer-a', admin_token: 'admin-a' });
 
     await api.get('/users/login');
     await api.get('/users/register');
@@ -261,9 +269,9 @@ describe('API client sign-in routes', () => {
     await api.post('/users/login-extra', {});
     await api.post('/users/register/profile', {});
     await api.post('/admin/login/other', {});
-    expect(requests.map(authorization)).toEqual(['Bearer customer-a', 'Bearer customer-a', 'Bearer admin-a', 'Bearer customer-a', 'Bearer customer-a', 'Bearer admin-a']);
+    expect(requests.map(authorization)).toEqual([undefined, undefined, 'Bearer admin-a', undefined, undefined, 'Bearer admin-a']);
 
-    localStorage.setItem('token', 'other-tab-customer');
+    localStorage.setItem('session', 'other-tab-customer');
     await userApi.login({ email: 'customer@example.test', password: 'test-password' });
     await userApi.register({ username: 'Customer', email: 'customer@example.test', password: 'test-password' });
     for (const config of requests.slice(-2)) expect(authorization(config)).toBeFalsy();
@@ -271,3 +279,27 @@ describe('API client sign-in routes', () => {
     await expect(api.post('/users/login-extra', {})).rejects.toThrow(/登录状态已变化/);
   });
 });
+
+describe('API client cookie session', () => {
+  it('sends anonymous and customer requests with credentials and the CSRF header, and never stores a token', async () => {
+    const { productApi, userApi, requests } = await setupApi({});
+
+    await productApi.list({ page: 1 });
+    await userApi.login({ email: 'customer@example.test', password: 'test-password' });
+    await userApi.logout();
+
+    expect(requests.map(config => [config.method, config.url])).toEqual([['get', '/products'], ['post', '/users/login'], ['post', '/users/logout']]);
+    for (const config of requests) expect(credentials(config)).toEqual(asCustomer);
+    expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  it('signs a customer out on a 401 for the session it was sent with', async () => {
+    const { userApi, fail } = await setupApi({ session: 'customer-session' });
+    fail(401, 'Unauthorized');
+
+    await expect(userApi.getProfile()).rejects.toThrow(/Unauthorized/);
+    expect(localStorage.getItem('session')).toBeNull();
+    expect(window.location.pathname).toBe('/login');
+  });
+});
+

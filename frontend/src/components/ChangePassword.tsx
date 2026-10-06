@@ -4,14 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { userApi } from '@/lib/api';
 import { passwordError } from '@/lib/password-validation';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 
 export default function ChangePassword({ onPasswordChanged }: { onPasswordChanged?: () => void } = {}) {
   const { t } = useI18n(), router = useRouter();
-  const { token, user, isAuthenticated, isHydrated } = useAuthStore();
-  const key = JSON.stringify([token, user?.user_id]);
+  const { sessionId, user, isAuthenticated, isHydrated } = useAuthStore();
+  const key = JSON.stringify([sessionId, user?.user_id]);
   const currentKey = useRef(key); currentKey.current = key;
   const mounted = useRef(true), mutation = useRef<object | null>(null);
   const [values, setValues] = useState({ current: '', next: '', confirm: '' });
@@ -20,7 +20,7 @@ export default function ChangePassword({ onPasswordChanged }: { onPasswordChange
   const [notice, setNotice] = useState<{ key: string; error?: string } | null>(null);
   const active = () => {
     const state = useAuthStore.getState();
-    try { return mounted.current && currentKey.current === key && state.isAuthenticated && state.token === token && state.user?.user_id === user?.user_id && localStorage.getItem('token') === (token ?? null); }
+    try { return mounted.current && currentKey.current === key && state.isAuthenticated && state.sessionId === sessionId && state.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null); }
     catch { return false; }
   };
   useEffect(() => {

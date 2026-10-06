@@ -60,7 +60,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const data = await userApi.register({ username, email, password });
-      login(data.user, data.token);
+      login(data.user);
       toast.success(t("注册成功"));
       router.push('/');
     } catch (error) {

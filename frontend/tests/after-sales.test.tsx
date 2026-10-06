@@ -141,7 +141,7 @@ describe('customer after-sales', () => {
   it('cannot submit after another browser tab changes the token', async () => {
     await setup();
     fillRequest();
-    localStorage.setItem('token', 'session-b');
+    localStorage.setItem('session', 'session-b');
 
     await submit();
 
@@ -150,7 +150,7 @@ describe('customer after-sales', () => {
 
   it("hides the previous account's record and ignores its delayed response", async () => {
     const old = deferred<Response>();
-    await setup({ get: () => useAuthStore.getState().token === 'session-a' ? old.promise
+    await setup({ get: () => useAuthStore.getState().sessionId === 'session-a' ? old.promise
       : Promise.resolve({ after_sales: request('approved', 'Replacement request') }) });
 
     act(() => useAuthStore.getState().login(replacement, 'session-b'));
@@ -162,7 +162,8 @@ describe('customer after-sales', () => {
     await settle();
     expect(screen.queryByText(/Damaged item/)).not.toBeInTheDocument();
     expect(screen.getByText(/Replacement request/)).toBeInTheDocument();
-    expect(reads.map(read => read.authorization)).toEqual(['Bearer session-a', 'Bearer session-b']);
+    // The session travels in the httpOnly cookie, never in a header the page could leak.
+    expect(reads.map(read => read.authorization)).toEqual([undefined, undefined]);
   });
 
   const lateCases = (['account', 'storage', 'unmount'] as const).flatMap(change =>
@@ -178,7 +179,7 @@ describe('customer after-sales', () => {
       act(() => useAuthStore.getState().login(replacement, 'session-b'));
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'session-b');
+    if (change === 'storage') localStorage.setItem('session', 'session-b');
     if (change === 'unmount') view.unmount();
     const readCount = reads.length;
 

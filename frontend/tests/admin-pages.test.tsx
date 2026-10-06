@@ -35,7 +35,7 @@ let requests: InternalAxiosRequestConfig[] = [];
 
 /** A customer and an administrator are both signed in, as when one person runs the shop. */
 function signIn(adminToken = 'admin-session', adminUser = JSON.stringify({ admin_id: 1, username: 'Admin' })) {
-  localStorage.setItem('token', 'customer-session');
+  localStorage.setItem('session', 'customer-session');
   localStorage.setItem('user', JSON.stringify({ user_id: 1, username: 'customer', email: 'customer@example.test' }));
   localStorage.setItem('admin_token', adminToken);
   localStorage.setItem('admin_user', adminUser);
@@ -150,7 +150,7 @@ describe('admin dashboard', () => {
 
     expect(localStorage.getItem('admin_token')).toBeNull();
     expect(localStorage.getItem('admin_user')).toBeNull();
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
     expect(new URL(window.location.href).pathname).toBe('/admin/login');
   });
 });

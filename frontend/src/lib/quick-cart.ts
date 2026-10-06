@@ -1,15 +1,15 @@
 import { productApi, cartApi } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 
 /** Shared by cards, favorites and history; SKU choices always happen on the detail page. */
 export async function quickAddToCart(productId: number, isActive: () => boolean = () => true): Promise<'select' | 'added' | null> {
   const session = useAuthStore.getState();
-  if (!session.isHydrated || !session.isAuthenticated || !session.token || !session.user) throw new Error('请先登录');
+  if (!session.isHydrated || !session.isAuthenticated || !session.sessionId || !session.user) throw new Error('请先登录');
   const current = () => {
     const state = useAuthStore.getState();
-    return isActive() && state.token === session.token && state.user?.user_id === session.user?.user_id &&
-      localStorage.getItem('token') === session.token;
+    return isActive() && state.sessionId === session.sessionId && state.user?.user_id === session.user?.user_id &&
+      storedSessionId() === session.sessionId;
   };
   if (!current()) return null;
   try {

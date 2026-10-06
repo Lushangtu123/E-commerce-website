@@ -55,7 +55,7 @@ async function setup(kind: Kind, { list, remove = async () => ({}), clear = asyn
   useAuthStore.getState().login(firstUser, 'first-session');
   vi.stubGlobal('confirm', confirm);
   const listing = async (params: Params) => {
-    requests.push({ ...params, token: useAuthStore.getState().token });
+    requests.push({ ...params, token: useAuthStore.getState().sessionId });
     if (list) return list(params);
     return pageOf(kind, rows.slice((params.page - 1) * params.limit, params.page * params.limit), rows.length, Math.ceil(rows.length / params.limit));
   };
@@ -120,7 +120,7 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
 
   it('hides loaded rows and counts at once when the account changes and starts its first page', async () => {
     const nextAccount = deferred<Page>();
-    const { commits } = await setup(kind, { list: async params => useAuthStore.getState().token === 'second-session'
+    const { commits } = await setup(kind, { list: async params => useAuthStore.getState().sessionId === 'second-session'
       ? nextAccount.promise : pageOf(kind, [product(params.page === 1 ? 1 : 21)], 21, 2) });
     await click(button('下一页'));
     expect(titles()).toEqual(['Product 21']);
@@ -200,7 +200,7 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
     const removal = deferred();
     let calls = 0;
     await setup(kind, {
-      list: async () => pageOf(kind, [product(useAuthStore.getState().token === 'second-session' ? 2 : 1)]),
+      list: async () => pageOf(kind, [product(useAuthStore.getState().sessionId === 'second-session' ? 2 : 1)]),
       remove: () => ++calls === 1 ? removal.promise : Promise.resolve({}),
     });
     fireEvent.click(removeButtons(kind)[0]);
@@ -226,7 +226,7 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
       switchAccount();
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'second-session');
+    if (change === 'storage') localStorage.setItem('session', 'second-session');
     if (change === 'unmount') view.unmount();
     await act(async () => {
       if (fail) pending.reject(new Error('Old failure'));
@@ -273,7 +273,7 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
     const handlers = [removeButtons(kind)[0], button('加入购物车'), ...(kind === 'history' ? [button('清空历史')] : [])].map(element => captureHandler(element));
 
     if (change === 'account') switchAccount();
-    if (change === 'storage') localStorage.setItem('token', 'second-session');
+    if (change === 'storage') localStorage.setItem('session', 'second-session');
     if (change === 'unmount') view.unmount();
     for (const handler of handlers) await handler();
     await settle();
@@ -296,7 +296,7 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
       switchAccount();
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'second-session');
+    if (change === 'storage') localStorage.setItem('session', 'second-session');
     if (change === 'unmount') view.unmount();
     const before = requests.length;
     await act(async () => {
@@ -345,7 +345,7 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
       switchAccount();
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'second-session');
+    if (change === 'storage') localStorage.setItem('session', 'second-session');
     if (change === 'unmount') view.unmount();
     if (change === 'page') {
       await act(() => next());
@@ -388,7 +388,7 @@ describe('history clear confirmation', () => {
   it.each(['cancel', 'account', 'storage'] as const)('checks identity before and after the prompt and sends nothing (%s)', async (change) => {
     await setup('history', { rows: [product(1)], confirm: () => {
       if (change === 'account') useAuthStore.getState().login(secondUser, 'second-session');
-      if (change === 'storage') localStorage.setItem('token', 'second-session');
+      if (change === 'storage') localStorage.setItem('session', 'second-session');
       return change !== 'cancel';
     } });
 

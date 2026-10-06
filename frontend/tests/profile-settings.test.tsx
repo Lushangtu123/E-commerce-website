@@ -38,14 +38,14 @@ describe('auth store profile updates', () => {
     expect(useAuthStore.getState().user).toMatchObject({ username: '新名字', phone: null });
     expect(useAuthStore.getState().user).not.toHaveProperty('password_hash');
     expect(useCartStore.getState().items).toHaveLength(1);
-    expect(localStorage.getItem('token')).toBe('session-one');
+    expect(localStorage.getItem('session')).toBe('session-one');
   });
 
   it.each(['account', 'token', 'storage', 'storage_user'] as const)('cannot replace the user after a %s change', (scenario) => {
     useAuthStore.getState().login(customer, 'session-one');
     if (scenario === 'account') useAuthStore.getState().login({ ...customer, user_id: 2, username: 'another' }, 'session-two');
     if (scenario === 'token') useAuthStore.getState().login(customer, 'session-two');
-    if (scenario === 'storage') localStorage.setItem('token', 'session-two');
+    if (scenario === 'storage') localStorage.setItem('session', 'session-two');
     if (scenario === 'storage_user') localStorage.setItem('user', JSON.stringify({ ...customer, user_id: 2 }));
     const before = useAuthStore.getState().user;
     const stored = localStorage.getItem('user');
@@ -82,7 +82,7 @@ function serve({ getProfile = async () => ({ user: customer }), save = async bod
 }
 
 function signIn() {
-  localStorage.setItem('token', 'session-one');
+  localStorage.setItem('session', 'session-one');
   localStorage.setItem('user', JSON.stringify(customer));
   localStorage.setItem('admin_token', 'administrator');
   useAuthStore.getState().hydrate();
@@ -176,7 +176,7 @@ describe('settings page', () => {
     edit({ username: '  新名字  ', phone: '  ', avatar_url: '' });
     await submit();
 
-    expect(requests[1]).toEqual({ method: 'put', body: { username: '新名字', phone: null, avatar_url: null }, authorization: 'Bearer session-one', url: '/users/profile' });
+    expect(requests[1]).toEqual({ method: 'put', body: { username: '新名字', phone: null, avatar_url: null }, authorization: undefined, url: '/users/profile' });
     expect(input('username')).toHaveValue('服务器确认名');
     expect(screen.getByText(/资料已保存/)).toBeInTheDocument();
     useAuthStore.getState().hydrate();
@@ -310,7 +310,8 @@ describe('settings page', () => {
     const old = deferred<ProfileResponse>(), next = deferred<ProfileResponse>();
     let saves = 0;
     await setup({
-      getProfile: config => ({ user: config.headers.get('Authorization') === 'Bearer session-one' ? customer : second }),
+      // The cookie names the account to the server; here the store's session at request time stands in for it.
+      getProfile: () => ({ user: useAuthStore.getState().sessionId === 'session-one' ? customer : second }),
       save: () => ++saves === 1 ? old.promise : next.promise,
     });
     edit({ username: 'old write' });
@@ -359,7 +360,7 @@ describe('settings page', () => {
     const { view } = await setup();
     edit({ username: 'draft' });
     const staleSubmit = captureHandler(profileForm()!, 'onSubmit');
-    localStorage.setItem('token', 'session-two');
+    localStorage.setItem('session', 'session-two');
 
     await staleSubmit();
     expect(requests.map(request => request.method)).toEqual(['get']);

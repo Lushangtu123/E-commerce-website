@@ -137,7 +137,7 @@ describe('orders page', () => {
   it.each(['loaded', 'pending'] as const)('hides %s results of the previous customer at once and resets filter and page', async (previousState) => {
     const pending = deferred<OrderList>();
     const { commits } = await setup({ search: '?status=0', list: async params => {
-      if (useAuthStore.getState().token === 'second-session') return page([order(1, 3, 'SECOND')], 1, 1);
+      if (useAuthStore.getState().sessionId === 'second-session') return page([order(1, 3, 'SECOND')], 1, 1);
       if (previousState === 'pending' && params.page === 2) return pending.promise;
       return page([order(1, 0, 'FIRST')], 13, 2);
     } });
@@ -172,7 +172,7 @@ describe('orders page', () => {
 
   it('sends no list request for a filter chosen after another tab changed the session', async () => {
     await setup();
-    localStorage.setItem('token', 'other-tab-session');
+    localStorage.setItem('session', 'other-tab-session');
 
     await click(button('已取消'));
     expect(requests()).toHaveLength(1);
@@ -283,7 +283,7 @@ describe('orders page', () => {
 
     it('sends nothing after another tab changes the token', async () => {
       await setup({ list: ordersFor });
-      localStorage.setItem('token', 'other-tab-session');
+      localStorage.setItem('session', 'other-tab-session');
 
       await click(button(actionLabel[action]));
       expect(mutations).toEqual([]);
@@ -304,7 +304,7 @@ describe('orders page', () => {
       act(() => useAuthStore.getState().login(secondUser, 'second-session'));
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'other-tab-session');
+    if (change === 'storage') localStorage.setItem('session', 'other-tab-session');
     if (change === 'unmount') view.unmount();
     useCartStore.getState().setItems([{ cart_id: 1, product_id: 1, title: 'Current cart', quantity: 2, price: 10, stock: 4 }]);
     const lists = requests().length;
@@ -367,7 +367,7 @@ describe('orders page', () => {
     const pending = deferred<OrderList>();
     const { view } = await setup({ list: () => pending.promise });
     if (change === 'unmount') view.unmount();
-    else localStorage.setItem('token', 'other-tab-session');
+    else localStorage.setItem('session', 'other-tab-session');
 
     await act(async () => {
       if (outcome === 'success') pending.resolve(page([order(99, 0, 'LATE')], 1, 1));

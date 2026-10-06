@@ -58,7 +58,7 @@ describe('quick add to cart', () => {
     const work = quickAddToCart(1);
     await flush();
     if (change === 'account') useAuthStore.getState().login({ user_id: 2, username: 'two', email: 'two@example.test' }, 'two');
-    else localStorage.setItem('token', 'two');
+    else localStorage.setItem('session', 'two');
     pending.resolve(phase === 'detail' ? { product: product() } : {});
 
     expect(await work).toBeNull();

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { couponApi } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
@@ -29,16 +29,16 @@ interface Coupon {
 export default function CouponsPage() {
   const router = useRouter();
   const { t, locale, formatDate } = useI18n();
-  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [receivingIds, setReceivingIds] = useState<Set<number>>(new Set());
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const isCurrentSession = () => {
     const current = useAuthStore.getState();
-    return current.isAuthenticated && current.token === token && current.user?.user_id === user?.user_id &&
-      localStorage.getItem('token') === (token ?? null);
+    return current.isAuthenticated && current.sessionId === sessionId && current.user?.user_id === user?.user_id &&
+      storedSessionId() === (sessionId ?? null);
   };
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export default function CouponsPage() {
       }
     });
     return () => { active = false; };
-  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
 
   const handleReceive = async (coupon: Coupon) => {
     if (!isAuthenticated) {

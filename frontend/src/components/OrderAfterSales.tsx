@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { afterSalesApi, type AfterSalesRequest } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 
@@ -10,8 +10,8 @@ export const AFTER_SALES_STATUS = { requested: '待审核', approved: '审核通
 
 export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const { t, formatDate } = useI18n();
-  const { token, user, isAuthenticated } = useAuthStore();
-  const key = JSON.stringify([token, user?.user_id, orderId]);
+  const { sessionId, user, isAuthenticated } = useAuthStore();
+  const key = JSON.stringify([sessionId, user?.user_id, orderId]);
   const currentKey = useRef(key); currentKey.current = key;
   const mounted = useRef(true), request = useRef(0), mutation = useRef<object | null>(null);
   const [result, setResult] = useState<{ key: string; value: AfterSalesRequest | null; error?: string } | null>(null);
@@ -21,7 +21,7 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const [notice, setNotice] = useState<{ key: string; error?: string; success?: string } | null>(null);
   const active = () => {
     const state = useAuthStore.getState();
-    try { return mounted.current && currentKey.current === key && state.isAuthenticated && state.token === token && state.user?.user_id === user?.user_id && localStorage.getItem('token') === (token ?? null); }
+    try { return mounted.current && currentKey.current === key && state.isAuthenticated && state.sessionId === sessionId && state.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null); }
     catch { return false; }
   };
   const load = async () => {

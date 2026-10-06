@@ -88,7 +88,7 @@ describe('order reviews', () => {
     await submit(forms()[0]);
 
     expect(requests[0].params).toEqual({ order_id: 7, page: 1, limit: 100 });
-    expect(requests[1]).toEqual({ method: 'post', url: '/reviews', params: undefined, authorization: 'Bearer buyer-one',
+    expect(requests[1]).toEqual({ method: 'post', url: '/reviews', params: undefined, authorization: undefined,
       body: { order_id: 7, product_id: 11, rating: 4, content: '实际评价内容' } });
     expect(forms()).toHaveLength(1);
     expect(screen.getByText('实际评价内容')).toBeInTheDocument();
@@ -231,7 +231,7 @@ describe('order reviews', () => {
     if (scenario === 'account') act(() => useAuthStore.getState().login(otherBuyer, 'buyer-two'));
     if (scenario === 'token') act(() => useAuthStore.getState().login(buyer, 'renewed'));
     if (scenario === 'order') view.rerender(<OrderReviews orderId={8} items={products} />);
-    if (scenario === 'storage') localStorage.setItem('token', 'different');
+    if (scenario === 'storage') localStorage.setItem('session', 'different');
     if (scenario === 'storage-user') localStorage.setItem('user', JSON.stringify({ user_id: 2 }));
     if (scenario === 'unmount') view.unmount();
     await settle();
@@ -245,7 +245,7 @@ describe('order reviews', () => {
   it('does not submit after another browser tab changes the token', async () => {
     prepare();
     await renderReviews();
-    localStorage.setItem('token', 'another-tab');
+    localStorage.setItem('session', 'another-tab');
 
     await submit(forms()[0]);
 

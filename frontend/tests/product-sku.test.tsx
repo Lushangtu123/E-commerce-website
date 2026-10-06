@@ -155,7 +155,7 @@ describe('product SKU purchase', () => {
       act(() => useAuthStore.getState().login(secondUser, 'second-session'));
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'second-session');
+    if (change === 'storage') localStorage.setItem('session', 'second-session');
     if (change === 'unmount') view.unmount();
     useCartStore.getState().setItems([{ cart_id: 9, product_id: 1, sku_id: 102, quantity: 1, title: 'B item', price: 30, stock: 4 }]);
     await act(async () => {

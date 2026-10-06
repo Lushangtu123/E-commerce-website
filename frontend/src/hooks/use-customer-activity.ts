@@ -32,8 +32,8 @@ export function useCustomerActivity<T extends { product_id: number }>(
   errorMessage: string,
 ) {
   const router = useRouter();
-  const { user, token, isAuthenticated, isHydrated } = useAuthStore();
-  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const { user, sessionId, isAuthenticated, isHydrated } = useAuthStore();
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   // A page belongs to the session that chose it; another session starts on page one.
   const [pageState, setPageState] = useState({ session: sessionKey, page: 1 });
   const page = pageState.session === sessionKey ? pageState.page : 1;

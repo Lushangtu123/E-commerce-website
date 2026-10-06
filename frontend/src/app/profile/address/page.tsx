@@ -28,14 +28,14 @@ const addressInput = (address: ShippingAddress): AddressInput => ({
 export default function AddressPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { isHydrated, isAuthenticated, token, user } = useAuthStore();
+  const { isHydrated, isAuthenticated, sessionId, user } = useAuthStore();
   const [form, setForm] = useState<AddressInput>(emptyForm);
   const [editing, setEditing] = useState<number | null | undefined>(undefined);
   const [formError, setFormError] = useState<string | { key: string; field: string; max?: number }>('');
   const formErrorText = typeof formError === 'string' ? t(formError) : t(formError.key, { field: t(formError.field), max: formError.max ?? 0 });
   const [busy, setBusy] = useState<string | null>(null);
   const mutation = useRef<string | null>(null);
-  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const query = useSessionQuery({ name: 'addresses', params: [], load: () => addressApi.list() });
   const { isCurrentSession: isCurrent } = query;
   const addresses = query.data?.addresses || [];

@@ -37,7 +37,7 @@ interface Setup {
  * transport layer and renders the SKU manager for the product in `params.id`.
  */
 async function setup({ list = async () => ({ product, skus: [sku] }), mutate = async () => ({ sku_id: 12 }), locale = 'zh-CN', page = () => <SkuPage />, before }: Setup = {}) {
-  localStorage.setItem('token', 'customer-session');
+  localStorage.setItem('session', 'customer-session');
   localStorage.setItem('admin_token', 'admin-one');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: '测试管理员' }));
   useLocaleStore.getState().setLocale(locale);
@@ -133,7 +133,7 @@ describe('admin SKU management', () => {
     expect(screen.getByText('FREE-M')).toBeInTheDocument();
     expect(form()).toBeNull();
     expect(screen.getByText('规格已保存')).toBeInTheDocument();
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
   });
 
   it('binds product and SKU IDs when editing, keeps typed spec values and clears optional fields', async () => {

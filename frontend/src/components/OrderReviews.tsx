@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { reviewApi, type PurchaseReview } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 
@@ -13,9 +13,9 @@ const initialDraft: Draft = { rating: '5', content: '' };
 
 export default function OrderReviews({ orderId, items }: { orderId: number; items: Item[] }) {
   const { t, formatDate } = useI18n();
-  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const products = Array.from(new Map(items.map(item => [item.product_id, item])).values());
-  const key = JSON.stringify([token, user?.user_id, orderId, products.map(item => item.product_id)]);
+  const key = JSON.stringify([sessionId, user?.user_id, orderId, products.map(item => item.product_id)]);
   const currentKey = useRef(key); currentKey.current = key;
   const mounted = useRef(true);
   const request = useRef(0);
@@ -30,7 +30,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
     const state = useAuthStore.getState();
     try {
       return mounted.current && currentKey.current === key && state.isHydrated && state.isAuthenticated &&
-        state.token === token && state.user?.user_id === user?.user_id && localStorage.getItem('token') === token &&
+        state.sessionId === sessionId && state.user?.user_id === user?.user_id && storedSessionId() === sessionId &&
         JSON.parse(localStorage.getItem('user') || 'null')?.user_id === user?.user_id;
     } catch { return false; }
   };
