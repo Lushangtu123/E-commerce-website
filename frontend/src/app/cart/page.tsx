@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { addressApi, cartApi, orderApi, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
-import { FiTrash2, FiShoppingBag, FiShoppingCart } from 'react-icons/fi';
-import ProductImage from '@/components/ProductImage';
+import { FiShoppingCart } from 'react-icons/fi';
+import CartItemRow, { canReduceCartItem as canReduce, isCartItemAvailable as isAvailable } from '@/components/CartItemRow';
+import CheckoutSummary from '@/components/CheckoutSummary';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
@@ -51,8 +51,6 @@ export default function CartPage() {
     }
   }, []);
 
-  const isAvailable = (item: CartItem) => item.available !== false && item.available !== 0;
-  const canReduce = (item: CartItem) => isAvailable(item) || (item.unavailable_reason === '库存不足' && item.stock > 0);
   const availableItems = items.filter(isAvailable);
   const orderItems = availableItems
     .filter(item => selectedItems.includes(cartItemKey(item)))
@@ -286,155 +284,21 @@ export default function CartPage() {
 
             {/* 商品列表 */}
             {items.map((item) => (
-              <div key={cartItemKey(item)} className="card p-4">
-                <div className="flex flex-wrap items-center gap-4">
-                  <input
-                    type="checkbox"
-                    aria-label={t("选择 {title}", { title: item.title })}
-                    checked={isAvailable(item) && selectedItems.includes(cartItemKey(item))}
-                    disabled={submitting || !isAvailable(item)}
-                    onChange={() => handleToggleSelect(item)}
-                    className="h-5 w-5 rounded-sm accent-primary-600"
-                  />
-
-                  <ProductImage src={item.main_image} alt={item.title} compact className="h-24 w-24 shrink-0 rounded-lg border border-gray-200" />
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-medium text-gray-900">{item.title}</h3>
-                    {item.sku_specs && <p className="text-sm text-gray-600 mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
-                    {item.sku_code && <p className="text-xs text-gray-500 mt-1">{t("规格编号：")}{item.sku_code}</p>}
-                    {!isAvailable(item) && (
-                      <div className="text-sm text-red-600 mt-1">
-                        <p>{t(item.unavailable_reason || '商品当前不可用')}</p>
-                        <button onClick={() => router.push(`/products/${item.product_id}`)} className="underline">{t("重新选规格")}</button>
-                      </div>
-                    )}
-                    <p className="text-primary-600 font-medium mt-1">¥{item.price}</p>
-                    {item.stock < 10 && (
-                      <p className="text-orange-500 text-sm mt-1">{t('仅剩 {count} 件', { count: item.stock })}</p>
-                    )}
-                  </div>
-
-                  <div className="flex w-full items-center justify-end gap-4 sm:w-auto">
-                  <div className="flex items-center overflow-hidden rounded-lg border border-gray-300">
-                    <button
-                      onClick={() => handleQuantityChange(item, Math.min(item.quantity - 1, item.stock))}
-                      disabled={submitting || !canReduce(item) || item.quantity <= 1}
-                      className="h-9 w-9 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300"
-                    >
-                      -
-                    </button>
-                    <span className="flex h-9 min-w-12 items-center justify-center border-x border-gray-300 px-3 text-sm">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => handleQuantityChange(item, item.quantity + 1)}
-                      disabled={submitting || !isAvailable(item) || item.quantity >= item.stock}
-                      className="h-9 w-9 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div className="min-w-20 text-right">
-                    <p className="text-lg font-semibold text-gray-900">¥{(Number(item.price) * item.quantity).toFixed(2)}</p>
-                  </div>
-
-                  <button
-                    onClick={() => handleRemove(item)}
-                    disabled={submitting}
-                    aria-label={t('删除')}
-                    className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-red-500"
-                  >
-                    <FiTrash2 size={18} />
-                  </button>
-                  </div>
-                </div>
-              </div>
+              <CartItemRow key={cartItemKey(item)} item={item} selected={selectedItems.includes(cartItemKey(item))} submitting={submitting}
+                onToggle={() => handleToggleSelect(item)} onQuantityChange={quantity => handleQuantityChange(item, quantity)}
+                onRemove={() => handleRemove(item)} />
             ))}
           </div>
 
           {/* 结算信息 */}
           <div className="lg:col-span-1">
-            <div className="card p-6 sticky top-24">
-              <h3 className="font-bold text-lg mb-4">{t("订单摘要")}</h3>
-              <div className="mb-6">
-                <label htmlFor="shipping-address" className="block font-medium mb-2">{t("收货地址")}</label>
-                {addressLoading ? <p className="text-sm text-gray-500">{t("收货地址加载中...")}</p> : addressError ? (
-                  <div className="text-sm text-red-600" role="alert">
-                    <p>{t(addressError)}</p>
-                    <button onClick={() => setAddressRevision(value => value + 1)} className="underline mt-1">{t("重新加载地址")}</button>
-                  </div>
-                ) : addresses.length === 0 ? <p className="text-sm text-gray-600">{t("请先添加收货地址")}</p> : (
-                  <select id="shipping-address" value={selectedAddress?.address_id ?? ''} disabled={submitting}
-                    onChange={event => setAddressSelection({ key: sessionKey, id: Number(event.target.value) })}
-                    className="w-full border border-gray-300 rounded-sm px-3 py-2">
-                    <option value="" disabled>{t("请选择收货地址")}</option>
-                    {addresses.map(address => <option key={address.address_id} value={address.address_id}>
-                      {address.receiver_name} {address.phone} · {address.province}{address.city}{address.district}{address.detail_address}
-                    </option>)}
-                  </select>
-                )}
-                <Link href="/profile/address" className="inline-block text-primary-600 text-sm underline mt-2">{t("管理收货地址")}</Link>
-              </div>
-              
-              <div className="space-y-3 mb-6">
-                <div className="flex justify-between text-gray-600">
-                  <span>{t("商品数量")}</span>
-                  <span>{t('{count} 件', { count: orderItems.length })}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>{t("商品总价")}</span>
-                  <span>{quote ? `¥${quote.original_amount.toFixed(2)}` : t('计算中...')}</span>
-                </div>
-                <div>
-                  <label htmlFor="checkout-coupon" className="block text-sm text-gray-600 mb-2">{t("优惠券")}</label>
-                  <select
-                    id="checkout-coupon"
-                    value={selectedCouponId ?? ''}
-                    disabled={submitting || quoteLoading || !quote}
-                    onChange={(event) => setSelectedCouponId(event.target.value ? Number(event.target.value) : undefined)}
-                    className="w-full border border-gray-300 rounded-sm px-3 py-2"
-                  >
-                    <option value="">{t("不使用优惠券")}</option>
-                    {quote?.available_coupons.map(coupon => (
-                      <option key={coupon.user_coupon_id} value={coupon.user_coupon_id}>
-                        {t('{name}（优惠¥{amount}）', { name: coupon.name, amount: coupon.discount_amount.toFixed(2) })}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>{t("优惠券优惠")}</span>
-                  <span>{quote ? `-¥${quote.discount_amount.toFixed(2)}` : t('计算中...')}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>{t("运费")}</span>
-                  <span className="text-green-600">{t("免运费")}</span>
-                </div>
-                <div className="border-t pt-3 flex justify-between items-center">
-                  <span className="font-medium">{t("应付金额")}</span>
-                  <span className="text-2xl font-bold text-primary-600">
-                    {quote ? `¥${quote.total_amount.toFixed(2)}` : t('计算中...')}
-                  </span>
-                </div>
-                {quoteError && (
-                  <div className="text-sm text-red-600" role="alert">
-                    <p>{t(quoteError)}</p>
-                    <button onClick={() => setQuoteRevision(value => value + 1)} className="mt-2 underline">{t("重新计算")}</button>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={handleCheckout}
-                disabled={orderItems.length === 0 || submitting || !quote || quoteLoading || !!quoteError || addressLoading || !!addressError || !selectedAddress}
-                className="w-full btn btn-primary disabled:opacity-50"
-              >
-                <FiShoppingBag className="inline mr-2" />
-                {submitting ? t('提交中...') : t('结算 ({count})', { count: orderItems.length })}
-              </button>
-            </div>
+            <CheckoutSummary itemCount={orderItems.length} submitting={submitting}
+              addresses={addresses} addressLoading={addressLoading} addressError={addressError}
+              selectedAddressId={selectedAddress?.address_id}
+              onSelectAddress={id => setAddressSelection({ key: sessionKey, id })}
+              onReloadAddresses={() => setAddressRevision(value => value + 1)}
+              quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} onRetryQuote={() => setQuoteRevision(value => value + 1)}
+              selectedCouponId={selectedCouponId} onSelectCoupon={setSelectedCouponId} onCheckout={handleCheckout} />
           </div>
         </div>
       </div>
