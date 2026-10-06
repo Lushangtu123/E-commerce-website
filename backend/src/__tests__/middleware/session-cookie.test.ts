@@ -107,7 +107,7 @@ describe('administrator session cookie', () => {
 });
 
 describe('login', () => {
-  test('an administrator login sets the admin session cookie to the returned token', async () => {
+  test('an administrator login sets the admin session cookie without exposing the token in the body', async () => {
     const password_hash = await bcrypt.hash('admin-password', 4);
     (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async (sql: string) => sql.includes('FROM admins a')
       ? [[{ admin_id: 9, username: 'root', role_id: 1, role_name: '超级管理员', status: 1, password_hash }]] : [{}]) });
@@ -117,7 +117,11 @@ describe('login', () => {
 
     const res = await request(app).post('/api/admin/login').send({ username: 'root', password: 'admin-password' }).expect(200);
     const [cookie] = res.headers['set-cookie'] as unknown as string[];
-    expect(cookie.startsWith(`admin_session=${res.body.token};`)).toBe(true);
+    const token = /^admin_session=([^;]+);/.exec(cookie)![1];
+    expect(jwt.verify(token, SECRET)).toMatchObject({ adminId: 9, type: 'admin' });
+    expect(res.body).not.toHaveProperty('token');
+    expect(res.body.admin).toMatchObject({ admin_id: 9, username: 'root' });
+    expect(res.text).not.toContain(token);
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toMatch(/Max-Age=(86399|86400);/);
   });

@@ -42,11 +42,11 @@ echo "🔐 用户登录"
 echo "────────────────────────────────────────────────────────────────"
 
 # 2. 用户登录
-LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/users/login" \
+LOGIN_RESPONSE=$(curl -s -i -X POST "$BASE_URL/users/login" \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"123456"}')
 
-TOKEN=$(echo $LOGIN_RESPONSE | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+TOKEN=$(echo $LOGIN_RESPONSE | grep -o 'customer_session=[^;]*' | head -1 | cut -d= -f2)
 
 if [ -z "$TOKEN" ]; then
     echo -e "${RED}✗ 登录失败${NC}"

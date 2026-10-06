@@ -43,13 +43,13 @@ const options: swaggerJSDoc.Options = {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: '用户登录 Token：Authorization: Bearer <token>',
+          description: '非浏览器客户端可把 customer_session Cookie 的值作为 Authorization: Bearer <token> 发送；登录接口不在响应体中返回令牌。',
         },
         adminAuth: {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: '管理员 Token：Authorization: Bearer <admin_token>',
+          description: '非浏览器客户端可把 admin_session Cookie 的值作为 Authorization: Bearer <token> 发送；登录接口不在响应体中返回令牌。',
         },
         customerCookie: {
           type: 'apiKey',

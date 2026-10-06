@@ -54,11 +54,12 @@ test('login binds the session to the database authentication version', async () 
   (query as jest.Mock).mockResolvedValue([{ user_id: 7, username: 'customer', email: 'user@example.test',
     auth_version: 3, password_hash: await bcrypt.hash(password, 4) }]);
   const res = response(); await UserController.login(req({ email: 'user@example.test', password }), res);
-  const token = res.json.mock.calls[0][0].token;
+  // The session token goes only into an httpOnly cookie that expires with it, scoped to the API.
+  const [name, token, options] = res.cookie.mock.calls[0];
+  expect(name).toBe('customer_session');
   expect(jwt.verify(token, process.env.JWT_SECRET!)).toMatchObject({ userId: 7, authVersion: 3, type: 'user' });
-  // The same token also goes into an httpOnly cookie that expires with it, scoped to the API.
-  const [name, value, options] = res.cookie.mock.calls[0];
-  expect([name, value]).toEqual(['customer_session', token]);
+  expect(res.json.mock.calls[0][0]).not.toHaveProperty('token');
+  expect(JSON.stringify(res.json.mock.calls[0][0])).not.toContain(token);
   expect(options).toMatchObject({ httpOnly: true, sameSite: 'lax', secure: false, path: '/api' });
   expect(options.maxAge).toBeGreaterThan(7 * 24 * 3600 * 1000 - 60_000);
   expect(options.maxAge).toBeLessThanOrEqual(7 * 24 * 3600 * 1000);

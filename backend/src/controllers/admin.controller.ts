@@ -76,9 +76,9 @@ export const adminLogin = async (req: Request, res: Response) => {
     // 返回登录信息（不返回密码）
     delete admin.password_hash;
 
+    // The signed token travels only in the httpOnly cookie; page scripts never see it.
     setSessionCookie(res, ADMIN_COOKIE, token);
     res.json({
-      token,
       admin: {
         admin_id: admin.admin_id,
         username: admin.username,

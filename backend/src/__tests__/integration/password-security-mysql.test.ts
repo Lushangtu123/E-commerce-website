@@ -20,6 +20,9 @@ integration('isolated MySQL password revocation and single-use reset', () => {
     user: process.env.MYSQL_TEST_USER || 'root', password: process.env.MYSQL_TEST_PASSWORD || '', connectionLimit: 8, timezone: '+00:00' };
   let server: Pool; let db: Pool; let created = false;
   const hash = (token: string) => createHash('sha256').update(token).digest('hex');
+  /** The signed session a login set; it travels only in the httpOnly cookie, never in the body. */
+  const sessionOf = (res: { headers: Record<string, unknown> }) =>
+    /customer_session=([^;]+)/.exec(String(res.headers['set-cookie']))![1];
   const model = () => require('../../models/password-reset.model').PasswordResetModel;
   const app = express(); app.use(express.json()); app.use('/api/users', userRoutes);
 
@@ -86,15 +89,16 @@ integration('isolated MySQL password revocation and single-use reset', () => {
     await db.query('UPDATE users SET password_hash = ? WHERE user_id = 7', [await bcrypt.hash(currentPassword, 4)]);
     const legacy = jwt.sign({ userId: 7 }, process.env.JWT_SECRET!);
     const login = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: currentPassword }).expect(200);
-    await request(app).put('/api/users/password').set('Authorization', `Bearer ${login.body.token}`)
+    expect(login.body).not.toHaveProperty('token');
+    await request(app).put('/api/users/password').set('Authorization', `Bearer ${sessionOf(login)}`)
       .send({ currentPassword, newPassword }).expect(200);
-    for (const token of [legacy, login.body.token]) {
+    for (const token of [legacy, sessionOf(login)]) {
       await request(app).get('/api/users/profile').set('Authorization', `Bearer ${token}`).expect(401);
     }
     await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: currentPassword }).expect(401);
     const newLogin = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: newPassword }).expect(200);
-    expect(jwt.verify(newLogin.body.token, process.env.JWT_SECRET!)).toMatchObject({ type: 'user', userId: 7, authVersion: 1 });
-    await request(app).get('/api/users/profile').set('Authorization', `Bearer ${newLogin.body.token}`).expect(200);
+    expect(jwt.verify(sessionOf(newLogin), process.env.JWT_SECRET!)).toMatchObject({ type: 'user', userId: 7, authVersion: 1 });
+    await request(app).get('/api/users/profile').set('Authorization', `Bearer ${sessionOf(newLogin)}`).expect(200);
   });
   test('HTTP reset consumes the bearer secret once, revokes the customer session, and leaves another account unchanged', async () => {
     const rawToken = 'c'.repeat(64); await model().issue(7, hash(rawToken));
@@ -105,7 +109,7 @@ integration('isolated MySQL password revocation and single-use reset', () => {
     expect(repeated.body.code).toBe('INVALID_RESET_TOKEN');
     await request(app).get('/api/users/profile').set('Authorization', `Bearer ${oldSession}`).expect(401);
     const newLogin = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: 'reset-http-password' }).expect(200);
-    expect(jwt.verify(newLogin.body.token, process.env.JWT_SECRET!)).toMatchObject({ userId: 7, authVersion: 1 });
+    expect(jwt.verify(sessionOf(newLogin), process.env.JWT_SECRET!)).toMatchObject({ userId: 7, authVersion: 1 });
     const [other] = await db.query<RowDataPacket[]>('SELECT password_hash,auth_version FROM users WHERE user_id = 8');
     expect(other).toEqual([{ password_hash: 'other-hash', auth_version: 0 }]);
   });

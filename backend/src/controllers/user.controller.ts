@@ -105,10 +105,10 @@ export class UserController {
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
+      // The signed token travels only in the httpOnly cookie; page scripts never see it.
       setSessionCookie(res, CUSTOMER_COOKIE, token);
       res.status(201).json({
         message: '注册成功',
-        token,
         user: { user_id: userId, username, email }
       });
     } catch (error) {
@@ -151,10 +151,10 @@ export class UserController {
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
+      // The signed token travels only in the httpOnly cookie; page scripts never see it.
       setSessionCookie(res, CUSTOMER_COOKIE, token);
       res.json({
         message: '登录成功',
-        token,
         user: {
           user_id: user.user_id,
           username: user.username,
