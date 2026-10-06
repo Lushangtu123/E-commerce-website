@@ -1,5 +1,6 @@
 'use client';
 
+import '@/lib/admin-i18n';
 import { useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, clearAdminSession, getAdminSession, getAdminSessionId, type AdminSession } from '@/lib/admin-session';

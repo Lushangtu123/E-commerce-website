@@ -1,5 +1,6 @@
 'use client';
 
+import '@/lib/admin-i18n';
 import { useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { afterSalesApi, type AfterSalesRequest } from '@/lib/api';

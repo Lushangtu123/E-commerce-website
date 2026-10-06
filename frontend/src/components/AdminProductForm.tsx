@@ -1,5 +1,6 @@
 'use client';
 
+import '@/lib/admin-i18n';
 import type { Category } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ProductImage from '@/components/ProductImage';

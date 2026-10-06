@@ -174,6 +174,33 @@ describe('translation', () => {
     }
     expect(problems).toEqual([]);
   });
+
+  it('keeps the admin dictionary out of storefront code and loads it on every admin screen', () => {
+    const storefront: Record<string, string> = { ...errorTranslations, ...accountTranslations, ...commonTranslations };
+    const isAdmin = (file: string) => file.includes('/src/app/admin/') || basename(file).startsWith('Admin');
+    const problems: string[] = [];
+    for (const filename of walk(join(root, 'src')).filter(file => /\.tsx?$/.test(file))) {
+      const code = readFileSync(filename, 'utf8');
+      const source = ts.createSourceFile(filename, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      let usesT = false;
+      const visit = (node: ts.Node) => {
+        if (ts.isCallExpression(node) && node.expression.getText(source) === 't' && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
+          usesT = true;
+          if (!isAdmin(filename) && !Object.hasOwn(storefront, node.arguments[0].text)) {
+            problems.push(`${filename}: storefront key ${node.arguments[0].text} is only in the admin dictionary`);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+      const loadsAdmin = /from '@\/lib\/admin-translations'|'@\/lib\/admin-i18n'/.test(code);
+      if (isAdmin(filename) && usesT && !code.includes("import '@/lib/admin-i18n';")) problems.push(`${filename}: admin screen without @/lib/admin-i18n`);
+      if (!isAdmin(filename) && loadsAdmin && !filename.endsWith('/lib/admin-i18n.ts')) problems.push(`${filename}: storefront code loads the admin dictionary`);
+    }
+    // A shared key translates one way everywhere; the admin dictionary only adds admin-only keys.
+    problems.push(...Object.keys(adminTranslations).filter(key => Object.hasOwn(storefront, key)).map(key => `admin dictionary repeats ${key}`));
+    expect(problems).toEqual([]);
+  });
 });
 
 describe('language changes on rendered pages', () => {

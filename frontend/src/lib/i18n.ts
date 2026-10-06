@@ -3,10 +3,15 @@
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
 import { commonTranslations } from '@/lib/common-translations';
 import { accountTranslations } from '@/lib/account-translations';
-import { adminTranslations } from '@/lib/admin-translations';
 import { errorTranslations } from '@/lib/error-translations';
 
-const english: Record<string, string> = { ...errorTranslations, ...accountTranslations, ...adminTranslations, ...commonTranslations };
+// The storefront dictionaries ship with every page; the admin pages add theirs through `@/lib/admin-i18n`.
+const english: Record<string, string> = { ...errorTranslations, ...accountTranslations, ...commonTranslations };
+
+/** Adds a section's English strings; a section only holds keys the shared dictionaries lack (see tests/i18n.test.tsx). */
+export function registerTranslations(dictionary: Record<string, string>) {
+  Object.assign(english, dictionary);
+}
 type Params = Record<string, string | number>;
 
 // Only match known server message templates; product names stay literal.
