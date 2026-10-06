@@ -50,3 +50,7 @@ uploads/
 docker-compose.override.yml
 .vercel
 .env*
+
+# 本地补丁快照（不入库）
+/*.diff
+/*.patch
