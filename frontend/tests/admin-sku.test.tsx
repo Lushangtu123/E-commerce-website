@@ -317,7 +317,9 @@ describe('admin SKU management', () => {
 
     expect(screen.queryByText(/原始中文商品/)).not.toBeInTheDocument();
     expect(screen.queryByText('旧错误')).not.toBeInTheDocument();
-    expect(requests).toHaveLength(scenario === 'product' || scenario === 'account' ? 2 : 1);
+    // The stored token is read on every render, so even an unannounced change loads the new session's list.
+    expect(requests).toHaveLength(scenario === 'unmount' ? 1 : 2);
+    if (scenario === 'storage') expect(requests[1].authorization).toBe('Bearer raw-other');
   });
 
   it.each(lateCases)('neither refreshes nor reports a late mutation (fails=$fail) after a $scenario change', async ({ scenario, fail }) => {
@@ -411,5 +413,119 @@ describe('admin SKU management', () => {
 
     expect(requests).toHaveLength(1);
     expect(screen.getByText('没有需要保存的修改')).toBeInTheDocument();
+  });
+
+  it('lets the next administrator open the editor and act at once, even while the previous one was editing or saving', async () => {
+    const pending = deferred();
+    let writes = 0;
+    const { rerender } = await setup({ mutate: () => ++writes === 1 ? pending.promise : Promise.resolve({}) });
+    const oldToggle = captureHandler(button('停用规格')!);
+    void oldToggle();
+    await settle();
+
+    changeSession();
+    rerender();
+    await settle();
+    await click('停用规格');
+    expect(requests.filter(request => request.method === 'put').map(request => request.authorization)).toEqual(['Bearer admin-one', 'Bearer admin-two']);
+
+    await click('编辑规格');
+    expect(form()).not.toBeNull();
+  });
+
+  it('closes an open editor when the administrator changes and lets the next one open their own', async () => {
+    const { rerender } = await setup();
+    await click('编辑规格');
+    expect(form()).not.toBeNull();
+
+    changeSession();
+    rerender();
+    await settle();
+    expect(form()).toBeNull();
+    expect(button('新增规格')).toBeEnabled();
+    await click('新增规格');
+    expect(form()).not.toBeNull();
+  });
+
+  it("forgets a product's notice and save state when the page returns to it", async () => {
+    let reads = 0;
+    const { rerender } = await setup({ list: async () => {
+      reads++;
+      if (reads === 2 || reads === 4) throw new Error('offline');
+      return { product: { ...product, product_id: Number(params.id) }, skus: Number(params.id) === 1 ? [sku] : [] };
+    } });
+    await click('停用规格');
+    expect(screen.getByText(/规格已保存，但列表刷新失败/)).toBeInTheDocument();
+    expect(screen.getByText('规格已停用')).toBeInTheDocument();
+
+    params.id = '2';
+    rerender();
+    await settle();
+    params.id = '1';
+    rerender();
+    await settle();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('获取SKU列表失败');
+    expect(screen.queryByText(/规格已保存/)).not.toBeInTheDocument();
+    expect(screen.queryByText('规格已停用')).not.toBeInTheDocument();
+  });
+
+  it('reports a failed retry after a save as an ordinary load failure', async () => {
+    let reads = 0;
+    await setup({ list: async () => {
+      if (++reads >= 2) throw new Error('offline');
+      return { product, skus: [sku] };
+    } });
+    await click('停用规格');
+    expect(screen.getByText(/规格已保存，但列表刷新失败/)).toBeInTheDocument();
+
+    await click('重新加载');
+    expect(screen.getByRole('alert')).toHaveTextContent('获取SKU列表失败');
+    expect(screen.queryByText(/规格已保存，但列表刷新失败/)).not.toBeInTheDocument();
+  });
+
+  it('sends no reload for the administrator another tab replaced, before the storage event arrives', async () => {
+    await setup({ list: async () => { throw new Error('offline'); } });
+    localStorage.setItem('admin_token', 'raw-other');
+
+    fireEvent.click(button('重新加载')!);
+    await settle();
+    // The API client would send a stale reload with the new token, so the only safe outcome is no request.
+    expect(requests).toHaveLength(1);
+  });
+
+  it('keeps edit, toggle and cancel handlers from an older list or a pending save inactive', async () => {
+    let disabled = false;
+    const pending = deferred();
+    let writes = 0;
+    const { rerender } = await setup({
+      list: async () => ({ product: { ...product, product_id: Number(params.id) }, skus: Number(params.id) === 1 ? [{ ...sku, status: disabled ? 0 : 1 }] : [] }),
+      mutate: async () => { if (++writes === 2) return pending.promise; disabled = true; return {}; },
+    });
+    const staleToggle = captureHandler(button('停用规格')!);
+    await click('停用规格');
+    expect(screen.getByText('已停用')).toBeInTheDocument();
+    await staleToggle();
+    await settle();
+    expect(writes).toBe(1);
+
+    await click('编辑规格');
+    await edit({ price: '19' });
+    const cancel = captureHandler(button('取消')!);
+    void captureHandler(form()!, 'onSubmit')();
+    await settle();
+    await cancel();
+    expect(form()).not.toBeNull();
+    await act(async () => pending.resolve({}));
+    await settle();
+
+    const staleEdit = captureHandler(button('编辑规格')!);
+    params.id = '2';
+    rerender();
+    await settle();
+    await staleEdit();
+    expect(form()).toBeNull();
+    // A hidden editor from the old list would otherwise block the new product's own forms.
+    expect(button('新增规格')).toBeEnabled();
   });
 });

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 import { adminSKUApi, type AdminSKUList, type AdminSKU } from '@/lib/api';
-import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
+import { useAdminQuery, useAdminSessionToken } from '@/hooks/use-admin-query';
 import { useI18n } from '@/lib/i18n';
 import { skuDraft, parseSKUForm, skuChanges, type SKUDraft } from '@/lib/sku-form';
 import { requestFailure } from '@/lib/api-error';
@@ -31,52 +31,52 @@ export default function AdminSKUPage() {
   const params = useParams() || {};
   const productId = typeof params.id === 'string' && /^[1-9]\d*$/.test(params.id) ? Number(params.id) : 0;
   const validId = Number.isSafeInteger(productId) && productId > 0 && productId <= 2147483647;
-  const [token, setToken] = useState<string | null>(null);
+  const token = useAdminSessionToken();
   const key = JSON.stringify([token, productId]);
   const currentKey = useRef(key); currentKey.current = key;
-  const mounted = useRef(true);
-  const request = useRef(0);
-  const [result, setResult] = useState<{ key: string; revision: number; data?: AdminSKUList; error?: string } | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const mutation = useRef<object | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ key: string; error?: string; success?: string } | null>(null);
-  const isCurrent = () => mounted.current && currentKey.current === key && !!token && getAdminSessionToken() === token;
-  const displayed = isCurrent() && result?.key === key && result.revision === request.current;
-  const data = displayed ? result.data : undefined;
+  // The product and session whose list is reloading after a save; its failure says the save itself went through.
+  const [refreshAfterSave, setRefreshAfterSave] = useState<string | null>(null);
+  const query = useAdminQuery({
+    name: 'skus',
+    params: [productId],
+    enabled: validId,
+    load: async () => {
+      const next = await adminSKUApi.list(productId);
+      if (!validList(next, productId)) throw new Error('Invalid SKU list');
+      return next;
+    },
+  });
+  const data = query.data;
+  // Handlers act only on the list they were rendered with, not on one a refresh has since replaced.
+  const displayedData = useRef(data); displayedData.current = data;
+  const loadError = query.error
+    ? refreshAfterSave === key ? '规格已保存，但列表刷新失败，请重新加载' : requestFailure(query.error).response?.data?.error || '获取SKU列表失败'
+    : undefined;
+  const loading = !data && !loadError;
+  const isCurrent = () => query.isCurrentSession() && currentKey.current === key;
   const busy = pendingKey === key;
-  const isDisplayed = () => isCurrent() && result?.key === key && result.revision === request.current && !!result.data && !result.error;
+  const isDisplayed = () => isCurrent() && !!data && displayedData.current === data;
   const replaceEditor = (next: Editor | null) => { editorRef.current = next; setEditor(next); };
 
+  // The editor, a pending change and notices belong to the administrator and product they were made for.
   useEffect(() => {
-    mounted.current = true;
-    const sync = () => setToken(getAdminSessionToken());
-    const onStorage = (event: StorageEvent) => {
-      if ((event.storageArea === null || event.storageArea === localStorage) &&
-        (event.key === null || event.key === 'admin_token' || event.key === 'admin_user')) sync();
-    };
-    sync(); window.addEventListener('storage', onStorage); window.addEventListener(ADMIN_SESSION_EVENT, sync);
-    return () => { mounted.current = false; request.current++; window.removeEventListener('storage', onStorage); window.removeEventListener(ADMIN_SESSION_EVENT, sync); };
-  }, []);
-
-  const load = async (afterSave = false) => {
-    if (!isCurrent() || !validId || (mutation.current && !afterSave)) return;
-    const revision = ++request.current;
-    setResult(null);
-    try {
-      const next = await adminSKUApi.list(productId);
-      if (!isCurrent() || request.current !== revision) return;
-      if (!validList(next, productId)) throw new Error();
-      setResult({ key, revision, data: next });
-    } catch (error) {
-      if (isCurrent() && request.current === revision) setResult({ key, revision, error: afterSave ? '规格已保存，但列表刷新失败，请重新加载' : requestFailure(error).response?.data?.error || '获取SKU列表失败' });
-    }
-  };
-  useEffect(() => {
-    setResult(null); replaceEditor(null); mutation.current = null; setPendingKey(null); setNotice(null); load();
-    return () => { request.current++; };
+    replaceEditor(null); mutation.current = null; setPendingKey(null); setNotice(null); setRefreshAfterSave(null);
   }, [key]);
+
+  const reload = () => {
+    if (!isCurrent() || mutation.current) return;
+    setRefreshAfterSave(null);
+    void query.refetch();
+  };
+  const refreshAfter = async () => {
+    setRefreshAfterSave(key);
+    await query.invalidate();
+  };
 
   const open = (sku?: AdminSKU) => {
     if (!isDisplayed() || mutation.current || editorRef.current || (sku && !data?.skus.some(row => row.sku_id === sku.sku_id))) return;
@@ -104,11 +104,11 @@ export default function AdminSKUPage() {
       else await adminSKUApi.update(productId, current.id, changes!);
       if (!active()) return;
       replaceEditor(null); setNotice({ key, success: '规格已保存' });
-      await load(true);
+      await refreshAfter();
     } catch (error) {
       if (active()) setNotice({ key, error: requestFailure(error).response?.data?.error || (current.id === null ? '创建SKU失败' : '更新SKU失败') });
     } finally {
-      if (mutation.current === operation) { mutation.current = null; if (isCurrent()) setPendingKey(null); }
+      if (mutation.current === operation) { mutation.current = null; setPendingKey(null); }
     }
   };
 
@@ -122,11 +122,11 @@ export default function AdminSKUPage() {
       await adminSKUApi.update(productId, id, { status: sku.status === 1 ? 0 : 1 });
       if (!active()) return;
       setNotice({ key, success: sku.status === 1 ? '规格已停用' : '规格已启用' });
-      await load(true);
+      await refreshAfter();
     } catch (error) {
       if (active()) setNotice({ key, error: requestFailure(error).response?.data?.error || '更新SKU失败' });
     } finally {
-      if (mutation.current === operation) { mutation.current = null; if (isCurrent()) setPendingKey(null); }
+      if (mutation.current === operation) { mutation.current = null; setPendingKey(null); }
     }
   };
 
@@ -134,8 +134,8 @@ export default function AdminSKUPage() {
   return <AdminLayout><div className="space-y-6">
     <Link href="/admin/products" className="block w-fit text-primary-600 underline">{t('返回商品管理')}</Link>
     <div><h1 className="text-2xl font-bold text-gray-900">{t('SKU 管理')}</h1>{data && <p className="mt-2 text-gray-600">{data.product.title} · #{productId}</p>}</div>
-    {notice?.key === key && isCurrent() && <div role={notice.error ? 'alert' : 'status'} className={notice.error ? 'text-red-600' : 'text-green-700'}>{t(notice.error || notice.success || '')}</div>}
-    {!validId ? <p role="alert">{t('商品ID无效')}</p> : !displayed ? <p role="status">{t('加载中...')}</p> : result.error ? <div role="alert" className="bg-white rounded-lg p-6 shadow-sm"><p className="text-red-600">{t(result.error)}</p><button type="button" onClick={() => load()} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
+    {notice?.key === key && <div role={notice.error ? 'alert' : 'status'} className={notice.error ? 'text-red-600' : 'text-green-700'}>{t(notice.error || notice.success || '')}</div>}
+    {!validId ? <p role="alert">{t('商品ID无效')}</p> : loading ? <p role="status">{t('加载中...')}</p> : loadError ? <div role="alert" className="bg-white rounded-lg p-6 shadow-sm"><p className="text-red-600">{t(loadError)}</p><button type="button" onClick={reload} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
         {data.product.status === 0 && <p className="font-medium text-amber-800">{t('商品已下架，需上架商品后才能购买')}</p>}
         <p>{t(data.product.status === 1 ? '可售库存：{stock}' : '启用规格库存：{stock}', { stock: active.reduce((sum, sku) => sum + sku.stock, 0) })}</p>
