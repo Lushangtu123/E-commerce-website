@@ -61,7 +61,9 @@ export class CouponModel {
   /**
    * 创建优惠券
    */
-  static async create(coupon: Partial<Coupon>): Promise<number> {
+  static async create(
+    coupon: Partial<Coupon> & Pick<Coupon, 'code' | 'name' | 'type' | 'discount_value' | 'total_quantity' | 'start_time' | 'end_time'>
+  ): Promise<number> {
     const [result] = await getPool().execute<ResultSetHeader>(
       `INSERT INTO coupons 
        (code, name, description, type, discount_value, min_amount, max_discount,
