@@ -8,6 +8,14 @@ import api from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { CommitLog, apiError, captureHandler, deferred, reactHandler, render, settle } from './helpers';
 
+/**
+ * The administrator sign-in a request went out for. The httpOnly cookie names it to the API, so a
+ * request that still carried a token header would show up here as that header instead.
+ */
+const sentSession = (config: { headers: { get(name: string): unknown } }) =>
+  config.headers.get('Authorization') ?? `session:${localStorage.getItem('admin_session')}`;
+
+
 const notifications = vi.hoisted(() => [] as string[]);
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -47,12 +55,12 @@ interface Setup {
  * the list. Raw fetch is stubbed so a page bypassing the shared client would show up.
  */
 async function setup(kind: Kind, { list, mutate = async () => ({}), categories = async () => [] }: Setup = {}) {
-  localStorage.setItem('admin_token', 'admin-a');
+  localStorage.setItem('admin_session', 'admin-a');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin A' }));
   const fetch = vi.fn();
   vi.stubGlobal('fetch', fetch);
   const adapter: AxiosAdapter = async config => {
-    const authorization = config.headers.get('Authorization');
+    const authorization = sentSession(config);
     let data;
     if (config.url === '/products/categories') data = await categories();
     else if (config.method === 'get') {
@@ -80,9 +88,9 @@ async function setup(kind: Kind, { list, mutate = async () => ({}), categories =
 
 /** Administrator B signs in from another tab. */
 function changeSession() {
-  localStorage.setItem('admin_token', 'admin-b');
+  localStorage.setItem('admin_session', 'admin-b');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 2, username: 'Admin B' }));
-  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_token', storageArea: localStorage })); });
+  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_session', storageArea: localStorage })); });
 }
 
 const search = () => screen.getByRole<HTMLInputElement>('textbox', { name: /^搜索(商品|用户)$/ });
@@ -123,7 +131,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     expect(screen.getByText('New filter')).toBeInTheDocument();
     expect(screen.queryByText('Old filter')).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
-    expect(requests.at(-1)?.authorization).toBe('Bearer admin-a');
+    expect(requests.at(-1)?.authorization).toBe('session:admin-a');
   });
 
   it('returns to the first page when the filters change', async () => {
@@ -160,7 +168,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     const added = vi.spyOn(window, 'addEventListener');
     const removed = vi.spyOn(window, 'removeEventListener');
     const replacement = deferred();
-    const { view, commits } = await setup(kind, { list: (_, auth) => auth === 'Bearer admin-b' ? replacement.promise : result(kind, [row(kind, 1, 'Admin A data')], 40) });
+    const { view, commits } = await setup(kind, { list: (_, auth) => auth === 'session:admin-b' ? replacement.promise : result(kind, [row(kind, 1, 'Admin A data')], 40) });
     await type(search(), 'Admin A');
     await click(button('下一页'));
 
@@ -227,7 +235,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
 
   it.each(['success', 'failure'] as const)('cannot let a late list %s replace the new administrator rows or error state', async (outcome) => {
     const old = deferred();
-    await setup(kind, { list: (_, auth) => auth === 'Bearer admin-a' ? old.promise : result(kind, [row(kind, 2, 'Replacement rows')]) });
+    await setup(kind, { list: (_, auth) => auth === 'session:admin-a' ? old.promise : result(kind, [row(kind, 2, 'Replacement rows')]) });
     changeSession();
     await settle();
     expect(screen.getByText('Replacement rows')).toBeInTheDocument();
@@ -247,7 +255,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
   it('rejects an old row action once another tab replaces the token, before and after the next render', async () => {
     const { rerender } = await setup(kind);
     const old = captureHandler(button(statusAction[kind]));
-    localStorage.setItem('admin_token', 'admin-b');
+    localStorage.setItem('admin_session', 'admin-b');
 
     await old();
     expect(mutations).toHaveLength(0);
@@ -359,7 +367,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     changeSession();
     await settle();
     await click(button(statusAction[kind]));
-    expect(mutations.map(item => item.authorization)).toEqual(['Bearer admin-a', 'Bearer admin-b']);
+    expect(mutations.map(item => item.authorization)).toEqual(['session:admin-a', 'session:admin-b']);
   });
 
   it('ignores stale filter and pagination handlers once the list has moved on', async () => {
@@ -383,7 +391,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
 
   it('sends no reload for the administrator another tab replaced, before the storage event arrives', async () => {
     await setup(kind);
-    localStorage.setItem('admin_token', 'admin-b');
+    localStorage.setItem('admin_session', 'admin-b');
     const count = requests.length;
 
     fireEvent.click(button('搜索'));
@@ -512,7 +520,7 @@ describe('admin product selection and creation', () => {
 
   it("does not follow a row's specification link for the administrator another tab replaced", async () => {
     await setup('products');
-    localStorage.setItem('admin_token', 'admin-b');
+    localStorage.setItem('admin_session', 'admin-b');
 
     const followed = fireEvent.click(screen.getAllByRole('link', { name: '管理规格' })[0]);
     expect(followed, 'navigation must be cancelled').toBe(false);

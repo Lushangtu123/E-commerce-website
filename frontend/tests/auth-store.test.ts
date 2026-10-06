@@ -24,7 +24,7 @@ describe('customer auth store', () => {
   ])('%s customer storage finishes hydration without authenticating an admin session', (_, user) => {
     localStorage.setItem('session', 'customer-session');
     if (user) localStorage.setItem('user', user);
-    localStorage.setItem('admin_token', 'admin-session');
+    localStorage.setItem('admin_session', 'admin-session');
     localStorage.setItem('admin_user', '{"admin_id":2}');
 
     useAuthStore.getState().hydrate();
@@ -33,7 +33,7 @@ describe('customer auth store', () => {
   });
 
   it('switching customer login and logging out clear cart contents and the header count', () => {
-    localStorage.setItem('admin_token', 'admin-session');
+    localStorage.setItem('admin_session', 'admin-session');
     useAuthStore.getState().login(first, 'first-session');
     useCartStore.getState().setItems([cartItem]);
     expect(useCartStore.getState().getTotalCount()).toBe(3);
@@ -49,7 +49,7 @@ describe('customer auth store', () => {
 
     expect(useCartStore.getState().items).toHaveLength(0);
     expect(useCartStore.getState().getTotalCount()).toBe(0);
-    expect(localStorage.getItem('admin_token')).toBe('admin-session');
+    expect(localStorage.getItem('admin_session')).toBe('admin-session');
   });
 
   it("rehydrating another tab's customer session clears the previous cart, while the same session preserves it", () => {

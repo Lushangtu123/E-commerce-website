@@ -1,17 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ADMIN_SESSION_EVENT, getAdminSessionToken } from '@/lib/admin-session';
+import { ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, getAdminSessionId } from '@/lib/admin-session';
 import { useScopedQuery } from '@/hooks/use-scoped-query';
 
-/** The stored administrator token, read again whenever this or another tab changes the session. */
-export function useAdminSessionToken() {
+/** The stored administrator sessionId, read again whenever this or another tab changes the session. */
+export function useAdminSessionId() {
   const [, notifySessionChange] = useState(0);
   useEffect(() => {
     const sync = () => notifySessionChange(value => value + 1);
     const onStorage = (event: StorageEvent) => {
       if ((event.storageArea === null || event.storageArea === localStorage) &&
-        (event.key === null || event.key === 'admin_token' || event.key === 'admin_user')) sync();
+        (event.key === null || event.key === ADMIN_SESSION_KEY || event.key === 'admin_user')) sync();
     };
     window.addEventListener('storage', onStorage);
     window.addEventListener(ADMIN_SESSION_EVENT, sync);
@@ -20,11 +20,11 @@ export function useAdminSessionToken() {
       window.removeEventListener(ADMIN_SESSION_EVENT, sync);
     };
   }, []);
-  return getAdminSessionToken();
+  return getAdminSessionId();
 }
 
 interface AdminQueryOptions<T> {
-  /** Names the data; with the token it forms the prefix that `invalidate` refreshes. */
+  /** Names the data; with the sessionId it forms the prefix that `invalidate` refreshes. */
   name: string;
   params: readonly unknown[];
   load: () => Promise<T>;
@@ -33,13 +33,13 @@ interface AdminQueryOptions<T> {
 
 /** Loads data for the signed-in administrator; see useScopedQuery. */
 export function useAdminQuery<T>({ name, params, load, enabled = true }: AdminQueryOptions<T>) {
-  const token = useAdminSessionToken();
+  const sessionId = useAdminSessionId();
   const query = useScopedQuery({
-    scope: ['admin', name, token],
+    scope: ['admin', name, sessionId],
     params,
     load,
-    enabled: enabled && !!token,
-    sessionIsCurrent: () => !!token && getAdminSessionToken() === token,
+    enabled: enabled && !!sessionId,
+    sessionIsCurrent: () => !!sessionId && getAdminSessionId() === sessionId,
   });
-  return { ...query, token };
+  return { ...query, sessionId };
 }

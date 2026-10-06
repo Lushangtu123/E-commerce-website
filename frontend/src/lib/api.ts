@@ -1,7 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { SESSION_KEY, storedSessionId, useAuthStore, type User } from '@/store/useAuthStore';
 import type { CartItem } from '@/store/useCartStore';
-import { clearAdminSession } from '@/lib/admin-session';
+import { ADMIN_SESSION_KEY, clearAdminSession } from '@/lib/admin-session';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -16,7 +16,7 @@ const api = axios.create({
   },
 });
 
-/** The customer sign-in a request was sent for, so a late 401 cannot sign out a newer one. */
+/** The sign-in a request was sent for, so a late 401 cannot sign out a newer one. */
 const requestSessions = new WeakMap<object, string | null>();
 
 const getRequestIdentity = (config: AxiosRequestConfig) => {
@@ -39,7 +39,7 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
   return path === '/admin' || path.startsWith('/admin/') ? 'admin' : 'customer';
 };
 
-// 请求拦截器：核对客户会话，管理员请求附加 Token
+// 请求拦截器：核对会话，记录请求所属的登录
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
@@ -51,12 +51,10 @@ api.interceptors.request.use(
         if (auth.isHydrated && auth.sessionId !== sessionId) throw new Error('登录状态已变化，请刷新后重试');
         requestSessions.set(config, sessionId);
       }
-      const token = identity === 'admin' ? localStorage.getItem('admin_token') : null;
-      if (token) {
-        config.headers.set('Authorization', `Bearer ${token}`);
-      } else {
-        config.headers.delete('Authorization');
-      }
+      // The raw stored id, so a 401 can also clear a stored session whose profile is unreadable.
+      if (identity === 'admin') requestSessions.set(config, localStorage.getItem(ADMIN_SESSION_KEY));
+      // Both sessions travel in httpOnly cookies; a caller's header must not override them.
+      config.headers.delete('Authorization');
     }
     return config;
   },
@@ -78,10 +76,10 @@ api.interceptors.response.use(
           const identity = getRequestIdentity(config);
           if (identity) {
             if (identity === 'admin') {
-              const currentToken = localStorage.getItem('admin_token');
-              const requestAuthorization = axios.AxiosHeaders.from(config.headers).get('Authorization');
-              if (currentToken && requestAuthorization !== `Bearer ${currentToken}`) return Promise.reject(error);
-              if (!clearAdminSession(currentToken)) return Promise.reject(error);
+              const currentSession = localStorage.getItem(ADMIN_SESSION_KEY);
+              // Only the sign-in this request was sent for may be ended by its 401.
+              if (currentSession && requestSessions.get(config) !== currentSession) return Promise.reject(error);
+              if (!clearAdminSession(currentSession)) return Promise.reject(error);
             } else {
               const currentSession = storedSessionId();
               // Only the sign-in this request was sent for may be ended by its 401.
@@ -201,6 +199,11 @@ export interface AdminSKUList {
   product: { product_id: number; title: string; status: number };
   skus: AdminSKU[];
 }
+export const adminApi = {
+  /** Clears the administrator's httpOnly session cookie; works after the session has expired too. */
+  logout: () => api.post<unknown, { message: string }>('/admin/logout'),
+};
+
 export const adminSKUApi = {
   list: (productId: number) => api.get<unknown, AdminSKUList>(`/admin/products/${productId}/skus`),
   create: (productId: number, data: AdminSKUInput) => api.post<unknown, { sku_id: number }>(`/admin/products/${productId}/skus`, data),

@@ -15,7 +15,7 @@ export default function AdminAfterSalesPage() {
   const [result, setResult] = useState<{ key: string; requests: AfterSalesRequest[]; total: number; error?: string } | null>(null);
   const [review, setReview] = useState<{ key: string; id: number; decision: 'approved' | 'rejected'; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const key = JSON.stringify([session.token, page, status]), currentKey = useRef(key); currentKey.current = key;
+  const key = JSON.stringify([session.sessionId, page, status]), currentKey = useRef(key); currentKey.current = key;
   const request = useRef(0), mutation = useRef<object | null>(null), latestLoad = useRef<(() => Promise<void>) | null>(null);
   const active = () => session.active() && currentKey.current === key;
   const visible = result?.key === key && session.active() ? result : null;
@@ -31,7 +31,7 @@ export default function AdminAfterSalesPage() {
     } catch (error) { if (active() && revision === request.current) setResult({ key, requests: [], total: 0, error: requestFailure(error).response?.data?.error || '加载售后申请失败，请重试' }); }
   };
   latestLoad.current = load;
-  useEffect(() => { setPage(1); setStatus('requested'); setReview(null); mutation.current = null; setBusy(false); }, [session.token]);
+  useEffect(() => { setPage(1); setStatus('requested'); setReview(null); mutation.current = null; setBusy(false); }, [session.sessionId]);
   useEffect(() => { setReview(null); load(); return () => { request.current++; }; }, [key]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();

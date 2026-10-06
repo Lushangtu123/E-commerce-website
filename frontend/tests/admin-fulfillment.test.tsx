@@ -7,6 +7,14 @@ import AdminOrdersPage from '@/app/admin/orders/page';
 import api, { type AfterSalesRequest } from '@/lib/api';
 import { CommitLog, apiError, captureHandler, deferred, render, settle, submitTogether } from './helpers';
 
+/**
+ * The administrator sign-in a request went out for. The httpOnly cookie names it to the API, so a
+ * request that still carried a token header would show up here as that header instead.
+ */
+const sentSession = (config: { headers: { get(name: string): unknown } }) =>
+  config.headers.get('Authorization') ?? `session:${localStorage.getItem('admin_session')}`;
+
+
 const notices = vi.hoisted(() => [] as string[]);
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -39,12 +47,12 @@ interface Setup {
 
 /** Signs administrator A in, answers the real API client at the transport layer and renders the page. */
 async function setup(kind: keyof typeof pages, { list, mutate = async () => ({}) }: Setup = {}) {
-  localStorage.setItem('admin_token', 'admin-a');
+  localStorage.setItem('admin_session', 'admin-a');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin A' }));
   vi.stubGlobal('confirm', () => true);
   const adapter: AxiosAdapter = async config => {
     const call = { path: config.url, params: config.params, data: typeof config.data === 'string' ? JSON.parse(config.data) : config.data,
-      authorization: config.headers.get('Authorization') };
+      authorization: sentSession(config) };
     let data;
     if (config.method === 'get') {
       reads.push(call);
@@ -65,9 +73,9 @@ async function setup(kind: keyof typeof pages, { list, mutate = async () => ({})
 
 /** Another administrator signs in from a different tab. */
 function changeAdmin() {
-  localStorage.setItem('admin_token', 'admin-b');
+  localStorage.setItem('admin_session', 'admin-b');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 2, username: 'Admin B' }));
-  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_token' })); });
+  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_session' })); });
 }
 
 const form = (root: ParentNode = document) => root.querySelector('form');
@@ -114,7 +122,7 @@ describe('admin fulfillment', () => {
       expect(writes).toHaveLength(1);
       expect(writes[0].path).toBe('/admin/orders/1/status');
       expect(writes[0].data).toEqual({ status: 2, shipping_company: 'SF Express', tracking_number: 'SF123456' });
-      expect(writes[0].authorization).toBe('Bearer admin-a');
+      expect(writes[0].authorization).toBe('session:admin-a');
       await settle();
       expect(screen.getByRole('button', { name: '确认发货' })).toBeDisabled();
 
@@ -149,7 +157,7 @@ describe('admin fulfillment', () => {
       await fillShipment();
       fireEvent.submit(form()!);
 
-      if (change === 'storage') localStorage.setItem('admin_token', 'admin-b');
+      if (change === 'storage') localStorage.setItem('admin_session', 'admin-b');
       else view.unmount();
       const readCount = reads.length;
       await act(async () => {
@@ -183,7 +191,7 @@ describe('admin fulfillment', () => {
       expect(writes).toHaveLength(1);
       expect(writes[0].path).toBe('/admin/after-sales/7/review');
       expect(writes[0].data).toEqual({ status: 'approved', note: 'Contact the customer to arrange follow-up' });
-      expect(writes[0].authorization).toBe('Bearer admin-a');
+      expect(writes[0].authorization).toBe('session:admin-a');
 
       await act(async () => pending.resolve({}));
       await settle();
@@ -197,7 +205,7 @@ describe('admin fulfillment', () => {
 
       if (change === 'filter') fireEvent.change(screen.getByRole('combobox', { name: '审核状态' }), { target: { value: 'rejected' } });
       if (change === 'account') changeAdmin();
-      if (change === 'storage') localStorage.setItem('admin_token', 'admin-b');
+      if (change === 'storage') localStorage.setItem('admin_session', 'admin-b');
       await staleSubmit();
       expect(writes).toEqual([]);
 

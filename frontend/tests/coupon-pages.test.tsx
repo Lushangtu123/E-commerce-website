@@ -37,7 +37,7 @@ const pages: Record<string, ComponentType> = { coupons: CouponsPage, 'my/coupons
 
 async function setup(page: string, coupons: Coupon[] = [coupon]) {
   useAuthStore.getState().login(customerA, 'A');
-  localStorage.setItem('admin_token', 'admin-session');
+  localStorage.setItem('admin_session', 'admin-session');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin' }));
   for (const fn of [couponApi.getAvailable, couponApi.getMyCoupons, adminCouponApi.getList]) vi.mocked(fn).mockResolvedValue({ data: coupons } as never);
   const Page = pages[page];

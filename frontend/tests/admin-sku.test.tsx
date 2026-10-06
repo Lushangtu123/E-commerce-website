@@ -8,6 +8,14 @@ import api, { type AdminSKU } from '@/lib/api';
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
 import { apiError, captureHandler, deferred, reactHandler, render, settle } from './helpers';
 
+/**
+ * The administrator sign-in a request went out for. The httpOnly cookie names it to the API, so a
+ * request that still carried a token header would show up here as that header instead.
+ */
+const sentSession = (config: { headers: { get(name: string): unknown } }) =>
+  config.headers.get('Authorization') ?? `session:${localStorage.getItem('admin_session')}`;
+
+
 const params = vi.hoisted(() => ({ id: '1' }));
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -38,12 +46,12 @@ interface Setup {
  */
 async function setup({ list = async () => ({ product, skus: [sku] }), mutate = async () => ({ sku_id: 12 }), locale = 'zh-CN', page = () => <SkuPage />, before }: Setup = {}) {
   localStorage.setItem('session', 'customer-session');
-  localStorage.setItem('admin_token', 'admin-one');
+  localStorage.setItem('admin_session', 'admin-one');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: '测试管理员' }));
   useLocaleStore.getState().setLocale(locale);
   const adapter: AxiosAdapter = async config => {
     const body = config.data ? JSON.parse(config.data) : undefined;
-    requests.push({ url: config.url, method: config.method, body, authorization: config.headers.get('Authorization') });
+    requests.push({ url: config.url, method: config.method, body, authorization: sentSession(config) });
     const data = config.method === 'get' ? await list(config) : await mutate(config.url, body);
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
@@ -55,9 +63,9 @@ async function setup({ list = async () => ({ product, skus: [sku] }), mutate = a
 }
 
 function changeSession() {
-  localStorage.setItem('admin_token', 'admin-two');
+  localStorage.setItem('admin_session', 'admin-two');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 2, username: '另一个管理员' }));
-  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_token', storageArea: localStorage })); });
+  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_session', storageArea: localStorage })); });
 }
 
 const field = (name: string) => document.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`);
@@ -113,7 +121,7 @@ describe('admin SKU management', () => {
     expect(screen.getByText('可售库存：2')).toBeInTheDocument();
     expect(screen.getByText('最低售价：¥12.50')).toBeInTheDocument();
     expect(requests[0].url).toBe('/admin/products/1/skus');
-    expect(requests[0].authorization).toBe('Bearer admin-one');
+    expect(requests[0].authorization).toBe('session:admin-one');
   });
 
   it('creates a SKU with normalized zero price and stock, then reloads the server list with admin credentials only', async () => {
@@ -127,7 +135,7 @@ describe('admin SKU management', () => {
     await edit({ sku_code: '  FREE-M  ', price: '0', stock: '0', 'spec-name-0': '  Color  ', 'spec-value-0': '  Green  ' });
     await submit();
 
-    expect(requests[1]).toEqual({ method: 'post', url: '/admin/products/1/skus', authorization: 'Bearer admin-one',
+    expect(requests[1]).toEqual({ method: 'post', url: '/admin/products/1/skus', authorization: 'session:admin-one',
       body: { sku_code: 'FREE-M', specs: { Color: 'Green' }, price: 0, original_price: null, stock: 0, image: null, status: 1 } });
     expect(requests.filter(request => request.method === 'get')).toHaveLength(2);
     expect(screen.getByText('FREE-M')).toBeInTheDocument();
@@ -284,7 +292,7 @@ describe('admin SKU management', () => {
   it.each(['id', 'missing-token', 'malformed-user'] as const)('neither requests nor exposes an editor for an invalid %s', async (scenario) => {
     await setup({ before: () => {
       if (scenario === 'id') params.id = '1e2';
-      if (scenario === 'missing-token') localStorage.removeItem('admin_token');
+      if (scenario === 'missing-token') localStorage.removeItem('admin_session');
       if (scenario === 'malformed-user') localStorage.setItem('admin_user', '{}');
     } });
 
@@ -303,7 +311,7 @@ describe('admin SKU management', () => {
 
     if (scenario === 'product') params.id = '2';
     if (scenario === 'account') changeSession();
-    if (scenario === 'storage') localStorage.setItem('admin_token', 'raw-other');
+    if (scenario === 'storage') localStorage.setItem('admin_session', 'raw-other');
     if (scenario === 'unmount') view.unmount();
     else {
       rerender();
@@ -319,7 +327,7 @@ describe('admin SKU management', () => {
     expect(screen.queryByText('旧错误')).not.toBeInTheDocument();
     // The stored token is read on every render, so even an unannounced change loads the new session's list.
     expect(requests).toHaveLength(scenario === 'unmount' ? 1 : 2);
-    if (scenario === 'storage') expect(requests[1].authorization).toBe('Bearer raw-other');
+    if (scenario === 'storage') expect(requests[1].authorization).toBe('session:raw-other');
   });
 
   it.each(lateCases)('neither refreshes nor reports a late mutation (fails=$fail) after a $scenario change', async ({ scenario, fail }) => {
@@ -331,7 +339,7 @@ describe('admin SKU management', () => {
     const saving = oldToggle();
     if (scenario === 'product') params.id = '2';
     if (scenario === 'account') changeSession();
-    if (scenario === 'storage') localStorage.setItem('admin_token', 'raw-other');
+    if (scenario === 'storage') localStorage.setItem('admin_session', 'raw-other');
     if (scenario === 'unmount') view.unmount();
     else {
       rerender();
@@ -427,7 +435,7 @@ describe('admin SKU management', () => {
     rerender();
     await settle();
     await click('停用规格');
-    expect(requests.filter(request => request.method === 'put').map(request => request.authorization)).toEqual(['Bearer admin-one', 'Bearer admin-two']);
+    expect(requests.filter(request => request.method === 'put').map(request => request.authorization)).toEqual(['session:admin-one', 'session:admin-two']);
 
     await click('编辑规格');
     expect(form()).not.toBeNull();
@@ -486,7 +494,7 @@ describe('admin SKU management', () => {
 
   it('sends no reload for the administrator another tab replaced, before the storage event arrives', async () => {
     await setup({ list: async () => { throw new Error('offline'); } });
-    localStorage.setItem('admin_token', 'raw-other');
+    localStorage.setItem('admin_session', 'raw-other');
 
     fireEvent.click(button('重新加载')!);
     await settle();

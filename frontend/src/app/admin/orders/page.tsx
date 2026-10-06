@@ -19,7 +19,7 @@ export default function AdminOrdersPage() {
   const [shipment, setShipment] = useState<{ key: string; id: number; company: string; tracking: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const request = useRef(0), mutation = useRef<object | null>(null), latestLoad = useRef<(() => Promise<void>) | null>(null);
-  const key = JSON.stringify([session.token, page, filters]);
+  const key = JSON.stringify([session.sessionId, page, filters]);
   const currentKey = useRef(key); currentKey.current = key;
   const active = () => session.active() && currentKey.current === key;
   const visible = result?.key === key && session.active() ? result : null;
@@ -38,7 +38,7 @@ export default function AdminOrdersPage() {
     }
   };
   latestLoad.current = fetchOrders;
-  useEffect(() => { setPage(1); setFilters({ orderNo: '', status: '' }); setShipment(null); mutation.current = null; setBusy(false); }, [session.token]);
+  useEffect(() => { setPage(1); setFilters({ orderNo: '', status: '' }); setShipment(null); mutation.current = null; setBusy(false); }, [session.sessionId]);
   useEffect(() => { setShipment(null); fetchOrders(); return () => { request.current++; }; }, [key]);
   const changeFilters = (next: typeof filters) => { currentKey.current = ''; setFilters(next); setPage(1); setShipment(null); };
   const handleUpdate = async (id: number, status: number) => {

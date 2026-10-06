@@ -9,6 +9,14 @@ import api, { type AdminOrderRow } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { deferred, render, settle } from './helpers';
 
+/**
+ * The administrator sign-in a request went out for. The httpOnly cookie names it to the API, so a
+ * request that still carried a token header would show up here as that header instead.
+ */
+const sentSession = (config: { headers: { get(name: string): unknown } }) =>
+  config.headers.get('Authorization') ?? `session:${localStorage.getItem('admin_session')}`;
+
+
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin' }));
@@ -37,7 +45,7 @@ let requests: InternalAxiosRequestConfig[] = [];
 function signIn(adminToken = 'admin-session', adminUser = JSON.stringify({ admin_id: 1, username: 'Admin' })) {
   localStorage.setItem('session', 'customer-session');
   localStorage.setItem('user', JSON.stringify({ user_id: 1, username: 'customer', email: 'customer@example.test' }));
-  localStorage.setItem('admin_token', adminToken);
+  localStorage.setItem('admin_session', adminToken);
   localStorage.setItem('admin_user', adminUser);
   useAuthStore.getState().hydrate();
 }
@@ -115,7 +123,7 @@ describe('admin orders', () => {
     expect(updates.map(config => [config.url, JSON.parse(config.data).status])).toEqual([
       ['/admin/orders/1/status', 4], ['/admin/orders/2/status', 2], ['/admin/orders/3/status', 3],
     ]);
-    for (const config of requests) expect(config.headers.get('Authorization')).toBe('Bearer admin-session');
+    for (const config of requests) expect(sentSession(config)).toBe('session:admin-session');
     expect(JSON.parse(updates[1].data)).toEqual({ status: 2, shipping_company: 'SF Express', tracking_number: 'SF123456' });
     expect(requests.filter(config => config.method === 'get').length).toBeGreaterThanOrEqual(4);
   });
@@ -148,7 +156,7 @@ describe('admin dashboard', () => {
     render(<AdminDashboardPage />);
     await settle();
 
-    expect(localStorage.getItem('admin_token')).toBeNull();
+    expect(localStorage.getItem('admin_session')).toBeNull();
     expect(localStorage.getItem('admin_user')).toBeNull();
     expect(localStorage.getItem('session')).toBe('customer-session');
     expect(new URL(window.location.href).pathname).toBe('/admin/login');

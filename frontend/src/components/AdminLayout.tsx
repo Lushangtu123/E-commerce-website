@@ -2,7 +2,9 @@
 
 import { useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { ADMIN_SESSION_EVENT, clearAdminSession, getAdminSession, getAdminSessionToken, type AdminSession } from '@/lib/admin-session';
+import { ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, clearAdminSession, getAdminSession, getAdminSessionId, type AdminSession } from '@/lib/admin-session';
+import { adminApi } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -18,7 +20,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname() || '';
   const [storedAdmin, setAdmin] = useState<AdminSession['admin'] | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sessionToken, setSessionToken] = useState<string | null>(() => getAdminSessionToken());
+  const [sessionId, setSessionId] = useState<string | null>(() => getAdminSessionId());
   const mounted = useRef(false);
 
   useEffect(() => {
@@ -28,11 +30,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       if (!active) return;
       const next = getAdminSession();
       setAdmin(next?.admin ?? null);
-      setSessionToken(next?.token ?? null);
+      setSessionId(next?.sessionId ?? null);
       if (!next) router.push('/admin/login');
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === 'admin_token' || event.key === 'admin_user') syncSession();
+      if (event.key === null || event.key === ADMIN_SESSION_KEY || event.key === 'admin_user') syncSession();
     };
     syncSession();
     window.addEventListener?.('storage', onStorage);
@@ -46,10 +48,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, [router, pathname]);
 
   const handleLogout = () => {
-    if (!mounted.current || !sessionToken || getAdminSessionToken() !== sessionToken) return;
-    clearAdminSession(sessionToken);
+    if (!mounted.current || !sessionId || getAdminSessionId() !== sessionId) return;
+    clearAdminSession(sessionId);
     setAdmin(null);
-    setSessionToken(null);
+    setSessionId(null);
+    // The page cannot remove the httpOnly session cookie itself; the client-side navigation lets this request finish.
+    adminApi.logout().catch(error => logger.error('退出登录失败:', error));
     router.push('/admin/login');
   };
 
@@ -116,7 +120,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   ];
 
   const current = getAdminSession();
-  if (!storedAdmin || !current || current.token !== sessionToken) {
+  if (!storedAdmin || !current || current.sessionId !== sessionId) {
     return <div className="min-h-screen flex items-center justify-center">{t("加载中...")}</div>;
   }
   const admin = current.admin;
@@ -214,7 +218,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </div>
 
         {/* 页面内容 */}
-        <div key={sessionToken} className="p-6">
+        <div key={sessionId} className="p-6">
           {children}
         </div>
       </div>
