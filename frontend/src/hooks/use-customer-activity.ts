@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
 import { requestFailure } from '@/lib/api-error';
-import { StaleSessionError } from '@/lib/query-client';
+import { useSessionQuery } from '@/hooks/use-session-query';
 import type { ActivityPage } from '@/lib/api';
 
 interface MutationOptions<T> {
@@ -23,13 +22,6 @@ export function canBuyActivityProduct(product: { status: number | null; stock: n
   return product.status === 1 && Number.isFinite(stock) && stock > 0;
 }
 
-/** True while the store and browser storage still hold the session a request was made for. */
-function sessionIsCurrent(token: string | null, userId: number | undefined) {
-  const state = useAuthStore.getState();
-  return state.isHydrated && state.isAuthenticated && state.token === token && state.user?.user_id === userId &&
-    localStorage.getItem('token') === (token ?? null);
-}
-
 /**
  * Keeps each account's paginated collection in its own scope. The query key carries the
  * session and page, so a response only ever fills the scope that requested it.
@@ -40,7 +32,6 @@ export function useCustomerActivity<T extends { product_id: number }>(
   errorMessage: string,
 ) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { user, token, isAuthenticated, isHydrated } = useAuthStore();
   const sessionKey = JSON.stringify([token, user?.user_id]);
   // A page belongs to the session that chose it; another session starts on page one.
@@ -50,31 +41,24 @@ export function useCustomerActivity<T extends { product_id: number }>(
   const scopeKey = JSON.stringify([sessionKey, page]);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
-  const mounted = useRef(true);
   const mutation = useRef<object | null>(null);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
-  const sessionQueryKey = ['customer-activity', collection, token, user?.user_id] as const;
-
-  const query = useQuery({
-    queryKey: [...sessionQueryKey, page],
-    enabled: isHydrated && isAuthenticated && !!user,
-    // Another account must not find this one's rows in memory once the page stops using them.
-    gcTime: 0,
-    queryFn: async () => {
-      if (!sessionIsCurrent(token, user?.user_id)) throw new StaleSessionError();
+  const query = useSessionQuery({
+    name: collection,
+    params: [page],
+    load: async () => {
       const data = await load({ page, limit });
-      if (!sessionIsCurrent(token, user?.user_id)) throw new StaleSessionError();
       const total = Number(data.pagination?.total) || 0;
       return { rows: data[collection] || [], total, totalPages: Number(data.pagination?.total_pages) || Math.ceil(total / limit) };
     },
   });
 
-  const isCurrentSession = () => mounted.current && sessionIsCurrent(token, user?.user_id);
+  const { isCurrentSession } = query;
   const isCurrentQuery = () => isCurrentSession() && currentScope.current === scopeKey;
-  const live = isCurrentSession();
-  const beyondLastPage = query.data !== undefined && page > Math.max(1, query.data.totalPages);
-  const shown = live && query.isSuccess && !beyondLastPage ? query.data : undefined;
-  const error = live && query.isError && !(query.error instanceof StaleSessionError)
+  const lastPage = Math.max(1, query.data?.totalPages ?? 0);
+  const beyondLastPage = query.data !== undefined && page > lastPage;
+  const shown = beyondLastPage ? undefined : query.data;
+  const error = query.error
     ? requestFailure(query.error).response?.data?.message || requestFailure(query.error).response?.data?.error || errorMessage
     : undefined;
   const rows = shown?.rows ?? [];
@@ -85,11 +69,6 @@ export function useCustomerActivity<T extends { product_id: number }>(
   const hasDisplayedRow = (productId: number) => isCurrentScope() && rows.some(row => row.product_id === productId);
   const busy = pendingSession === sessionKey;
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-
   // A pending action belongs to the session that started it; the next session may act at once.
   useEffect(() => {
     mutation.current = null;
@@ -98,7 +77,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
 
   // Deleting the only row on the final page leaves that page empty; show the new last page.
   useEffect(() => {
-    if (beyondLastPage) setPage(Math.max(1, query.data.totalPages));
+    if (beyondLastPage) setPage(lastPage);
   }, [beyondLastPage]);
 
   useEffect(() => {
@@ -122,7 +101,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
       if (!isCurrentSession()) return;
       if (isCurrentScope()) options.onSuccess(value);
       // A deletion may finish after pagination changes; this reloads whichever page is displayed now.
-      if (options.refresh) await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+      if (options.refresh) await query.invalidate();
     } catch (cause) {
       if (isCurrentScope()) options.onError(cause);
     } finally {
