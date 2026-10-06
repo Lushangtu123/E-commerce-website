@@ -5,7 +5,7 @@ import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/admin-auth';
 import { CouponModel, CouponStatus } from '../models/coupon.model';
 import { adminCouponListSchema, couponCreateSchema, couponIdSchema, couponStatusSchema } from '../utils/coupon-validation';
-import { logAdminAction } from './admin.controller';
+import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 
 export class AdminCouponController {

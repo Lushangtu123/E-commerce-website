@@ -1,14 +1,7 @@
 import express from 'express';
-import {
-  adminLogin,
-  adminLogout,
-  getAdminProfile,
-  getDashboardStats,
-  getRecentOrders,
-  getTopProducts,
-  getSalesTrend,
-  getAdminLogs
-} from '../controllers/admin.controller';
+import { adminLogin, adminLogout, getAdminProfile } from '../controllers/admin.controller';
+import { getDashboardStats, getRecentOrders, getTopProducts, getSalesTrend } from '../controllers/admin-dashboard.controller';
+import { getAdminLogs } from '../controllers/admin-log.controller';
 import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
 import { authLimiter } from '../middleware/rate-limit';
 
@@ -20,7 +13,7 @@ const router = express.Router();
  *   post:
  *     tags: [管理后台]
  *     summary: 管理员登录
- *     description: 登录接口带防暴力破解限流，返回管理员 Token
+ *     description: 登录接口带防暴力破解限流；会话写入 httpOnly Cookie admin_session，响应体不含令牌
  *     requestBody:
  *       required: true
  *       content:
@@ -33,7 +26,7 @@ const router = express.Router();
  *               password: { type: string, format: password }
  *     responses:
  *       200:
- *         description: 登录成功，返回管理员信息与 Token
+ *         description: 登录成功，返回管理员信息并设置 admin_session Cookie
  *       401:
  *         description: 用户名或密码错误 / 账号被禁用
  *         content:

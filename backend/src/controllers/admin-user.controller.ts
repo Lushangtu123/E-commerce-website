@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
-import { logAdminAction } from './admin.controller';
+import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 
 // 获取用户列表（管理员）
