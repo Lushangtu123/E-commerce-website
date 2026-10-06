@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminLogsPage from '@/app/admin/logs/page';
 import api, { type AdminLog } from '@/lib/api';
+import { clearAdminSession } from '@/lib/admin-session';
+import { logger } from '@/lib/logger';
 import { apiError, captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -63,6 +65,7 @@ describe('admin logs', () => {
 
     expect(requests[0]).toEqual({ url: '/admin/logs', params: { page: 1, limit: 20 } });
     expect(screen.getByRole('alert')).toHaveTextContent('获取日志失败');
+    expect(logger.error).toHaveBeenCalledTimes(1);
 
     await click('重新加载');
     expect(screen.getByText('Current logs')).toBeInTheDocument();
@@ -88,7 +91,7 @@ describe('admin logs', () => {
 
   it.each(lateCases)('ignores an old outcome (fails=$fails) after a $change change, even before the storage event arrives', async ({ change, fails }) => {
     const delayed = deferred<Logs>();
-    const view = await setup(() => delayed.promise);
+    const view = await setup(() => requests.length === 1 ? delayed.promise : { logs: [log('Second administrator logs')], pagination: { total: 1 } });
 
     if (change === 'storage') switchAdmin({ notify: false });
     else view.unmount();
@@ -97,7 +100,12 @@ describe('admin logs', () => {
       else delayed.resolve({ logs: [log('Old logs')], pagination: { total: 1 } });
     });
     await settle();
-    if (change === 'storage') act(() => view.rerender(<AdminLogsPage />));
+    if (change === 'storage') {
+      act(() => view.rerender(<AdminLogsPage />));
+      await settle();
+      // The token is read on every render, so the page catches up with the new administrator at once.
+      expect(screen.getByText('Second administrator logs')).toBeInTheDocument();
+    }
 
     expect(screen.queryByText('Old logs')).not.toBeInTheDocument();
     expect(screen.queryByText('Old failure')).not.toBeInTheDocument();
@@ -116,5 +124,37 @@ describe('admin logs', () => {
 
     expect(screen.getByText('Second page')).toBeInTheDocument();
     expect(requests).toHaveLength(2);
+  });
+
+  it('hides the logs as soon as this tab clears the administrator session', async () => {
+    await setup(() => ({ logs: [log('Current logs')], pagination: { total: 1 } }));
+    expect(screen.getByText('Current logs')).toBeInTheDocument();
+
+    act(() => { clearAdminSession('first-session'); });
+
+    expect(screen.queryByText('Current logs')).not.toBeInTheDocument();
+  });
+
+  it('ignores a saved previous-page handler once the page has moved on', async () => {
+    await setup(params => ({ logs: [log(`Page ${params.page}`)], pagination: { total: 61 } }));
+    await click('下一页');
+    const stalePrevious = captureHandler(screen.getByRole('button', { name: '上一页' }));
+    await click('下一页');
+    expect(screen.getByText('Page 3')).toBeInTheDocument();
+
+    await stalePrevious();
+    await settle();
+    expect(screen.getByText('Page 3')).toBeInTheDocument();
+    expect(requests).toHaveLength(3);
+  });
+
+  it('sends no retry for the administrator another tab replaced, before the storage event arrives', async () => {
+    await setup(async () => { throw apiError('获取日志失败'); });
+    switchAdmin({ notify: false });
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    // The API client would send a stale retry with the new token, so the only safe outcome is no request.
+    expect(requests).toHaveLength(1);
   });
 });

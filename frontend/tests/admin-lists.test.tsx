@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminProductsPage from '@/app/admin/products/page';
 import AdminUsersPage from '@/app/admin/users/page';
 import api from '@/lib/api';
+import { logger } from '@/lib/logger';
 import { CommitLog, apiError, captureHandler, deferred, reactHandler, render, settle } from './helpers';
 
 const notifications = vi.hoisted(() => [] as string[]);
@@ -144,6 +145,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
       return result(kind, [row(kind, 1, 'Loaded row')]);
     } });
     expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
 
     await click(button('重新加载'));
     expect(screen.getByText('Loaded row')).toBeInTheDocument();
@@ -202,7 +204,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
 
   it('clamps pagination and reloads the remaining rows after disabling the last item on the final page', async () => {
     let total = 21;
-    await setup(kind, {
+    const { commits } = await setup(kind, {
       list: params => {
         const rows = Array.from({ length: total }, (_, index) => row(kind, index + 1));
         return result(kind, rows.slice((params.page - 1) * 20, params.page * 20), total);
@@ -219,6 +221,8 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     expect(screen.getByText('Row 20')).toBeInTheDocument();
     expect(screen.queryByText('Row 21')).not.toBeInTheDocument();
     expect(requests.at(-1)).toMatchObject({ page: 1, status: '1' });
+    const emptyTables = commits.filter(commit => commit.querySelector('table') && !/Row \d+/.test(commit.textContent ?? ''));
+    expect(emptyTables, 'the emptied page must not flash').toEqual([]);
   });
 
   it.each(['success', 'failure'] as const)('cannot let a late list %s replace the new administrator rows or error state', async (outcome) => {
@@ -305,10 +309,87 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
       fireEvent.change(search(), { target: { value: 'new query' } });
       action.click();
     });
-    expect(mutations).toHaveLength(0);
-
     await settle();
+    expect(mutations).toHaveLength(0);
     expect(requests.at(-1)?.keyword).toBe('new query');
+
+    // Clearing filters by click rather than through the controlled input does not re-render first.
+    act(() => {
+      button('重置').click();
+      button(statusAction[kind]).click();
+    });
+    await settle();
+    expect(mutations).toHaveLength(0);
+    expect(requests.at(-1)?.keyword).toBeUndefined();
+
+    const next = button('下一页');
+    act(() => {
+      next.click();
+      button(statusAction[kind]).click();
+    });
+    await settle();
+    expect(mutations).toHaveLength(0);
+    expect(requests.at(-1)?.page).toBe(2);
+  });
+
+  it('keeps a row handler rendered before a refresh inactive once the refresh changes its rows', async () => {
+    let changed = false;
+    await setup(kind, {
+      list: () => result(kind, [row(kind, 1, changed ? 'Changed row' : 'Row 1'), row(kind, 2)]),
+      mutate: async () => { changed = true; },
+    });
+    const stale = captureHandler(screen.getAllByRole('button', { name: statusAction[kind] })[1]);
+
+    await click(button(statusAction[kind]));
+    expect(mutations).toHaveLength(1);
+    expect(requests).toHaveLength(2);
+
+    await stale();
+    await settle();
+    expect(mutations).toHaveLength(1);
+  });
+
+  it('lets the next administrator act while the previous administrator\'s change is pending', async () => {
+    const write = deferred();
+    let writes = 0;
+    await setup(kind, { mutate: () => ++writes === 1 ? write.promise : Promise.resolve({}) });
+    fireEvent.click(button(statusAction[kind]));
+    await settle();
+
+    changeSession();
+    await settle();
+    await click(button(statusAction[kind]));
+    expect(mutations.map(item => item.authorization)).toEqual(['Bearer admin-a', 'Bearer admin-b']);
+  });
+
+  it('ignores stale filter and pagination handlers once the list has moved on', async () => {
+    await setup(kind, { list: params => result(kind, [row(kind, params.page, `Page ${params.page}`)], 60) });
+    const staleStatus = reactHandler(statusFilter(), 'onChange');
+    await type(search(), 'kept');
+    act(() => { staleStatus({ target: { value: '0' } }); });
+    await settle();
+    expect(requests.at(-1)).toMatchObject({ keyword: 'kept' });
+    expect(requests.at(-1)?.status).toBeUndefined();
+
+    await click(button('下一页'));
+    const stalePrevious = captureHandler(button('上一页'));
+    await click(button('下一页'));
+    expect(screen.getByText('Page 3')).toBeInTheDocument();
+    await stalePrevious();
+    await settle();
+    expect(requests.at(-1)?.page).toBe(3);
+    expect(screen.getByText('Page 3')).toBeInTheDocument();
+  });
+
+  it('sends no reload for the administrator another tab replaced, before the storage event arrives', async () => {
+    await setup(kind);
+    localStorage.setItem('admin_token', 'admin-b');
+    const count = requests.length;
+
+    fireEvent.click(button('搜索'));
+    await settle();
+    // The API client would send a stale reload with the new token, so the only safe outcome is no request.
+    expect(requests).toHaveLength(count);
   });
 });
 
