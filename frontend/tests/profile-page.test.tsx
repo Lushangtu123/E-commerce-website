@@ -2,6 +2,7 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import ProfilePage from '@/app/profile/page';
 import { userApi, type UserStats } from '@/lib/api';
+import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/useAuthStore';
 import { CommitLog, deferred, render, settle } from './helpers';
 
@@ -49,6 +50,7 @@ describe('profile page', () => {
     });
     expect(screen.getByText(/统计数据加载失败/)).toBeInTheDocument();
     expect(counts('我的订单')).toContain('—');
+    expect(vi.mocked(logger.error).mock.calls).toEqual([['加载统计数据失败:', new Error('offline')]]);
 
     fireEvent.click(screen.getByRole('button', { name: '重新加载统计' }));
     await settle();
@@ -95,6 +97,7 @@ describe('profile page', () => {
     await settle();
 
     expect(screen.queryByText(/统计数据加载失败/)).not.toBeInTheDocument();
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it('ignores a late success after the page is left', async () => {
@@ -116,5 +119,15 @@ describe('profile page', () => {
     await settle();
 
     expect(userApi.getStats).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not sign out the customer another tab signed in', async () => {
+    await setup();
+    localStorage.setItem('token', 'B');
+
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+
+    expect(localStorage.getItem('token')).toBe('B');
+    expect(router.push).not.toHaveBeenCalled();
   });
 });
