@@ -2,6 +2,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OrdersPage from '@/app/orders/page';
 import { orderApi, type Order } from '@/lib/api';
+import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import { CommitLog, apiError, captureHandler, clickTogether, deferred, render, settle } from './helpers';
@@ -154,28 +155,90 @@ describe('orders page', () => {
     expect(displayedOrders()).toEqual(['SECOND-1']);
   });
 
-  it('shows a retryable error instead of an empty history when the list fails, and recovers on retry', async () => {
+  it('does not show a filter\'s earlier rows again while returning to it', async () => {
+    const pending = deferred<OrderList>();
+    let unfiltered = 0;
+    await setup({ list: async params => params.status === 4 ? page([order(1, 4, 'CANCELLED')], 1, 1)
+      : ++unfiltered === 1 ? page([order(1, 0, 'BEFORE')], 1, 1) : pending.promise });
+    await click(button('已取消'));
+
+    await click(button('全部'));
+    expect(displayedOrders()).toEqual([]);
+
+    await act(async () => pending.resolve(page([order(1, 1, 'AFTER')], 1, 1)));
+    await settle();
+    expect(displayedOrders()).toEqual(['AFTER-1']);
+  });
+
+  it('sends no list request for a filter chosen after another tab changed the session', async () => {
+    await setup();
+    localStorage.setItem('token', 'other-tab-session');
+
+    await click(button('已取消'));
+    expect(requests()).toHaveLength(1);
+  });
+
+  it('starts the next customer unfiltered even when the previous one never touched a status link\'s filter', async () => {
+    await setup({ search: '?status=0', list: async () => page([order(1)], 1, 1) });
+    expect(requests()).toEqual([{ page: 1, limit: 10, status: 0 }]);
+
+    act(() => useAuthStore.getState().login(secondUser, 'second-session'));
+    await settle();
+    expect(requests().at(-1)).toEqual({ page: 1, limit: 10 });
+  });
+
+  it('shows a retryable error instead of an empty history when the list fails, and loads again on retry', async () => {
+    const retry = deferred<OrderList>();
     let calls = 0;
     await setup({ list: async () => {
       if (++calls === 1) throw apiError('订单服务暂不可用');
-      return page([order(1)], 1, 1);
+      return retry.promise;
     } });
     expect(screen.getByRole('alert')).toHaveTextContent('订单服务暂不可用');
     expect(screen.queryByText('暂无订单')).not.toBeInTheDocument();
+    expect(vi.mocked(logger.error).mock.calls).toEqual([['加载订单失败:', expect.objectContaining({ response: expect.anything() })]]);
 
     await click(button('重新加载'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重新加载' })).not.toBeInTheDocument();
+
+    await act(async () => retry.resolve(page([order(1)], 1, 1)));
+    await settle();
     expect(displayedOrders()).toEqual(['ORDER-1']);
     expect(requests()).toHaveLength(2);
   });
 
+  it('shows the error of a failed refresh after payment, and loading again while it is retried', async () => {
+    const retry = deferred<OrderList>();
+    let calls = 0;
+    await setup({ list: async () => {
+      calls++;
+      if (calls === 1) return page([order(1)], 1, 1);
+      if (calls === 2) throw apiError('订单刷新失败');
+      return retry.promise;
+    } });
+
+    await click(button('模拟支付'));
+    expect(screen.getByRole('alert')).toHaveTextContent('订单刷新失败');
+
+    await click(button('重新加载'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await act(async () => retry.resolve(page([order(1, 1)], 1, 1)));
+    await settle();
+    expect(screen.getByText('已支付', { selector: 'span' })).toBeInTheDocument();
+  });
+
   it('rejects duplicate pay or cancel on a pending order and refreshes only after payment succeeds', async () => {
     const payment = deferred();
-    await setup({ pay: () => payment.promise });
+    const confirm = vi.fn(() => true);
+    await setup({ pay: () => payment.promise, confirm });
     const pay = screen.getAllByRole('button', { name: '模拟支付' })[0];
     const cancel = screen.getAllByRole('button', { name: '取消订单' })[0];
 
     clickTogether(pay, pay, cancel);
     expect(mutations).toEqual([['pay', 1]]);
+    expect(confirm, 'a click while an action is pending must not prompt').not.toHaveBeenCalled();
     await settle();
     for (const action of actionButtons()) expect(action).toBeDisabled();
     expect(requests()).toHaveLength(1);
@@ -188,7 +251,7 @@ describe('orders page', () => {
 
   it('returns to the remaining last page after cancelling the only order on the final filtered page', async () => {
     let cancelled = false;
-    await setup({ search: '?status=0', cancel: async () => { cancelled = true; }, list: async params => {
+    const { commits } = await setup({ search: '?status=0', cancel: async () => { cancelled = true; }, list: async params => {
       const total = cancelled ? 10 : 11;
       const rows = Array.from({ length: params.page === 1 ? 10 : cancelled ? 0 : 1 }, (_, index) => order((params.page - 1) * 10 + index + 1));
       return { orders: rows, total, page: params.page, limit: 10, totalPages: Math.ceil(total / 10) };
@@ -201,19 +264,21 @@ describe('orders page', () => {
     expect(requests().slice(-2)).toEqual([{ page: 2, limit: 10, status: 0 }, { page: 1, limit: 10, status: 0 }]);
     expect(displayedOrders()).toHaveLength(10);
     expect(screen.getByText('第 1 / 1 页')).toBeInTheDocument();
-    expect(screen.queryByText('暂无订单')).not.toBeInTheDocument();
+    expect(commits.filter(commit => within(commit).queryByText('暂无订单')), 'the emptied page must not flash').toEqual([]);
   });
 
   describe.each(['pay', 'cancel', 'confirm'] as const)('a stale %s handler', (action) => {
     const ordersFor = async () => page([order(1, action === 'confirm' ? 2 : 0)], 1, 1);
 
-    it('sends nothing after the filter changes', async () => {
-      await setup({ list: ordersFor });
+    it('sends nothing and asks nothing after the filter changes', async () => {
+      const confirm = vi.fn(() => true);
+      await setup({ list: ordersFor, confirm });
       const staleAction = captureHandler(button(actionLabel[action]));
       await click(button('已取消'));
 
       await staleAction();
       expect(mutations).toEqual([]);
+      expect(confirm).not.toHaveBeenCalled();
     });
 
     it('sends nothing after another tab changes the token', async () => {
@@ -254,6 +319,19 @@ describe('orders page', () => {
     expect(notifications).toEqual([]);
     expect(router.push).not.toHaveBeenCalled();
     expect(useCartStore.getState().getTotalCount()).toBe(2);
+  });
+
+  it('lets the next customer act while the previous customer\'s payment is still pending', async () => {
+    const payment = deferred();
+    let calls = 0;
+    await setup({ pay: () => ++calls === 1 ? payment.promise : Promise.resolve({}), list: async () => page([order(1)], 1, 1) });
+    fireEvent.click(button('模拟支付'));
+
+    act(() => useAuthStore.getState().login(secondUser, 'second-session'));
+    await settle();
+    await click(button('模拟支付'));
+    expect(mutations).toEqual([['pay', 1], ['pay', 1]]);
+    expect(notifications).toEqual(['模拟支付完成，未实际扣款']);
   });
 
   it.each(['filter', 'page'] as const)('refreshes the current query when a mutation finishes after a %s change, without restoring the old scope', async (change) => {
@@ -298,9 +376,10 @@ describe('orders page', () => {
     await settle();
 
     expect(notifications).toEqual([]);
+    expect(logger.error).not.toHaveBeenCalled();
     if (change === 'storage') {
       expect(displayedOrders()).toEqual([]);
-      expect(screen.queryByText('旧列表错误')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     }
   });
 
