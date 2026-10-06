@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Admin } from '../models/admin.model';
 import logger from '../utils/logger';
+import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasCsrfHeader, setSessionCookie } from '../utils/session-cookie';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
 
@@ -75,6 +76,7 @@ export const adminLogin = async (req: Request, res: Response) => {
     // 返回登录信息（不返回密码）
     delete admin.password_hash;
 
+    setSessionCookie(res, ADMIN_COOKIE, token);
     res.json({
       token,
       admin: {
@@ -387,3 +389,9 @@ export const getAdminLogs = async (req: Request, res: Response) => {
   }
 };
 
+// 管理员退出登录：清除会话 Cookie。即使令牌已过期也能退出，所以不经过管理员认证。
+export const adminLogout = (req: Request, res: Response) => {
+  if (!hasCsrfHeader(req)) return res.status(403).json({ error: CSRF_ERROR });
+  clearSessionCookie(res, ADMIN_COOKIE);
+  return res.json({ message: '已退出登录' });
+};

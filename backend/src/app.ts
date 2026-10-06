@@ -35,7 +35,7 @@ import paymentRoutes from './routes/payment.routes';
 import afterSalesRoutes from './routes/after-sales.routes';
 import adminAfterSalesRoutes from './routes/admin-after-sales.routes';
 import logger from './utils/logger';
-import { validateEnv, getCorsOrigins } from './utils/validate-env';
+import { validateEnv, corsOptions } from './utils/validate-env';
 
 export function createApp(options: { serverless?: boolean } = {}): Express {
   validateEnv();
@@ -44,7 +44,7 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
 
   // 中间件
   app.use(helmet()); // 安全头
-  app.use(cors({ origin: getCorsOrigins() })); // 跨域：CORS_ORIGIN 限制来源
+  app.use(cors(corsOptions())); // 跨域：CORS_ORIGIN 限制来源，只有列出的来源能带会话 Cookie
   app.use(compression()); // 压缩
   app.use(express.json({ limit: '10mb' })); // JSON解析
   app.use(express.urlencoded({ extended: true, limit: '10mb' })); // URL编码解析

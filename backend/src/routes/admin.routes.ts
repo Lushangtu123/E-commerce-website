@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   adminLogin,
+  adminLogout,
   getAdminProfile,
   getDashboardStats,
   getRecentOrders,
@@ -42,6 +43,23 @@ const router = express.Router();
  *         description: 触发登录防爆破限流
  */
 router.post('/login', authLimiter, adminLogin);
+
+/**
+ * @openapi
+ * /api/admin/logout:
+ *   post:
+ *     tags: [管理后台]
+ *     summary: 管理员退出登录
+ *     description: 清除管理员 httpOnly 会话 Cookie；令牌过期后也能调用。需带 X-Requested-With 请求头。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
+ *     responses:
+ *       200:
+ *         description: 已清除会话 Cookie
+ *       403:
+ *         description: 缺少 X-Requested-With 请求头
+ */
+router.post('/logout', adminLogout);
 
 // 需要认证的路由
 router.use(authenticateAdmin);

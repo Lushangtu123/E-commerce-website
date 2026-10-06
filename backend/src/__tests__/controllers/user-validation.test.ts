@@ -9,6 +9,7 @@ const profile = { user_id: 7, username: '客户', email: 'customer@example.test'
 function response() {
   const res = {} as Response;
   res.status = jest.fn().mockReturnValue(res); res.json = jest.fn().mockReturnValue(res);
+  res.cookie = jest.fn().mockReturnValue(res); res.clearCookie = jest.fn().mockReturnValue(res);
   return res;
 }
 const req = (body: unknown) => ({ body, userId: 7 }) as any;
@@ -67,6 +68,7 @@ test.each([' ' + 'x'.repeat(70) + ' ', '汉'.repeat(24)])('registration preserve
   const output = (res.json as jest.Mock).mock.calls[0][0];
   expect(output.user).toEqual({ user_id: 7, username: '单', email: 'customer@example.test' });
   expect(typeof output.token).toBe('string');
+  expect((res.cookie as jest.Mock).mock.calls[0].slice(0, 2)).toEqual(['customer_session', output.token]);
 });
 
 test.each([

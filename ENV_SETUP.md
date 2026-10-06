@@ -112,7 +112,7 @@ nano .env.local
 
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
-| `CORS_ORIGIN` | 允许的前端域名 | `*` | `http://localhost:3000` |
+| `CORS_ORIGIN` | 允许的前端域名，逗号分隔。只有列出的来源能跨域携带登录 Cookie；未配置或 `*` 时放行所有来源但不带 Cookie | 未配置 | `http://localhost:3000` |
 
 #### 限流配置
 
@@ -373,7 +373,7 @@ NEXT_PUBLIC_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 
 **解决方法:**
 1. 确保 `CORS_ORIGIN` 包含前端地址
-2. 开发环境可以设置为 `*`（不推荐生产环境）
+2. 开发环境可以设置为 `*`（不推荐生产环境）。`*` 不允许跨域携带登录 Cookie，前后端端口不同时请明确列出前端地址
 3. 检查前端的 `NEXT_PUBLIC_API_URL` 是否正确
 
 ### 4. JWT 认证失败？

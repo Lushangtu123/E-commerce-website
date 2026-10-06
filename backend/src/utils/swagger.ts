@@ -51,6 +51,18 @@ const options: swaggerJSDoc.Options = {
           bearerFormat: 'JWT',
           description: '管理员 Token：Authorization: Bearer <admin_token>',
         },
+        customerCookie: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'customer_session',
+          description: '登录后由服务器写入的 httpOnly 会话 Cookie；非 GET 请求还需 X-Requested-With 请求头。同时带 Bearer 时以 Bearer 为准。',
+        },
+        adminCookie: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'admin_session',
+          description: '管理员登录后写入的 httpOnly 会话 Cookie；非 GET 请求还需 X-Requested-With 请求头。',
+        },
       },
       schemas: {
         Error: {

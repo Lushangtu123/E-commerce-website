@@ -1,5 +1,6 @@
 jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn() }));
 import { getPool, query } from '../../database/mysql';
+import { PasswordResetModel } from '../../models/password-reset.model';
 import { UserController } from '../../controllers/user.controller';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -9,6 +10,7 @@ import * as recovery from '../../services/password-recovery.service';
 function response() {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res); res.json = jest.fn().mockReturnValue(res);
+  res.cookie = jest.fn().mockReturnValue(res); res.clearCookie = jest.fn().mockReturnValue(res);
   return res;
 }
 const req = (body: unknown) => ({ body, userId: 7 }) as any;
@@ -54,6 +56,12 @@ test('login binds the session to the database authentication version', async () 
   const res = response(); await UserController.login(req({ email: 'user@example.test', password }), res);
   const token = res.json.mock.calls[0][0].token;
   expect(jwt.verify(token, process.env.JWT_SECRET!)).toMatchObject({ userId: 7, authVersion: 3, type: 'user' });
+  // The same token also goes into an httpOnly cookie that expires with it, scoped to the API.
+  const [name, value, options] = res.cookie.mock.calls[0];
+  expect([name, value]).toEqual(['customer_session', token]);
+  expect(options).toMatchObject({ httpOnly: true, sameSite: 'lax', secure: false, path: '/api' });
+  expect(options.maxAge).toBeGreaterThan(7 * 24 * 3600 * 1000 - 60_000);
+  expect(options.maxAge).toBeLessThanOrEqual(7 * 24 * 3600 * 1000);
 });
 
 test('known recovery stores only a hash and sends one fragment link without exposing it publicly', async () => {
@@ -120,11 +128,23 @@ test('changing a password stores a complete bcrypt hash and invalidates outstand
   expect(update[1].slice(1)).toEqual([7, oldHash]);
   expect(conn.query).toHaveBeenCalledWith('DELETE FROM password_reset_tokens WHERE user_id = ?', [7]);
   expect(res.json).toHaveBeenCalledWith({ message: '密码已修改，请重新登录', reauthenticate: true });
+  // The revoked session cookie leaves the browser with the response that revokes it.
+  expect(res.clearCookie).toHaveBeenCalledWith('customer_session', expect.objectContaining({ httpOnly: true, path: '/api' }));
 });
 
 test.each(['bad', 'a'.repeat(63), 'A'.repeat(64), 'g'.repeat(64)])('reset rejects malformed token %p without database work', async token => {
   const res = response(); await (UserController as any).resetPassword(req({ token, newPassword: 'new-long-password' }), res);
   expect(res.status).toHaveBeenCalledWith(400); expect(getPool).not.toHaveBeenCalled();
+});
+
+test('a completed reset clears the session cookie, and a rejected one leaves it alone', async () => {
+  const consume = jest.spyOn(PasswordResetModel, 'consume').mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  const done = response(); await (UserController as any).resetPassword(req({ token: 'a'.repeat(64), newPassword: 'new-long-password' }), done);
+  expect(done.json).toHaveBeenCalledWith({ message: '密码已重置，请重新登录', reauthenticate: true });
+  expect(done.clearCookie).toHaveBeenCalledWith('customer_session', expect.objectContaining({ path: '/api' }));
+  const rejected = response(); await (UserController as any).resetPassword(req({ token: 'a'.repeat(64), newPassword: 'new-long-password' }), rejected);
+  expect(rejected.clearCookie).not.toHaveBeenCalled();
+  consume.mockRestore();
 });
 
 test('expired or consumed reset link cannot change the password', async () => {
