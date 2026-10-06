@@ -347,7 +347,7 @@ docker-compose exec backend npm run seed
 
 - 查看 [README.md](README.md) 了解详细的项目文档
 - 查看 [DEPLOYMENT.md](DEPLOYMENT.md) 了解部署指南
-- 查看 [design_plan.txt](design_plan.txt) 了解系统设计
+- 查看 [docs/archive/design_plan.txt](docs/archive/design_plan.txt) 了解系统设计
 
 ## 获取帮助
 

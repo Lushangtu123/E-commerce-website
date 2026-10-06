@@ -274,7 +274,7 @@ E-commerce-website/
 │   └── Dockerfile
 │
 ├── docker-compose.yml      # Docker编排配置
-├── design_plan.txt        # 设计文档
+├── docs/                  # 文档（设计稿在 docs/archive/design_plan.txt）
 └── README.md              # 项目说明
 ```
 
