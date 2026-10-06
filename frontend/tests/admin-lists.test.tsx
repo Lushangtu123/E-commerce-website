@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter } from 'axios';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminProductsPage from '@/app/admin/products/page';
 import AdminUsersPage from '@/app/admin/users/page';
 import api from '@/lib/api';
-import { CommitLog, apiError, captureHandler, deferred, reactHandler, settle } from './helpers';
+import { CommitLog, apiError, captureHandler, deferred, reactHandler, render, settle } from './helpers';
 
 const notifications = vi.hoisted(() => [] as string[]);
 // Next returns the same router on every render; pages list it as an effect dependency.

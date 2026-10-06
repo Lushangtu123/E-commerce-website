@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CartPage from '@/app/cart/page';
@@ -11,7 +11,7 @@ import OrdersPage from '@/app/orders/page';
 import ProfileAddressPage from '@/app/profile/address/page';
 import ProfilePage from '@/app/profile/page';
 import { useAuthStore } from '@/store/useAuthStore';
-import { settle } from './helpers';
+import { render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const requests = vi.hoisted(() => [] as { api: string; method: string }[]);

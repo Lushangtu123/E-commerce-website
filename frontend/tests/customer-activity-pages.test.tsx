@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FavoritesPage from '@/app/favorites/page';
 import HistoryPage from '@/app/history/page';
 import { browseApi, cartApi, favoriteApi, productApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import { CommitLog, apiError, captureHandler, deferred, settle } from './helpers';
+import { CommitLog, apiError, captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -181,16 +181,37 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
 
   it('reloads the remaining valid page after deleting the only row on the final page', async () => {
     const rows = Array.from({ length: 21 }, (_, index) => product(index + 1));
-    await setup(kind, { rows, remove: async id => { rows.splice(rows.findIndex(row => row.product_id === id), 1); } });
+    const { commits } = await setup(kind, { rows, remove: async id => { rows.splice(rows.findIndex(row => row.product_id === id), 1); } });
     await click(button('下一页'));
     expect(titles()).toEqual(['Product 21']);
+    const before = commits.length;
 
     await click(removeButtons(kind)[0]);
 
     expect(requests.at(-1)?.page).toBe(1);
     expect(titles()).toHaveLength(20);
     expect(screen.getByText(/20 个商品/)).toBeInTheDocument();
-    expect(screen.queryByText(emptyText)).not.toBeInTheDocument();
+    for (const commit of commits.slice(before)) {
+      expect(commit.textContent, 'the emptied page must not flash an empty collection').not.toContain(emptyText);
+    }
+  });
+
+  it("lets the next account act at once while the previous account's removal is still pending", async () => {
+    const removal = deferred();
+    let calls = 0;
+    await setup(kind, {
+      list: async () => pageOf(kind, [product(useAuthStore.getState().token === 'second-session' ? 2 : 1)]),
+      remove: () => ++calls === 1 ? removal.promise : Promise.resolve({}),
+    });
+    fireEvent.click(removeButtons(kind)[0]);
+
+    switchAccount();
+    await settle();
+    expect(titles()).toEqual(['Product 2']);
+    expect(removeButtons(kind)[0]).toBeEnabled();
+    await click(removeButtons(kind)[0]);
+
+    expect(mutations).toEqual([['remove', 1], ['remove', 2]]);
   });
 
   const lateListCases = (['account', 'storage', 'unmount'] as const).flatMap(change =>

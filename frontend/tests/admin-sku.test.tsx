@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,7 @@ import AdminProductsPage from '@/app/admin/products/page';
 import SkuPage from '@/app/admin/products/[id]/skus/page';
 import api, { type AdminSKU } from '@/lib/api';
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
-import { apiError, captureHandler, deferred, reactHandler, settle } from './helpers';
+import { apiError, captureHandler, deferred, reactHandler, render, settle } from './helpers';
 
 const params = vi.hoisted(() => ({ id: '1' }));
 // Next returns the same router on every render; pages list it as an effect dependency.

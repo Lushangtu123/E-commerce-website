@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter } from 'axios';
 import type { ComponentType } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,7 @@ import RegisterPage from '@/app/register/page';
 import api from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/useAuthStore';
-import { settle } from './helpers';
+import { render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const errors = vi.hoisted(() => [] as string[]);

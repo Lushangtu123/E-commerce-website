@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { ComponentType, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import AdminCouponsPage from '@/app/admin/coupons/page';
@@ -6,7 +6,7 @@ import CouponsPage from '@/app/coupons/page';
 import MyCouponsPage from '@/app/my/coupons/page';
 import { adminCouponApi, couponApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { captureHandler, deferred, settle } from './helpers';
+import { captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

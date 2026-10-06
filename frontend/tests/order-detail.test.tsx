@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import OrderDetailPage from '@/app/orders/[id]/page';
 import OrderReviews from '@/components/OrderReviews';
 import { orderApi, type Order, type OrderItem } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { deferred, settle } from './helpers';
+import { deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({ id: '1' }) }));

@@ -1,4 +1,3 @@
-import { render } from '@testing-library/react';
 import { resolveTitle } from 'next/dist/lib/metadata/resolvers/resolve-title';
 import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
@@ -32,6 +31,7 @@ import {
   TITLE_TEMPLATE, fetchApiJson, fetchApiResult, isIndexable, listPublicProducts, serverApiBase, shareableImage, siteUrl, summarize,
   type ApiResult, type PublicProduct,
 } from '@/lib/site';
+import { render } from './helpers';
 
 const NOT_FOUND = vi.hoisted(() => new Error('NEXT_NOT_FOUND'));
 vi.mock('next/navigation', () => ({ notFound: () => { throw NOT_FOUND; }, usePathname: () => '/' }));

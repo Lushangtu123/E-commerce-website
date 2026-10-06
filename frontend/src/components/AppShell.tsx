@@ -5,12 +5,14 @@ import Header from '@/components/Header';
 import SiteFooter from '@/components/SiteFooter';
 import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LOCALE_STORAGE_KEY, useLocaleStore } from '@/store/useLocaleStore';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { redactTelemetryUrl } from '@/lib/telemetry';
+import { createQueryClient } from '@/lib/query-client';
 
 /** Client half of the root layout: language, session sync and storefront chrome. */
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -19,6 +21,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isAdminRoute = pathname?.startsWith('/admin');
   const hydrate = useAuthStore((state) => state.hydrate);
   const hydrateLocale = useLocaleStore((state) => state.hydrate);
+  // One client per browser tab; useState keeps it across re-renders without sharing it between server requests.
+  const [queryClient] = useState(createQueryClient);
 
   // The server renders lang="zh-CN"; keep <html lang> in step with the chosen language.
   useEffect(() => {
@@ -66,7 +70,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [hydrate]);
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       {!isAdminRoute && <Header />}
       <main className={`min-h-screen ${!isAdminRoute ? 'bg-gray-50' : ''}`}>
         {children}
@@ -75,6 +79,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Toaster position="top-center" />
       <Analytics beforeSend={redactTelemetryUrl} />
       <SpeedInsights beforeSend={redactTelemetryUrl} />
-    </>
+    </QueryClientProvider>
   );
 }

@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CartPage from '@/app/cart/page';
 import { addressApi, cartApi, orderApi, type CartInput, type OrderCreateInput, type OrderInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore, type CartItem } from '@/store/useCartStore';
-import { CommitLog, apiError, clickTogether, deferred, settle } from './helpers';
+import { CommitLog, apiError, clickTogether, deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const notifications = vi.hoisted(() => [] as string[]);
