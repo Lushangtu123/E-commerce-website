@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
-import { userApi, type UserStats } from '@/lib/api';
+import { userApi } from '@/lib/api';
+import { useSessionQuery } from '@/hooks/use-session-query';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -28,55 +29,25 @@ import { useI18n } from '@/lib/i18n';
 export default function ProfilePage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user, token, isAuthenticated, isHydrated, logout } = useAuthStore();
-  const [result, setResult] = useState<{ key: string; stats?: UserStats; error?: string } | null>(null);
+  const { user, isAuthenticated, isHydrated, logout } = useAuthStore();
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const avatarKey = JSON.stringify([user?.user_id, user?.avatar_url]);
   const avatar = user?.avatar_url && /^https?:\/\/\S+$/i.test(user.avatar_url) && failedAvatar !== avatarKey ? user.avatar_url : null;
-  const mounted = useRef(true);
-  const revision = useRef(0);
-  const sessionKey = JSON.stringify([token, user?.user_id]);
-  const stats = result?.key === sessionKey ? result.stats : undefined;
-  const error = result?.key === sessionKey ? result.error : undefined;
-  const loading = result?.key !== sessionKey;
-  const isCurrent = () => {
-    const current = useAuthStore.getState();
-    return mounted.current && current.isAuthenticated && current.token === token && current.user?.user_id === user?.user_id &&
-      localStorage.getItem('token') === (token ?? null);
-  };
+  const query = useSessionQuery({ name: 'user-stats', params: [], load: () => userApi.getStats() });
+  const stats = query.data?.stats;
+  const error = query.error ? '统计数据加载失败，请重试' : undefined;
+  const loading = !query.data && !error;
 
   useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; revision.current += 1; };
-  }, []);
+    if (query.error) logger.error('加载统计数据失败:', query.error);
+  }, [query.error]);
 
   useEffect(() => {
-    if (!isHydrated) return;
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    loadUserStats();
-    return () => { revision.current += 1; };
-  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
-
-  const loadUserStats = async () => {
-    if (!isCurrent()) return;
-    const request = ++revision.current;
-    setResult(null);
-    try {
-      const data = await userApi.getStats();
-      if (!isCurrent() || revision.current !== request) return;
-      setResult({ key: sessionKey, stats: data.stats });
-    } catch (error) {
-      if (!isCurrent() || revision.current !== request) return;
-      logger.error('加载统计数据失败:', error);
-      setResult({ key: sessionKey, error: '统计数据加载失败，请重试' });
-    }
-  };
+    if (isHydrated && !isAuthenticated) router.push('/login');
+  }, [isHydrated, isAuthenticated, router]);
 
   const handleLogout = () => {
-    if (!isCurrent()) return;
+    if (!query.isCurrentSession()) return;
     logout();
     router.push('/');
   };
@@ -184,7 +155,7 @@ export default function ProfilePage() {
 
         {error && <div role="alert" className="bg-white rounded-xl p-4 mb-6 text-red-600">
           <p>{t(error)}</p>
-          <button onClick={loadUserStats} className="underline mt-2">{t("重新加载统计")}</button>
+          <button onClick={query.refetch} className="underline mt-2">{t("重新加载统计")}</button>
         </div>}
 
         {/* 优惠券快捷入口 - 突出显示 */}

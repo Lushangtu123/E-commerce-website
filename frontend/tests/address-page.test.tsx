@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AddressPage from '@/app/profile/address/page';
 import { addressApi, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { CommitLog, apiError, captureHandler, deferred, render, settle } from './helpers';
+import { CommitLog, apiError, captureHandler, clickTogether, deferred, render, settle, submitTogether } from './helpers';
 
 const notifications = vi.hoisted(() => [] as string[]);
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -23,9 +23,9 @@ const customer = { user_id: 1, username: 'one', email: 'one@test' };
 const address = { address_id: 41, receiver_name: 'Receiver', phone: '+86 138-0013-8000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '文一路 1 号', is_default: false, user_id: 1 } as ShippingAddress;
 const fields = ['receiver_name', 'phone', 'province', 'city', 'district', 'detail_address'] as const;
 
-async function setup(list: () => Promise<List> = async () => ({ addresses: [address] })) {
+async function setup(list: () => Promise<List> = async () => ({ addresses: [address] }), confirm = () => true) {
   useAuthStore.getState().login(customer, 'one');
-  vi.stubGlobal('confirm', () => true);
+  vi.stubGlobal('confirm', confirm);
   vi.mocked(addressApi.list).mockImplementation(list);
   const commits: HTMLElement[] = [];
   const view = render(<CommitLog commits={commits}><AddressPage /></CommitLog>);
@@ -33,6 +33,8 @@ async function setup(list: () => Promise<List> = async () => ({ addresses: [addr
   return { view, commits };
 }
 
+const secondCustomer = { ...customer, user_id: 2 };
+const switchAccount = () => act(() => useAuthStore.getState().login(secondCustomer, 'two'));
 const input = (name: string) => document.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
 const form = () => document.querySelector('form')!;
 const writes = () => [
@@ -176,6 +178,83 @@ describe('address management', () => {
     await submit();
 
     expect(screen.getByRole('alert')).toHaveTextContent('请填写省份');
+    expect(writes()).toEqual([]);
+  });
+
+  it('refreshes the list after a successful change', async () => {
+    let defaulted = false;
+    vi.mocked(addressApi.update).mockImplementation(async () => { defaulted = true; return {} as never; });
+    await setup(async () => ({ addresses: [{ ...address, is_default: defaulted }] }));
+    expect(screen.queryByText('默认地址')).not.toBeInTheDocument();
+
+    await click('设为默认');
+
+    expect(addressApi.list).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('默认地址')).toBeInTheDocument();
+    expect(notifications).toEqual(['默认地址已更新']);
+  });
+
+  it('sends one change for a double click or a double submit', async () => {
+    const pending = deferred();
+    await setup();
+    vi.mocked(addressApi.update).mockReturnValue(pending.promise as never);
+
+    const setDefault = screen.getByRole('button', { name: '设为默认' });
+    clickTogether(setDefault, setDefault);
+    expect(writes()).toHaveLength(1);
+    await act(async () => pending.resolve({}));
+    await settle();
+
+    await click('编辑');
+    submitTogether(form(), form());
+    expect(writes()).toHaveLength(2);
+  });
+
+  it("closes the previous customer's open form when the account changes", async () => {
+    await setup(async () => ({ addresses: [useAuthStore.getState().user?.user_id === 2 ? { ...address, address_id: 42, receiver_name: 'Second Receiver' } : address] }));
+    await click('编辑');
+    expect(input('receiver_name')).toHaveValue('Receiver');
+
+    switchAccount();
+    await settle();
+
+    expect(screen.getByText(/Second Receiver/)).toBeInTheDocument();
+    expect(document.querySelector('form')).toBeNull();
+  });
+
+  it("lets the next customer act while the previous customer's change is pending, and keeps the next customer's own lock", async () => {
+    const previous = deferred();
+    const next = deferred();
+    await setup();
+    vi.mocked(addressApi.update).mockReturnValueOnce(previous.promise as never).mockReturnValueOnce(next.promise as never);
+    fireEvent.click(screen.getByRole('button', { name: '设为默认' }));
+
+    switchAccount();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '设为默认' }));
+    expect(writes()).toHaveLength(2);
+
+    await act(async () => previous.resolve({}));
+    await settle();
+    // The finished change belongs to the previous customer; the next customer's change still holds the lock.
+    await captureHandler(screen.getByRole('button', { name: '设为默认' }))();
+    expect(writes()).toHaveLength(2);
+  });
+
+  it("neither opens a form, asks, nor sends a change for the customer another tab signed in", async () => {
+    const confirm = vi.fn(() => true);
+    await setup(undefined, confirm);
+    localStorage.setItem('token', 'two');
+
+    for (const name of ['新增地址', '编辑']) {
+      fireEvent.click(screen.getByRole('button', { name }));
+      await settle();
+      expect(document.querySelector('form'), `${name} must not open a form`).toBeNull();
+    }
+    await click('删除');
+    await click('设为默认');
+
+    expect(confirm).not.toHaveBeenCalled();
     expect(writes()).toEqual([]);
   });
 });

@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
+import { useSessionQuery } from '@/hooks/use-session-query';
 
 const fields = [
   { name: 'receiver_name', label: '收货人', max: 50 },
@@ -28,57 +29,32 @@ export default function AddressPage() {
   const router = useRouter();
   const { t } = useI18n();
   const { isHydrated, isAuthenticated, token, user } = useAuthStore();
-  const [result, setResult] = useState<{ key: string; addresses: ShippingAddress[]; error?: string } | null>(null);
   const [form, setForm] = useState<AddressInput>(emptyForm);
   const [editing, setEditing] = useState<number | null | undefined>(undefined);
   const [formError, setFormError] = useState<string | { key: string; field: string; max?: number }>('');
   const formErrorText = typeof formError === 'string' ? t(formError) : t(formError.key, { field: t(formError.field), max: formError.max ?? 0 });
   const [busy, setBusy] = useState<string | null>(null);
-  const mounted = useRef(true);
-  const request = useRef(0);
   const mutation = useRef<string | null>(null);
   const sessionKey = JSON.stringify([token, user?.user_id]);
-  const currentSession = useRef(sessionKey);
-  currentSession.current = sessionKey;
-  const addresses = result?.key === sessionKey ? result.addresses : [];
-  const loading = result?.key !== sessionKey;
-  const error = result?.key === sessionKey ? result.error : undefined;
+  const query = useSessionQuery({ name: 'addresses', params: [], load: () => addressApi.list() });
+  const { isCurrentSession: isCurrent } = query;
+  const addresses = query.data?.addresses || [];
+  const error = query.error ? requestFailure(query.error).response?.data?.error || '加载收货地址失败' : undefined;
+  const loading = !query.data && !error;
   const isBusy = busy === sessionKey;
-  const isCurrent = () => {
-    const state = useAuthStore.getState();
-    return mounted.current && currentSession.current === sessionKey && state.isAuthenticated &&
-      state.token === token && state.user?.user_id === user?.user_id && localStorage.getItem('token') === (token ?? null);
-  };
 
+  // An open form and a pending action belong to the account that started them.
   useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; request.current += 1; };
-  }, []);
-
-  const loadAddresses = async () => {
-    if (!isCurrent()) return;
-    const revision = ++request.current;
-    setResult(null);
-    try {
-      const data = await addressApi.list();
-      if (isCurrent() && revision === request.current) setResult({ key: sessionKey, addresses: data.addresses || [] });
-    } catch (error) {
-      if (isCurrent() && revision === request.current) setResult({ key: sessionKey, addresses: [], error: requestFailure(error).response?.data?.error || '加载收货地址失败' });
-    }
-  };
-
-  useEffect(() => {
-    setResult(null);
     setEditing(undefined);
     setForm(emptyForm);
     setFormError('');
     setBusy(null);
     mutation.current = null;
-    if (!isHydrated) return;
-    if (!isAuthenticated) { router.push('/login'); return; }
-    loadAddresses();
-    return () => { request.current += 1; };
-  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
+  }, [sessionKey]);
+
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) router.push('/login');
+  }, [isHydrated, isAuthenticated, router]);
 
   const mutate = async (operation: () => Promise<unknown>, success: string) => {
     if (!isCurrent() || mutation.current) return;
@@ -90,7 +66,7 @@ export default function AddressPage() {
       if (!isCurrent()) return;
       setEditing(undefined);
       toast.success(t(success));
-      await loadAddresses();
+      await query.invalidate();
     } catch (error) {
       if (!isCurrent()) return;
       const message = requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || '地址操作失败，请重试';
@@ -126,7 +102,7 @@ export default function AddressPage() {
         <div><h1 className="text-2xl font-bold">{t("收货地址")}</h1><p className="text-sm text-gray-600 mt-2">{t('已保存 {count} / 20 个地址', { count: addresses.length })}</p></div>
         <Link href="/cart" className="text-primary-600 underline">{t("返回购物车")}</Link>
       </div>
-      {error ? <div className="card p-6 text-red-600" role="alert"><p>{t(error)}</p><button onClick={loadAddresses} className="underline mt-2">{t("重新加载地址")}</button></div> : (
+      {error ? <div className="card p-6 text-red-600" role="alert"><p>{t(error)}</p><button onClick={query.refetch} className="underline mt-2">{t("重新加载地址")}</button></div> : (
         <>
           <button disabled={isBusy || addresses.length >= 20} onClick={() => { if (!isCurrent()) return; setEditing(null); setForm({ ...emptyForm, is_default: addresses.length === 0 }); setFormError(''); }} className="btn btn-primary mb-6 disabled:opacity-50">{t("新增地址")}</button>
           {addresses.length === 0 && <p className="text-gray-600 mb-6">{t("暂无收货地址，请添加后再结算")}</p>}
