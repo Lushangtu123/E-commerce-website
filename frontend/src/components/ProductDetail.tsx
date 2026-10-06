@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi, type Product, type ProductReview } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
 import { FiHeart, FiShoppingCart } from 'react-icons/fi';
@@ -23,7 +23,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const { t, formatDate } = useI18n();
   const params = useParams() || {};
   const router = useRouter();
-  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const { addItem } = useCartStore();
   
   const [loadedProduct, setLoadedProduct] = useState<Product | null>(null);
@@ -41,14 +41,14 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const mounted = useRef(true);
   const addingRequest = useRef<string | null>(null);
   const productId = parseInt(params.id as string);
-  const context = JSON.stringify([productId, token, user?.user_id, isAuthenticated]);
+  const context = JSON.stringify([productId, sessionId, user?.user_id, isAuthenticated]);
   const currentContext = useRef(context);
   currentContext.current = context;
   const isCurrentContext = () => {
     const auth = useAuthStore.getState();
     return mounted.current && currentContext.current === context &&
-      auth.isAuthenticated === isAuthenticated && auth.token === token && auth.user?.user_id === user?.user_id &&
-      localStorage.getItem('token') === (token ?? null);
+      auth.isAuthenticated === isAuthenticated && auth.sessionId === sessionId && auth.user?.user_id === user?.user_id &&
+      storedSessionId() === (sessionId ?? null);
   };
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       browseApi.record(productId).catch((error) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
     return () => { active = false; };
-  }, [isHydrated, productId, isAuthenticated, token, user?.user_id, router]);
+  }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router]);
 
   // Until the client has loaded the product for this context, show the server's copy with every control locked.
   const ready = isHydrated && !loading && loadedContext === context;

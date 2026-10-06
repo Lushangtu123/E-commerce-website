@@ -53,7 +53,7 @@ describe('header search history', () => {
 
   it('loads once the persisted customer hydrates after the header mounts', async () => {
     await setup();
-    localStorage.setItem('token', 'session-A');
+    localStorage.setItem('session', 'session-A');
     localStorage.setItem('user', JSON.stringify(userA));
 
     act(() => useAuthStore.getState().hydrate());
@@ -118,7 +118,7 @@ describe('header search history', () => {
       act(() => useAuthStore.getState().login(userA, 'rotated-session'));
       await settle();
     }
-    if (change === 'storage') localStorage.setItem('token', 'other-session');
+    if (change === 'storage') localStorage.setItem('session', 'other-session');
     if (change === 'unmount') view.unmount();
     await act(async () => pending.resolve({ history: [keyword('Obsolete private history')] }));
     await settle();
@@ -144,7 +144,7 @@ describe('header search history', () => {
     await openHistory();
     expect(screen.getByText('My search')).toBeInTheDocument();
 
-    localStorage.setItem('token', 'session-B');
+    localStorage.setItem('session', 'session-B');
     act(() => view.rerender(<Header />));
 
     expect(screen.queryByText('My search')).not.toBeInTheDocument();

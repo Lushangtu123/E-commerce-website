@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { orderApi, orderTimeoutApi, type Order, type OrderItem } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { FiAlertTriangle, FiClock } from 'react-icons/fi';
@@ -26,7 +26,7 @@ export default function OrderDetailPage() {
   const params = useParams() || {};
   const router = useRouter();
   const { t, formatDate } = useI18n();
-  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,13 +39,13 @@ export default function OrderDetailPage() {
   const payments = usePaymentSettings(isHydrated && isAuthenticated);
 
   const orderId = parseInt(params.id as string);
-  const sessionKey = JSON.stringify([token, user?.user_id, orderId]);
+  const sessionKey = JSON.stringify([sessionId, user?.user_id, orderId]);
   const currentSession = useRef(sessionKey);
   currentSession.current = sessionKey;
   const isCurrentSession = () => {
     const current = useAuthStore.getState();
     return mounted.current && currentSession.current === sessionKey && current.isAuthenticated &&
-      current.token === token && current.user?.user_id === user?.user_id && localStorage.getItem('token') === (token ?? null);
+      current.sessionId === sessionId && current.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null);
   };
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export default function OrderDetailPage() {
       return;
     }
     loadOrder();
-  }, [isHydrated, isAuthenticated, token, user?.user_id, orderId, router]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, router]);
 
   useEffect(() => {
     if (isHydrated && isAuthenticated && loadedKey === sessionKey && order?.status === 0) {
@@ -75,7 +75,7 @@ export default function OrderDetailPage() {
       const interval = setInterval(refresh, 60000);
       return () => { active = false; clearInterval(interval); };
     }
-  }, [isHydrated, isAuthenticated, token, user?.user_id, orderId, loadedKey, order?.status]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status]);
 
   const loadOrder = async () => {
     if (!isCurrentSession()) return;

@@ -10,7 +10,7 @@ import { CommitLog, deferred, render, settle } from './helpers';
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/profile' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
-vi.mock('@/lib/api', () => ({ userApi: { getStats: vi.fn() }, couponApi: { getMyCoupons: vi.fn(async () => ({ data: [] })) } }));
+vi.mock('@/lib/api', () => ({ userApi: { getStats: vi.fn(), logout: vi.fn(async () => ({})) }, couponApi: { getMyCoupons: vi.fn(async () => ({ data: [] })) } }));
 
 type Stats = { stats: UserStats };
 const stats: UserStats = { totalOrders: 17, pendingOrders: 3, totalCoupons: 11, availableCoupons: 4, favoriteCount: 8 };
@@ -113,7 +113,7 @@ describe('profile page', () => {
 
   it("cannot load another tab's customer through a retry before hydration catches up", async () => {
     await setup(async () => { throw new Error('offline'); });
-    localStorage.setItem('token', 'B');
+    localStorage.setItem('session', 'B');
 
     fireEvent.click(screen.getByRole('button', { name: '重新加载统计' }));
     await settle();
@@ -123,11 +123,21 @@ describe('profile page', () => {
 
   it('does not sign out the customer another tab signed in', async () => {
     await setup();
-    localStorage.setItem('token', 'B');
+    localStorage.setItem('session', 'B');
 
     fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
 
-    expect(localStorage.getItem('token')).toBe('B');
+    expect(localStorage.getItem('session')).toBe('B');
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('signs out here at once and asks the server to clear the session cookie', async () => {
+    await setup();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+
+    expect(localStorage.getItem('session')).toBeNull();
+    expect(userApi.logout).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/');
   });
 });

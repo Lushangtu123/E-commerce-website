@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+import { signOut } from '@/lib/sign-out';
 import { userApi } from '@/lib/api';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import Link from 'next/link';
@@ -29,7 +30,7 @@ import { useI18n } from '@/lib/i18n';
 export default function ProfilePage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user, isAuthenticated, isHydrated, logout } = useAuthStore();
+  const { user, isAuthenticated, isHydrated } = useAuthStore();
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const avatarKey = JSON.stringify([user?.user_id, user?.avatar_url]);
   const avatar = user?.avatar_url && /^https?:\/\/\S+$/i.test(user.avatar_url) && failedAvatar !== avatarKey ? user.avatar_url : null;
@@ -48,7 +49,7 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     if (!query.isCurrentSession()) return;
-    logout();
+    void signOut();
     router.push('/');
   };
 

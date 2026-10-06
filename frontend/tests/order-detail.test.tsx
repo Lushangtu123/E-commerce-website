@@ -108,7 +108,7 @@ describe('order detail', () => {
 
   it('does not pay for an account another browser tab signed in', async () => {
     await setupDetail({ status: 0, total_amount: 10 });
-    localStorage.setItem('token', 'B');
+    localStorage.setItem('session', 'B');
 
     fireEvent.click(screen.getByRole('button', { name: '模拟支付' }));
     await settle();

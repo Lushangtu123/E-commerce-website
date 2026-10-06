@@ -4,7 +4,8 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useI18n } from '@/lib/i18n';
 
 import Link from 'next/link';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
+import { signOut } from '@/lib/sign-out';
 import { useCartStore } from '@/store/useCartStore';
 import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift, FiHeart, FiShoppingBag } from 'react-icons/fi';
 import { useState, useEffect, useRef } from 'react';
@@ -14,7 +15,7 @@ import { logger } from '@/lib/logger';
 
 export default function Header() {
   const { t } = useI18n();
-  const { isAuthenticated, isHydrated, token, user, logout } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const { getTotalCount } = useCartStore();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [history, setHistory] = useState<{ scope: string | null; rows: SearchKeyword[] }>({ scope: null, rows: [] });
@@ -24,7 +25,7 @@ export default function Header() {
   const searchRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
   const historyRequest = useRef(0);
-  const scope = isHydrated && isAuthenticated && token && user ? JSON.stringify([token, user.user_id]) : null;
+  const scope = isHydrated && isAuthenticated && sessionId && user ? JSON.stringify([sessionId, user.user_id]) : null;
   const currentScope = useRef(scope);
   currentScope.current = scope;
 
@@ -32,7 +33,7 @@ export default function Header() {
     const auth = useAuthStore.getState();
     try {
       return mounted.current && !!scope && currentScope.current === scope && auth.isHydrated && auth.isAuthenticated &&
-        auth.token === token && auth.user?.user_id === user?.user_id && localStorage.getItem('token') === token;
+        auth.sessionId === sessionId && auth.user?.user_id === user?.user_id && storedSessionId() === sessionId;
     } catch { return false; }
   };
   const searchHistory = isCurrentSession() && history.scope === scope ? history.rows : [];
@@ -118,12 +119,10 @@ export default function Header() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    // 延迟跳转，确保状态已清除
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 100);
+  const handleLogout = async () => {
+    // A full page load would cancel the request that clears the session cookie, so wait for it.
+    await signOut();
+    window.location.href = '/';
   };
 
   return (

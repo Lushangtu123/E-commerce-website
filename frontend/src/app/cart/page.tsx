@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { addressApi, cartApi, orderApi, type OrderPreview, type ShippingAddress } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
 import { FiTrash2, FiShoppingBag, FiShoppingCart } from 'react-icons/fi';
@@ -16,7 +16,7 @@ import { requestFailure } from '@/lib/api-error';
 export default function CartPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const { items, setItems, updateQuantity, removeItem } = useCartStore();
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -33,7 +33,7 @@ export default function CartPage() {
   const [addressResult, setAddressResult] = useState<{ key: string; addresses: ShippingAddress[]; error?: string } | null>(null);
   const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
   const [addressRevision, setAddressRevision] = useState(0);
-  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
   const addressLoading = addressResult?.key !== sessionKey;
   const addressError = addressResult?.key === sessionKey ? addressResult.error : null;
@@ -58,18 +58,18 @@ export default function CartPage() {
     .filter(item => selectedItems.includes(cartItemKey(item)))
     .map(item => ({ product_id: item.product_id, quantity: item.quantity, ...(item.sku_id != null && { sku_id: item.sku_id }) }));
   const orderItemsKey = JSON.stringify(orderItems);
-  const quoteKey = JSON.stringify([token, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
+  const quoteKey = JSON.stringify([sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
   const quote = quoteResult?.key === quoteKey ? quoteResult.data : null;
   const quoteError = quoteFailure?.key === quoteKey ? quoteFailure.message : null;
   const isCurrentSession = () => {
     const currentAuth = useAuthStore.getState();
-    return mounted.current && currentAuth.isAuthenticated && currentAuth.token === token && currentAuth.user?.user_id === user?.user_id &&
-      localStorage.getItem('token') === (token ?? null);
+    return mounted.current && currentAuth.isAuthenticated && currentAuth.sessionId === sessionId && currentAuth.user?.user_id === user?.user_id &&
+      storedSessionId() === (sessionId ?? null);
   };
 
   useEffect(() => {
     if (!isHydrated) return;
-    const session = JSON.stringify([token, user?.user_id]);
+    const session = JSON.stringify([sessionId, user?.user_id]);
     if (previousSession.current !== null && previousSession.current !== session) {
       linkedCouponId.current = undefined;
       setSelectedCouponId(undefined);
@@ -79,7 +79,7 @@ export default function CartPage() {
       submittingRequest.current = false;
     }
     previousSession.current = session;
-  }, [isHydrated, token, user?.user_id]);
+  }, [isHydrated, sessionId, user?.user_id]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -88,7 +88,7 @@ export default function CartPage() {
       return;
     }
     loadCart();
-  }, [isHydrated, isAuthenticated, token, user?.user_id, router]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
 
   useEffect(() => {
     const previousSelection = addressSelection;
@@ -108,7 +108,7 @@ export default function CartPage() {
       setAddressResult({ key: sessionKey, addresses: [], error: error.response?.data?.error || '加载收货地址失败' });
     });
     return () => { active = false; };
-  }, [isHydrated, isAuthenticated, token, user?.user_id, addressRevision]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, addressRevision]);
 
   useEffect(() => {
     if (!isHydrated || !isAuthenticated || loading || orderItems.length === 0) return;
@@ -139,7 +139,7 @@ export default function CartPage() {
       })
       .finally(() => { if (isCurrentRequest()) setQuoteLoading(false); });
     return () => { active = false; };
-  }, [isHydrated, isAuthenticated, loading, token, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
+  }, [isHydrated, isAuthenticated, loading, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
 
   const loadCart = async () => {
     try {

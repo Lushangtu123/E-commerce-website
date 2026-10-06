@@ -24,8 +24,8 @@ const ORDER_STATUS = {
 export default function OrdersPage() {
   const router = useRouter();
   const { t, formatDate } = useI18n();
-  const { isAuthenticated, isHydrated, token, user } = useAuthStore();
-  const sessionKey = JSON.stringify([token, user?.user_id]);
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   // Null until the status link is read. The filter belongs to the session that chose it; a session of null
   // is the link's filter, which the first hydrated session claims, so a later account starts unfiltered.
   const [filters, setFilters] = useState<{ session: string | null; tab?: number; page: number } | null>(null);

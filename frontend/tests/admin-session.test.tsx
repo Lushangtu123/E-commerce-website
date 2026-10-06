@@ -16,7 +16,7 @@ let requests: InternalAxiosRequestConfig[] = [];
 
 /** Browser storage of a signed-in customer beside the administrator session under test. */
 function storage(entries: Record<string, string> = {}) {
-  for (const [key, value] of Object.entries({ token: 'customer-session', user: '{"user_id":1}', 'ecommerce-locale': 'en-US', ...entries })) {
+  for (const [key, value] of Object.entries({ session: 'customer-session', user: '{"user_id":1}', 'ecommerce-locale': 'en-US', ...entries })) {
     localStorage.setItem(key, value);
   }
 }
@@ -57,7 +57,7 @@ describe('admin layout session', () => {
 
     expect(redirects()).toContain('/admin/login');
     expect(screen.queryByText('Protected administration')).not.toBeInTheDocument();
-    expect(localStorage.getItem('token')).toBe('customer-session');
+    expect(localStorage.getItem('session')).toBe('customer-session');
     expect(localStorage.getItem('ecommerce-locale')).toBe('en-US');
   });
 
@@ -172,7 +172,7 @@ describe('API client sessions', () => {
   it('keeps public category reads anonymous when customer storage differs from the hydrated session', async () => {
     storage({ token: 'customer-A', user: '{"user_id":1,"username":"customer","email":"customer@example.test"}', admin_token: 'admin-session', admin_user: admin('administrator') });
     useAuthStore.getState().hydrate();
-    localStorage.setItem('token', 'customer-B');
+    localStorage.setItem('session', 'customer-B');
     const adapter: AxiosAdapter = async config => {
       requests.push(config);
       return { data: { data: [] }, status: 200, statusText: 'OK', headers: {}, config };

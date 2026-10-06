@@ -12,37 +12,60 @@ export interface User {
 
 interface AuthState {
   user: User | null;
-  token: string | null;
+  /** Names this sign-in so tabs and requests can tell sessions apart. It is not a credential. */
+  sessionId: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User, sessionId?: string) => void;
   logout: () => void;
-  updateUser: (user: Partial<User>, expectedToken?: string) => boolean;
+  updateUser: (user: Partial<User>, expectedSessionId?: string) => boolean;
   hydrate: () => void;
+}
+
+/**
+ * The browser keeps the session itself in an httpOnly cookie the page cannot read. Storage only
+ * holds this sign-in's id and profile, so every tab can see when another one signs in or out.
+ */
+export const SESSION_KEY = 'session';
+/** Where signed tokens used to be stored; such a session has no cookie and must sign in again. */
+const LEGACY_TOKEN_KEY = 'token';
+
+export function storedSessionId(): string | null {
+  return localStorage.getItem(SESSION_KEY);
+}
+
+function newSessionId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 // 从localStorage加载状态
 const loadFromStorage = () => {
-  if (typeof window === 'undefined') return { user: null, token: null, isAuthenticated: false };
-  
+  if (typeof window === 'undefined') return { user: null, sessionId: null, isAuthenticated: false };
+
   try {
-    const token = localStorage.getItem('token');
+    if (localStorage.getItem(LEGACY_TOKEN_KEY) !== null) {
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      if (storedSessionId() === null) localStorage.removeItem('user');
+    }
+    const sessionId = storedSessionId();
     const userStr = localStorage.getItem('user');
-    
-    if (token && userStr) {
+
+    if (sessionId && userStr) {
       const user = JSON.parse(userStr);
-      return { user, token, isAuthenticated: true };
+      return { user, sessionId, isAuthenticated: true };
     }
   } catch (error) {
     logger.error('Failed to load auth state:', error);
   }
-  
-  return { user: null, token: null, isAuthenticated: false };
+
+  return { user: null, sessionId: null, isAuthenticated: false };
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: null,
+  sessionId: null,
   isAuthenticated: false,
   isHydrated: false,
   
@@ -50,33 +73,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrate: () => {
     const state = loadFromStorage();
     const previous = get();
-    if (previous.token !== state.token || previous.user?.user_id !== state.user?.user_id) {
+    if (previous.sessionId !== state.sessionId || previous.user?.user_id !== state.user?.user_id) {
       useCartStore.getState().clearCart();
     }
     set({ ...state, isHydrated: true });
   },
   
-  login: (user, token) => {
-    localStorage.setItem('token', token);
+  // The server has already set the session cookie; this records which sign-in it was.
+  login: (user, sessionId = newSessionId()) => {
+    localStorage.setItem(SESSION_KEY, sessionId);
     localStorage.setItem('user', JSON.stringify(user));
     useCartStore.getState().clearCart();
-    set({ user, token, isAuthenticated: true, isHydrated: true });
+    set({ user, sessionId, isAuthenticated: true, isHydrated: true });
   },
-  
+
+  // Forgets this tab's sign-in; signOut also asks the server to clear the session cookie.
   logout: () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem('user');
     useCartStore.getState().clearCart();
-    set({ user: null, token: null, isAuthenticated: false, isHydrated: true });
+    set({ user: null, sessionId: null, isAuthenticated: false, isHydrated: true });
   },
   
-  updateUser: (userData, expectedToken) => {
+  updateUser: (userData, expectedSessionId) => {
     const state = get();
-    if (!state.isHydrated || !state.isAuthenticated || !state.user || !state.token ||
-      (expectedToken !== undefined && expectedToken !== state.token) ||
+    if (!state.isHydrated || !state.isAuthenticated || !state.user || !state.sessionId ||
+      (expectedSessionId !== undefined && expectedSessionId !== state.sessionId) ||
       (userData.user_id !== undefined && userData.user_id !== state.user.user_id)) return false;
     try {
-      if (localStorage.getItem('token') !== state.token ||
+      if (storedSessionId() !== state.sessionId ||
         JSON.parse(localStorage.getItem('user') || 'null')?.user_id !== state.user.user_id) return false;
       const user: User = { user_id: state.user.user_id, username: state.user.username, email: state.user.email,
         phone: state.user.phone, avatar_url: state.user.avatar_url };

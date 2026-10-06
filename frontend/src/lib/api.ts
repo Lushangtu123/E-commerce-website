@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from 'axios';
-import { useAuthStore, type User } from '@/store/useAuthStore';
+import { SESSION_KEY, storedSessionId, useAuthStore, type User } from '@/store/useAuthStore';
 import type { CartItem } from '@/store/useCartStore';
 import { clearAdminSession } from '@/lib/admin-session';
 
@@ -7,10 +7,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,
+  // The customer session travels in an httpOnly cookie. The header tells the API a write came
+  // from this site's scripts, which a cross-site form cannot claim.
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
   },
 });
+
+/** The customer sign-in a request was sent for, so a late 401 cannot sign out a newer one. */
+const requestSessions = new WeakMap<object, string | null>();
 
 const getRequestIdentity = (config: AxiosRequestConfig) => {
   const requestUrl = new URL(axios.getUri(config), window.location.origin);
@@ -32,16 +39,19 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
   return path === '/admin' || path.startsWith('/admin/') ? 'admin' : 'customer';
 };
 
-// 请求拦截器 - 添加token
+// 请求拦截器：核对客户会话，管理员请求附加 Token
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
       const identity = getRequestIdentity(config);
-      const token = identity ? localStorage.getItem(identity === 'admin' ? 'admin_token' : 'token') : null;
       if (identity === 'customer') {
         const auth = useAuthStore.getState();
-        if (auth.isHydrated && auth.token !== token) throw new Error('登录状态已变化，请刷新后重试');
+        const sessionId = storedSessionId();
+        // Another tab signed in or out: the cookie may no longer belong to the account this tab shows.
+        if (auth.isHydrated && auth.sessionId !== sessionId) throw new Error('登录状态已变化，请刷新后重试');
+        requestSessions.set(config, sessionId);
       }
+      const token = identity === 'admin' ? localStorage.getItem('admin_token') : null;
       if (token) {
         config.headers.set('Authorization', `Bearer ${token}`);
       } else {
@@ -67,24 +77,23 @@ api.interceptors.response.use(
           const config = error.config || error.response.config || {};
           const identity = getRequestIdentity(config);
           if (identity) {
-            const isAdmin = identity === 'admin';
-            const tokenKey = isAdmin ? 'admin_token' : 'token';
-            const currentToken = localStorage.getItem(tokenKey);
-            const requestAuthorization = axios.AxiosHeaders.from(config.headers).get('Authorization');
-            if (currentToken && requestAuthorization !== `Bearer ${currentToken}`) {
-              return Promise.reject(error);
-            }
-            if (isAdmin) {
+            if (identity === 'admin') {
+              const currentToken = localStorage.getItem('admin_token');
+              const requestAuthorization = axios.AxiosHeaders.from(config.headers).get('Authorization');
+              if (currentToken && requestAuthorization !== `Bearer ${currentToken}`) return Promise.reject(error);
               if (!clearAdminSession(currentToken)) return Promise.reject(error);
             } else {
-              localStorage.removeItem(tokenKey);
+              const currentSession = storedSessionId();
+              // Only the sign-in this request was sent for may be ended by its 401.
+              if (currentSession && requestSessions.get(config) !== currentSession) return Promise.reject(error);
+              localStorage.removeItem(SESSION_KEY);
               localStorage.removeItem('user');
             }
-            window.location.href = isAdmin ? '/admin/login' : '/login';
+            window.location.href = identity === 'admin' ? '/admin/login' : '/login';
           }
         } catch {
           // Preserve the HTTP error if storage is unavailable; do not clear a
-          // session whose current token cannot be compared with this request.
+          // session that cannot be compared with this request.
           return Promise.reject(error);
         }
       }
@@ -110,7 +119,6 @@ export interface ProfileInput {
 
 export interface AuthSession {
   message?: string;
-  token: string;
   user: User;
 }
 
@@ -119,6 +127,8 @@ export const userApi = {
     api.post<unknown, AuthSession>('/users/register', data),
   login: (data: { email: string; password: string }) =>
     api.post<unknown, AuthSession>('/users/login', data),
+  /** Clears the httpOnly session cookie; the API needs no valid session to do so. */
+  logout: () => api.post<unknown, { message: string }>('/users/logout'),
   getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
   getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
   updateProfile: (data: ProfileInput) => api.put<unknown, { message: string; user: User }>('/users/profile', data),

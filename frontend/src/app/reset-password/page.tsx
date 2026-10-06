@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { userApi } from '@/lib/api';
 import { passwordError } from '@/lib/password-validation';
 import { useI18n } from '@/lib/i18n';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { requestFailure } from '@/lib/api-error';
 
 export default function ResetPasswordPage() {
@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
       if (mounted.current) {
         const current = useAuthStore.getState();
         try {
-          if (previousSession.token && current.token === previousSession.token && current.user?.user_id === previousSession.user?.user_id && localStorage.getItem('token') === previousSession.token) current.logout();
+          if (previousSession.sessionId && current.sessionId === previousSession.sessionId && current.user?.user_id === previousSession.user?.user_id && storedSessionId() === previousSession.sessionId) current.logout();
         } catch { /* Storage denial must not turn a successful reset into a failed reset. */ }
         setToken(null); setPassword(''); setConfirmation(''); setNotice({ success: '密码已重置，所有旧会话已失效，请使用新密码登录' });
       }

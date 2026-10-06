@@ -49,7 +49,7 @@ describe.each(pages)('protected page %s', (_, Page, expectedRequests) => {
     expect(router.push).not.toHaveBeenCalled();
     expect(requests).toEqual([]);
 
-    localStorage.setItem('token', 'customer-session');
+    localStorage.setItem('session', 'customer-session');
     localStorage.setItem('user', JSON.stringify({ user_id: 1, username: 'customer', email: 'customer@example.test' }));
     act(() => useAuthStore.getState().hydrate());
     await settle();

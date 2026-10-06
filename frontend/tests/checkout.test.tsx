@@ -360,7 +360,7 @@ describe('checkout', () => {
 
   it('refuses a different browser tab token before the local auth store catches up', async () => {
     await setupCheckout();
-    localStorage.setItem('token', 'second-session');
+    localStorage.setItem('session', 'second-session');
 
     await click(checkoutButton());
 
