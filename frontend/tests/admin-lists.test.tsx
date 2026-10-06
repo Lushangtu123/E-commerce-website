@@ -472,4 +472,49 @@ describe('admin product selection and creation', () => {
     expect(screen.getByPlaceholderText('请输入商品标题')).toHaveValue('');
     expect(mutations).toHaveLength(0);
   });
+
+  it('logs a category failure without blocking the list', async () => {
+    await setup('products', { categories: async () => { throw apiError('分类不可用'); } });
+    expect(screen.getAllByText(/^Row \d+$/)).toHaveLength(20);
+    expect(vi.mocked(logger.error).mock.calls.map(([message]) => message)).toEqual(['获取分类失败:']);
+  });
+
+  it('keeps selection and forms still while a change is pending', async () => {
+    const write = deferred();
+    await setup('products', { mutate: () => write.promise });
+    const toggleRow = captureHandler(checkboxes()[1], 'onChange');
+    const toggleAll = captureHandler(checkboxes()[0], 'onChange');
+    const openAdd = captureHandler(button('添加商品'));
+    const openEdit = captureHandler(button('编辑'));
+    fireEvent.click(button('下架'));
+    await settle();
+
+    await toggleRow();
+    await toggleAll();
+    await openAdd();
+    await openEdit();
+    await settle();
+    expect(screen.queryByText(/已选择/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^(添加|编辑)商品$/ })).not.toBeInTheDocument();
+  });
+
+  it('ignores a create handler from a form whose list scope has moved on', async () => {
+    await setup('products');
+    await click(button('添加商品'));
+    const staleCreate = captureHandler(createButton());
+    await type(search(), 'changed');
+
+    await staleCreate();
+    await settle();
+    expect(notifications).toEqual([]);
+    expect(mutations).toEqual([]);
+  });
+
+  it("does not follow a row's specification link for the administrator another tab replaced", async () => {
+    await setup('products');
+    localStorage.setItem('admin_token', 'admin-b');
+
+    const followed = fireEvent.click(screen.getAllByRole('link', { name: '管理规格' })[0]);
+    expect(followed, 'navigation must be cancelled').toBe(false);
+  });
 });
