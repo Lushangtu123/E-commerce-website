@@ -8,23 +8,13 @@ import type { AdminPage, AdminProductRow, Category } from '@/lib/api';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import AdminLayout from '@/components/AdminLayout';
 import ProductImage from '@/components/ProductImage';
+import AdminProductForm, { EMPTY_PRODUCT_FORM, isProductFormComplete, toProductPayload, type ProductFormValues } from '@/components/AdminProductForm';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 
-/** The edit modal keeps numbers as strings while the administrator types. */
-interface EditProductForm {
-  product_id: number;
-  title: string;
-  description: string;
-  price: string;
-  stock: string;
-  category_id: string;
-  brand: string;
-  main_image: string;
-  status: number;
-}
+type EditProductForm = ProductFormValues & { product_id: number };
 
 export default function AdminProductsPage() {
   const { t } = useI18n();
@@ -38,16 +28,7 @@ export default function AdminProductsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [formScope, setFormScope] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    title: '',
-    description: '',
-    price: '',
-    stock: '',
-    category_id: '',
-    brand: '',
-    main_image: '',
-    status: 1
-  });
+  const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT_FORM);
   const [editProduct, setEditProduct] = useState<EditProductForm | null>(null);
 
   const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
@@ -95,7 +76,7 @@ export default function AdminProductsPage() {
     setShowAddModal(false);
     setShowEditModal(false);
     setEditProduct(null);
-    setNewProduct({ title: '', description: '', price: '', stock: '', category_id: '', brand: '', main_image: '', status: 1 });
+    setNewProduct(EMPTY_PRODUCT_FORM);
   }, [sessionId]);
 
   // A selection belongs to the page and filters it was made on, even when they are visited again.
@@ -188,7 +169,7 @@ export default function AdminProductsPage() {
     }
   };
 
-  const updateNewProduct = (next: typeof newProduct) => {
+  const updateNewProduct = (next: ProductFormValues) => {
     if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setNewProduct(next);
   };
   const updateEditProduct = (next: EditProductForm) => {
@@ -197,19 +178,14 @@ export default function AdminProductsPage() {
 
   const handleAddProduct = () => {
     if (formScope !== scopeKey || !isDisplayedScope() || mutation.current) return;
-    if (!newProduct.title || !newProduct.price || !newProduct.category_id) {
+    if (!isProductFormComplete(newProduct)) {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
     }
-    const payload = {
-      title: newProduct.title, description: newProduct.description,
-      price: parseFloat(newProduct.price), stock: parseInt(newProduct.stock) || 0,
-      category_id: parseInt(newProduct.category_id), brand: newProduct.brand,
-      image_url: newProduct.main_image, status: newProduct.status,
-    };
+    const payload = toProductPayload(newProduct);
     return runMutation(() => api.post('/admin/products', payload), '商品添加成功', '添加商品失败', () => {
       setShowAddModal(false);
-      setNewProduct({ title: '', description: '', price: '', stock: '', category_id: '', brand: '', main_image: '', status: 1 });
+      setNewProduct(EMPTY_PRODUCT_FORM);
     });
   };
 
@@ -233,16 +209,11 @@ export default function AdminProductsPage() {
   const handleEditProduct = () => {
     if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || mutation.current ||
       !products.some(product => product.product_id === editProduct.product_id)) return;
-    if (!editProduct.title || !editProduct.price || !editProduct.category_id) {
+    if (!isProductFormComplete(editProduct)) {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
     }
-    const payload = {
-      title: editProduct.title, description: editProduct.description,
-      price: parseFloat(editProduct.price), stock: parseInt(editProduct.stock) || 0,
-      category_id: parseInt(editProduct.category_id), brand: editProduct.brand,
-      image_url: editProduct.main_image, status: editProduct.status,
-    };
+    const payload = toProductPayload(editProduct);
     return runMutation(() => api.put(`/admin/products/${editProduct.product_id}`, payload), '商品更新成功', '更新商品失败', () => {
       setShowEditModal(false);
       setEditProduct(null);
@@ -478,336 +449,17 @@ export default function AdminProductsPage() {
           )}
         </div>
 
-        {/* 添加商品模态框 */}
         {formScope === scopeKey && showAddModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">{t("添加商品")}</h2>
-                  <button
-                    onClick={() => setShowAddModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {/* 商品标题 */}
-                  <div>
-                    <label htmlFor="newProduct-title" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("商品标题")} <span className="text-red-500">*</span>
-                    </label>
-                    <input id="newProduct-title"
-                      type="text"
-                      value={newProduct.title}
-                      onChange={(e) => updateNewProduct({ ...newProduct, title: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder={t("请输入商品标题")}
-                    />
-                  </div>
-
-                  {/* 商品描述 */}
-                  <div>
-                    <label htmlFor="newProduct-description" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("商品描述")}
-                    </label>
-                    <textarea id="newProduct-description"
-                      value={newProduct.description}
-                      onChange={(e) => updateNewProduct({ ...newProduct, description: e.target.value })}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder={t("请输入商品描述")}
-                    />
-                  </div>
-
-                  {/* 价格和库存 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="newProduct-price" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("价格 (元)")} <span className="text-red-500">*</span>
-                      </label>
-                      <input id="newProduct-price"
-                        type="number"
-                        step="0.01"
-                        value={newProduct.price}
-                        onChange={(e) => updateNewProduct({ ...newProduct, price: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="newProduct-stock" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("库存")}
-                      </label>
-                      <input id="newProduct-stock"
-                        type="number"
-                        value={newProduct.stock}
-                        onChange={(e) => updateNewProduct({ ...newProduct, stock: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 分类和品牌 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="newProduct-category-id" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("分类")} <span className="text-red-500">*</span>
-                      </label>
-                      <select id="newProduct-category-id"
-                        value={newProduct.category_id}
-                        onChange={(e) => updateNewProduct({ ...newProduct, category_id: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      >
-                        <option value="">{t("请选择分类")}</option>
-                        {categories.map((cat) => (
-                          <option key={cat.category_id} value={cat.category_id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="newProduct-brand" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("品牌")}
-                      </label>
-                      <input id="newProduct-brand"
-                        type="text"
-                        value={newProduct.brand}
-                        onChange={(e) => updateNewProduct({ ...newProduct, brand: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder={t("请输入品牌")}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 图片URL */}
-                  <div>
-                    <label htmlFor="newProduct-main-image" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("商品图片URL")}
-                    </label>
-                    <input id="newProduct-main-image"
-                      type="text"
-                      value={newProduct.main_image}
-                      onChange={(e) => updateNewProduct({ ...newProduct, main_image: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="https://example.com/image.jpg"
-                    />
-                    {/* Shows the fallback for a broken URL, and recovers once the URL is corrected. */}
-                    {newProduct.main_image && (
-                      <ProductImage src={newProduct.main_image} alt={t("预览")} className="mt-2 h-32 w-32 rounded-lg" />
-                    )}
-                  </div>
-
-                  {/* 状态 */}
-                  <div>
-                    <label htmlFor="newProduct-status" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("状态")}
-                    </label>
-                    <select id="newProduct-status"
-                      value={newProduct.status}
-                      onChange={(e) => updateNewProduct({ ...newProduct, status: parseInt(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value={1}>{t("上架")}</option>
-                      <option value={0}>{t("下架")}</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 按钮 */}
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    {t("取消")}
-                  </button>
-                  <button
-                    onClick={handleAddProduct}
-                    disabled={busy}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                  >
-                    {t("添加商品")}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AdminProductForm idPrefix="newProduct" heading={t('添加商品')} submitLabel={t('添加商品')}
+            values={newProduct} categories={categories} busy={busy} onChange={updateNewProduct}
+            onClose={() => setShowAddModal(false)} onSubmit={handleAddProduct} />
         )}
 
-        {/* 编辑商品模态框 */}
         {formScope === scopeKey && showEditModal && editProduct && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">{t("编辑商品")}</h2>
-                  <button
-                    onClick={() => {
-                      setShowEditModal(false);
-                      setEditProduct(null);
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {/* 商品标题 */}
-                  <div>
-                    <label htmlFor="editProduct-title" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("商品标题")} <span className="text-red-500">*</span>
-                    </label>
-                    <input id="editProduct-title"
-                      type="text"
-                      value={editProduct.title}
-                      onChange={(e) => updateEditProduct({ ...editProduct, title: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder={t("请输入商品标题")}
-                    />
-                  </div>
-
-                  {/* 商品描述 */}
-                  <div>
-                    <label htmlFor="editProduct-description" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("商品描述")}
-                    </label>
-                    <textarea id="editProduct-description"
-                      value={editProduct.description}
-                      onChange={(e) => updateEditProduct({ ...editProduct, description: e.target.value })}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder={t("请输入商品描述")}
-                    />
-                  </div>
-
-                  {/* 价格和库存 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="editProduct-price" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("价格 (元)")} <span className="text-red-500">*</span>
-                      </label>
-                      <input id="editProduct-price"
-                        type="number"
-                        step="0.01"
-                        value={editProduct.price}
-                        onChange={(e) => updateEditProduct({ ...editProduct, price: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="editProduct-stock" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("库存")}
-                      </label>
-                      <input id="editProduct-stock"
-                        type="number"
-                        value={editProduct.stock}
-                        onChange={(e) => updateEditProduct({ ...editProduct, stock: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 分类和品牌 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="editProduct-category-id" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("分类")} <span className="text-red-500">*</span>
-                      </label>
-                      <select id="editProduct-category-id"
-                        value={editProduct.category_id}
-                        onChange={(e) => updateEditProduct({ ...editProduct, category_id: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      >
-                        <option value="">{t("请选择分类")}</option>
-                        {categories.map((cat) => (
-                          <option key={cat.category_id} value={cat.category_id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="editProduct-brand" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t("品牌")}
-                      </label>
-                      <input id="editProduct-brand"
-                        type="text"
-                        value={editProduct.brand}
-                        onChange={(e) => updateEditProduct({ ...editProduct, brand: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder={t("请输入品牌")}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 图片URL */}
-                  <div>
-                    <label htmlFor="editProduct-main-image" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("商品图片URL")}
-                    </label>
-                    <input id="editProduct-main-image"
-                      type="text"
-                      value={editProduct.main_image}
-                      onChange={(e) => updateEditProduct({ ...editProduct, main_image: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="https://example.com/image.jpg"
-                    />
-                    {/* Shows the fallback for a broken URL, and recovers once the URL is corrected. */}
-                    {editProduct.main_image && (
-                      <ProductImage src={editProduct.main_image} alt={t("预览")} className="mt-2 h-32 w-32 rounded-lg" />
-                    )}
-                  </div>
-
-                  {/* 状态 */}
-                  <div>
-                    <label htmlFor="editProduct-status" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t("状态")}
-                    </label>
-                    <select id="editProduct-status"
-                      value={editProduct.status}
-                      onChange={(e) => updateEditProduct({ ...editProduct, status: parseInt(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value={1}>{t("上架")}</option>
-                      <option value={0}>{t("下架")}</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 按钮 */}
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={() => {
-                      setShowEditModal(false);
-                      setEditProduct(null);
-                    }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    {t("取消")}
-                  </button>
-                  <button
-                    onClick={handleEditProduct}
-                    disabled={busy}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                  >
-                    {t("保存修改")}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AdminProductForm idPrefix="editProduct" heading={t('编辑商品')} submitLabel={t('保存修改')}
+            values={editProduct} categories={categories} busy={busy}
+            onChange={values => updateEditProduct({ ...values, product_id: editProduct.product_id })}
+            onClose={() => { setShowEditModal(false); setEditProduct(null); }} onSubmit={handleEditProduct} />
         )}
       </div>
     </AdminLayout>
