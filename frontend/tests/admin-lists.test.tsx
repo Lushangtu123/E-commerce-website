@@ -448,6 +448,7 @@ describe('admin product selection and creation', () => {
       button('批量下架').click();
     });
     await settle();
+    expect(createButton()).toBeDisabled();
     expect(mutations).toHaveLength(1);
     expect(mutations[0].method).toBe('post');
     expect(mutations[0].body).toMatchObject({ title: 'New product', price: 12.5 });
@@ -479,6 +480,68 @@ describe('admin product selection and creation', () => {
     await settle();
     expect(screen.getByPlaceholderText('请输入商品标题')).toHaveValue('');
     expect(mutations).toHaveLength(0);
+  });
+
+  const field = (label: RegExp) => screen.getByLabelText<HTMLInputElement>(label);
+  const productFields = [/^商品标题/, /^商品描述/, /^价格/, /^库存/, /^分类/, /^品牌/, /^商品图片URL/, /^状态/];
+
+  it('requires a title, price and category, then creates the product from every field and resets the form', async () => {
+    await setup('products', { categories: async () => [{ category_id: 1, name: 'Category' }, { category_id: 2, name: 'Other' }] });
+    await click(button('添加商品'));
+    expect(screen.getByRole('heading', { name: '添加商品' })).toBeInTheDocument();
+    await click(createButton());
+    await type(field(/^商品标题/), 'Lamp');
+    await type(field(/^价格/), '19.90');
+    await click(createButton());
+    expect(notifications).toEqual(['请填写商品标题、价格和分类', '请填写商品标题、价格和分类']);
+    expect(mutations).toEqual([]);
+
+    const values = ['Lamp', 'Warm light', '19.90', '7', '2', 'Acme', 'https://example.test/lamp.jpg', '0'];
+    for (let index = 0; index < productFields.length; index++) await type(field(productFields[index]), values[index]);
+    expect(screen.getByRole('img', { name: '预览' })).toHaveAttribute('src', 'https://example.test/lamp.jpg');
+    await click(createButton());
+
+    expect(mutations).toEqual([expect.objectContaining({ method: 'post', path: '/admin/products', body: {
+      title: 'Lamp', description: 'Warm light', price: 19.9, stock: 7, category_id: 2, brand: 'Acme',
+      image_url: 'https://example.test/lamp.jpg', status: 0,
+    } })]);
+    expect(notifications.at(-1)).toBe('商品添加成功');
+    expect(screen.queryByRole('heading', { name: '添加商品' })).not.toBeInTheDocument();
+    await click(button('添加商品'));
+    expect(productFields.map(label => field(label).value)).toEqual(['', '', '', '', '', '', '', '1']);
+  });
+
+  it('opens a row in the edit form, saves the changed fields and closes', async () => {
+    await setup('products', { categories: async () => [{ category_id: 1, name: 'Category' }, { category_id: 2, name: 'Other' }] });
+    await click(button('编辑'));
+    expect(screen.getByRole('heading', { name: '编辑商品' })).toBeInTheDocument();
+    expect(productFields.map(label => field(label).value)).toEqual(['Row 1', '', '10.00', '5', '1', '', '', '1']);
+
+    await type(field(/^价格/), '');
+    await click(button('保存修改'));
+    expect(notifications).toEqual(['请填写商品标题、价格和分类']);
+    expect(mutations).toEqual([]);
+
+    await type(field(/^价格/), '15');
+    await type(field(/^库存/), 'many');
+    await type(field(/^分类/), '2');
+    await type(field(/^状态/), '0');
+    await click(button('保存修改'));
+    expect(mutations).toEqual([expect.objectContaining({ method: 'put', path: '/admin/products/1', body: {
+      title: 'Row 1', description: '', price: 15, stock: 0, category_id: 2, brand: '', image_url: '', status: 0,
+    } })]);
+    expect(notifications.at(-1)).toBe('商品更新成功');
+    expect(screen.queryByRole('heading', { name: '编辑商品' })).not.toBeInTheDocument();
+  });
+
+  it.each(['添加商品', '编辑'])('closes the %s form from its cancel button without sending anything', async (open) => {
+    await setup('products');
+    await click(button(open));
+    await type(field(/^商品标题/), 'Draft');
+    await click(button('取消'));
+
+    expect(screen.queryByRole('heading', { name: /^(添加|编辑)商品$/ })).not.toBeInTheDocument();
+    expect(mutations).toEqual([]);
   });
 
   it('logs a category failure without blocking the list', async () => {

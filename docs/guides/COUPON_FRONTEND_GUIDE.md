@@ -126,7 +126,7 @@
 
 ### API 接口
 
-**文件**: `frontend/src/lib/api.ts`
+**文件**: `frontend/src/lib/api/orders.ts`（`couponApi`）、`frontend/src/lib/api/admin.ts`（`adminCouponApi`），统一从 `@/lib/api` 导入
 
 ```typescript
 // 优惠券相关API
