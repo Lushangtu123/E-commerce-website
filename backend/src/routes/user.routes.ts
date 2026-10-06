@@ -156,7 +156,7 @@ router.get('/stats', authMiddleware, UserController.getStats);
  *               password: { type: string, format: password, minLength: 6, description: 最多72个UTF-8字节，不去除空白 }
  *     responses:
  *       201:
- *         description: 注册成功，返回用户信息与 Token
+ *         description: 注册成功，返回用户信息并设置 customer_session Cookie
  *       400:
  *         description: 字段、类型或长度错误
  *         content:
@@ -189,7 +189,7 @@ router.post('/register', authLimiter, UserController.register);
  *               password: { type: string, format: password, minLength: 1 }
  *     responses:
  *       200:
- *         description: 登录成功，返回用户信息与 Token
+ *         description: 登录成功，返回用户信息并设置 customer_session Cookie
  *       400:
  *         description: 字段或类型错误
  *       401:

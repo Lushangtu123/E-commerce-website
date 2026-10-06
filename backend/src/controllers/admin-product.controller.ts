@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { SKUError, SKUModel } from '../models/sku.model';
-import { logAdminAction } from './admin.controller';
+import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 import { ProductModel } from '../models/product.model';
 import { productCreateSchema, productUpdateSchema, positiveId } from '../utils/product-validation';

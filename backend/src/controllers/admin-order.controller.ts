@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { OrderStatus } from '../models/order.model';
 import { transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
-import { logAdminAction } from './admin.controller';
+import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 
 // 获取订单列表（管理员）

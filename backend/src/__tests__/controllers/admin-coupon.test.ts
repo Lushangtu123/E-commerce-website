@@ -20,14 +20,14 @@ jest.mock('../../utils/logger', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
-jest.mock('../../controllers/admin.controller', () => ({
+jest.mock('../../controllers/admin-log.controller', () => ({
   logAdminAction: jest.fn(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { CouponModel } = require('../../models/coupon.model');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { logAdminAction } = require('../../controllers/admin.controller');
+const { logAdminAction } = require('../../controllers/admin-log.controller');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { AdminCouponController } = require('../../controllers/admin-coupon.controller');
 
