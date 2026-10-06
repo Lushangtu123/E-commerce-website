@@ -19,6 +19,8 @@ const nextConfig = {
   ...(embeddedApi ? {
     experimental: { externalDir: true },
   } : {}),
+  // The Docker image sets NEXT_OUTPUT=standalone to ship only the traced server files; Vercel builds its own output.
+  ...(process.env.NEXT_OUTPUT === 'standalone' ? { output: 'standalone' } : {}),
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {
