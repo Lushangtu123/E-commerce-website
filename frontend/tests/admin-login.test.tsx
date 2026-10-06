@@ -45,8 +45,8 @@ describe('admin login', () => {
     expect(screen.getByLabelText('密码')).toHaveAttribute('autocomplete', 'current-password');
   });
 
-  it('stores the session and opens the dashboard after a successful login', async () => {
-    const fetch = setup(json(200, { token: 'admin-token', admin }));
+  it('accepts the session cookie, stores only a sign-in id and opens the dashboard after a successful login', async () => {
+    const fetch = setup(json(200, { token: 'admin-signed-token', admin }));
 
     await signIn();
 
@@ -54,15 +54,19 @@ describe('admin login', () => {
     const [url, init] = fetch.mock.calls[0];
     expect(url).toBe('/api/admin/login');
     expect(JSON.parse(String(init.body))).toEqual({ username: 'root', password: 'secret-pass' });
-    expect(localStorage.getItem('admin_token')).toBe('admin-token');
+    // A cross-origin API's Set-Cookie only counts with credentials.
+    expect(init.credentials).toBe('include');
+    expect(new Headers(init.headers).get('X-Requested-With')).toBe('XMLHttpRequest');
+    expect(localStorage.getItem('admin_session')).toEqual(expect.any(String));
+    expect(Object.values(localStorage).join()).not.toContain('admin-signed-token');
     expect(JSON.parse(localStorage.getItem('admin_user')!)).toEqual(admin);
     expect(router.push.mock.calls).toEqual([['/admin/dashboard']]);
   });
 
   it.each([
     ['a rejection', json(401, { error: '用户名或密码错误' }), '用户名或密码错误'],
-    ['a response without a token', json(200, { admin }), '登录失败'],
-    ['an empty token', json(200, { token: '', admin }), '登录失败'],
+    ['a success without an administrator', json(200, { token: 'admin-signed-token' }), '登录失败'],
+    ['a success with a malformed administrator', json(200, { admin: 'root' }), '登录失败'],
     ['a non-JSON gateway error', async () => ({ ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } }), '登录失败，请稍后重试'],
     ['an unreachable server', async () => { throw new TypeError('Failed to fetch'); }, '登录失败，请稍后重试'],
   ] as [string, Respond, string][])('never stores a session after %s and lets the form be used again', async (_, respond, message) => {
@@ -70,7 +74,7 @@ describe('admin login', () => {
 
     await signIn();
 
-    expect(localStorage.getItem('admin_token')).toBeNull();
+    expect(localStorage.getItem('admin_session')).toBeNull();
     expect(router.push).not.toHaveBeenCalled();
     expect(toasts).toEqual([['error', message]]);
     expect(document.querySelector('button[type="submit"]')).toBeEnabled();

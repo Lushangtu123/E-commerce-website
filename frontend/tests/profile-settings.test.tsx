@@ -84,7 +84,7 @@ function serve({ getProfile = async () => ({ user: customer }), save = async bod
 function signIn() {
   localStorage.setItem('session', 'session-one');
   localStorage.setItem('user', JSON.stringify(customer));
-  localStorage.setItem('admin_token', 'administrator');
+  localStorage.setItem('admin_session', 'administrator');
   useAuthStore.getState().hydrate();
 }
 
@@ -183,7 +183,7 @@ describe('settings page', () => {
     expect(useAuthStore.getState().user).toMatchObject({ username: '服务器确认名', phone: null });
     expect(useAuthStore.getState().user).not.toHaveProperty('password_hash');
     expect(useCartStore.getState().items).toHaveLength(1);
-    expect(localStorage.getItem('admin_token')).toBe('administrator');
+    expect(localStorage.getItem('admin_session')).toBe('administrator');
   });
 
   it('retries a failed load and keeps drafts for correction after a server conflict', async () => {

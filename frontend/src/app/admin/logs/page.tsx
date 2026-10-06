@@ -7,16 +7,16 @@ import AdminLayout from '@/components/AdminLayout';
 import { logger } from '@/lib/logger';
 import api from '@/lib/api';
 import type { AdminLog } from '@/lib/api';
-import { useAdminQuery, useAdminSessionToken } from '@/hooks/use-admin-query';
+import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import { requestFailure } from '@/lib/api-error';
 
 export default function AdminLogsPage() {
   const { t, formatDate } = useI18n();
-  const token = useAdminSessionToken();
+  const sessionId = useAdminSessionId();
   // The page belongs to the administrator who chose it; another administrator starts on page one.
-  const [pageState, setPageState] = useState({ token, page: 1 });
-  const page = pageState.token === token ? pageState.page : 1;
-  const viewKey = JSON.stringify([token, page]);
+  const [pageState, setPageState] = useState({ sessionId, page: 1 });
+  const page = pageState.sessionId === sessionId ? pageState.page : 1;
+  const viewKey = JSON.stringify([sessionId, page]);
   const currentView = useRef(viewKey);
   currentView.current = viewKey;
   const query = useAdminQuery({
@@ -38,7 +38,7 @@ export default function AdminLogsPage() {
 
   const changePage = (next: number) => {
     if (!isCurrentView() || !query.data) return;
-    setPageState({ token, page: next });
+    setPageState({ sessionId, page: next });
   };
 
   const getActionBadge = (action: string) => {

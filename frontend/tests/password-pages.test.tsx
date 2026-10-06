@@ -273,7 +273,7 @@ describe('password rules and credentials', () => {
   it('keeps recovery and capability requests anonymous while a password change needs the invoking customer', async () => {
     localStorage.setItem('session', 'customer-a');
     localStorage.setItem('user', JSON.stringify(customer));
-    localStorage.setItem('admin_token', 'admin-a');
+    localStorage.setItem('admin_session', 'admin-a');
     useAuthStore.getState().hydrate();
     localStorage.setItem('session', 'other-tab-customer');
     serve({

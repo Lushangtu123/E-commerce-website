@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
 import { useCartStore } from '@/store/useCartStore';
+import { newSessionId } from '@/lib/session-id';
 
 export interface User {
   user_id: number;
@@ -32,12 +33,6 @@ const LEGACY_TOKEN_KEY = 'token';
 
 export function storedSessionId(): string | null {
   return localStorage.getItem(SESSION_KEY);
-}
-
-function newSessionId(): string {
-  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 // 从localStorage加载状态

@@ -39,7 +39,9 @@ const authorization = (config: InternalAxiosRequestConfig) => config.headers.get
 const credentials = (config: InternalAxiosRequestConfig) =>
   ({ authorization: authorization(config), cookie: config.withCredentials, csrf: config.headers.get('X-Requested-With') });
 const asCustomer = { authorization: undefined, cookie: true, csrf: 'XMLHttpRequest' };
-const both = { session: 'customer-session', admin_token: 'admin-session' };
+/** Administrators authenticate the same way, by their own httpOnly cookie. */
+const asAdmin = asCustomer;
+const both = { session: 'customer-session', admin_session: 'admin-session' };
 
 describe('API client requests', () => {
   it('reads profile statistics as the signed-in customer and returns the server counters', async () => {
@@ -87,12 +89,12 @@ describe('API client requests', () => {
     expect(JSON.parse(requests[3].data)).toEqual({ product_id: 12, quantity: 3, sku_id: 102 });
   });
 
-  it('uses the admin token for admin coupon requests when both identities are signed in', async () => {
+  it('sends admin coupon requests by cookie, without a token, when both identities are signed in', async () => {
     const { adminCouponApi, requests } = await setupApi(both);
 
     await adminCouponApi.getList(2, 50, 1);
 
-    expect(authorization(requests[0])).toBe('Bearer admin-session');
+    expect(credentials(requests[0])).toEqual(asAdmin);
     expect(requests[0].params).toEqual({ page: 2, page_size: 50, status: 1 });
   });
 
@@ -112,8 +114,8 @@ describe('API client requests', () => {
   it.each([
     ['customer', { session: 'customer-session' }, '/admin/coupons', 'Authorization'],
     ['customer', { session: 'customer-session' }, '/admin/coupons', 'authorization'],
-    ['admin', { admin_token: 'admin-session' }, '/coupons/my/list', 'Authorization'],
-    ['admin', { admin_token: 'admin-session' }, '/coupons/my/list', 'authorization'],
+    ['admin', { admin_session: 'admin-session' }, '/coupons/my/list', 'Authorization'],
+    ['admin', { admin_session: 'admin-session' }, '/coupons/my/list', 'authorization'],
   ] as [string, Storage, string, string][])('with only a %s session, never falls back to it for %s or keeps a supplied %s header', async (_, storage, url, header) => {
     const { api, requests } = await setupApi(storage);
 
@@ -130,8 +132,7 @@ describe('API client requests', () => {
     await api.get('/administrator');
     await api.get('/coupons/available', { params: { next: '/admin/coupons' } });
 
-    expect(requests.map(authorization)).toEqual(['Bearer admin-session', 'Bearer admin-session', undefined, undefined]);
-    expect(requests.slice(2).map(credentials)).toEqual([asCustomer, asCustomer]);
+    expect(requests.map(credentials)).toEqual([asAdmin, asAdmin, asCustomer, asCustomer]);
   });
 
   it('keeps customer and admin sessions apart with a relative API base URL', async () => {
@@ -140,8 +141,7 @@ describe('API client requests', () => {
     await adminCouponApi.getList();
     await userApi.getProfile();
 
-    expect(requests.map(authorization)).toEqual(['Bearer admin-session', undefined]);
-    expect(credentials(requests[1])).toEqual(asCustomer);
+    expect(requests.map(credentials)).toEqual([asAdmin, asCustomer]);
   });
 
   it('sends selected quantities and an optional coupon ID with customer credentials for an order preview', async () => {
@@ -182,12 +182,12 @@ describe('API client requests', () => {
 
 describe('API client sign-out on 401', () => {
   it('clears only the admin identity and opens admin login after an admin 401', async () => {
-    const { adminCouponApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_token: 'expired-admin-session', admin_user: '{"admin_id":2}' });
+    const { adminCouponApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_session: 'expired-admin-session', admin_user: '{"admin_id":2}' });
     fail(401, 'Unauthorized');
 
     await expect(adminCouponApi.getList()).rejects.toThrow(/Unauthorized/);
 
-    expect(localStorage.getItem('admin_token')).toBeNull();
+    expect(localStorage.getItem('admin_session')).toBeNull();
     expect(localStorage.getItem('admin_user')).toBeNull();
     expect(localStorage.getItem('session')).toBe('customer-session');
     expect(localStorage.getItem('user')).toBe('{"user_id":1}');
@@ -195,12 +195,12 @@ describe('API client sign-out on 401', () => {
   });
 
   it.each([401, 403, 500])('keeps the admin identity after a customer %i, and signs the customer out only on 401', async (status) => {
-    const { userApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_token: 'admin-session', admin_user: '{"admin_id":2}' });
+    const { userApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_session: 'admin-session', admin_user: '{"admin_id":2}' });
     fail(status);
 
     await expect(userApi.getProfile()).rejects.toThrow(/Request failed/);
 
-    expect(localStorage.getItem('admin_token')).toBe('admin-session');
+    expect(localStorage.getItem('admin_session')).toBe('admin-session');
     expect(localStorage.getItem('admin_user')).toBe('{"admin_id":2}');
     expect(localStorage.getItem('session')).toBe(status === 401 ? null : 'customer-session');
     expect(localStorage.getItem('user')).toBe(status === 401 ? null : '{"user_id":1}');
@@ -216,12 +216,12 @@ describe('API client sign-out on 401', () => {
     fail(401, 'Unauthorized');
     await expect(api.get(url)).rejects.toThrow(/Unauthorized/);
     expect(localStorage.getItem('session')).toBe('customer-session');
-    expect(localStorage.getItem('admin_token')).toBe('admin-session');
+    expect(localStorage.getItem('admin_session')).toBe('admin-session');
     expect(window.location.pathname).toBe('/');
   });
 
   it.each(['customer', 'admin'] as const)('cannot clear a newly signed-in %s with a late 401 from the earlier session', async (identity) => {
-    const tokenKey = identity === 'admin' ? 'admin_token' : 'session';
+    const tokenKey = identity === 'admin' ? 'admin_session' : 'session';
     const userKey = identity === 'admin' ? 'admin_user' : 'user';
     const loaded = await setupApi({ [tokenKey]: 'old-session', [userKey]: '{"id":1}' });
     const started = deferred<() => void>();
@@ -255,13 +255,13 @@ describe('API client sign-in routes', () => {
     expect(authorization(requests[0])).toBeUndefined();
     expect(localStorage.getItem('session')).toBe('customer-session');
     expect(localStorage.getItem('user')).toBe(customer);
-    expect(localStorage.getItem('admin_token')).toBe('admin-session');
+    expect(localStorage.getItem('admin_session')).toBe('admin-session');
     expect(localStorage.getItem('admin_user')).toBe(admin);
     expect(window.location.pathname + window.location.search).toBe('/login?passwordChanged=1');
   });
 
   it('keeps only POST sign-in routes anonymous; other methods and similar paths keep their guarded identity', async () => {
-    const { api, userApi, requests } = await setupApi({ session: 'customer-a', admin_token: 'admin-a' });
+    const { api, userApi, requests } = await setupApi({ session: 'customer-a', admin_session: 'admin-a' });
 
     await api.get('/users/login');
     await api.get('/users/register');
@@ -269,7 +269,7 @@ describe('API client sign-in routes', () => {
     await api.post('/users/login-extra', {});
     await api.post('/users/register/profile', {});
     await api.post('/admin/login/other', {});
-    expect(requests.map(authorization)).toEqual([undefined, undefined, 'Bearer admin-a', undefined, undefined, 'Bearer admin-a']);
+    expect(requests.map(authorization)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
 
     localStorage.setItem('session', 'other-tab-customer');
     await userApi.login({ email: 'customer@example.test', password: 'test-password' });
@@ -300,6 +300,17 @@ describe('API client cookie session', () => {
     await expect(userApi.getProfile()).rejects.toThrow(/Unauthorized/);
     expect(localStorage.getItem('session')).toBeNull();
     expect(window.location.pathname).toBe('/login');
+  });
+});
+
+describe('API client admin cookie session', () => {
+  it('posts the admin logout with credentials and the CSRF header', async () => {
+    const { adminApi, requests } = await setupApi({ admin_session: 'admin-session', admin_user: '{"admin_id":2,"username":"admin"}' });
+
+    await adminApi.logout();
+
+    expect(requests.map(config => [config.method, config.url])).toEqual([['post', '/admin/logout']]);
+    expect(credentials(requests[0])).toEqual(asAdmin);
   });
 });
 

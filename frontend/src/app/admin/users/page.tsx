@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import type { AdminPage, AdminUserRow } from '@/lib/api';
-import { useAdminQuery, useAdminSessionToken } from '@/hooks/use-admin-query';
+import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
@@ -13,17 +13,17 @@ import { requestFailure } from '@/lib/api-error';
 
 export default function AdminUsersPage() {
   const { t, formatDate } = useI18n();
-  const token = useAdminSessionToken();
+  const sessionId = useAdminSessionId();
   // The page and filters belong to the administrator who chose them; another one starts unfiltered on page one.
-  const [view, setView] = useState({ token, page: 1, filters: { keyword: '', status: '' } });
-  const ownsView = view.token === token;
+  const [view, setView] = useState({ sessionId, page: 1, filters: { keyword: '', status: '' } });
+  const ownsView = view.sessionId === sessionId;
   const page = ownsView ? view.page : 1;
   const filters = ownsView ? view.filters : { keyword: '', status: '' };
-  const scopeKey = JSON.stringify([token, page, filters.keyword, filters.status]);
+  const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
-  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const query = useAdminQuery({
     name: 'users',
     params: [page, filters.keyword, filters.status],
@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   const total = Number(shown?.pagination?.total) || 0;
   const loadError = query.error ? requestFailure(query.error).response?.data?.error || '获取用户列表失败' : undefined;
   const loading = !shown && !loadError;
-  const busy = !!token && pendingToken === token;
+  const busy = !!sessionId && pendingSessionId === sessionId;
   const isCurrentScope = () => query.isCurrentSession() && currentScope.current === scopeKey;
   const isDisplayedScope = () => isCurrentScope() && shown !== undefined && displayed.current === shown;
   const reload = () => { if (isCurrentScope()) void query.refetch(); };
@@ -51,12 +51,12 @@ export default function AdminUsersPage() {
   // A pending action belongs to the administrator who started it; the next one may act at once.
   useEffect(() => {
     mutation.current = null;
-    setPendingToken(null);
-  }, [token]);
+    setPendingSessionId(null);
+  }, [sessionId]);
 
   // Disabling the only user on the final filtered page leaves that page empty; show the new last page.
   useEffect(() => {
-    if (beyondLastPage) setView({ token, page: lastPage, filters });
+    if (beyondLastPage) setView({ sessionId, page: lastPage, filters });
   }, [beyondLastPage]);
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function AdminUsersPage() {
     if (!isDisplayedScope() || mutation.current) return;
     const operation = {};
     mutation.current = operation;
-    setPendingToken(token);
+    setPendingSessionId(sessionId);
     try {
       await perform();
       if (isDisplayedScope()) toast.success(t(success));
@@ -79,7 +79,7 @@ export default function AdminUsersPage() {
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
-        setPendingToken(null);
+        setPendingSessionId(null);
       }
     }
   };
@@ -87,16 +87,16 @@ export default function AdminUsersPage() {
   const changeFilters = (next: { keyword: string; status: string }) => {
     if (!isCurrentScope() || (page === 1 && next.keyword === filters.keyword && next.status === filters.status)) return;
     // Retire this scope's handlers now, before React commits the new query.
-    currentScope.current = JSON.stringify([token, 1, next.keyword, next.status]);
-    setView({ token, page: 1, filters: next });
+    currentScope.current = JSON.stringify([sessionId, 1, next.keyword, next.status]);
+    setView({ sessionId, page: 1, filters: next });
   };
 
   const changePage = (next: number) => {
     if (!isDisplayedScope()) return;
     const target = Math.max(1, Math.min(next, Math.max(1, Math.ceil(total / 20))));
     if (target === page) return;
-    currentScope.current = JSON.stringify([token, target, filters.keyword, filters.status]);
-    setView({ token, page: target, filters });
+    currentScope.current = JSON.stringify([sessionId, target, filters.keyword, filters.status]);
+    setView({ sessionId, page: target, filters });
   };
 
   const handleStatusChange = (userId: number, newStatus: number) => {

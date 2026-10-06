@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { startAdminSession } from '@/lib/admin-session';
 
 export default function AdminLoginPage() {
   const { t } = useI18n();
@@ -25,20 +26,21 @@ export default function AdminLoginPage() {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/admin/login`, {
         method: 'POST',
+        // Without credentials a cross-origin API's Set-Cookie would be discarded.
+        credentials: 'include',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify(formData)
       });
 
       const data = await response.json();
 
-      // A success response without a session would otherwise store "undefined" as the token.
-      if (response.ok && typeof data?.token === 'string' && data.token && data.admin) {
-        // 保存token和管理员信息
-        localStorage.setItem('admin_token', data.token);
-        localStorage.setItem('admin_user', JSON.stringify(data.admin));
-        
+      // The API has set the httpOnly session cookie; record this sign-in and who it belongs to.
+      if (response.ok && data?.admin && typeof data.admin === 'object') {
+        startAdminSession(data.admin);
+
         toast.success(t('登录成功'));
         router.push('/admin/dashboard');
       } else {

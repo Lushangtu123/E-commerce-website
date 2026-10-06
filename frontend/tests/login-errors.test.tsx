@@ -36,7 +36,7 @@ describe.each(pages)('failed %s', (route, Page, values) => {
   it('keeps visible feedback and both sessions, and never logs the request or its password', async () => {
     localStorage.setItem('session', 'current-customer');
     localStorage.setItem('user', JSON.stringify({ user_id: 1, username: 'current', email: 'current@example.test' }));
-    localStorage.setItem('admin_token', 'current-admin');
+    localStorage.setItem('admin_session', 'current-admin');
     useAuthStore.getState().hydrate();
     window.history.replaceState(null, '', '/login?passwordChanged=1');
     const adapter: AxiosAdapter = async config => {
@@ -57,7 +57,7 @@ describe.each(pages)('failed %s', (route, Page, values) => {
     expect(errors).toEqual(['邮箱或密码错误']);
     expect(window.location.pathname + window.location.search).toBe('/login?passwordChanged=1');
     expect(localStorage.getItem('session')).toBe('current-customer');
-    expect(localStorage.getItem('admin_token')).toBe('current-admin');
+    expect(localStorage.getItem('admin_session')).toBe('current-admin');
     expect(router.push).not.toHaveBeenCalled();
     if (route === 'login') expect(screen.getByText('密码已修改，请使用新密码登录')).toBeInTheDocument();
 

@@ -24,7 +24,7 @@ let requests: { url?: string; params: Params }[] = [];
 
 /** Signs the first administrator in and answers the real API client at the transport layer. */
 async function setup(get: (params: Params) => Promise<Logs> | Logs) {
-  localStorage.setItem('admin_token', 'first-session');
+  localStorage.setItem('admin_session', 'first-session');
   localStorage.setItem('admin_user', admin('first'));
   const adapter: AxiosAdapter = async config => {
     requests.push({ url: config.url, params: config.params });
@@ -37,7 +37,7 @@ async function setup(get: (params: Params) => Promise<Logs> | Logs) {
 }
 
 function switchAdmin({ notify }: { notify: boolean }) {
-  localStorage.setItem('admin_token', 'second-session');
+  localStorage.setItem('admin_session', 'second-session');
   localStorage.setItem('admin_user', admin('second', 2));
   if (notify) act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_user' })); });
 }

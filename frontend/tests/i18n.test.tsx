@@ -269,7 +269,7 @@ describe('language changes on rendered pages', () => {
   it.each([['coupons', CouponsPage], ['my/coupons', MyCouponsPage], ['admin/coupons', AdminCouponsPage]] as [string, ComponentType][])(
     '%s changes percentage wording on a language change without refetching or rewriting coupon data', async (_, Page) => {
       useAuthStore.getState().login({ user_id: 1, username: 'customer', email: 'customer@example.test' }, 'session');
-      localStorage.setItem('admin_token', 'admin-session');
+      localStorage.setItem('admin_session', 'admin-session');
       localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin' }));
       const coupon = { coupon_id: 1, user_coupon_id: 7, name: '原始中文券名', code: 'EXAMPLE20', type: 2,
         discount_value: '20.00', min_amount: 0, max_discount: '50.00', total_quantity: 10, remain_quantity: 5,
