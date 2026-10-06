@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
+import { confirmAction } from '@/lib/confirm';
 
 const fields = [
   { name: 'receiver_name', label: '收货人', max: 50 },
@@ -115,7 +116,7 @@ export default function AddressPage() {
               <div className="flex gap-4 mt-4 text-sm">
                 <button disabled={isBusy} onClick={() => { if (!isCurrent()) return; setEditing(address.address_id); setForm(addressInput(address)); setFormError(''); }} className="text-primary-600">{t("编辑")}</button>
                 {!(address.is_default === true || address.is_default === 1) && <button disabled={isBusy} onClick={() => mutate(() => addressApi.update(address.address_id, { ...addressInput(address), is_default: true }), '默认地址已更新')} className="text-primary-600">{t("设为默认")}</button>}
-                <button disabled={isBusy} onClick={() => { if (isCurrent() && confirm(t('确定删除这个收货地址吗？'))) return mutate(() => addressApi.remove(address.address_id), '地址已删除'); }} className="text-red-600">{t("删除")}</button>
+                <button disabled={isBusy} onClick={async () => { if (isCurrent() && await confirmAction(t('确定删除这个收货地址吗？'))) return mutate(() => addressApi.remove(address.address_id), '地址已删除'); }} className="text-red-600">{t("删除")}</button>
               </div>
             </div>)}
           </div>

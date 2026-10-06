@@ -299,6 +299,9 @@ describe('orders page', () => {
     const { view } = await setup({ pay: () => pending.promise, cancel: () => pending.promise, confirmOrder: () => pending.promise,
       list: async () => page([order(1, action === 'confirm' ? 2 : 0)], 1, 1) });
     fireEvent.click(button(actionLabel[action]));
+    // Cancelling awaits the confirmation first; the change must come while the request is in flight.
+    await act(async () => { await Promise.resolve(); });
+    expect(mutations, 'the request is in flight before the change').toHaveLength(1);
 
     if (change === 'account') {
       act(() => useAuthStore.getState().login(secondUser, 'second-session'));

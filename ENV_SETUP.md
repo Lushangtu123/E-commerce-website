@@ -172,67 +172,20 @@ CORS_ORIGIN=http://localhost:3000
 
 ### 可选配置
 
-#### 应用配置
-
-| 变量名 | 说明 | 默认值 | 示例 |
-|--------|------|--------|------|
-| `NEXT_PUBLIC_APP_NAME` | 应用名称 | `电商平台` | `电商平台` |
-| `NEXT_PUBLIC_APP_VERSION` | 应用版本 | `2.0.0` | `2.0.0` |
-| `NEXT_PUBLIC_APP_DOMAIN` | 应用域名 | - | `https://your-domain.com` |
-
-#### 功能开关
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `NEXT_PUBLIC_ENABLE_REGISTRATION` | 启用用户注册 | `true` |
-| `NEXT_PUBLIC_ENABLE_REVIEWS` | 启用评论功能 | `true` |
-| `NEXT_PUBLIC_ENABLE_FAVORITES` | 启用收藏功能 | `true` |
-| `NEXT_PUBLIC_ENABLE_SEARCH_HISTORY` | 启用搜索历史 | `true` |
-| `NEXT_PUBLIC_ENABLE_BROWSE_HISTORY` | 启用浏览历史 | `true` |
-
-#### 分页配置
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `NEXT_PUBLIC_PRODUCTS_PER_PAGE` | 商品列表每页数量 | `12` |
-| `NEXT_PUBLIC_ORDERS_PER_PAGE` | 订单列表每页数量 | `10` |
-| `NEXT_PUBLIC_REVIEWS_PER_PAGE` | 评论列表每页数量 | `10` |
-
-#### 第三方服务
-
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
-| `NEXT_PUBLIC_GA_ID` | Google Analytics ID | `G-XXXXXXXXXX` |
-| `NEXT_PUBLIC_BAIDU_ANALYTICS_ID` | 百度统计 ID | `your-baidu-id` |
-| `NEXT_PUBLIC_SENTRY_DSN` | Sentry DSN | `https://xxx@xxx.ingest.sentry.io/xxx` |
+| `NEXT_PUBLIC_SITE_URL` | 网站公开地址，用于 canonical、Open Graph、robots.txt 和 sitemap。生产环境设置后才允许搜索引擎收录；Vercel 生产环境可不填 | `https://your-domain.com` |
+| `INTERNAL_API_URL` | 服务端读取商品数据时用的后端地址，前端容器访问不到浏览器用的地址时设置 | `http://backend:3001/api` |
+| `ECOMMERCE_SERVERLESS_API` | 把后端内嵌到 Next.js 的 `/api` 路由；Vercel 上自动开启 | `true` |
+
+前端只读取以上变量（加上 Vercel 自动注入的 `VERCEL_*`）；分页大小、功能开关等都写在代码里，不能通过环境变量修改。
 
 ### 配置示例
 
 **开发环境 (frontend/.env.local):**
 
 ```bash
-# API 配置
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
-
-# 应用配置
-NEXT_PUBLIC_APP_NAME=电商平台
-NEXT_PUBLIC_APP_VERSION=2.0.0
-NEXT_PUBLIC_APP_DOMAIN=http://localhost:3000
-
-# 功能开关
-NEXT_PUBLIC_ENABLE_REGISTRATION=true
-NEXT_PUBLIC_ENABLE_REVIEWS=true
-NEXT_PUBLIC_ENABLE_FAVORITES=true
-NEXT_PUBLIC_ENABLE_SEARCH_HISTORY=true
-NEXT_PUBLIC_ENABLE_BROWSE_HISTORY=true
-
-# 分页配置
-NEXT_PUBLIC_PRODUCTS_PER_PAGE=12
-NEXT_PUBLIC_ORDERS_PER_PAGE=10
-NEXT_PUBLIC_REVIEWS_PER_PAGE=10
-
-# 调试模式
-NEXT_PUBLIC_DEBUG=true
 ```
 
 ---
@@ -335,16 +288,8 @@ RATE_LIMIT_WINDOW=60000
 # 生产环境 API 地址
 NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
 
-# 生产域名
-NEXT_PUBLIC_APP_DOMAIN=https://your-domain.com
-
-# 生产环境关闭调试
-NEXT_PUBLIC_DEBUG=false
-NEXT_PUBLIC_LOG_API_REQUESTS=false
-
-# 第三方服务 ID
-NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
-NEXT_PUBLIC_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+# 网站公开地址（允许搜索引擎收录）
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
 ---

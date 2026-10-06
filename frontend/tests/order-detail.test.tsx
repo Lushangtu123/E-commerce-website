@@ -11,7 +11,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
   paymentApi: { getSettings: vi.fn(async () => ({ mode: 'demo', canPay: true, isDemo: true })) },
-  orderApi: { getDetail: vi.fn(), pay: vi.fn() },
+  orderApi: { getDetail: vi.fn(), pay: vi.fn(), cancel: vi.fn(async () => ({})) },
   orderTimeoutApi: { getRemainingTime: vi.fn(async () => ({ remaining_minutes: 10 })) },
 }));
 // Both sections load their own data and have their own tests; here they only mark where they render.
@@ -114,6 +114,29 @@ describe('order detail', () => {
     await settle();
 
     expect(orderApi.pay).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the customer declines', () => false],
+    ['another tab signs in while the question is open', () => { localStorage.setItem('session', 'B'); return true; }],
+  ])('does not cancel when %s', async (_, answer) => {
+    await setupDetail({ status: 0, total_amount: 10 });
+    const confirm = vi.fn(answer);
+    vi.stubGlobal('confirm', confirm);
+
+    fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
+    await settle();
+
+    expect(confirm).toHaveBeenCalledWith('确定要取消订单吗？');
+    expect(orderApi.cancel).not.toHaveBeenCalled();
+  });
+
+  it('cancels once the customer confirms', async () => {
+    await setupDetail({ status: 0, total_amount: 10 });
+    vi.stubGlobal('confirm', () => true);
+    fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
+    await settle();
+    expect(orderApi.cancel).toHaveBeenCalledWith(1);
   });
 
   it.each([0, 1, 2, 3, 4])('shows the review section only for a completed order (status %i)', async (status) => {

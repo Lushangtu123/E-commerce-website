@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
+import { confirmAction } from '@/lib/confirm';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -93,7 +94,7 @@ export default function OrdersPage() {
     if (action === 'pay' && !payments.canPay) return;
     const order = orders.find(item => item.order_id === orderId);
     if (!order || (action === 'confirm' ? order.status !== 2 : order.status !== 0)) return;
-    if (action === 'cancel' && !confirm(t('确定要取消订单吗？'))) return;
+    if (action === 'cancel' && !(await confirmAction(t('确定要取消订单吗？')))) return;
     if (!isCurrentScope() || mutation.current) return;
     const operation = {};
     mutation.current = operation;

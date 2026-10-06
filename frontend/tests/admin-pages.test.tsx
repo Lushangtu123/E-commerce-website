@@ -129,6 +129,22 @@ describe('admin orders', () => {
   });
 });
 
+describe('admin order cancellation', () => {
+  it.each([
+    ['the administrator declines', () => false],
+    ['another tab signs a different administrator in while the question is open', () => { localStorage.setItem('admin_session', 'other-admin'); return true; }],
+  ])('sends nothing when %s', async (_, answer) => {
+    await renderOrders();
+    const confirm = vi.fn(answer);
+    vi.stubGlobal('confirm', confirm);
+
+    await click('取消订单');
+
+    expect(confirm).toHaveBeenCalledWith('确定要取消订单吗？');
+    expect(requests.filter(config => config.method === 'put')).toEqual([]);
+  });
+});
+
 describe('admin dashboard', () => {
   it('labels recent orders with the customer order status contract', async () => {
     signIn();

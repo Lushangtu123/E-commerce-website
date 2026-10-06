@@ -9,7 +9,8 @@ import type { ActivityPage } from '@/lib/api';
 
 interface MutationOptions<T> {
   productId?: number;
-  confirm?: () => boolean;
+  /** Asked after the action is locked; the action is dropped unless it resolves to true. */
+  confirm?: () => Promise<boolean>;
   onSuccess: (value: T) => void;
   onError: (error: unknown) => void;
   refresh?: boolean;
@@ -95,7 +96,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
     mutation.current = operation;
     setPendingSession(sessionKey);
     try {
-      if (options.confirm && !options.confirm()) return;
+      if (options.confirm && !(await options.confirm())) return;
       if (!isCurrentScope()) return;
       const value = await perform();
       if (!isCurrentSession()) return;
