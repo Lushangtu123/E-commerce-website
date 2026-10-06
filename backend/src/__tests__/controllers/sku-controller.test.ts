@@ -3,7 +3,8 @@ jest.mock('../../database/redis', () => ({ getRedisClient: jest.fn() }));
 
 import { getPool, query } from '../../database/mysql';
 import { getRedisClient } from '../../database/redis';
-import { createSKU, batchCreateSKUs, updateSKU, deleteSKU, getProductSKUs, updateProductStatus, batchUpdateProductStatus, updateProduct, deleteProduct } from '../../controllers/admin-product.controller';
+import { updateProductStatus, batchUpdateProductStatus, updateProduct, deleteProduct } from '../../controllers/admin-product.controller';
+import { createSKU, batchCreateSKUs, updateSKU, deleteSKU, getProductSKUs } from '../../controllers/admin-sku.controller';
 import { ProductController } from '../../controllers/product.controller';
 
 let connection: any;
@@ -101,6 +102,13 @@ test('管理列表包含停用规格以便重新启用', async () => {
   expect(res.statusCode).toBe(200);
   expect(res.body.skus).toHaveLength(1);
   expect(res.body.skus[0].status).toBe(0);
+});
+
+test('已软删除的商品不再列出规格', async () => {
+  product.status = -1;
+  const res = await call(getProductSKUs);
+  expect(res.statusCode).toBe(404);
+  expect(res.body).toEqual({ error: '商品不存在' });
 });
 
 test('更新和删除检查可选路径商品归属；全局删除软删并失效缓存', async () => {
