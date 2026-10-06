@@ -6,7 +6,9 @@ import AdminLogsPage from '@/app/admin/logs/page';
 import api, { type AdminLog } from '@/lib/api';
 import { apiError, captureHandler, deferred, settle } from './helpers';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/admin/logs' }));
+// Next returns the same router on every render; pages list it as an effect dependency.
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin/logs' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 

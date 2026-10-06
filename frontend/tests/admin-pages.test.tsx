@@ -9,7 +9,9 @@ import api, { type AdminOrderRow } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { deferred, settle } from './helpers';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/admin' }));
+// Next returns the same router on every render; pages list it as an effect dependency.
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
   const toast = { success: vi.fn(), error: vi.fn() };

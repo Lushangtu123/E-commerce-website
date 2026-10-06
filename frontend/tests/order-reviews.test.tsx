@@ -7,7 +7,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
 import { captureHandler, deferred, reactHandler, settle, submitTogether } from './helpers';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// Next returns the same router on every render; pages list it as an effect dependency.
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 type Item = { product_id: number; product_name: string };
 type ListResponse = { reviews: PurchaseReview[]; totalPages: number };

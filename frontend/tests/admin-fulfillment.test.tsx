@@ -8,7 +8,9 @@ import api, { type AfterSalesRequest } from '@/lib/api';
 import { CommitLog, apiError, captureHandler, deferred, settle, submitTogether } from './helpers';
 
 const notices = vi.hoisted(() => [] as string[]);
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/admin' }));
+// Next returns the same router on every render; pages list it as an effect dependency.
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin' }));
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('react-hot-toast', () => {
   const record = (message: string) => { notices.push(message); };

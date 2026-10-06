@@ -9,7 +9,9 @@ import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
 import { apiError, captureHandler, deferred, reactHandler, settle } from './helpers';
 
 const params = vi.hoisted(() => ({ id: '1' }));
-vi.mock('next/navigation', () => ({ useParams: () => params, useRouter: () => ({ push: vi.fn() }), usePathname: () => '/admin/products' }));
+// Next returns the same router on every render; pages list it as an effect dependency.
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useParams: () => params, useRouter: () => router, usePathname: () => '/admin/products' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 
