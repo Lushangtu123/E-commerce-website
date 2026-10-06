@@ -75,7 +75,7 @@ export async function createOrder(
   const normalizedItems = normalizeItems(items);
   validateCouponId(userCouponId);
   if (remark !== undefined && (typeof remark !== 'string' || remark.length > 2000)) throw new OrderError('订单备注无效');
-  if (!Number.isSafeInteger(shippingAddressId) || Number(shippingAddressId) <= 0) {
+  if (shippingAddressId === undefined || !Number.isSafeInteger(shippingAddressId) || shippingAddressId <= 0) {
     throw new OrderError('请选择有效的收货地址');
   }
   const connection = await getPool().getConnection();
