@@ -1,6 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ProductsPage from '@/app/products/page';
+import ProductsPage from '@/components/ProductList';
 import Header from '@/components/Header';
 import { productApi, searchApi, type Product, type SearchKeyword } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
