@@ -1,26 +1,9 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import { cache } from 'react';
 import { preload } from 'react-dom';
-import { SITE_NAME, fetchApiResult, shareableImage, summarize, type ApiResult, type PublicProduct } from '@/lib/site';
+import { SITE_NAME, shareableImage, summarize } from '@/lib/site';
+import { resolveProduct } from './product-data';
 
 const FALLBACK_TITLE = '商品详情';
-const isProductId = (id: string) => /^[1-9]\d{0,9}$/.test(id);
-
-/** One backend read per request, shared by metadata and the layout. */
-const loadProduct = cache((id: string): Promise<ApiResult<{ product?: PublicProduct }>> =>
-  fetchApiResult<{ product?: PublicProduct }>(`/products/${id}`));
-
-/**
- * Deleted, delisted and malformed product URLs return a real 404. An unreachable API
- * renders the page normally, so an outage never removes real products from search.
- */
-async function resolveProduct(id: string): Promise<PublicProduct | null> {
-  if (!isProductId(id)) notFound();
-  const result = await loadProduct(id);
-  if (result.kind === 'missing') notFound();
-  return result.kind === 'ok' && result.data.product?.title ? result.data.product : null;
-}
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
