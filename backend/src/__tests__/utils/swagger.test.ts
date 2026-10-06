@@ -13,6 +13,8 @@ jest.mock('../../controllers/admin-product.controller', () => ({
   createProduct: jest.fn(),
   updateProduct: jest.fn(),
   deleteProduct: jest.fn(),
+}));
+jest.mock('../../controllers/admin-sku.controller', () => ({
   getProductSKUs: jest.fn(),
   createSKU: jest.fn(),
   batchCreateSKUs: jest.fn(),

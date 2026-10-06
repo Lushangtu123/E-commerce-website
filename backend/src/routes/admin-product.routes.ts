@@ -5,13 +5,9 @@ import {
   batchUpdateProductStatus,
   createProduct,
   updateProduct,
-  deleteProduct,
-  getProductSKUs,
-  createSKU,
-  batchCreateSKUs,
-  updateSKU,
-  deleteSKU
+  deleteProduct
 } from '../controllers/admin-product.controller';
+import { getProductSKUs, createSKU, batchCreateSKUs, updateSKU, deleteSKU } from '../controllers/admin-sku.controller';
 import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
 
 const router = express.Router();
