@@ -443,10 +443,13 @@ The browser regression uses an isolated local MySQL database for registration, a
 cd backend
 npm test
 
-# Frontend tests
+# Frontend tests (Vitest + React Testing Library + happy-dom)
 cd frontend
 npm test
+npm run test:watch    # watch mode
 ```
+
+Frontend tests use Vitest + React Testing Library + happy-dom. Tests are `tests/*.test.ts(x)` files: they render real components and are type-checked by `npm run typecheck`. Shared setup (clearing localStorage, resetting the URL and the Zustand stores) lives in `tests/setup.ts`; helpers for awaiting async results, double clicks and first-render snapshots live in `tests/helpers.tsx`.
 
 ## 📈 Development Roadmap
 
