@@ -1,6 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ProductDetailPage from '@/app/products/[id]/page';
+import ProductDetailPage from '@/components/ProductDetail';
 import { cartApi, favoriteApi, productApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
