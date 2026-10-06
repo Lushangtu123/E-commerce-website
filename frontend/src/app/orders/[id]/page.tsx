@@ -13,6 +13,7 @@ import OrderReviews from '@/components/OrderReviews';
 import OrderAfterSales from '@/components/OrderAfterSales';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
+import { confirmAction } from '@/lib/confirm';
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -132,7 +133,7 @@ export default function OrderDetailPage() {
 
   const handleCancel = async () => {
     if (!isCurrentSession() || actionLock.current || order?.status !== 0) return;
-    if (!confirm(t('确定要取消订单吗？'))) return;
+    if (!(await confirmAction(t('确定要取消订单吗？')))) return;
     if (!isCurrentSession() || actionLock.current) return;
     actionLock.current = true; setActionPending(true);
 

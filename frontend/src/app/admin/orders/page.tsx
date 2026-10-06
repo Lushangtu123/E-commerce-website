@@ -9,6 +9,7 @@ import { useAdminSession } from '@/hooks/use-admin-session';
 import { useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
 import { requestFailure } from '@/lib/api-error';
+import { confirmAction } from '@/lib/confirm';
 
 const NEXT_STATUS: Record<number, { status: number; text: string }> = { 0: { status: 4, text: '取消订单' }, 1: { status: 2, text: '发货' }, 2: { status: 3, text: '完成订单' } };
 const STATUS = ['待支付', '已支付', '已发货', '已完成', '已取消'];
@@ -49,7 +50,7 @@ export default function AdminOrdersPage() {
     if (status === 2 && (shipment?.key !== key || shipment.id !== id)) { setShipment({ key, id, company: '', tracking: '' }); return; }
     const company = shipment?.company.trim() || '', tracking = shipment?.tracking.trim() || '';
     if (status === 2 && (!company || company.length > 60 || !tracking || tracking.length > 100 || /[\x00-\x1f\x7f]/.test(company + tracking))) { toast.error(t('请填写有效的快递公司和运单号')); return; }
-    if (status === 4 && !confirm(t('确定要取消订单吗？'))) return;
+    if (status === 4 && !(await confirmAction(t('确定要取消订单吗？')))) return;
     if (!active() || mutation.current) return;
     const operation = {}; mutation.current = operation; setBusy(true);
     try {

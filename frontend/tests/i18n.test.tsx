@@ -12,6 +12,7 @@ import HistoryPage from '@/app/history/page';
 import LoginPage from '@/app/login/page';
 import MyCouponsPage from '@/app/my/coupons/page';
 import AppShell from '@/components/AppShell';
+import { useConfirmStore } from '@/lib/confirm';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { accountTranslations } from '@/lib/account-translations';
 import { adminTranslations } from '@/lib/admin-translations';
@@ -272,6 +273,14 @@ describe('language changes on rendered pages', () => {
     expect(storageListeners(removed)).toEqual(expect.arrayContaining(storageListeners(added)));
     expect(observers.callbacks, 'title observers must not keep rewriting the title').toBeLessThan(100);
     expect(observers.disconnected).toBe(observers.created);
+  });
+
+  it('mounts the site confirmation dialog for every page', async () => {
+    render(<AppShell>page</AppShell>);
+    await settle();
+    act(() => useConfirmStore.setState({ request: { message: '确定要取消订单吗？', resolve: vi.fn() } }));
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName('确定要取消订单吗？');
+    act(() => useConfirmStore.setState({ request: null }));
   });
 
   it.each([['favorites', FavoritesPage], ['history', HistoryPage]] as const)('%s keeps the real names of deleted products in both languages', async (collection, Page) => {

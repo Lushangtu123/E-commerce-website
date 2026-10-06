@@ -3,6 +3,7 @@
 import { translateTitle, useI18n } from '@/lib/i18n';
 import Header from '@/components/Header';
 import SiteFooter from '@/components/SiteFooter';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -76,6 +77,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       {!isAdminRoute && <SiteFooter />}
+      <ConfirmDialog />
       <Toaster position="top-center" />
       <Analytics beforeSend={redactTelemetryUrl} />
       <SpeedInsights beforeSend={redactTelemetryUrl} />

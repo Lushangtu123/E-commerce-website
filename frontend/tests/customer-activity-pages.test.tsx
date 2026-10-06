@@ -291,6 +291,9 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
     const pending = deferred();
     const { view } = await setup(kind, { rows: [product(1)], remove: () => pending.promise, clear: () => pending.promise });
     fireEvent.click(action === 'clear' ? button('清空历史') : removeButtons(kind)[0]);
+    // Clearing awaits the confirmation first; the change must come while the request is in flight.
+    await act(async () => { await Promise.resolve(); });
+    expect(mutations, 'the request is in flight before the change').toHaveLength(1);
 
     if (change === 'account') {
       switchAccount();

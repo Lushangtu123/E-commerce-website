@@ -241,6 +241,17 @@ describe('address management', () => {
     expect(writes()).toHaveLength(2);
   });
 
+  it.each([
+    ['the customer declines', () => false],
+    ['another tab signs in while the question is open', () => { localStorage.setItem('session', 'two'); return true; }],
+  ])('keeps the address when %s', async (_, answer) => {
+    const confirm = vi.fn(answer);
+    await setup(undefined, confirm);
+    await click('删除');
+    expect(confirm).toHaveBeenCalledWith('确定删除这个收货地址吗？');
+    expect(writes()).toEqual([]);
+  });
+
   it("neither opens a form, asks, nor sends a change for the customer another tab signed in", async () => {
     const confirm = vi.fn(() => true);
     await setup(undefined, confirm);

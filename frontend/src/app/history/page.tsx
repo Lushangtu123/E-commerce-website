@@ -10,6 +10,7 @@ import { canBuyActivityProduct, useCustomerActivity } from '@/hooks/use-customer
 import { quickAddToCart } from '@/lib/quick-cart';
 import ProductImage from '@/components/ProductImage';
 import { requestFailure } from '@/lib/api-error';
+import { confirmAction } from '@/lib/confirm';
 
 interface BrowseHistory {
   id: number;
@@ -37,7 +38,7 @@ export default function BrowseHistoryPage() {
   });
 
   const handleClearAll = () => runMutation(() => browseApi.clearHistory(), {
-    confirm: () => confirm(t("确定要清空所有浏览历史吗？")), refresh: true,
+    confirm: () => confirmAction(t("确定要清空所有浏览历史吗？")), refresh: true,
     onSuccess: () => toast.success(t("已清空浏览历史")),
     onError: error => toast.error(t(requestFailure(error).response?.data?.message || "清空失败")),
   });
