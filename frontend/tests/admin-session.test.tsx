@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminLayout from '@/components/AdminLayout';
 import api, { cartApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { captureHandler, settle } from './helpers';
+import { captureHandler, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 const pathname = vi.hoisted(() => ({ current: '/admin/logs' }));

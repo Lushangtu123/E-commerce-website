@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductsPage from '@/app/products/page';
 import Header from '@/components/Header';
 import { productApi, searchApi, type Product, type SearchKeyword } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { captureHandler, deferred, settle } from './helpers';
+import { captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

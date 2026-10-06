@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { AxiosAdapter } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import OrderReviews from '@/components/OrderReviews';
 import api, { type PurchaseReview } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
-import { captureHandler, deferred, reactHandler, settle, submitTogether } from './helpers';
+import { captureHandler, deferred, reactHandler, render, settle, submitTogether } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ import api, { paymentApi, userApi } from '@/lib/api';
 import { passwordError } from '@/lib/password-validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import { CommitLog, apiError, captureHandler, deferred, settle, submitTogether } from './helpers';
+import { CommitLog, apiError, captureHandler, deferred, render, settle, submitTogether } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/profile/settings' }));

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,7 @@ import AdminDashboardPage from '@/app/admin/dashboard/page';
 import AdminOrdersPage from '@/app/admin/orders/page';
 import api, { type AdminOrderRow } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { deferred, settle } from './helpers';
+import { deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

@@ -1,9 +1,10 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CartPage from '@/app/cart/page';
 import { cartApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore, type CartItem } from '@/store/useCartStore';
+import { render } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

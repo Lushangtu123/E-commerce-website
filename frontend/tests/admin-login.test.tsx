@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminLoginPage from '@/app/admin/login/page';
-import { settle } from './helpers';
+import { render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const toasts = vi.hoisted(() => [] as [string, string][]);

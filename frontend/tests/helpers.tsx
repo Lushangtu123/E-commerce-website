@@ -1,5 +1,17 @@
-import { act } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { act, render as renderWithoutProviders, type RenderOptions } from '@testing-library/react';
 import { Profiler, useRef, type ReactNode } from 'react';
+import { createQueryClient } from '@/lib/query-client';
+
+/**
+ * Renders inside the providers AppShell gives every page, with a fresh query cache per call
+ * so no test sees another's data. rerender keeps the same cache, as a re-render would.
+ */
+export function render(ui: ReactNode, options?: Omit<RenderOptions, 'wrapper'>) {
+  const client = createQueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return renderWithoutProviders(ui, { ...options, wrapper });
+}
 
 export function deferred<T = unknown>() {
   let resolve!: (value: T) => void;

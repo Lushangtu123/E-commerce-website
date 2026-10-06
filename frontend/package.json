@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit --incremental false"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.104.1",
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
     "axios": "^1.6.2",

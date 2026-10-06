@@ -1,9 +1,9 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePage from '@/components/HomePage';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { deferred, settle } from './helpers';
+import { deferred, render, settle } from './helpers';
 
 const toasts = vi.hoisted(() => [] as string[]);
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));

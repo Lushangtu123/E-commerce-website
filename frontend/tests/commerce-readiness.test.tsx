@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OrdersPage from '@/app/orders/page';
 import { orderApi, paymentApi, type PaymentSettings } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { settle } from './helpers';
+import { render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

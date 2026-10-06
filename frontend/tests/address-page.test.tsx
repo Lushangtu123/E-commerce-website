@@ -1,9 +1,9 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AddressPage from '@/app/profile/address/page';
 import { addressApi, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { CommitLog, apiError, captureHandler, deferred, settle } from './helpers';
+import { CommitLog, apiError, captureHandler, deferred, render, settle } from './helpers';
 
 const notifications = vi.hoisted(() => [] as string[]);
 // Next returns the same router on every render; pages list it as an effect dependency.

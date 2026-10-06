@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import ProductImage from '@/components/ProductImage';
+import { render } from './helpers';
 
 it('shows the fallback for a broken image and recovers when the URL is corrected', () => {
   const view = render(<ProductImage src="https://cdn.test/typo.jpg" alt="Preview" />);

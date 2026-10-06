@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
 import type { AxiosAdapter } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RegisterPage from '@/app/register/page';
@@ -6,7 +6,7 @@ import api from '@/lib/api';
 import { translate } from '@/lib/i18n';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
-import { apiError, settle } from './helpers';
+import { apiError, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn() }));

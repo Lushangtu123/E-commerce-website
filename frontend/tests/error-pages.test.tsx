@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import ErrorPage from '@/app/error';
 import GlobalError from '@/app/global-error';
 import { logger } from '@/lib/logger';
+import { render } from './helpers';
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 
