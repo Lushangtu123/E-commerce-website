@@ -4,7 +4,8 @@ import './globals.css';
 import AppShell from '@/components/AppShell';
 import { SITE_DESCRIPTION, SITE_NAME, TITLE_TEMPLATE, isIndexable, siteUrl } from '@/lib/site';
 
-const inter = Inter({ subsets: ['latin'] });
+// Inter covers Latin text only; globals.css lists the Chinese fonts that follow it.
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body className={inter.className}>
+      <body className={inter.variable}>
         <AppShell>{children}</AppShell>
       </body>
     </html>
