@@ -16,11 +16,11 @@ echo ""
 
 # 1. 管理员登录
 echo -e "${BLUE}[1/8] 管理员登录...${NC}"
-ADMIN_LOGIN=$(curl -s -X POST "${BASE_URL}/admin/login" \
+ADMIN_LOGIN=$(curl -s -i -X POST "${BASE_URL}/admin/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}')
 
-ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | grep -o '"token":"[^"]*' | sed 's/"token":"//')
+ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | grep -o 'admin_session=[^;]*' | head -1 | cut -d= -f2)
 
 if [ -n "$ADMIN_TOKEN" ]; then
   echo -e "${GREEN}✓ 管理员登录成功${NC}"
@@ -122,7 +122,7 @@ echo ""
 echo -e "${BLUE}[4/8] 用户注册/登录...${NC}"
 
 # 尝试注册
-REGISTER=$(curl -s -X POST "${BASE_URL}/users/register" \
+REGISTER=$(curl -s -i -X POST "${BASE_URL}/users/register" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "coupon_test_user",
@@ -132,14 +132,14 @@ REGISTER=$(curl -s -X POST "${BASE_URL}/users/register" \
   }')
 
 # 登录
-USER_LOGIN=$(curl -s -X POST "${BASE_URL}/users/login" \
+USER_LOGIN=$(curl -s -i -X POST "${BASE_URL}/users/login" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "coupon_test_user",
     "password": "123456"
   }')
 
-USER_TOKEN=$(echo "$USER_LOGIN" | grep -o '"token":"[^"]*' | sed 's/"token":"//')
+USER_TOKEN=$(echo "$USER_LOGIN" | grep -o 'customer_session=[^;]*' | head -1 | cut -d= -f2)
 
 if [ -n "$USER_TOKEN" ]; then
   echo -e "${GREEN}✓ 用户登录成功${NC}"

@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { query } from '../../database/mysql';
 import { UserController } from '../../controllers/user.controller';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const valid = { username: '客户', email: 'customer@example.test', password: 'valid-password' };
 const profile = { user_id: 7, username: '客户', email: 'customer@example.test', phone: null, avatar_url: null, password_hash: 'private-hash', role: 'private' };
@@ -67,8 +68,12 @@ test.each([' ' + 'x'.repeat(70) + ' ', '汉'.repeat(24)])('registration preserve
   expect(await bcrypt.compare(password, insert[1][2])).toBe(true);
   const output = (res.json as jest.Mock).mock.calls[0][0];
   expect(output.user).toEqual({ user_id: 7, username: '单', email: 'customer@example.test' });
-  expect(typeof output.token).toBe('string');
-  expect((res.cookie as jest.Mock).mock.calls[0].slice(0, 2)).toEqual(['customer_session', output.token]);
+  // The signed session goes only into the httpOnly cookie, never into the readable body.
+  expect(output).not.toHaveProperty('token');
+  const [name, token] = (res.cookie as jest.Mock).mock.calls[0];
+  expect(name).toBe('customer_session');
+  expect(jwt.verify(token, process.env.JWT_SECRET!)).toMatchObject({ userId: 7, type: 'user', authVersion: 0 });
+  expect(JSON.stringify(output)).not.toContain(token);
 });
 
 test.each([
@@ -122,7 +127,9 @@ test('legacy short passwords and historical email remain usable without trimming
   const password_hash = await bcrypt.hash(password, 4);
   (query as jest.Mock).mockResolvedValue([{ ...profile, email: 'legacy-local-email', password_hash }]);
   const res = response(); await UserController.login(req({ email: ' legacy-local-email ', password }), res);
-  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ token: expect.any(String), user: expect.objectContaining({ user_id: 7 }) }));
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ user: expect.objectContaining({ user_id: 7 }) }));
+  expect((res.json as jest.Mock).mock.calls[0][0]).not.toHaveProperty('token');
+  expect((res.cookie as jest.Mock).mock.calls[0][0]).toBe('customer_session');
   expect((res.json as jest.Mock).mock.calls[0][0].user.password_hash).toBeUndefined();
   expect(query).toHaveBeenCalledWith(expect.any(String), ['legacy-local-email']);
 });

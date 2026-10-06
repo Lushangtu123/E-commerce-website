@@ -27,25 +27,32 @@
 
 ## 🔐 认证说明
 
-### JWT Token 认证
+### 会话 Cookie 认证
 
-大多数 API 需要在请求头中包含 JWT token：
+登录成功后，服务器通过 `Set-Cookie` 写入 httpOnly 会话 Cookie，响应体中**不再返回令牌**：
+
+- 用户登录 / 注册: `POST /api/users/login`、`POST /api/users/register` → `customer_session`
+- 管理员登录: `POST /api/admin/login` → `admin_session`
+
+Cookie 属性为 `HttpOnly; SameSite=Lax; Path=/api`（生产环境另加 `Secure`），有效期与令牌一致。浏览器请求需携带 Cookie（axios `withCredentials: true`，fetch `credentials: 'include'`）。
+
+使用 Cookie 认证的非 GET 请求必须带 `X-Requested-With: XMLHttpRequest` 请求头，否则返回 403（CSRF 防护）。
+
+退出登录: `POST /api/users/logout`、`POST /api/admin/logout`（清除对应 Cookie）。
+
+### 非浏览器客户端
+
+脚本或其他服务可以保存 Cookie（如 `curl -c cookies.txt` / `-b cookies.txt`），也可以把 Cookie 的值作为 Bearer 令牌发送；同时提供时以 Bearer 为准：
 
 ```http
-Authorization: Bearer <your_jwt_token>
+Authorization: Bearer <customer_session 或 admin_session 的值>
 ```
-
-### 获取 Token
-
-通过登录接口获取：
-- 用户登录: `POST /api/users/login`
-- 管理员登录: `POST /api/admin/login`
 
 ### Token 生命周期
 
 - **有效期**: 7天
 - **刷新**: Token 过期后需要重新登录
-- **存储**: 建议存储在 localStorage 或安全的 cookie 中
+- **存储**: 只在 httpOnly Cookie 中，页面脚本无法读取
 
 ---
 
@@ -127,7 +134,6 @@ Authorization: Bearer <your_jwt_token>
 ```json
 {
   "message": "注册成功",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "id": 1,
     "username": "user123",
@@ -146,7 +152,7 @@ Authorization: Bearer <your_jwt_token>
 
 ### 2. 用户登录
 
-用户登录获取 token。
+用户登录；会话写入 httpOnly Cookie `customer_session`。
 
 **接口**: `POST /api/users/login`  
 **认证**: 不需要
@@ -163,7 +169,6 @@ Authorization: Bearer <your_jwt_token>
 ```json
 {
   "message": "登录成功",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "id": 1,
     "username": "user123",
@@ -1339,7 +1344,6 @@ GET /api/products/search?keyword=手机&page=1&limit=12
 ```json
 {
   "message": "登录成功",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "admin": {
     "id": 1,
     "username": "admin",
@@ -1760,10 +1764,15 @@ curl -X POST http://localhost:3001/api/users/register \
 # 获取商品列表
 curl -X GET "http://localhost:3001/api/products?page=1&limit=12"
 
-# 添加到购物车（需要token）
-curl -X POST http://localhost:3001/api/cart \
+# 登录并保存会话 Cookie
+curl -c cookies.txt -X POST http://localhost:3001/api/users/login \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"email": "test@example.com", "password": "password123"}'
+
+# 添加到购物车（需要登录；Cookie 认证的写请求需带 X-Requested-With）
+curl -b cookies.txt -X POST http://localhost:3001/api/cart \
+  -H "Content-Type: application/json" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -d '{
     "product_id": 1,
     "sku_id": 1,
@@ -1774,19 +1783,25 @@ curl -X POST http://localhost:3001/api/cart \
 ### JavaScript (Axios)
 
 ```javascript
+// 浏览器会自动保存并发送 httpOnly 会话 Cookie
+const api = axios.create({
+  baseURL: 'http://localhost:3001/api',
+  withCredentials: true,
+  headers: { 'X-Requested-With': 'XMLHttpRequest' }
+});
+
 // 登录
 const login = async () => {
-  const response = await axios.post('http://localhost:3001/api/users/login', {
+  const response = await api.post('/users/login', {
     email: 'user@example.com',
     password: 'password123'
   });
-  const token = response.data.token;
-  localStorage.setItem('token', token);
+  return response.data.user;
 };
 
 // 获取商品列表
 const getProducts = async () => {
-  const response = await axios.get('http://localhost:3001/api/products', {
+  const response = await api.get('/products', {
     params: {
       page: 1,
       limit: 12,
@@ -1796,18 +1811,9 @@ const getProducts = async () => {
   return response.data;
 };
 
-// 创建订单（带认证）
+// 创建订单（会话 Cookie 自动随请求发送）
 const createOrder = async (orderData) => {
-  const token = localStorage.getItem('token');
-  const response = await axios.post(
-    'http://localhost:3001/api/orders',
-    orderData,
-    {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    }
-  );
+  const response = await api.post('/orders', orderData);
   return response.data;
 };
 ```
@@ -1822,11 +1828,12 @@ const createOrder = async (orderData) => {
 
 1. 设置环境变量：
    - `base_url`: `http://localhost:3001/api`
-   - `token`: 登录后获取的 JWT token
 
-2. 在请求头中添加：
+2. 先调用登录接口，Postman 会保存返回的会话 Cookie 并在之后的请求中自动发送。
+
+3. 非 GET 请求添加请求头：
    ```
-   Authorization: Bearer {{token}}
+   X-Requested-With: XMLHttpRequest
    ```
 
 ### 测试账号

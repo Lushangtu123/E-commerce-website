@@ -21,7 +21,7 @@ echo ""
 
 # 1. 用户注册登录
 echo -e "${BLUE}[1/10] 测试用户注册和登录${NC}"
-REGISTER_RESPONSE=$(curl -s -X POST "${BASE_URL}/users/register" \
+REGISTER_RESPONSE=$(curl -s -i -X POST "${BASE_URL}/users/register" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "testuser_es",
@@ -30,18 +30,18 @@ REGISTER_RESPONSE=$(curl -s -X POST "${BASE_URL}/users/register" \
     "phone": "13900000001"
   }')
 
-if echo "$REGISTER_RESPONSE" | grep -q "token"; then
+if echo "$REGISTER_RESPONSE" | grep -q "customer_session="; then
   echo -e "${GREEN}✓ 注册成功${NC}"
-  TOKEN=$(echo "$REGISTER_RESPONSE" | grep -o '"token":"[^"]*' | sed 's/"token":"//')
+  TOKEN=$(echo "$REGISTER_RESPONSE" | grep -o 'customer_session=[^;]*' | head -1 | cut -d= -f2)
 else
   # 尝试登录
-  LOGIN_RESPONSE=$(curl -s -X POST "${BASE_URL}/users/login" \
+  LOGIN_RESPONSE=$(curl -s -i -X POST "${BASE_URL}/users/login" \
     -H "Content-Type: application/json" \
     -d '{
       "username": "testuser_es",
       "password": "123456"
     }')
-  TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*' | sed 's/"token":"//')
+  TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o 'customer_session=[^;]*' | head -1 | cut -d= -f2)
   echo -e "${GREEN}✓ 登录成功${NC}"
 fi
 
@@ -74,13 +74,13 @@ echo -e "${BLUE}[3/10] 测试优惠券系统${NC}"
 
 # 3.1 管理员登录
 echo "  • 管理员登录..."
-ADMIN_LOGIN=$(curl -s -X POST "${BASE_URL}/admin/login" \
+ADMIN_LOGIN=$(curl -s -i -X POST "${BASE_URL}/admin/login" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",
     "password": "admin123"
   }')
-ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | grep -o '"token":"[^"]*' | sed 's/"token":"//')
+ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | grep -o 'admin_session=[^;]*' | head -1 | cut -d= -f2)
 
 if [ -n "$ADMIN_TOKEN" ]; then
   echo -e "${GREEN}    管理员登录成功${NC}"
