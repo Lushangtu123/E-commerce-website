@@ -89,7 +89,7 @@ export default function OrdersPage() {
   }, [isHydrated, isAuthenticated, router]);
 
   const handleMutation = async (orderId: number, action: 'pay' | 'cancel' | 'confirm') => {
-    if (!isCurrentScope() || !shown || mutation.current) return;
+    if (!isCurrentScope() || mutation.current) return;
     if (action === 'pay' && !payments.canPay) return;
     const order = orders.find(item => item.order_id === orderId);
     if (!order || (action === 'confirm' ? order.status !== 2 : order.status !== 0)) return;
@@ -108,7 +108,7 @@ export default function OrdersPage() {
       if (!isCurrentSession()) return;
       toast.error(t(requestFailure(error).response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
     } finally {
-      if (isCurrentSession() && mutation.current === operation) {
+      if (mutation.current === operation) {
         mutation.current = null;
         setPendingSession(null);
       }

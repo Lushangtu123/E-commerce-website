@@ -51,10 +51,12 @@ export function useSessionQuery<T>({ name, params, load, enabled = true }: Sessi
   const live = isCurrentSession();
   return {
     data: live && query.isSuccess ? query.data : undefined,
-    // A retry shows the loading state again rather than the error it is replacing.
+    // A retry shows the loading state again rather than the error it is replacing. TanStack does this itself
+    // for a query without data, but keeps the error of one whose earlier data failed to refresh.
     error: live && query.isError && !query.isFetching && !(query.error instanceof StaleSessionError) ? query.error : undefined,
     isCurrentSession,
-    refetch: async () => { if (isCurrentSession()) await query.refetch(); },
+    // A refetch for a session that is no longer current fails its first check without a request.
+    refetch: async () => { await query.refetch(); },
     /** Reloads whatever this session's pages of the data are displayed now. */
     invalidate: () => queryClient.invalidateQueries({ queryKey: [name, token, userId] }),
   };

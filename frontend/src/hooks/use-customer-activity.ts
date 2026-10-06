@@ -105,7 +105,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
     } catch (cause) {
       if (isCurrentScope()) options.onError(cause);
     } finally {
-      if (isCurrentSession() && mutation.current === operation) {
+      if (mutation.current === operation) {
         mutation.current = null;
         setPendingSession(null);
       }
