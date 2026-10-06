@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getPool } from '../database/mysql';
 import logger from '../utils/logger';
+import { ADMIN_COOKIE, CSRF_ERROR, sessionToken } from '../utils/session-cookie';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
 
@@ -35,8 +36,8 @@ export const authenticateAdmin = async (
   next: NextFunction
 ) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-
+    const { token, source } = sessionToken(req, ADMIN_COOKIE);
+    if (source === 'forged') return res.status(403).json({ error: CSRF_ERROR });
     if (!token) {
       return res.status(401).json({ error: '未提供认证令牌' });
     }

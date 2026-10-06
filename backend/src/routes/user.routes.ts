@@ -204,6 +204,23 @@ router.post('/login', authLimiter, UserController.login);
 
 /**
  * @openapi
+ * /api/users/logout:
+ *   post:
+ *     tags: [用户]
+ *     summary: 退出登录
+ *     description: 清除 httpOnly 会话 Cookie。需带 X-Requested-With 请求头，防止跨站页面强制退出。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
+ *     responses:
+ *       200:
+ *         description: 已清除会话 Cookie
+ *       403:
+ *         description: 缺少 X-Requested-With 请求头
+ */
+router.post('/logout', UserController.logout);
+
+/**
+ * @openapi
  * /api/users/profile:
  *   get:
  *     tags: [用户]

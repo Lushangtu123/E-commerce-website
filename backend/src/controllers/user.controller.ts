@@ -4,6 +4,7 @@ import { UserModel } from '../models/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
+import { CSRF_ERROR, CUSTOMER_COOKIE, clearSessionCookie, hasCsrfHeader, setSessionCookie } from '../utils/session-cookie';
 import { normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
 import { passwordMailConfig } from '../services/password-mail.service';
 import { PasswordResetModel } from '../models/password-reset.model';
@@ -40,6 +41,7 @@ export class UserController {
       if (await bcrypt.compare(newPassword, user.password_hash)) return res.status(400).json({ error: '新密码不能与当前密码相同' });
       const hash = await bcrypt.hash(newPassword, 12);
       if (!await PasswordResetModel.changePassword(user.user_id, user.password_hash, hash)) return res.status(409).json({ error: '账户密码已更新，请重新登录后重试' });
+      clearSessionCookie(res, CUSTOMER_COOKIE);
       return res.json({ message: '密码已修改，请重新登录', reauthenticate: true });
     } catch (error) {
       if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
@@ -54,6 +56,7 @@ export class UserController {
       const hash = await bcrypt.hash(newPassword, 12);
       const consumed = await PasswordResetModel.consume(createHash('sha256').update(token).digest('hex'), hash);
       if (!consumed) return res.status(400).json({ error: '密码重置链接无效或已过期', code: 'INVALID_RESET_TOKEN' });
+      clearSessionCookie(res, CUSTOMER_COOKIE);
       return res.json({ message: '密码已重置，请重新登录', reauthenticate: true });
     } catch (error) {
       if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
@@ -102,6 +105,7 @@ export class UserController {
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
+      setSessionCookie(res, CUSTOMER_COOKIE, token);
       res.status(201).json({
         message: '注册成功',
         token,
@@ -113,6 +117,13 @@ export class UserController {
       logger.error({ err: error }, '注册失败');
       res.status(500).json({ error: '注册失败' });
     }
+  }
+
+  // 退出登录：清除会话 Cookie。令牌本身无状态，Bearer 客户端自行丢弃即可。
+  static logout(req: AuthRequest, res: Response) {
+    if (!hasCsrfHeader(req)) return res.status(403).json({ error: CSRF_ERROR });
+    clearSessionCookie(res, CUSTOMER_COOKIE);
+    return res.json({ message: '已退出登录' });
   }
 
   // 登录
@@ -140,6 +151,7 @@ export class UserController {
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
+      setSessionCookie(res, CUSTOMER_COOKIE, token);
       res.json({
         message: '登录成功',
         token,

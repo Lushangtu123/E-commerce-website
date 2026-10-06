@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserModel } from '../models/user.model';
+import { CSRF_ERROR, CUSTOMER_COOKIE, sessionToken } from '../utils/session-cookie';
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -17,8 +18,8 @@ function userPayload(decoded: string | jwt.JwtPayload): decoded is jwt.JwtPayloa
 export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   let decoded: jwt.JwtPayload;
   try {
-    const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
-
+    const { token, source } = sessionToken(req, CUSTOMER_COOKIE);
+    if (source === 'forged') return res.status(403).json({ error: CSRF_ERROR });
     if (!token) {
       return res.status(401).json({ error: '未登录，请先登录' });
     }
@@ -44,7 +45,8 @@ export async function optionalAuth(req: AuthRequest, res: Response, next: NextFu
   delete req.userId;
   delete req.user;
   try {
-    const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
+    // A cookie on an unsafe request without the CSRF header reads as anonymous.
+    const { token } = sessionToken(req, CUSTOMER_COOKIE);
 
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;

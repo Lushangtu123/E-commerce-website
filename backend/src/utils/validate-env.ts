@@ -12,14 +12,23 @@ const WEAK_SECRETS = new Set([
 
 /**
  * 解析 CORS 允许的来源列表（支持逗号分隔多个域名）
- * @returns 来源数组；未配置时返回 true（开发环境放行所有）
+ * @returns 来源数组；未配置或含 `*` 时返回 true（放行所有来源，但不带 Cookie）
  */
 export function getCorsOrigins(): string[] | true {
   const origins = (process.env.CORS_ORIGIN || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return origins.length > 0 ? origins : true;
+  return origins.length > 0 && !origins.includes('*') ? origins : true;
+}
+
+/**
+ * CORS 配置。会话 Cookie 只允许发给明确列出的来源：未配置 CORS_ORIGIN 时（仅开发环境）
+ * 放行所有来源，但不带凭据，否则任何网站都能以访客身份调用接口。
+ */
+export function corsOptions(): { origin: string[] | true; credentials: boolean } {
+  const origin = getCorsOrigins();
+  return { origin, credentials: origin !== true };
 }
 
 /**
