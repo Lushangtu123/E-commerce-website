@@ -7,10 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "npm run test:legacy && npm run test:unit",
-    "test:unit": "vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
-    "test:legacy": "node --test tests/*.test.cjs",
     "test:e2e": "node tests/e2e/commerce.cjs",
     "typecheck": "tsc --noEmit --incremental false"
   },

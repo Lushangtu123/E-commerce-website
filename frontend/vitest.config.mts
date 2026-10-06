@@ -1,10 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-/**
- * Component and store tests render real React into happy-dom. The older
- * node:test suite (tests/*.test.cjs) still runs alongside until it is migrated.
- */
+/** Component and store tests render real React into happy-dom; tests/helpers.tsx holds the shared tools. */
 export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

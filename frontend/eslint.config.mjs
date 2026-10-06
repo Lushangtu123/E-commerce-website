@@ -24,6 +24,6 @@ export default defineConfig([
     files: ['**/*.js'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
-  // The node:test harness under tests/ is CommonJS and builds its own module scope.
+  // The Playwright browser regression (tests/e2e/commerce.cjs) is a CommonJS script run by plain Node.
   globalIgnores(['.next/**', 'out/**', 'test-results/**', 'next-env.d.ts', '**/*.cjs']),
 ]);
