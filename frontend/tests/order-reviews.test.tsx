@@ -290,7 +290,7 @@ describe('order reviews', () => {
     await renderReviews();
     const retry = captureHandler(screen.getByRole('button', { name: '重新加载评价' }));
 
-    await retry();
+    await act(() => retry());
     await settle();
     fireEvent.submit(forms()[0]);
     await retry();

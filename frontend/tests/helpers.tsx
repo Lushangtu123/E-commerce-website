@@ -52,10 +52,19 @@ export function reactHandler(element: Element, name: 'onClick' | 'onChange' | 'o
   return handler;
 }
 
-/** Captures an element's current handler; calling it later runs that render's closure. */
-export function captureHandler(element: Element, name: 'onClick' | 'onSubmit' = 'onClick') {
+/**
+ * Captures an element's current handler; calling it later runs that render's closure. Only
+ * the synchronous part runs inside act, and the handler's promise is returned as is, so a
+ * handler waiting on a pending request never holds an act scope open. Wrap the call in
+ * `await act(() => handler())` when its later state updates should be awaited.
+ */
+export function captureHandler(element: Element, name: 'onClick' | 'onChange' | 'onSubmit' = 'onClick') {
   const handler = reactHandler(element, name);
-  return () => act(async () => { await handler({ preventDefault() {}, stopPropagation() {} }); });
+  return () => {
+    let result: unknown;
+    act(() => { result = handler({ preventDefault() {}, stopPropagation() {} }); });
+    return Promise.resolve(result);
+  };
 }
 
 /**
