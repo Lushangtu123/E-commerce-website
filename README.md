@@ -28,7 +28,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - **Account centre** - One place for profile, orders and coupons
 - Product browsing, search and filtering
 - **Favourites** - Add and remove favourites and manage the favourites list
-- **Search history** - Searches are recorded automatically, with a popular-search ranking
+- **Search history** - Searches are recorded automatically, with a popular-search ranking. Removing a history entry preserves the current query and page.
 - **Browsing history** - Viewed products are tracked for quick repurchase
 - Shopping cart - Add, remove and change items
 - **Coupons** - Claim coupons, apply them and calculate discounts

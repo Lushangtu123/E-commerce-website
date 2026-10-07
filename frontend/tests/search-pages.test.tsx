@@ -1,9 +1,11 @@
 import { act, fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductsPage from '@/components/ProductList';
 import Header from '@/components/Header';
 import { productApi, searchApi, type Product, type SearchKeyword } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -50,6 +52,61 @@ describe('header search history', () => {
     fireEvent.focus(document.querySelector('form[role="search"] input')!);
     await settle();
   }
+
+  it.each(['zh-CN', 'en'] as const)('deletes a history entry without submitting the populated search form (%s)', async locale => {
+    useAuthStore.getState().login(userA, 'session-A');
+    useLocaleStore.setState({ locale });
+    let stored = [keyword('My search'), keyword('Keep this')];
+    vi.mocked(searchApi.deleteKeyword).mockImplementation(async value => {
+      stored = stored.filter(item => item.keyword !== value);
+      return {} as never;
+    });
+    vi.mocked(searchApi.record).mockImplementation(async value => {
+      stored.push(keyword(value));
+      return {} as never;
+    });
+    await setup(async () => ({ history: [...stored] }));
+    const input = document.querySelector<HTMLInputElement>('form[role="search"] input')!;
+    fireEvent.change(input, { target: { value: '  My search  ' } });
+    await openHistory();
+    const click = userEvent.setup();
+
+    await click.click(screen.getByText('My search').parentElement!.querySelector('button')!);
+    await settle();
+
+    expect(searchApi.deleteKeyword).toHaveBeenCalledExactlyOnceWith('My search');
+    expect(searchApi.record).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(input).toHaveValue('  My search  ');
+    expect(screen.queryByText('My search')).not.toBeInTheDocument();
+    expect(screen.getByText('Keep this')).toBeVisible();
+
+    await click.click(screen.getByRole('button', { name: locale === 'en' ? 'Search' : '搜索' }));
+    await settle();
+    expect(searchApi.record).toHaveBeenCalledExactlyOnceWith('My search');
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/products?keyword=My%20search');
+    await openHistory();
+    expect(screen.getByText('My search')).toBeVisible();
+  });
+
+  it('keeps the history and query in place when deleting fails without submitting a search', async () => {
+    useAuthStore.getState().login(userA, 'session-A');
+    vi.mocked(searchApi.deleteKeyword).mockRejectedValue(new Error('Delete unavailable'));
+    await setup();
+    const input = document.querySelector<HTMLInputElement>('form[role="search"] input')!;
+    fireEvent.change(input, { target: { value: 'Other search' } });
+    await openHistory();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: '删除' }));
+    await settle();
+
+    expect(searchApi.deleteKeyword).toHaveBeenCalledExactlyOnceWith('My search');
+    expect(searchApi.record).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(searchApi.getHistory).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue('Other search');
+    expect(screen.getByText('My search')).toBeVisible();
+  });
 
   it('loads once the persisted customer hydrates after the header mounts', async () => {
     await setup();
