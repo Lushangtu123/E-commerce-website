@@ -3,7 +3,7 @@
  */
 import express from 'express';
 import { AdminCouponController } from '../controllers/admin-coupon.controller';
-import { adminAuthMiddleware } from '../middleware/admin-auth';
+import { adminAuthMiddleware, requirePermission } from '../middleware/admin-auth';
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.use(adminAuthMiddleware);
  *   post:
  *     tags: [管理后台-优惠券]
  *     summary: 创建优惠券
- *     description: 操作记审计日志
+ *     description: 需要 coupon:create 权限，操作记审计日志
  *     security: [{ adminAuth: [] }]
  *     requestBody:
  *       required: true
@@ -45,8 +45,10 @@ router.use(adminAuthMiddleware);
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       403:
+ *         description: 权限不足
  */
-router.post('/', AdminCouponController.createCoupon);
+router.post('/', requirePermission('coupon:create'), AdminCouponController.createCoupon);
 
 /**
  * @openapi
@@ -54,6 +56,7 @@ router.post('/', AdminCouponController.createCoupon);
  *   get:
  *     tags: [管理后台-优惠券]
  *     summary: 获取优惠券列表
+ *     description: 需要 coupon:view 权限
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: page
@@ -74,8 +77,10 @@ router.post('/', AdminCouponController.createCoupon);
  *             schema:
  *               type: array
  *               items: { $ref: '#/components/schemas/Coupon' }
+ *       403:
+ *         description: 权限不足
  */
-router.get('/', AdminCouponController.getCouponList);
+router.get('/', requirePermission('coupon:view'), AdminCouponController.getCouponList);
 
 /**
  * @openapi
@@ -83,6 +88,7 @@ router.get('/', AdminCouponController.getCouponList);
  *   get:
  *     tags: [管理后台-优惠券]
  *     summary: 获取优惠券详情
+ *     description: 需要 coupon:view 权限
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: id
@@ -100,8 +106,10 @@ router.get('/', AdminCouponController.getCouponList);
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       403:
+ *         description: 权限不足
  */
-router.get('/:id', AdminCouponController.getCouponDetail);
+router.get('/:id', requirePermission('coupon:view'), AdminCouponController.getCouponDetail);
 
 /**
  * @openapi
@@ -109,7 +117,7 @@ router.get('/:id', AdminCouponController.getCouponDetail);
  *   put:
  *     tags: [管理后台-优惠券]
  *     summary: 更新优惠券状态
- *     description: 操作记审计日志
+ *     description: 需要 coupon:edit 权限，操作记审计日志
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: id
@@ -133,7 +141,9 @@ router.get('/:id', AdminCouponController.getCouponDetail);
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       403:
+ *         description: 权限不足
  */
-router.put('/:id/status', AdminCouponController.updateCouponStatus);
+router.put('/:id/status', requirePermission('coupon:edit'), AdminCouponController.updateCouponStatus);
 
 export default router;
