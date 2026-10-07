@@ -297,6 +297,7 @@ E-commerce-website/
 - `GET /api/users/password/capabilities` - 获取找回功能可用状态
 - `POST /api/users/password/forgot` - 请求重置邮件；服务未配置时安全禁用
 - `POST /api/users/password/reset` - 使用 30 分钟内的一次性凭据重置密码
+- `POST /api/users/logout` - 退出登录（清除会话 Cookie）
 
 注册仅接受用户名、邮箱和密码：用户名去除首尾空白后为 1–50 个字符，邮箱为合法地址且最多 100 个字符，密码至少 6 位、最多 72 个 UTF-8 字节，保留密码空白。注册成功返回 `201`，用户名或邮箱冲突返回 `409`，包含并发注册冲突。登录保留已有账户的密码长度兼容性。
 
@@ -317,7 +318,9 @@ E-commerce-website/
 - `GET /api/products/:id` - 获取商品详情（含SKU信息）
 - `GET /api/products/hot` - 获取热门商品
 - `GET /api/products/categories` - 获取商品分类
-- `GET /api/products/search` - 搜索商品
+- `POST /api/products`、`PUT /api/products/:id` - 创建、更新商品（需管理员 `product:create` / `product:edit` 权限）
+
+关键词搜索使用 `GET /api/products?keyword=...`（MySQL）或 `GET /api/search/es`（Elasticsearch，可回退 MySQL）。
 
 ### 收藏相关 (Favorites APIs) 🆕
 - `POST /api/favorites` - 添加收藏，body 为 `{ product_id }`，商品必须存在且上架
@@ -357,6 +360,7 @@ E-commerce-website/
 - `POST /api/orders` - 创建订单，必填本人有效的 `shipping_address_id`，可携带 `user_coupon_id`，返回原价、优惠额和应付金额；收货信息由服务器保存快照，后续编辑或删除地址不改变订单
 - `GET /api/orders` - 获取本人订单列表；`page` 默认 1，`limit` 默认 10（最多 100），`status` 可选 0–4；返回 `orders`、`total`、`page`、`limit`、`totalPages`
 - `GET /api/orders/:id` - 获取订单详情
+- `GET /api/orders/:id/remaining-time` - 距自动取消还剩的支付时间（分钟）
 - `GET /api/payments/settings` - 查看是否允许演示支付
 - `POST /api/orders/:id/pay` - 演示支付，不实际扣款；禁用时返回 503
 - `POST /api/orders/:id/cancel` - 取消订单
@@ -383,6 +387,7 @@ E-commerce-website/
 - `GET /api/coupons/my/list` - 获取我的优惠券列表
 - `GET /api/coupons/my/available-for-order` - 获取订单可用优惠券
 - `POST /api/coupons/calculate` - 计算优惠金额
+- `GET /api/coupons/:id` - 获取优惠券详情
 
 **管理员端:**
 - `POST /api/admin/coupons` - 创建优惠券
@@ -391,14 +396,21 @@ E-commerce-website/
 - `PUT /api/admin/coupons/:id/status` - 更新优惠券状态
 
 ### 推荐相关 (Recommendation APIs) 🆕
-- `GET /api/recommendations/for-you` - 获取个性化推荐
+- `GET /api/recommendations/personalized` - 基于浏览历史的个性化推荐（需登录）
+- `GET /api/recommendations/guess-you-like` - 猜你喜欢（登录时个性化，否则为热门商品）
 - `GET /api/recommendations/related/:productId` - 获取相关商品推荐
 
 ### 管理后台 (Admin APIs) 🆕
+**会话:**
+- `POST /api/admin/login` - 管理员登录
+- `POST /api/admin/logout` - 退出登录，并使该管理员的所有会话失效
+- `GET /api/admin/profile` - 管理员信息及权限
+
 **数据统计:**
 - `GET /api/admin/dashboard/stats` - 获取统计数据
 - `GET /api/admin/dashboard/sales-trend` - 获取销售趋势
 - `GET /api/admin/dashboard/top-products` - 获取热门商品
+- `GET /api/admin/dashboard/recent-orders` - 最新订单
 
 **商品管理:**
 - `GET /api/admin/products` - 获取商品列表
@@ -406,6 +418,7 @@ E-commerce-website/
 - `PUT /api/admin/products/:id` - 更新商品
 - `PUT /api/admin/products/:id/status` - 更新商品状态
 - `PUT /api/admin/products/batch/status` - 批量更新状态
+- `DELETE /api/admin/products/:id` - 删除商品（软删除：保留记录，状态置为 -1）
 - `GET /api/admin/products/:id/skus` - 获取全部启用/停用 SKU，返回 `{ product: { product_id, title, status }, skus }`
 - `POST /api/admin/products/:id/skus` - 创建SKU
 - `POST /api/admin/products/:id/skus/batch` - 批量创建SKU
@@ -415,22 +428,30 @@ E-commerce-website/
 
 **订单管理:**
 - `GET /api/admin/orders` - 获取订单列表
-- `PUT /api/admin/orders/:id` - 更新订单状态
 - `GET /api/admin/orders/:id` - 获取订单详情
+- `PUT /api/admin/orders/:id/status` - 更新订单状态（发货需填写快递公司和运单号）
+- `GET /api/admin/orders/stats/overview` - 订单统计
 
 **用户管理:**
 - `GET /api/admin/users` - 获取用户列表
 - `GET /api/admin/users/:id` - 获取用户详情
+- `GET /api/admin/users/:id/orders` - 获取用户订单
+- `PUT /api/admin/users/:id/status` - 启用或禁用用户
+- `GET /api/admin/users/stats/overview` - 用户统计
 
 **系统日志:**
 - `GET /api/admin/logs` - 获取操作日志
+
+### 运维 (Operations)
+- `GET /health`、`GET /api/health` - 健康检查；仅 MySQL 或 Redis 异常时返回 503（RabbitMQ、Elasticsearch 作为可选依赖单独标记）
+- `POST /api/internal/order-timeouts` - 供外部定时任务取消超时订单，需 `Authorization: Bearer <CRON_SECRET>`
 
 ## 🎯 性能优化
 
 ### 缓存策略
 - ✅ 热门商品信息缓存到Redis（10分钟）
 - ✅ 商品详情缓存到Redis（5分钟）
-- ✅ 用户Session存储到Redis
+- ✅ 设置 `RATE_LIMIT_STORE=redis` 或部署在 Vercel 时，限流计数存储在 Redis（登录会话是 httpOnly Cookie 中的签名 JWT，不存储在 Redis）
 
 ### 数据库优化
 - ✅ 合理的索引设计
@@ -502,6 +523,9 @@ npx vitest run tests/search-pages.test.tsx tests/admin-session.test.tsx tests/ad
 - [x] **个人中心页面** - 统一的用户功能入口 🆕
 
 ### 最近完成 🎉
+- [x] Elasticsearch 商品搜索：写入同步索引、MySQL 回退、参数校验（可选依赖）
+- [x] RabbitMQ 订单超时延迟队列改为可选依赖，断线重连后恢复消费；移除未使用的 MongoDB
+- [x] 优惠券结算：服务器预览、事务占用、取消返券与订单金额快照（2026-10-02）
 - [x] **优惠券系统** (2025-11-03)
   - 用户端：优惠券中心、我的优惠券、优惠券使用
   - 管理端：优惠券创建、状态管理
@@ -516,18 +540,11 @@ npx vitest run tests/search-pages.test.tsx tests/admin-session.test.tsx tests/ad
 - [x] 订单超时自动取消 (2025-10-31)
 - [x] 商品推荐算法 (2025-10-31)
 
-### 进行中 🚧
-- [x] Elasticsearch 商品搜索：写入同步索引、MySQL 回退、参数校验（可选依赖）
-- [x] RabbitMQ 订单超时延迟队列改为可选依赖，断线重连后恢复消费；移除未使用的 MongoDB
-- [x] 优惠券结算：服务器预览、事务占用、取消返券与订单金额快照（2026-10-02）
-
 ### 计划中 📋
 - [ ] 秒杀活动功能
 - [ ] 物流追踪
 - [ ] 移动端App
 - [ ] 性能进一步优化
-- [ ] 单元测试覆盖
-- [ ] CI/CD自动化部署
 
 ## 📊 项目统计
 
@@ -538,7 +555,7 @@ npx vitest run tests/search-pages.test.tsx tests/admin-session.test.tsx tests/ad
 | API接口 | 100+ |
 | 数据库表 | 24 |
 | 功能模块 | 15 |
-| 提交次数 | 110+ |
+| 提交次数 | 180+ |
 | 开发文档 | 7,000+ 行 |
 
 ## 📚 文档
@@ -639,17 +656,16 @@ MIT License
 ### 🚧 生产环境建议补充
 - HTTPS证书配置
 - 真实支付接口集成
-- 短信/邮件服务
+- 短信及订单通知邮件（密码重置邮件已通过 Resend 实现）
 - 对象存储（OSS）
 - CDN配置
 - 监控告警系统
 - 备份恢复方案
 - 负载均衡配置
-- 单元测试和集成测试
 
 ---
 
-**最后更新**: 2025年11月3日 | **版本**: 3.0.0
+**最后更新**: 2026年10月7日 | **版本**: 3.0.0
 
 ## 🎉 v3.0.0 更新亮点 (2025-11-03)
 
