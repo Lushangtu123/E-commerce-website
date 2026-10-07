@@ -5,7 +5,7 @@
 export const SITE_NAME = '电商平台';
 /** A layout with a plain string title drops this template for its children, so they repeat it. */
 export const TITLE_TEMPLATE = `%s | ${SITE_NAME}`;
-export const SITE_DESCRIPTION = '专业的电商平台，为您提供优质的购物体验。精选商品，全国包邮，7天无理由退换货。';
+export const SITE_DESCRIPTION = '浏览精选商品，便捷下单，在线查看订单物流与售后申请进度。';
 
 type Env = Record<string, string | undefined>;
 
@@ -104,15 +104,17 @@ export const PRIVATE_PATHS = ['/admin', '/api', '/cart', '/orders', '/profile', 
 /** Public pages that are always listed in the sitemap. */
 export const PUBLIC_STATIC_PATHS = ['/', '/products', '/coupons', '/help', '/returns', '/shipping'];
 
-/** Every listed product, page by page; stops at maxPages and on the first failed page. */
+/** Read fresh pages; a failed page must not replace the sitemap's complete ISR result. */
 export async function listPublicProducts(options: { env?: Env; fetcher?: typeof fetch; maxPages?: number } = {}): Promise<PublicProduct[]> {
   const products: PublicProduct[] = [];
   const maxPages = options.maxPages ?? 50;
   for (let page = 1; page <= maxPages; page++) {
-    const data = await fetchApiJson<{ products?: PublicProduct[]; totalPages?: number }>(`/products?page=${page}&limit=100`, { env: options.env, fetcher: options.fetcher, revalidate: 3600 });
-    if (!data?.products) break;
-    products.push(...data.products);
-    if (!data.totalPages || page >= data.totalPages) break;
+    const result = await fetchApiResult<{ products?: PublicProduct[]; totalPages?: number }>(`/products?page=${page}&limit=100`, { env: options.env, fetcher: options.fetcher, revalidate: 0 });
+    if (result.kind !== 'ok' || !Array.isArray(result.data?.products)) {
+      throw new Error('Unable to load a complete product sitemap');
+    }
+    products.push(...result.data.products);
+    if (!result.data.totalPages || page >= result.data.totalPages) break;
   }
   return products;
 }

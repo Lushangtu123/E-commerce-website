@@ -26,10 +26,15 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 | `CORS_ORIGIN` | 允许的前端来源；跨域调用时须包含实际域名 |
 | `NEXT_PUBLIC_API_URL=/api` | 同域 API 地址 |
 | `NEXT_PUBLIC_SITE_URL` | 可选。网站公开地址，用于 canonical、Open Graph 和 sitemap；不填时生产环境使用 Vercel 项目生产域名。只有 Production 允许搜索引擎收录，Preview 一律 noindex |
+| `NEXT_PUBLIC_SUPPORT_PHONE`、`NEXT_PUBLIC_SUPPORT_EMAIL` | 可选的公开商家客服联系信息。留空或格式不可用时不发布示例联系方式；仅配置一项时只显示该项。这些值会打包到客户端，修改后须重新构建和部署，勿填写密钥 |
 | `PAYMENT_MODE=demo` | 仅 Preview 演示交易，不实际扣款；默认 disabled，生产环境强制关闭模拟支付 |
 | `RESEND_API_KEY`、`EMAIL_FROM`、`APP_URL` | 可选的 Resend 密码找回；发件域名须验证，APP_URL 为可信 HTTPS 网站根地址 |
 
 连接初始化可复用并在失败后重试，MySQL 与 Redis 均保留 TLS 验证。Vercel API 不启动监听器、RabbitMQ 消费者或后台定时器；`/api/health` 检查 MySQL 和 Redis，`/api/openapi.json` 提供接口定义。
+
+商品详情在每次服务端请求中检查当前上架状态，下架后的 404 不会被旧的成功缓存覆盖；同一次页面请求仍复用商品数据。站点地图仅在可收录的生产环境生成 URL，完整结果按小时 ISR 缓存；生成时分页数据不跨请求缓存。分页失败或响应格式不可用会使本次生成失败，有既有结果时继续提供上次完整 XML，并在后续请求重试；首次生成失败会报错，不发布残缺列表。商品列表保持现有最多 50 页、每页 100 件的上限。
+
+首页、配送和售后说明描述当前可用流程。配送范围、费用、时效及退换货条件需由商家提供实际信息，不预设全国包邮、固定送达时间或赔付承诺。Docker 部署通过同名公开构建参数传入客服信息；只更改运行时环境不能更新已构建的客户端。
 
 ## Web Analytics 与 Speed Insights
 

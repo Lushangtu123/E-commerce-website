@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
-import { SUPPORT_EMAIL, SUPPORT_PHONE, supportEmailHref, supportPhoneHref } from '@/lib/contact';
+import SupportContacts from '@/components/SupportContacts';
 
 export interface InfoSection {
   title: string;
@@ -55,8 +55,7 @@ export default function InfoPage({ title, intro, sections }: InfoPageProps) {
           </nav>
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="font-semibold text-gray-900">{t('联系我们')}</h2>
-            <p className="mt-3 text-gray-600">{t('客服电话')}: <a href={supportPhoneHref} className="text-primary-600 hover:underline">{SUPPORT_PHONE}</a></p>
-            <p className="mt-1 text-gray-600">{t('邮箱')}: <a href={supportEmailHref} className="text-primary-600 hover:underline">{SUPPORT_EMAIL}</a></p>
+            <SupportContacts linkClassName="text-primary-600 hover:underline" />
           </div>
         </aside>
       </div>

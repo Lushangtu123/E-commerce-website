@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FiShoppingBag } from 'react-icons/fi';
 import { useI18n } from '@/lib/i18n';
-import { SUPPORT_EMAIL, SUPPORT_PHONE, supportEmailHref, supportPhoneHref } from '@/lib/contact';
+import SupportContacts from '@/components/SupportContacts';
 
 const linkClass = 'transition-colors hover:text-gray-900';
 
@@ -34,10 +34,7 @@ export default function SiteFooter() {
           </nav>
           <div>
             <h2 className="text-sm font-semibold text-gray-900">{t("联系我们")}</h2>
-            <ul className="mt-3 space-y-2 text-sm text-gray-500">
-              <li>{t("客服电话")}: <a href={supportPhoneHref} className={linkClass}>{SUPPORT_PHONE}</a></li>
-              <li>{t("邮箱")}: <a href={supportEmailHref} className={linkClass}>{SUPPORT_EMAIL}</a></li>
-            </ul>
+            <SupportContacts linkClassName={linkClass} />
           </div>
           <div>
             <h2 className="text-sm font-semibold text-gray-900">{t("关注我们")}</h2>
