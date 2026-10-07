@@ -25,16 +25,20 @@ async function ready(url, child) {
   }
   throw new Error('Local test server readiness timeout');
 }
-// Console errors are collected from every page. Only the deliberate old-password login may
-// log its expected 401 response and the login form's handled failure.
+// Console errors are collected from every page. Only the deliberate old-password login and
+// the injected checkout failures at their exact endpoint may log their expected errors.
 const consoleErrors = [];
 let expectedLoginFailure = false;
 const expectedLoginErrors = [/status of 401 \(Unauthorized\)/, /^登录请求失败/];
+let expectedCheckoutFailure = false;
+const checkoutEndpoint = 'http://127.0.0.1:3101/api/orders';
+const expectedCheckoutErrors = [/^Failed to load resource: net::ERR_FAILED$/, /^Failed to load resource: the server responded with a status of (408|429)(?: \([^)]*\))?$/];
 function watchConsole(page, label) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
     const text = message.text();
     if (expectedLoginFailure && expectedLoginErrors.some(pattern => pattern.test(text))) return;
+    if (expectedCheckoutFailure && message.location().url === checkoutEndpoint && expectedCheckoutErrors.some(pattern => pattern.test(text))) return;
     consoleErrors.push(`[${label}] ${new URL(page.url()).pathname}: ${text.slice(0, 300)}`);
   });
 }
@@ -77,8 +81,51 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '加入购物车', exact: true }).click();
   await visibleText(page, '已加入购物车');
   await page.goto('http://127.0.0.1:3100/cart');
+  const checkoutRequests = [];
+  let committedOrderId;
+  const checkoutFaults = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    checkoutRequests.push(route.request().postDataJSON());
+    if (checkoutRequests.length === 1) {
+      // Commit through the real API, then lose only the browser response.
+      const response = await route.fetch();
+      assert.equal(response.status(), 201);
+      committedOrderId = (await response.json()).order_id;
+      return route.abort('failed');
+    }
+    const status = [408, 429][checkoutRequests.length - 2];
+    if (status) return route.fulfill({ status, contentType: 'application/json',
+      headers: { 'access-control-allow-origin': 'http://127.0.0.1:3100', 'access-control-allow-credentials': 'true' },
+      body: JSON.stringify({ error: '暂时无法确认订单，请稍后重试' }),
+    });
+    return route.continue();
+  };
+  await page.route(checkoutEndpoint, checkoutFaults);
+  expectedCheckoutFailure = true;
   await page.getByRole('button', { name: /^结算 \(1\)$/ }).click();
+  const retryCheckout = () => page.getByRole('button', { name: '重试确认订单', exact: true });
+  await retryCheckout().waitFor({ state: 'visible' });
+  for (const status of [408, 429]) {
+    const response = page.waitForResponse(response => response.url() === checkoutEndpoint && response.status() === status);
+    await retryCheckout().click();
+    await response;
+    await retryCheckout().waitFor({ state: 'visible' });
+  }
+  await page.reload();
+  await retryCheckout().click();
   await page.waitForURL(/\/orders\/\d+$/);
+  expectedCheckoutFailure = false;
+  await page.unroute(checkoutEndpoint, checkoutFaults);
+  assert.equal(page.url(), `http://127.0.0.1:3100/orders/${committedOrderId}`);
+  assert.equal(checkoutRequests.length, 4);
+  for (const input of checkoutRequests) assert.deepEqual(input, checkoutRequests[0]);
+  const orders = await context.request.get(checkoutEndpoint);
+  assert.equal(orders.status(), 200);
+  assert.equal((await orders.json()).total, 1, 'one persisted order after lost and blocked responses');
+  const product = await context.request.get('http://127.0.0.1:3101/api/products/1');
+  assert.equal(product.status(), 200);
+  assert.equal((await product.json()).product.stock, 19, 'fixture stock deducted exactly once');
+  console.log('PASS browser lost checkout response, HTTP 408/429 and reload preserve one order and stock deduction');
   const orderUrl = page.url();
   await page.getByRole('button', { name: '模拟支付', exact: true }).click();
   await visibleText(page, '演示订单');
