@@ -85,7 +85,7 @@ describe('server API reads', () => {
     expect(await fetchApiJson('/products/1', { env: backend, fetcher: async () => { throw new Error('down'); } })).toBeNull();
   });
 
-  it('page through the product listing and stop at the cap or the first failure', async () => {
+  it('pages through successful product listings and respects the configured cap', async () => {
     const pages: number[] = [];
     const fetcher: Fetcher = async url => {
       const page = Number(new URL(String(url)).searchParams.get('page'));
@@ -96,8 +96,37 @@ describe('server API reads', () => {
     expect((await listPublicProducts({ env: backend, fetcher })).map(item => item.product_id)).toEqual([10, 20, 30]);
     expect(pages).toEqual([1, 2, 3]);
     expect(await listPublicProducts({ env: backend, fetcher, maxPages: 2 })).toHaveLength(2);
-    const failing: Fetcher = async url => new URL(String(url)).searchParams.get('page') === '2' ? jsonResponse({}, 500) : fetcher(url);
-    expect(await listPublicProducts({ env: backend, fetcher: failing })).toHaveLength(1);
+  });
+
+  it.each([1, 2])('rejects a failed page %s instead of publishing a truncated sitemap', async failedPage => {
+    const fetcher: Fetcher = async url => {
+      const page = Number(new URL(String(url)).searchParams.get('page'));
+      return page === failedPage ? jsonResponse({}, 503) : jsonResponse({ products: [{ product_id: page }], totalPages: 3 });
+    };
+    await expect(listPublicProducts({ env: backend, fetcher })).rejects.toThrow();
+  });
+
+  it.each([
+    ['missing totalPages', { products: [{ product_id: 7 }] }],
+    ['negative totalPages', { products: [{ product_id: 7 }], totalPages: -1 }],
+    ['fractional totalPages', { products: [{ product_id: 7 }], totalPages: 1.5 }],
+    ['string totalPages', { products: [{ product_id: 7 }], totalPages: 'unknown' }],
+    ['nonempty zero-page catalogue', { products: [{ product_id: 7 }], totalPages: 0 }],
+    ['empty nonzero-page catalogue', { products: [], totalPages: 2 }],
+    ['missing product ID', { products: [{}], totalPages: 1 }],
+    ['nonpositive product ID', { products: [{ product_id: 0 }], totalPages: 1 }],
+    ['string product ID', { products: [{ product_id: '7' }], totalPages: 1 }],
+  ])('rejects malformed product listings: %s', async (_, data) => {
+    await expect(listPublicProducts({ env: backend, fetcher: async () => jsonResponse(data) })).rejects.toThrow();
+  });
+
+  it('accepts a genuinely empty catalog and can retry after a failed listing', async () => {
+    expect(await listPublicProducts({ env: backend, fetcher: async () => jsonResponse({ products: [], totalPages: 0 }) })).toEqual([]);
+    const fetcher = vi.fn<Fetcher>()
+      .mockResolvedValueOnce(jsonResponse({}, 503))
+      .mockResolvedValueOnce(jsonResponse({ products: [{ product_id: 7 }], totalPages: 1 }));
+    await expect(listPublicProducts({ env: backend, fetcher })).rejects.toThrow();
+    expect(await listPublicProducts({ env: backend, fetcher })).toEqual([{ product_id: 7 }]);
   });
 
   it('separate definite misses from an unavailable backend', async () => {
@@ -205,7 +234,9 @@ describe('customer service pages', () => {
   it('are linked from the footer with the contact details and coupon center', () => {
     render(<SiteFooter />);
     const hrefs = Array.from(document.querySelectorAll('a'), link => link.getAttribute('href'));
-    for (const href of ['/help', '/returns', '/shipping', '/coupons', 'tel:4001234567', 'mailto:service@example.com']) expect(hrefs).toContain(href);
+    for (const href of ['/help', '/returns', '/shipping', '/coupons']) expect(hrefs).toContain(href);
+    expect(hrefs).not.toContain('tel:4001234567');
+    expect(hrefs).not.toContain('mailto:service@example.com');
   });
 });
 

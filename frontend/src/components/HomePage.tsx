@@ -9,7 +9,7 @@ import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
-import { FiArrowRight, FiGift, FiRotateCcw, FiShield, FiTruck } from 'react-icons/fi';
+import { FiArrowRight, FiGift, FiRotateCcw, FiShoppingBag, FiTruck } from 'react-icons/fi';
 
 export default function Home() {
   const { t } = useI18n();
@@ -147,9 +147,9 @@ export default function Home() {
 }
 
 const SERVICE_HIGHLIGHTS = [
-  { icon: FiTruck, title: '快速配送', description: '全国包邮，48小时送达' },
-  { icon: FiShield, title: '品质保证', description: '正品保障，假一赔十' },
-  { icon: FiRotateCcw, title: '售后无忧', description: '7天无理由退换货' },
+  { icon: FiTruck, title: '物流信息', description: '订单发货后查看快递公司和运单号' },
+  { icon: FiShoppingBag, title: '商品详情', description: '查看商品信息、价格与库存' },
+  { icon: FiRotateCcw, title: '售后申请', description: '在订单详情中提交并查看审核进度' },
 ] as const;
 
 interface ProductSectionProps {

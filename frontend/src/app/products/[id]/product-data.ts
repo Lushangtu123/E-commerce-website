@@ -5,9 +5,9 @@ import { fetchApiResult, type ApiResult } from '@/lib/site';
 
 const isProductId = (id: string) => /^[1-9]\d{0,9}$/.test(id);
 
-/** One backend read per request, shared by metadata, the layout and the page. */
+/** Read live availability, shared only within a request by metadata, the layout and the page. */
 const loadProduct = cache((id: string): Promise<ApiResult<{ product?: Product }>> =>
-  fetchApiResult<{ product?: Product }>(`/products/${id}`));
+  fetchApiResult<{ product?: Product }>(`/products/${id}`, { revalidate: 0 }));
 
 /**
  * Deleted, delisted and malformed product URLs return a real 404. An unreachable API
