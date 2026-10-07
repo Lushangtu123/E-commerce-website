@@ -110,7 +110,6 @@ docker-compose up -d
 这个命令会自动完成以下操作：
 - ✅ 启动MySQL数据库
 - ✅ 启动Redis缓存
-- ✅ 启动MongoDB数据库
 - ✅ 启动RabbitMQ消息队列
 - ✅ 启动Elasticsearch搜索引擎
 - ✅ 构建并启动后端服务
@@ -208,7 +207,7 @@ docker-compose down -v
 - Node.js 24 LTS（可在根目录执行 `nvm use`）
 - MySQL 8.0
 - Redis 7
-- MongoDB 7
+- 可选：Elasticsearch 8（商品搜索，未配置时用 MySQL）、RabbitMQ 3（订单精确超时，未配置时由定时任务处理）
 
 ### 后端开发
 

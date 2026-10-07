@@ -13,7 +13,7 @@
 
 - 🏗️ **微服务架构** - 模块化设计，易于扩展
 - 🔐 **完整权限系统** - 用户和管理员双系统
-- 💾 **多数据库支持** - MySQL + MongoDB + Redis + Elasticsearch
+- 💾 **多存储协同** - MySQL + Redis，可选 Elasticsearch 搜索与 RabbitMQ 延迟队列
 - 🚀 **高性能优化** - Redis缓存 + 数据库索引优化
 - 📱 **响应式设计** - 支持PC、平板、手机多端适配
 - 🐳 **容器化部署** - Docker Compose一键部署
@@ -40,7 +40,7 @@
 - ✅ 商品详情查看
 - ✅ **商品SKU规格** - 多规格商品支持 🆕
 - ✅ 商品分类与筛选
-- ✅ 商品搜索（支持Elasticsearch全文搜索）
+- ✅ 商品搜索（配置 Elasticsearch 时全文搜索，否则或故障时回退 MySQL）
 - ✅ 热门商品推荐
 - ✅ 新品推荐
 
@@ -68,8 +68,8 @@
 - 🚀 微服务架构
 - 💾 Redis缓存优化
 - 📊 数据库读写分离设计
-- 🔍 Elasticsearch全文搜索
-- 📨 RabbitMQ消息队列
+- 🔍 Elasticsearch全文搜索（可选，写入自动同步索引，故障回退 MySQL）
+- 📨 RabbitMQ延迟队列（可选，订单 30 分钟精确超时；不可用时由定时任务兜底）
 - ⏰ **订单超时自动处理** - 基于定时任务的订单状态管理 🆕
 - 🎯 **智能推荐系统** - 基于用户行为的商品推荐 🆕
 - 🐳 Docker容器化部署
@@ -93,9 +93,8 @@
 - **语言**: TypeScript
 - **数据库**: MySQL 8.0
 - **缓存**: Redis 7
-- **文档数据库**: MongoDB 7
-- **搜索引擎**: Elasticsearch 8
-- **消息队列**: RabbitMQ 3
+- **搜索引擎**: Elasticsearch 8（可选）
+- **消息队列**: RabbitMQ 3（可选）
 - **认证**: JWT
 
 ## 📋 系统架构
@@ -119,7 +118,7 @@
 ┌──────▼──────────────────────────────┐
 │          数据层                      │
 ├─────────────────────────────────────┤
-│ MySQL │ MongoDB │ Redis │ ES        │
+│ MySQL │ Redis │ ES（可选）│ MQ（可选）│
 └─────────────────────────────────────┘
 ```
 
@@ -160,7 +159,7 @@
 - Docker & Docker Compose
 - MySQL 8.0+
 - Redis 7+
-- MongoDB 7+
+- 可选：Elasticsearch 8、RabbitMQ 3
 
 ### 使用Docker Compose（推荐）
 
@@ -507,8 +506,8 @@ npx vitest run tests/search-pages.test.tsx tests/admin-session.test.tsx tests/ad
 - [x] 商品推荐算法 (2025-10-31)
 
 ### 进行中 🚧
-- [ ] 实现Elasticsearch商品搜索
-- [ ] 实现RabbitMQ消息队列处理
+- [x] Elasticsearch 商品搜索：写入同步索引、MySQL 回退、参数校验（可选依赖）
+- [x] RabbitMQ 订单超时延迟队列改为可选依赖，断线重连后恢复消费；移除未使用的 MongoDB
 - [x] 优惠券结算：服务器预览、事务占用、取消返券与订单金额快照（2026-10-02）
 
 ### 计划中 📋

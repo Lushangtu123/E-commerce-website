@@ -103,11 +103,6 @@ helm install redis bitnami/redis \
   --set auth.enabled=false \
   -n ecommerce
 
-# 部署MongoDB
-helm install mongodb bitnami/mongodb \
-  --set auth.rootPassword=admin123 \
-  -n ecommerce
-
 # 部署RabbitMQ
 helm install rabbitmq bitnami/rabbitmq \
   --set auth.username=admin \

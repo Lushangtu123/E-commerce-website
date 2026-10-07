@@ -1,12 +1,14 @@
 import { getPool } from '../database/mysql';
 import { getRedisClient } from '../database/redis';
-import mongoose from '../database/mongodb';
-import { getChannel } from '../database/rabbitmq';
+import { getChannel, isRabbitMQConfigured } from '../database/rabbitmq';
+import { getESClient } from '../database/elasticsearch';
 
 export interface DependencyStatus {
   status: 'up' | 'down';
   latencyMs?: number;
   error?: string;
+  /** 可选依赖异常时功能自动降级，不影响整体状态 */
+  optional?: true;
 }
 
 export interface HealthReport {
@@ -39,28 +41,30 @@ async function checkDependency(check: () => Promise<unknown>): Promise<Dependenc
 
 /**
  * 生成健康检查报告
- * 覆盖启动时必需的 4 个依赖（MySQL/Redis/MongoDB/RabbitMQ）；
- * 任一异常则整体状态为 degraded
+ * MySQL 和 Redis 为必需依赖，任一异常则整体状态为 degraded；
+ * 已配置的 RabbitMQ（精确超时取消）和 Elasticsearch（商品搜索）为可选依赖，
+ * 异常时由定时任务和 MySQL 搜索兜底，只在报告中标记为 down
  */
 export async function getHealthReport(serverless = false): Promise<HealthReport> {
-  const checks: Record<string, () => Promise<unknown>> = {
+  const required: Record<string, () => Promise<unknown>> = {
     mysql: () => getPool().query('SELECT 1'),
     redis: () => getRedisClient().ping(),
   };
+  const optional: Record<string, () => Promise<unknown>> = {};
   if (!serverless) {
-    checks.mongodb = () => mongoose.connection.db
-      ? mongoose.connection.db.admin().ping() : Promise.reject(new Error('MongoDB未初始化'));
-    checks.rabbitmq = async () => { getChannel(); };
+    if (isRabbitMQConfigured()) optional.rabbitmq = async () => { getChannel(); };
+    const es = getESClient();
+    if (es) optional.elasticsearch = () => es.ping();
   }
-  const dependencies: Record<string, DependencyStatus> = Object.fromEntries(await Promise.all(
-    Object.entries(checks).map(async ([name, check]) => [name, await checkDependency(check)] as const)
-  ));
-  const allUp = Object.values(dependencies).every((d) => d.status === 'up');
+  const run = (checks: Record<string, () => Promise<unknown>>, extra: Partial<DependencyStatus> = {}) => Promise.all(
+    Object.entries(checks).map(async ([name, check]) => [name, { ...await checkDependency(check), ...extra }] as const)
+  );
+  const [requiredResults, optionalResults] = await Promise.all([run(required), run(optional, { optional: true })]);
 
   return {
-    status: allUp ? 'ok' : 'degraded',
+    status: requiredResults.every(([, d]) => d.status === 'up') ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
-    dependencies,
+    dependencies: Object.fromEntries([...requiredResults, ...optionalResults]),
   };
 }

@@ -25,6 +25,7 @@ export interface Product {
 export interface ProductQuery {
   category_id?: number;
   keyword?: string;
+  brand?: string;
   min_price?: number;
   max_price?: number;
   sort?: string;
@@ -64,7 +65,7 @@ export class ProductModel {
   static async list(params: ProductQuery): Promise<{ products: Product[], total: number }> {
     const { error, value } = productQuerySchema.validate(params);
     if (error) throw error;
-    const { category_id, keyword, min_price, max_price, page, limit } = value;
+    const { category_id, keyword, brand, min_price, max_price, page, limit } = value;
     const sort = PRODUCT_SORTS[value.sort];
     
     let whereClauses: string[] = ['status = 1'];
@@ -78,6 +79,11 @@ export class ProductModel {
     if (keyword) {
       whereClauses.push('(title LIKE ? OR description LIKE ?)');
       queryParams.push(`%${keyword}%`, `%${keyword}%`);
+    }
+
+    if (brand) {
+      whereClauses.push('brand = ?');
+      queryParams.push(brand);
     }
 
     if (min_price !== undefined) {

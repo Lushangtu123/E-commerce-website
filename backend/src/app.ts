@@ -68,12 +68,12 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
    *   get:
    *     tags: [运维]
    *     summary: 健康检查
-   *     description: 返回 MySQL / Redis / MongoDB / RabbitMQ 的连通状态；任一依赖异常时返回 503
+   *     description: 返回 MySQL / Redis 及已配置的 RabbitMQ / Elasticsearch 的连通状态；MySQL 或 Redis 异常时返回 503，可选依赖异常只标记为 down
    *     responses:
    *       200:
-   *         description: 所有依赖正常
+   *         description: 必需依赖正常
    *       503:
-   *         description: 存在异常依赖
+   *         description: MySQL 或 Redis 异常
    */
   app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
     const report = await getHealthReport(options.serverless);

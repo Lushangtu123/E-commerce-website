@@ -20,47 +20,74 @@ export const QUEUES = {
 const ORDER_TIMEOUT_DELAY_QUEUE = 'order.timeout_check.delay';
 export const ORDER_TIMEOUT_DELAY_MS = 30 * 60 * 1000; // 30分钟，与订单超时配置一致
 
+/** 未配置 RABBITMQ_URL 时不使用消息队列，订单超时取消由定时任务处理 */
+export function isRabbitMQConfigured(): boolean {
+  return Boolean(process.env.RABBITMQ_URL);
+}
+
+const RECONNECT_DELAY_MS = 5000;
+let onConnected: (() => Promise<void>) | undefined;
+let shuttingDown = false;
+
+function scheduleReconnect() {
+  if (!shuttingDown) setTimeout(() => { void connectRabbitMQ(); }, RECONNECT_DELAY_MS).unref();
+}
+
 /**
- * 连接到 RabbitMQ
+ * 连接到 RabbitMQ。可选依赖：失败时只记录日志并在后台重试，不会抛错或阻塞启动。
+ * ready 在每次连接（含重连）成功后执行，用于重新注册消费者。
  */
-export async function connectRabbitMQ(): Promise<void> {
+export async function connectRabbitMQ(ready?: () => Promise<void>): Promise<void> {
+  if (ready) onConnected = ready;
+  if (!isRabbitMQConfigured()) {
+    logger.info('未配置 RABBITMQ_URL，跳过 RabbitMQ，订单超时由定时任务取消');
+    return;
+  }
   try {
-    const rabbitmqUrl = process.env.RABBITMQ_URL || 'amqp://admin:admin123@rabbitmq:5672';
-    
     logger.info('🐰 正在连接 RabbitMQ...');
-    const conn = await amqp.connect(rabbitmqUrl);
+    const conn = await amqp.connect(process.env.RABBITMQ_URL!);
     connection = conn as any;
-    channel = await conn.createChannel();
 
-    // 声明所有队列
-    for (const queueName of Object.values(QUEUES)) {
-      await channel.assertQueue(queueName, { durable: true });
-    }
-
-    // 声明订单超时检查延迟队列：消息 TTL 到期后死信路由到 order.timeout_check
-    await channel.assertQueue(ORDER_TIMEOUT_DELAY_QUEUE, {
-      durable: true,
-      arguments: {
-        'x-dead-letter-exchange': '',
-        'x-dead-letter-routing-key': QUEUES.ORDER_TIMEOUT_CHECK,
-      },
-    });
-
-    logger.info('✅ RabbitMQ 连接成功');
-
-    // 监听连接关闭事件（用局部 conn，已确保非空）
+    // 先注册事件：之后任何一步失败导致断开，都会经 close 事件重连
     conn.on('close', () => {
-      logger.warn('⚠️ RabbitMQ 连接已关闭');
-      setTimeout(connectRabbitMQ, 5000); // 5秒后重连
+      connection = null;
+      channel = null;
+      if (shuttingDown) return;
+      logger.warn('⚠️ RabbitMQ 连接已关闭，稍后重连');
+      scheduleReconnect();
     });
-
     conn.on('error', (error) => {
       logger.error({ err: error }, '❌ RabbitMQ 连接错误');
     });
+
+    try {
+      const ch = await conn.createChannel();
+
+      // 声明所有队列
+      for (const queueName of Object.values(QUEUES)) {
+        await ch.assertQueue(queueName, { durable: true });
+      }
+
+      // 声明订单超时检查延迟队列：消息 TTL 到期后死信路由到 order.timeout_check
+      await ch.assertQueue(ORDER_TIMEOUT_DELAY_QUEUE, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': '',
+          'x-dead-letter-routing-key': QUEUES.ORDER_TIMEOUT_CHECK,
+        },
+      });
+
+      channel = ch;
+      logger.info('✅ RabbitMQ 连接成功');
+      await onConnected?.();
+    } catch (error) {
+      logger.error({ err: error }, '❌ RabbitMQ 初始化失败，断开后重连');
+      channel = null;
+      await conn.close().catch(() => undefined);
+    }
   } catch (error) {
-    logger.error({ err: error }, '❌ 连接 RabbitMQ 失败');
-    // 5秒后重试
-    setTimeout(connectRabbitMQ, 5000);
+    logger.warn({ err: error }, '⚠️ 连接 RabbitMQ 失败，稍后重试；订单超时由定时任务兜底');
+    scheduleReconnect();
   }
 }
 
@@ -164,6 +191,7 @@ export async function consumeQueue(
  * 关闭 RabbitMQ 连接
  */
 export async function closeRabbitMQ(): Promise<void> {
+  shuttingDown = true;
   try {
     if (channel) {
       await channel.close();

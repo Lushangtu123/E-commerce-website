@@ -8,6 +8,7 @@ import { calculateDiscountCents } from '../utils/coupon-discount';
 import { CouponModel } from '../models/coupon.model';
 import { normalizeAddress } from '../models/address.model';
 import { getPaymentSettings } from '../utils/payment-settings';
+import { syncProductsToSearchIndex } from './product-search.service';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
@@ -323,7 +324,7 @@ export async function transitionOrder(
   }
 }
 
-/** Cache invalidation happens after commit; cache availability cannot undo an order. */
+/** Cache and search-index refresh happen after commit; neither can undo an order. */
 export async function invalidateOrderProductCache(productIds: number[]): Promise<void> {
   if (productIds.length === 0) return;
   try {
@@ -331,4 +332,5 @@ export async function invalidateOrderProductCache(productIds: number[]): Promise
   } catch (error) {
     logger.warn({ err: error }, '订单已提交，商品缓存清理失败');
   }
+  await syncProductsToSearchIndex(productIds);
 }

@@ -35,20 +35,6 @@ services:
       timeout: 3s
       retries: 5
 
-  # MongoDB
-  mongodb:
-    image: mongo:7
-    container_name: ecommerce-mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - ecommerce-network
-
   # RabbitMQ消息队列
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -106,7 +92,7 @@ services:
       - DB_NAME=ecommerce
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/ecommerce?authSource=admin
+      # 可选依赖：去掉下面两行即可不用 Elasticsearch（搜索回退 MySQL）或 RabbitMQ（超时取消由定时任务处理）
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env before starting Compose}
@@ -118,8 +104,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mongodb:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
       elasticsearch:
@@ -153,7 +137,6 @@ services:
 volumes:
   mysql_data:
   redis_data:
-  mongodb_data:
   rabbitmq_data:
   es_data:
 

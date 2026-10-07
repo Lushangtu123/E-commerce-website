@@ -1,10 +1,45 @@
 import { Client } from '@elastic/elasticsearch';
 import logger from '../utils/logger';
 
-// 创建 Elasticsearch 客户端
-const esClient = new Client({
-  node: process.env.ELASTICSEARCH_URL || 'http://elasticsearch:9200',
-});
+let esClient: Client | null | undefined;
+
+/**
+ * Elasticsearch 是可选依赖：未配置 ELASTICSEARCH_URL 时返回 null，商品搜索使用 MySQL。
+ * 超时较短，ES 故障时搜索能尽快回退，后台写入也不会长时间等待。
+ */
+export function getESClient(): Client | null {
+  if (esClient === undefined) {
+    esClient = process.env.ELASTICSEARCH_URL
+      ? new Client({ node: process.env.ELASTICSEARCH_URL, requestTimeout: 3000, maxRetries: 1 })
+      : null;
+  }
+  return esClient;
+}
+
+function requireESClient(): Client {
+  const client = getESClient();
+  if (!client) throw new Error('未配置 ELASTICSEARCH_URL');
+  return client;
+}
+
+/** 写入索引的商品字段；price 和 stock 取自顾客视图（启用 SKU 的最低价和合计库存） */
+function productDocument(product: any) {
+  return {
+    product_id: product.product_id,
+    title: product.title,
+    description: product.description,
+    price: product.price,
+    original_price: product.original_price,
+    stock: product.stock,
+    sales_count: product.sales_count,
+    category_id: product.category_id,
+    brand: product.brand,
+    main_image: product.main_image,
+    status: product.status,
+    created_at: product.created_at,
+    updated_at: product.updated_at,
+  };
+}
 
 // 索引名称
 export const PRODUCT_INDEX = 'products';
@@ -15,13 +50,13 @@ export const PRODUCT_INDEX = 'products';
 export async function initProductIndex() {
   try {
     // 检查索引是否存在
-    const indexExists = await esClient.indices.exists({
+    const indexExists = await requireESClient().indices.exists({
       index: PRODUCT_INDEX,
     });
 
     if (!indexExists) {
       // 创建索引及映射
-      await esClient.indices.create({
+      await requireESClient().indices.create({
         index: PRODUCT_INDEX,
         body: {
           settings: {
@@ -81,31 +116,11 @@ export async function initProductIndex() {
  * 同步单个商品到 Elasticsearch
  */
 export async function syncProductToES(product: any) {
-  try {
-    await esClient.index({
-      index: PRODUCT_INDEX,
-      id: product.product_id.toString(),
-      body: {
-        product_id: product.product_id,
-        title: product.title,
-        description: product.description,
-        price: product.price,
-        original_price: product.original_price,
-        stock: product.stock,
-        sales_count: product.sales_count,
-        category_id: product.category_id,
-        brand: product.brand,
-        main_image: product.main_image,
-        status: product.status,
-        created_at: product.created_at,
-        updated_at: product.updated_at,
-      },
-    });
-    logger.info(`✅ 商品 ${product.product_id} 同步到 ES 成功`);
-  } catch (error) {
-    logger.error({ err: error }, `❌ 商品 ${product.product_id} 同步到 ES 失败`);
-    throw error;
-  }
+  await requireESClient().index({
+    index: PRODUCT_INDEX,
+    id: product.product_id.toString(),
+    body: productDocument(product),
+  });
 }
 
 /**
@@ -115,24 +130,10 @@ export async function bulkSyncProductsToES(products: any[]) {
   try {
     const body = products.flatMap((product) => [
       { index: { _index: PRODUCT_INDEX, _id: product.product_id.toString() } },
-      {
-        product_id: product.product_id,
-        title: product.title,
-        description: product.description,
-        price: product.price,
-        original_price: product.original_price,
-        stock: product.stock,
-        sales_count: product.sales_count,
-        category_id: product.category_id,
-        brand: product.brand,
-        main_image: product.main_image,
-        status: product.status,
-        created_at: product.created_at,
-        updated_at: product.updated_at,
-      },
+      productDocument(product),
     ]);
 
-    const result = await esClient.bulk({ body });
+    const result = await requireESClient().bulk({ body });
     
     if (result.errors) {
       logger.error('❌ 批量同步部分商品失败');
@@ -153,163 +154,62 @@ export async function bulkSyncProductsToES(products: any[]) {
 }
 
 /**
- * 从 Elasticsearch 删除商品
+ * 从 Elasticsearch 删除商品（不存在视为成功）
  */
 export async function deleteProductFromES(productId: number) {
   try {
-    await esClient.delete({
+    await requireESClient().delete({
       index: PRODUCT_INDEX,
       id: productId.toString(),
     });
-    logger.info(`✅ 商品 ${productId} 从 ES 删除成功`);
   } catch (error: any) {
-    if (error.meta?.statusCode !== 404) {
-      logger.error({ err: error }, `❌ 商品 ${productId} 从 ES 删除失败`);
-      throw error;
-    }
+    if (error.meta?.statusCode !== 404) throw error;
   }
 }
 
-/**
- * 搜索商品
- */
-export async function searchProducts(params: {
-  keyword?: string;
+export interface ESSearchParams {
+  keyword: string;
   category_id?: number;
   min_price?: number;
   max_price?: number;
   brand?: string;
-  sort_by?: 'price' | 'sales' | 'created_at';
-  sort_order?: 'asc' | 'desc';
-  page?: number;
-  page_size?: number;
-}) {
-  try {
-    const {
-      keyword = '',
-      category_id,
-      min_price,
-      max_price,
-      brand,
-      sort_by = 'sales',
-      sort_order = 'desc',
-      page = 1,
-      page_size = 20,
-    } = params;
-
-    // 构建查询条件
-    const must: any[] = [
-      { term: { status: 1 } }, // 只搜索上架商品
-    ];
-
-    // 关键词搜索
-    if (keyword) {
-      must.push({
-        multi_match: {
-          query: keyword,
-          fields: ['title^3', 'description', 'brand^2'],
-          type: 'best_fields',
-          operator: 'or',
-          fuzziness: 'AUTO',
-        },
-      });
-    }
-
-    // 分类筛选
-    if (category_id) {
-      must.push({ term: { category_id } });
-    }
-
-    // 品牌筛选
-    if (brand) {
-      must.push({ term: { 'brand.keyword': brand } });
-    }
-
-    // 价格范围筛选
-    if (min_price || max_price) {
-      const range: any = {};
-      if (min_price) range.gte = min_price;
-      if (max_price) range.lte = max_price;
-      must.push({ range: { price: range } });
-    }
-
-    // 排序字段映射
-    const sortFieldMap: any = {
-      price: 'price',
-      sales: 'sales_count',
-      created_at: 'created_at',
-    };
-
-    const sortField = sortFieldMap[sort_by] || 'sales_count';
-
-    // 执行搜索
-    const result = await esClient.search({
-      index: PRODUCT_INDEX,
-      body: {
-        query: {
-          bool: { must },
-        },
-        sort: [{ [sortField]: sort_order }],
-        from: (page - 1) * page_size,
-        size: page_size,
-        track_total_hits: true,
-      },
-    });
-
-    // 提取结果
-    const hits = result.hits.hits;
-    const total = typeof result.hits.total === 'number' 
-      ? result.hits.total 
-      : result.hits.total?.value || 0;
-
-    const products = hits.map((hit: any) => ({
-      ...hit._source,
-      _score: hit._score,
-    }));
-
-    return {
-      products,
-      total,
-      page,
-      page_size,
-      total_pages: Math.ceil(total / page_size),
-    };
-  } catch (error) {
-    logger.error({ err: error }, '❌ ES 搜索失败');
-    throw error;
-  }
+  sort_by: 'price' | 'sales' | 'created_at';
+  sort_order: 'asc' | 'desc';
+  page: number;
+  page_size: number;
 }
 
-/**
- * 获取搜索建议（自动补全）
- */
-export async function getSearchSuggestions(prefix: string, limit: number = 10) {
-  try {
-    const result = await esClient.search({
-      index: PRODUCT_INDEX,
-      body: {
-        suggest: {
-          title_suggest: {
-            prefix,
-            completion: {
-              field: 'title.keyword',
-              size: limit,
-              skip_duplicates: true,
-            },
-          },
-        },
-      },
-    });
+const SORT_FIELDS = { price: 'price', sales: 'sales_count', created_at: 'created_at' } as const;
 
-    const options = result.suggest?.title_suggest?.[0]?.options;
-    if (Array.isArray(options)) {
-      return options.map((option: any) => option.text);
-    }
-    return [];
-  } catch (error) {
-    logger.error({ err: error }, '❌ 获取搜索建议失败');
-    return [];
+/**
+ * 在 Elasticsearch 中匹配上架商品，只返回按相关度/排序规则排好的商品 ID 和总数；
+ * 价格、库存等展示字段由调用方从 MySQL 读取，避免使用过期的索引数据
+ */
+export async function searchProductIds(params: ESSearchParams): Promise<{ ids: number[]; total: number }> {
+  const { keyword, category_id, min_price, max_price, brand, sort_by, sort_order, page, page_size } = params;
+  const filter: any[] = [{ term: { status: 1 } }];
+  if (category_id !== undefined) filter.push({ term: { category_id } });
+  if (brand) filter.push({ term: { 'brand.keyword': brand } });
+  if (min_price !== undefined || max_price !== undefined) {
+    filter.push({ range: { price: { ...(min_price !== undefined && { gte: min_price }), ...(max_price !== undefined && { lte: max_price }) } } });
   }
+  const must: any[] = keyword ? [{
+    multi_match: { query: keyword, fields: ['title^3', 'description', 'brand^2'], type: 'best_fields', operator: 'or', fuzziness: 'AUTO' },
+  }] : [];
+
+  const result = await requireESClient().search({
+    index: PRODUCT_INDEX,
+    body: {
+      query: { bool: { must, filter } },
+      sort: [{ [SORT_FIELDS[sort_by]]: sort_order }, { product_id: 'desc' }],
+      from: (page - 1) * page_size,
+      size: page_size,
+      track_total_hits: true,
+      _source: ['product_id'],
+    },
+  });
+  const total = typeof result.hits.total === 'number' ? result.hits.total : result.hits.total?.value || 0;
+  return { ids: result.hits.hits.map((hit: any) => Number(hit._source.product_id)), total };
 }
 
 /**
@@ -317,7 +217,7 @@ export async function getSearchSuggestions(prefix: string, limit: number = 10) {
  */
 export async function checkESConnection() {
   try {
-    const health = await esClient.cluster.health();
+    const health = await requireESClient().cluster.health();
     logger.info({ health }, '✅ Elasticsearch 连接成功');
     return true;
   } catch (error) {
@@ -326,5 +226,4 @@ export async function checkESConnection() {
   }
 }
 
-export default esClient;
 

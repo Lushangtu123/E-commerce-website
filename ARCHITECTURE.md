@@ -71,8 +71,8 @@
 │                    数据访问层 (Data)                         │
 │                                                              │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  MySQL   │  │  Redis   │  │ MongoDB  │  │Elasticsearch│ │
-│  │ 关系数据 │  │  缓存    │  │ 文档数据 │  │  全文搜索  │   │
+│  │  MySQL   │  │  Redis   │  │ RabbitMQ │  │Elasticsearch│ │
+│  │ 关系数据 │  │  缓存    │  │ 延迟队列 │  │  全文搜索  │   │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -81,7 +81,7 @@
 
 - **前后端分离**: 前端 Next.js，后端 Express.js
 - **微服务化**: 按业务功能模块化设计
-- **多数据库**: MySQL + Redis + MongoDB + Elasticsearch
+- **存储**: MySQL + Redis；Elasticsearch（搜索）和 RabbitMQ（订单超时延迟队列）为可选依赖，不可用时分别回退 MySQL 搜索和定时任务
 - **RESTful API**: 标准化的 API 设计
 - **容器化部署**: Docker + Docker Compose
 
@@ -139,8 +139,6 @@
 │ 数据库                                   │
 │  • MySQL 8.0 (Relational DB)            │
 │  • mysql2 (MySQL Driver)                │
-│  • MongoDB 7 (Document DB)              │
-│  • Mongoose (MongoDB ODM)               │
 │  • Redis 7 (Cache & Session)            │
 │  • ioredis (Redis Client)               │
 ├─────────────────────────────────────────┤
@@ -301,10 +299,6 @@ Redis (缓存)
 ├── user:session:{id}       // 用户会话
 └── ...
 
-MongoDB (日志)
-├── browse_history          // 浏览历史
-├── admin_logs              // 管理员日志
-└── ...
 ```
 
 ---
@@ -665,9 +659,9 @@ app.use(express.json({ limit: '10mb' }));
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 │                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │    Redis     │  │   MongoDB    │  │Elasticsearch │  │
-│  │    (7.x)     │  │    (7.x)     │  │   (8.11)     │  │
-│  │  Port 6379   │  │  Port 27017  │  │  Port 9200   │  │
+│  │    Redis     │  │   RabbitMQ   │  │Elasticsearch │  │
+│  │    (7.x)     │  │    (3.x)     │  │   (8.11)     │  │
+│  │  Port 6379   │  │  Port 5672   │  │  Port 9200   │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 │                                                          │
 │  ┌──────────────┐                                       │
@@ -720,9 +714,9 @@ app.use(express.json({ limit: '10mb' }));
          ┌─────────────────┼─────────────────┐
          │                 │                 │
     ┌────▼────┐      ┌────▼────┐      ┌────▼────┐
-    │ MySQL   │      │  Redis  │      │ MongoDB │
-    │ Master  │      │ Cluster │      │ Replica │
-    └────┬────┘      └─────────┘      │   Set   │
+    │ MySQL   │      │  Redis  │      │RabbitMQ │
+    │ Master  │      │ Cluster │      │ Cluster │
+    └────┬────┘      └─────────┘      │  (opt)  │
          │                             └─────────┘
     ┌────▼────┐
     │ MySQL   │

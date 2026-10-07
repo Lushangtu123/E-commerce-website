@@ -74,12 +74,6 @@ nano .env.local
 | `REDIS_PORT` | Redis 端口 | `6379` | `6379` |
 | `REDIS_PASSWORD` | Redis 密码（可选） | - | `your_redis_password` |
 
-#### MongoDB 配置
-
-| 变量名 | 说明 | 默认值 | 示例 |
-|--------|------|--------|------|
-| `MONGODB_URI` | MongoDB 连接字符串 | - | `mongodb://admin:admin123@localhost:27017/ecommerce?authSource=admin` |
-
 #### JWT 认证配置
 
 | 变量名 | 说明 | 默认值 | 示例 |
@@ -93,13 +87,13 @@ nano .env.local
 
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
-| `ELASTICSEARCH_URL` | Elasticsearch HTTP 地址 | `http://elasticsearch:9200` | `http://localhost:9200` |
+| `ELASTICSEARCH_URL` | Elasticsearch HTTP 地址。不设置时商品搜索使用 MySQL；ES 不可用时自动回退 MySQL。首次启用后运行 `npm run sync-es` 建立索引，之后商品和 SKU 写入会自动同步 | 不启用 | `http://localhost:9200` |
 
 #### RabbitMQ 配置
 
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
-| `RABBITMQ_URL` | RabbitMQ 连接 URL | - | `amqp://admin:admin123@localhost:5672` |
+| `RABBITMQ_URL` | RabbitMQ 连接 URL，用于下单 30 分钟后精确取消未支付订单。不设置或连接失败不影响启动，超时订单由每 5 分钟一次的定时任务取消 | 不启用 | `amqp://admin:admin123@localhost:5672` |
 
 #### 文件上传配置
 
@@ -139,9 +133,6 @@ DB_NAME=ecommerce
 # Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
-
-# MongoDB
-MONGODB_URI=mongodb://admin:admin123@localhost:27017/ecommerce?authSource=admin
 
 # JWT
 JWT_SECRET=dev_jwt_secret_key_for_development_only
@@ -207,7 +198,6 @@ services:
       - DB_NAME=ecommerce
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/ecommerce?authSource=admin
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
       - ELASTICSEARCH_URL=http://elasticsearch:9200
@@ -221,7 +211,7 @@ services:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
 ```
 
-**注意**: 在 Docker 网络中，服务名可以直接作为主机名使用（如 `mysql`、`redis`、`mongodb`）。
+**注意**: 在 Docker 网络中，服务名可以直接作为主机名使用（如 `mysql`、`redis`、`rabbitmq`）。
 
 ---
 
@@ -270,9 +260,6 @@ REDIS_PASSWORD=<strong_redis_password>
 # 使用强随机密钥
 JWT_SECRET=<generated_strong_secret_key>
 JWT_EXPIRES_IN=7d
-
-# 生产环境 MongoDB
-MONGODB_URI=mongodb://<user>:<password>@10.0.1.12:27017/ecommerce_prod?authSource=admin
 
 # 跨域配置为实际域名
 CORS_ORIGIN=https://your-domain.com
@@ -361,7 +348,6 @@ echo $NEXT_PUBLIC_API_URL
 - [ ] 已复制 `.env.example` 为 `.env`
 - [ ] MySQL 连接信息正确
 - [ ] Redis 连接信息正确
-- [ ] MongoDB 连接信息正确
 - [ ] JWT_SECRET 已设置（生产环境使用强密钥）
 - [ ] 端口未被占用
 - [ ] 已运行数据库迁移

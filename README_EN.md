@@ -13,7 +13,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 
 - 🏗️ **Microservices Architecture** - Modular design for easy scalability
 - 🔐 **Complete Permission System** - Dual system for users and administrators
-- 💾 **Multi-Database Support** - MySQL + MongoDB + Redis + Elasticsearch
+- 💾 **Storage** - MySQL + Redis, with optional Elasticsearch search and a RabbitMQ delay queue
 - 🚀 **High Performance Optimization** - Redis caching + database indexing
 - 📱 **Responsive Design** - Supports PC, tablet, and mobile devices
 - 🐳 **Containerized Deployment** - One-click deployment with Docker Compose
@@ -38,7 +38,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - ✅ Detailed product views
 - ✅ **Product SKU Specifications** - Multi-specification product support 🆕
 - ✅ Product categorization and filtering
-- ✅ Product search (with Elasticsearch full-text search)
+- ✅ Product search (Elasticsearch full-text when configured, falling back to MySQL)
 - ✅ Popular product recommendations
 - ✅ New product recommendations
 
@@ -66,8 +66,8 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - 🚀 Microservices architecture
 - 💾 Redis caching optimization
 - 📊 Database read-write separation design
-- 🔍 Elasticsearch full-text search ready
-- 📨 RabbitMQ message queue ready
+- 🔍 Elasticsearch full-text search (optional; index synced on writes, MySQL fallback)
+- 📨 RabbitMQ delay queue (optional; exact 30-minute order timeout, polling job as fallback)
 - ⏰ **Automatic Order Timeout Handling** - Task-based order status management 🆕
 - 🎯 **Smart Recommendation System** - User behavior-based recommendations 🆕
 - 🐳 Docker containerized deployment
@@ -92,9 +92,8 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - **Language**: TypeScript 5
 - **Database**: MySQL 8.0
 - **Cache**: Redis 7
-- **Document Database**: MongoDB 7
-- **Search Engine**: Elasticsearch 8
-- **Message Queue**: RabbitMQ 3
+- **Search Engine**: Elasticsearch 8 (optional)
+- **Message Queue**: RabbitMQ 3 (optional)
 - **Authentication**: JWT
 - **Password Encryption**: Bcrypt
 
@@ -119,7 +118,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 ┌────────▼──────────────────────────────┐
 │           Data Layer                  │
 ├───────────────────────────────────────┤
-│ MySQL │ MongoDB │ Redis │ Elasticsearch│
+│ MySQL │ Redis │ ES (opt.) │ MQ (opt.)│
 └───────────────────────────────────────┘
 ```
 
@@ -160,7 +159,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - Docker & Docker Compose
 - MySQL 8.0+
 - Redis 7+
-- MongoDB 7+
+- Optional: Elasticsearch 8, RabbitMQ 3
 
 ### Using Docker Compose (Recommended)
 
@@ -483,8 +482,8 @@ Frontend tests use Vitest + React Testing Library + happy-dom. Tests are `tests/
 - [x] Product recommendation algorithm (2025-10-31)
 
 ### In Progress 🚧
-- [ ] Elasticsearch product search implementation
-- [ ] RabbitMQ message queue processing
+- [x] Elasticsearch product search: index sync on writes, MySQL fallback, validated parameters (optional dependency)
+- [x] RabbitMQ order-timeout delay queue made optional, consumers restored after reconnect; unused MongoDB removed
 - [ ] Coupon usage in order checkout
 
 ### Planned 📋
