@@ -299,6 +299,7 @@ E-commerce-website/
 - `GET /api/users/password/capabilities` - Check whether password recovery is available
 - `POST /api/users/password/forgot` - Request a reset email; safely disabled when the email service is not configured
 - `POST /api/users/password/reset` - Reset the password with a one-time token valid for 30 minutes
+- `POST /api/users/logout` - Sign out (clears the session cookie)
 
 Registration accepts only a username, email and password. The username is 1–50 characters after trimming surrounding whitespace, the email must be a valid address of at most 100 characters, and the password must be at least 6 characters and at most 72 UTF-8 bytes, with whitespace preserved. Successful registration returns `201`; a username or email conflict, including one caused by concurrent registration, returns `409`. Sign-in keeps accepting the password lengths of existing accounts.
 
@@ -319,7 +320,9 @@ A complete address has six non-empty strings, `receiver_name`, `phone`, `provinc
 - `GET /api/products/:id` - Product details, including SKUs
 - `GET /api/products/hot` - Popular products
 - `GET /api/products/categories` - Product categories
-- `GET /api/products/search` - Search products
+- `POST /api/products`, `PUT /api/products/:id` - Create or update a product (administrators with `product:create` / `product:edit`)
+
+Keyword search uses `GET /api/products?keyword=...` (MySQL) or `GET /api/search/es` (Elasticsearch with MySQL fallback).
 
 ### Favourites APIs
 - `POST /api/favorites` - Add a favourite; body `{ product_id }`, the product must exist and be on sale
@@ -359,6 +362,7 @@ Favourites and browsing history default to `page=1&limit=20`, with `limit` at mo
 - `POST /api/orders` - Create an order; requires one of the user's valid `shipping_address_id` values and accepts an optional `user_coupon_id`; returns the original amount, discount and amount due. The server stores a snapshot of the shipping details, so later edits or deletion of the address do not change the order
 - `GET /api/orders` - The user's orders; `page` defaults to 1, `limit` to 10 (at most 100), optional `status` 0–4; returns `orders`, `total`, `page`, `limit` and `totalPages`
 - `GET /api/orders/:id` - Order details
+- `GET /api/orders/:id/remaining-time` - Minutes left to pay before automatic cancellation
 - `GET /api/payments/settings` - Whether simulated payment is allowed
 - `POST /api/orders/:id/pay` - Simulated payment that charges nothing; returns 503 when disabled
 - `POST /api/orders/:id/cancel` - Cancel an order
@@ -385,6 +389,7 @@ The details page of a completed order includes "Order reviews": all SKUs of the 
 - `GET /api/coupons/my/list` - The user's coupons
 - `GET /api/coupons/my/available-for-order` - Coupons usable for an order
 - `POST /api/coupons/calculate` - Calculate a discount
+- `GET /api/coupons/:id` - Coupon details
 
 **Admin:**
 - `POST /api/admin/coupons` - Create a coupon
@@ -393,14 +398,21 @@ The details page of a completed order includes "Order reviews": all SKUs of the 
 - `PUT /api/admin/coupons/:id/status` - Update coupon status
 
 ### Recommendation APIs
-- `GET /api/recommendations/for-you` - Personalised recommendations
+- `GET /api/recommendations/personalized` - Personalised recommendations from browsing history (sign-in required)
+- `GET /api/recommendations/guess-you-like` - "You may also like" (personalised when signed in, popular products otherwise)
 - `GET /api/recommendations/related/:productId` - Related products
 
 ### Admin APIs
+**Session:**
+- `POST /api/admin/login` - Administrator sign-in
+- `POST /api/admin/logout` - Sign out and invalidate every session of this administrator
+- `GET /api/admin/profile` - Administrator profile and permissions
+
 **Statistics:**
 - `GET /api/admin/dashboard/stats` - Statistics
 - `GET /api/admin/dashboard/sales-trend` - Sales trend
 - `GET /api/admin/dashboard/top-products` - Top products
+- `GET /api/admin/dashboard/recent-orders` - Latest orders
 
 **Products:**
 - `GET /api/admin/products` - Product list
@@ -408,6 +420,7 @@ The details page of a completed order includes "Order reviews": all SKUs of the 
 - `PUT /api/admin/products/:id` - Update a product
 - `PUT /api/admin/products/:id/status` - Update product status
 - `PUT /api/admin/products/batch/status` - Bulk status update
+- `DELETE /api/admin/products/:id` - Delete a product (soft delete: the record is kept with status -1)
 - `GET /api/admin/products/:id/skus` - All enabled and disabled SKUs; returns `{ product: { product_id, title, status }, skus }`
 - `POST /api/admin/products/:id/skus` - Create a SKU
 - `POST /api/admin/products/:id/skus/batch` - Create SKUs in bulk
@@ -417,22 +430,30 @@ The details page of a completed order includes "Order reviews": all SKUs of the 
 
 **Orders:**
 - `GET /api/admin/orders` - Order list
-- `PUT /api/admin/orders/:id` - Update order status
 - `GET /api/admin/orders/:id` - Order details
+- `PUT /api/admin/orders/:id/status` - Update order status (shipping requires a carrier and tracking number)
+- `GET /api/admin/orders/stats/overview` - Order statistics
 
 **Users:**
 - `GET /api/admin/users` - User list
 - `GET /api/admin/users/:id` - User details
+- `GET /api/admin/users/:id/orders` - A user's orders
+- `PUT /api/admin/users/:id/status` - Enable or disable a user
+- `GET /api/admin/users/stats/overview` - User statistics
 
 **Audit log:**
 - `GET /api/admin/logs` - Administrator actions
+
+### Operations
+- `GET /health`, `GET /api/health` - Health check; returns 503 only when MySQL or Redis is down (RabbitMQ and Elasticsearch are reported as optional)
+- `POST /api/internal/order-timeouts` - Cancels timed-out orders for an external scheduler; requires `Authorization: Bearer <CRON_SECRET>`
 
 ## Performance
 
 ### Caching
 - Popular products cached in Redis (10 minutes)
 - Product details cached in Redis (5 minutes)
-- User sessions stored in Redis
+- Rate-limit counters stored in Redis when `RATE_LIMIT_STORE=redis` or on Vercel (sign-in sessions are signed JWTs in httpOnly cookies, not Redis entries)
 
 ### Database
 - Deliberate index design
@@ -504,6 +525,9 @@ The admin product, user and log lists all handle expired sign-ins through the AP
 - [x] **Account centre** - Single entry point for customer features
 
 ### Recently Completed
+- [x] Elasticsearch product search: index sync on writes, MySQL fallback, parameter validation (optional dependency)
+- [x] RabbitMQ order-timeout delay queue made optional, consumers restored after reconnecting; unused MongoDB removed
+- [x] Coupon checkout: server-side preview, reservation in a transaction, coupon returned on cancellation, and order amount snapshots (2026-10-02)
 - [x] **Coupons** (2025-11-03)
   - Customer: coupon centre, my coupons, applying coupons
   - Admin: creating coupons, managing status
@@ -518,18 +542,11 @@ The admin product, user and log lists all handle expired sign-ins through the AP
 - [x] Automatic cancellation of unpaid orders (2025-10-31)
 - [x] Product recommendations (2025-10-31)
 
-### In Progress
-- [x] Elasticsearch product search: index sync on writes, MySQL fallback, parameter validation (optional dependency)
-- [x] RabbitMQ order-timeout delay queue made optional, consumers restored after reconnecting; unused MongoDB removed
-- [x] Coupon checkout: server-side preview, reservation in a transaction, coupon returned on cancellation, and order amount snapshots (2026-10-02)
-
 ### Planned
 - [ ] Flash sales
 - [ ] Shipment tracking
 - [ ] Mobile app
 - [ ] Further performance work
-- [ ] Unit test coverage
-- [ ] CI/CD deployment automation
 
 ## Project Statistics
 
@@ -540,7 +557,7 @@ The admin product, user and log lists all handle expired sign-ins through the AP
 | API endpoints | 100+ |
 | Database tables | 24 |
 | Feature modules | 15 |
-| Commits | 110+ |
+| Commits | 180+ |
 | Documentation | 7,000+ lines |
 
 ## Documentation
@@ -641,17 +658,16 @@ MIT License
 ### Recommended Additions for Production
 - HTTPS certificates
 - A real payment provider
-- SMS and email services
+- SMS and order-notification email (password-reset email via Resend already exists)
 - Object storage
 - CDN configuration
 - Monitoring and alerting
 - Backup and recovery
 - Load balancing
-- Unit and integration tests
 
 ---
 
-**Last updated**: 3 November 2025 | **Version**: 3.0.0
+**Last updated**: 7 October 2026 | **Version**: 3.0.0
 
 ## v3.0.0 Highlights (2025-11-03)
 
