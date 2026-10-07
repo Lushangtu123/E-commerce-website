@@ -28,7 +28,7 @@ integration('真实 MySQL 账户HTTP契约', () => {
   app.use(express.json());
   app.use('/api/users', userRoutes);
   const auth = (userId: number) => `Bearer ${jwt.sign({ userId }, process.env.JWT_SECRET!)}`;
-  const registration = { username: '新客户', email: 'new@example.test', password: '  密码123 ' };
+  const registration = { username: '新客户', email: 'new@example.test', password: '  exact 密码 password123  ' };
 
   beforeAll(async () => {
     server = mysql.createPool(options);
