@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# 用容器内的 MYSQL_ROOT_PASSWORD 执行 SQL，密码不写进脚本
+mysql_exec() {
+  docker exec ecommerce-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$@"' mysql "$@"
+}
+
 # 优惠券系统测试脚本
 
 BASE_URL="http://localhost:3001/api"
@@ -231,12 +236,12 @@ echo ""
 echo -e "${BLUE}[查看数据库] 优惠券数据...${NC}"
 echo ""
 echo "优惠券列表:"
-docker exec ecommerce-mysql mysql -uroot -proot123456 ecommerce \
+mysql_exec ecommerce \
   -e "SELECT coupon_id, code, name, type, discount_value, min_amount, total_quantity, remain_quantity, status FROM coupons;" 2>/dev/null
 
 echo ""
 echo "用户优惠券:"
-docker exec ecommerce-mysql mysql -uroot -proot123456 ecommerce \
+mysql_exec ecommerce \
   -e "SELECT user_coupon_id, user_id, coupon_id, status, received_at FROM user_coupons ORDER BY received_at DESC LIMIT 5;" 2>/dev/null
 
 echo ""

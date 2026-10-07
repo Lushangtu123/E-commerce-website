@@ -80,7 +80,7 @@
 ### 架构特点
 
 - **前后端分离**: 前端 Next.js，后端 Express.js
-- **微服务化**: 按业务功能模块化设计
+- **模块化单体**: 按业务功能划分路由、控制器和服务，作为单个 Express 应用部署
 - **存储**: MySQL + Redis；Elasticsearch（搜索）和 RabbitMQ（订单超时延迟队列）为可选依赖，不可用时分别回退 MySQL 搜索和定时任务
 - **RESTful API**: 标准化的 API 设计
 - **容器化部署**: Docker + Docker Compose
@@ -727,6 +727,8 @@ app.use(express.json({ limit: '10mb' }));
 ---
 
 ## 📈 扩展性设计
+
+> 本节是扩展规划：当前实现为单个 Express 应用和一个 MySQL 连接池，尚未实现读写分离或分库分表。
 
 ### 水平扩展
 

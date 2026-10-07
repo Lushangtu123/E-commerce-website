@@ -3,14 +3,17 @@
 echo "🔧 完全清理并重启项目..."
 echo ""
 
-# 1. 停止所有Node进程
-echo "🛑 停止所有Node进程..."
-pkill -9 node 2>/dev/null || true
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
+# 1. 只停止本项目的 Node 进程（按项目路径匹配，不影响编辑器和其他项目）
+echo "🛑 停止本项目的 Node 进程..."
+pkill -f "$ROOT/backend/node_modules/" 2>/dev/null || true
+pkill -f "$ROOT/frontend/node_modules/" 2>/dev/null || true
 sleep 2
 
 # 2. 清除所有缓存
 echo "🗑️  清除缓存..."
-cd "$(dirname "$0")/backend"
+cd "$ROOT/backend"
 rm -rf node_modules/.cache 2>/dev/null
 rm -rf .ts-node 2>/dev/null
 rm -rf dist 2>/dev/null
