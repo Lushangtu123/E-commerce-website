@@ -1,4 +1,4 @@
-import express from 'express';
+import type { IncomingMessage, ServerResponse } from 'http';
 import request from 'supertest';
 import { ProductModel } from '../../models/product.model';
 import handler from '../../serverless';
@@ -10,12 +10,11 @@ jest.mock('../../database/mysql', () => ({ connectDatabase: jest.fn().mockResolv
 jest.mock('../../database/redis', () => ({ connectRedis: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../models/product.model', () => ({ ProductModel: { list: jest.fn() } }));
 
-const bridge = express();
-bridge.use((req, res) => {
-  // Next.js adds the catch-all route parameter to query before invoking the handler.
-  req.query = { ...req.query, path: ['products'] };
+// Next.js hands the API route a plain Node request with its own catch-all parameter already in query.
+const bridge = (req: IncomingMessage & { query?: unknown }, res: ServerResponse) => {
+  req.query = { path: ['products'] };
   return handler(req, res);
-});
+};
 
 beforeEach(() => {
   jest.mocked(ProductModel.list).mockResolvedValue({ products: [], total: 0 });

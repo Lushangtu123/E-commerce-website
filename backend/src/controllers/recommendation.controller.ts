@@ -33,7 +33,7 @@ export class RecommendationController {
    */
   static async getRelated(req: AuthRequest, res: Response) {
     try {
-      const productId = parseInt(req.params.productId);
+      const productId = parseInt(req.params.productId as string);
       const limit = parseInt(req.query.limit as string) || 10;
 
       if (!productId) {

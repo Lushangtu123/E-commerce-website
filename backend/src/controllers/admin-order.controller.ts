@@ -152,7 +152,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       (req as any).admin.adminId,
       'UPDATE_ORDER_STATUS',
       'order',
-      orderId,
+      orderId as string,
       `更新订单状态: ${result.orderNo} -> ${statusText}`,
       req.ip,
       req.get('user-agent')

@@ -37,3 +37,15 @@ test('1MB 以内的正常请求体照常处理', async () => {
     .send(JSON.stringify({ email: 'a@example.test', password: 'x'.repeat(500 * 1024) }));
   expect(res.status).toBe(401);
 });
+
+// Express 5 leaves req.body undefined when nothing was parsed; endpoints must still answer 400, not 500.
+test.each([
+  '/api/users/login',
+  '/api/users/register',
+  '/api/users/password/reset',
+  '/api/admin/login',
+])('没有请求体的 POST %s 返回 400', async path => {
+  const res = await request(app).post(path).set('X-Requested-With', 'XMLHttpRequest');
+  expect(res.status).toBe(400);
+  expect(query).not.toHaveBeenCalled();
+});
