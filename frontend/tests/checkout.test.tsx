@@ -598,6 +598,53 @@ describe('checkout', () => {
     expect(router.push).toHaveBeenCalledWith('/orders/55');
   });
 
+  it.each([408, 429])('preserves the first checkout after HTTP %s and retries its exact payload', async status => {
+    let calls = 0;
+    await setupCheckout({ create: async () => {
+      if (++calls === 1) throw Object.assign(new Error('Temporary request failure'), { response: { status } });
+      return { message: 'ok', order_id: 55 };
+    }, preview: async input => quote(90, input.user_coupon_id === 7) });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+
+    expect(screen.getByRole('button', { name: '重试确认订单' })).toBeEnabled();
+    expect(JSON.parse(sessionStorage.getItem('pending-checkout')!).input).toEqual(creates()[0]);
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(creates()[1]).toEqual(creates()[0]);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+  });
+
+  it.each([408, 429])('recovers one committed order after a lost response, HTTP %s and a page return', async status => {
+    const committed = new Map<string, number>();
+    let calls = 0;
+    const { view } = await setupCheckout({ create: async input => {
+      calls++;
+      if (calls === 2) throw Object.assign(new Error('Temporary request failure'), { response: { status } });
+      if (!committed.has(input.checkout_key)) committed.set(input.checkout_key, 54 + committed.size + 1);
+      if (calls === 1) throw new Error('Committed response lost');
+      return { message: 'ok', order_id: committed.get(input.checkout_key)! };
+    }, preview: async input => quote(90, input.user_coupon_id === 7) });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    const original = creates()[0];
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+
+    expect(screen.getByRole('button', { name: '重试确认订单' })).toBeEnabled();
+    expect(JSON.parse(sessionStorage.getItem('pending-checkout')!).input).toEqual(original);
+    view.unmount();
+    vi.mocked(cartApi.list).mockResolvedValue({ items: [] });
+    vi.mocked(orderApi.preview).mockRejectedValue(apiError('商品已下架'));
+    render(<CartPage />);
+    await settle();
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+
+    expect(creates()).toEqual([original, original, original]);
+    expect(committed.size).toBe(1);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+  });
+
   it('recovers the same pending checkout after remount even if the cart is empty and quoting fails', async () => {
     const { view } = await setupCheckout({ create: async () => { throw Object.assign(new Error('Server error'), { response: { status: 500 } }); } });
     await click(checkoutButton());
@@ -642,10 +689,14 @@ describe('checkout', () => {
     expect(creates()[1].checkout_key).not.toBe(originalKey);
   });
 
-  it('issues a new request key only after a definite rejected checkout', async () => {
+  it.each([400, 409])('issues a new request key only after a definite HTTP %s checkout rejection', async status => {
     let calls = 0;
     await setupCheckout({ create: async () => {
-      if (++calls === 1) throw apiError('库存不足');
+      if (++calls === 1) {
+        const error = apiError(status === 409 ? '结算请求号已用于其他结算内容，请重新结算' : '库存不足');
+        error.response.status = status;
+        throw error;
+      }
       return { message: 'ok', order_id: 55 };
     } });
     await click(checkoutButton());

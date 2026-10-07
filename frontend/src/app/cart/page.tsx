@@ -274,7 +274,8 @@ export default function CartPage() {
       const failure = requestFailure(error);
       toast.error(t(failure.response?.data?.error || failure.response?.data?.message || '创建订单失败'));
       const status = failure.response?.status;
-      if (status === undefined || status >= 500) {
+      // Timeout or rate-limit responses cannot resolve an earlier checkout whose response was lost.
+      if (status === undefined || status === 408 || status === 429 || status >= 500) {
         setUnconfirmedSession(sessionKey);
       } else {
         clearPendingCheckout(sessionKey);
