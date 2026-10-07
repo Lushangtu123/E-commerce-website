@@ -52,7 +52,7 @@ export class OrderController {
   // 获取订单详情
   static async getDetail(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id);
+      const orderId = parseInt(req.params.id as string);
       
       const order = await OrderModel.findById(orderId);
       
@@ -148,7 +148,7 @@ export class OrderController {
   // 获取订单剩余支付时间
   static async getRemainingTime(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id);
+      const orderId = parseInt(req.params.id as string);
       
       const order = await OrderModel.findById(orderId);
       

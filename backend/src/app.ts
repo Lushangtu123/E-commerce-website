@@ -49,6 +49,11 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
   // 请求体上限：最大的合法请求（批量创建 100 个 SKU）约 350KB
   app.use(express.json({ limit: '1mb' })); // JSON解析
   app.use(express.urlencoded({ extended: true, limit: '1mb' })); // URL编码解析
+  // Express 5 不解析请求体时 req.body 为 undefined；保持 v4 的空对象约定，缺少字段时由校验返回 400 而不是 500
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    req.body ??= {};
+    next();
+  });
 
   // 设置响应头字符编码
   app.use((req: Request, res: Response, next: NextFunction) => {

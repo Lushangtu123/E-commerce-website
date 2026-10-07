@@ -81,7 +81,7 @@ export const deleteSearchKeyword = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.userId;
     const { keyword } = req.params;
 
-    const success = await SearchHistoryModel.deleteKeyword(userId, keyword);
+    const success = await SearchHistoryModel.deleteKeyword(userId, keyword as string);
 
     if (!success) {
       return res.status(404).json({ message: '搜索记录不存在' });

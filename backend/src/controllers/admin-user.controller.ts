@@ -158,7 +158,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
       (req as any).admin.adminId,
       'UPDATE_USER_STATUS',
       'user',
-      userId,
+      userId as string,
       `${status === 1 ? '启用' : '禁用'}用户: ${user.username}`,
       req.ip,
       req.get('user-agent')
