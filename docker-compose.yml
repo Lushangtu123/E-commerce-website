@@ -56,9 +56,12 @@ services:
       timeout: 10s
       retries: 5
 
-  # Elasticsearch搜索引擎
+  # Elasticsearch搜索引擎（后端使用 9.x 客户端，只能连接 9.x 服务端）
+  # 从 8.x 升级：ES 不能直接读取 8.11 的数据目录。商品索引可由 MySQL 重建，
+  # 删除旧数据卷后重新同步即可：docker-compose rm -sf elasticsearch && docker volume rm <项目名>_es_data，
+  # 启动后在 backend 执行 npm run sync-es
   elasticsearch:
-    image: elasticsearch:8.11.0
+    image: elasticsearch:9.5.5
     container_name: ecommerce-elasticsearch
     environment:
       - discovery.type=single-node

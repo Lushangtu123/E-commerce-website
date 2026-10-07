@@ -92,7 +92,7 @@
 - **语言**: TypeScript
 - **数据库**: MySQL 8.0
 - **缓存**: Redis 7
-- **搜索引擎**: Elasticsearch 8（可选）
+- **搜索引擎**: Elasticsearch 9（可选）
 - **消息队列**: RabbitMQ 3（可选）
 - **认证**: JWT
 
@@ -162,7 +162,7 @@
 - Docker & Docker Compose
 - MySQL 8.0+
 - Redis 7+
-- 可选：Elasticsearch 8、RabbitMQ 3
+- 可选：Elasticsearch 9、RabbitMQ 3
 
 ### 使用Docker Compose（推荐）
 

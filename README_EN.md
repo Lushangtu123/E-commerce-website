@@ -91,7 +91,7 @@ A modern, full-featured e-commerce platform with a separate frontend and a modul
 - **Language**: TypeScript 5
 - **Database**: MySQL 8.0
 - **Cache**: Redis 7
-- **Search Engine**: Elasticsearch 8 (optional)
+- **Search Engine**: Elasticsearch 9 (optional)
 - **Message Queue**: RabbitMQ 3 (optional)
 - **Authentication**: JWT
 - **Password Encryption**: Bcrypt
@@ -162,7 +162,7 @@ A modern, full-featured e-commerce platform with a separate frontend and a modul
 - Docker & Docker Compose
 - MySQL 8.0+
 - Redis 7+
-- Optional: Elasticsearch 8, RabbitMQ 3
+- Optional: Elasticsearch 9, RabbitMQ 3
 
 ### Using Docker Compose (Recommended)
 

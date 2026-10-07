@@ -87,7 +87,7 @@ nano .env.local
 
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
-| `ELASTICSEARCH_URL` | Elasticsearch HTTP 地址。不设置时商品搜索使用 MySQL；ES 不可用时自动回退 MySQL。首次启用后运行 `npm run sync-es` 建立索引，之后商品和 SKU 写入会自动同步 | 不启用 | `http://localhost:9200` |
+| `ELASTICSEARCH_URL` | Elasticsearch 9.x 的 HTTP 地址（客户端不兼容 8.x 服务端）。不设置时商品搜索使用 MySQL；ES 不可用时自动回退 MySQL。首次启用后运行 `npm run sync-es` 建立索引，之后商品和 SKU 写入会自动同步 | 不启用 | `http://localhost:9200` |
 
 #### RabbitMQ 配置
 

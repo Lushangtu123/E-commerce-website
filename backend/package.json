@@ -24,8 +24,8 @@
     "migrate-review:dev": "ts-node src/database/migrate-review.ts"
   },
   "dependencies": {
-    "@elastic/elasticsearch": "^8.11.0",
-    "amqplib": "^0.10.3",
+    "@elastic/elasticsearch": "^9.5.1",
+    "amqplib": "^2.2.0",
     "bcryptjs": "^3.0.3",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
@@ -42,7 +42,6 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
-    "@types/amqplib": "^0.10.4",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",

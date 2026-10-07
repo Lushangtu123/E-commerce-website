@@ -58,47 +58,45 @@ export async function initProductIndex() {
       // 创建索引及映射
       await requireESClient().indices.create({
         index: PRODUCT_INDEX,
-        body: {
-          settings: {
-            analysis: {
-              analyzer: {
-                standard_analyzer: {
-                  type: 'standard',
-                },
+        settings: {
+          analysis: {
+            analyzer: {
+              standard_analyzer: {
+                type: 'standard',
               },
             },
           },
-          mappings: {
-            properties: {
-              product_id: { type: 'integer' },
-              title: {
-                type: 'text',
-                analyzer: 'standard',
-                fields: {
-                  keyword: { type: 'keyword' },
-                },
+        },
+        mappings: {
+          properties: {
+            product_id: { type: 'integer' },
+            title: {
+              type: 'text',
+              analyzer: 'standard',
+              fields: {
+                keyword: { type: 'keyword' },
               },
-              description: {
-                type: 'text',
-                analyzer: 'standard',
-              },
-              price: { type: 'float' },
-              original_price: { type: 'float' },
-              stock: { type: 'integer' },
-              sales_count: { type: 'integer' },
-              category_id: { type: 'integer' },
-              brand: {
-                type: 'text',
-                analyzer: 'standard',
-                fields: {
-                  keyword: { type: 'keyword' },
-                },
-              },
-              main_image: { type: 'keyword' },
-              status: { type: 'integer' },
-              created_at: { type: 'date' },
-              updated_at: { type: 'date' },
             },
+            description: {
+              type: 'text',
+              analyzer: 'standard',
+            },
+            price: { type: 'float' },
+            original_price: { type: 'float' },
+            stock: { type: 'integer' },
+            sales_count: { type: 'integer' },
+            category_id: { type: 'integer' },
+            brand: {
+              type: 'text',
+              analyzer: 'standard',
+              fields: {
+                keyword: { type: 'keyword' },
+              },
+            },
+            main_image: { type: 'keyword' },
+            status: { type: 'integer' },
+            created_at: { type: 'date' },
+            updated_at: { type: 'date' },
           },
         },
       });
@@ -119,7 +117,7 @@ export async function syncProductToES(product: any) {
   await requireESClient().index({
     index: PRODUCT_INDEX,
     id: product.product_id.toString(),
-    body: productDocument(product),
+    document: productDocument(product),
   });
 }
 
@@ -128,12 +126,12 @@ export async function syncProductToES(product: any) {
  */
 export async function bulkSyncProductsToES(products: any[]) {
   try {
-    const body = products.flatMap((product) => [
+    const operations = products.flatMap((product) => [
       { index: { _index: PRODUCT_INDEX, _id: product.product_id.toString() } },
       productDocument(product),
     ]);
 
-    const result = await requireESClient().bulk({ body });
+    const result = await requireESClient().bulk({ operations });
     
     if (result.errors) {
       logger.error('❌ 批量同步部分商品失败');
@@ -199,14 +197,12 @@ export async function searchProductIds(params: ESSearchParams): Promise<{ ids: n
 
   const result = await requireESClient().search({
     index: PRODUCT_INDEX,
-    body: {
-      query: { bool: { must, filter } },
-      sort: [{ [SORT_FIELDS[sort_by]]: sort_order }, { product_id: 'desc' }],
-      from: (page - 1) * page_size,
-      size: page_size,
-      track_total_hits: true,
-      _source: ['product_id'],
-    },
+    query: { bool: { must, filter } },
+    sort: [{ [SORT_FIELDS[sort_by]]: sort_order }, { product_id: 'desc' }],
+    from: (page - 1) * page_size,
+    size: page_size,
+    track_total_hits: true,
+    _source: ['product_id'],
   });
   const total = typeof result.hits.total === 'number' ? result.hits.total : result.hits.total?.value || 0;
   return { ids: result.hits.hits.map((hit: any) => Number(hit._source.product_id)), total };
