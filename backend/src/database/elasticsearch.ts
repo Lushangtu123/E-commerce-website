@@ -191,8 +191,19 @@ export async function searchProductIds(params: ESSearchParams): Promise<{ ids: n
   if (min_price !== undefined || max_price !== undefined) {
     filter.push({ range: { price: { ...(min_price !== undefined && { gte: min_price }), ...(max_price !== undefined && { lte: max_price }) } } });
   }
+  // The standard analyzer splits Chinese into single characters, so every term must match:
+  // with `or`, 耳机 would also match 机械键盘 through the shared 机.
+  // cross_fields lets terms span fields (brand + title); best_fields keeps typo tolerance
+  // within one field, which cross_fields does not support.
+  const fields = ['title^3', 'description', 'brand^2'];
   const must: any[] = keyword ? [{
-    multi_match: { query: keyword, fields: ['title^3', 'description', 'brand^2'], type: 'best_fields', operator: 'or', fuzziness: 'AUTO' },
+    bool: {
+      should: [
+        { multi_match: { query: keyword, fields, type: 'cross_fields', operator: 'and' } },
+        { multi_match: { query: keyword, fields, type: 'best_fields', operator: 'and', fuzziness: 'AUTO' } },
+      ],
+      minimum_should_match: 1,
+    },
   }] : [];
 
   const result = await requireESClient().search({
