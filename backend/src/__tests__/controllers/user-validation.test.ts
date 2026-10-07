@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const valid = { username: '客户', email: 'customer@example.test', password: 'valid-password' };
-const profile = { user_id: 7, username: '客户', email: 'customer@example.test', phone: null, avatar_url: null, password_hash: 'private-hash', role: 'private' };
+const profile = { user_id: 7, username: '客户', email: 'customer@example.test', phone: null, avatar_url: null, password_hash: 'private-hash', status: 1, role: 'private' };
 function response() {
   const res = {} as Response;
   res.status = jest.fn().mockReturnValue(res); res.json = jest.fn().mockReturnValue(res);
@@ -132,6 +132,22 @@ test('legacy short passwords and historical email remain usable without trimming
   expect((res.cookie as jest.Mock).mock.calls[0][0]).toBe('customer_session');
   expect((res.json as jest.Mock).mock.calls[0][0].user.password_hash).toBeUndefined();
   expect(query).toHaveBeenCalledWith(expect.any(String), ['legacy-local-email']);
+});
+
+test('a disabled account cannot log in with its correct password', async () => {
+  const password = 'valid-password';
+  (query as jest.Mock).mockResolvedValue([{ ...profile, status: 0, password_hash: await bcrypt.hash(password, 4) }]);
+  const res = response(); await UserController.login(req({ email: valid.email, password }), res);
+  expect(res.status).toHaveBeenCalledWith(403);
+  expect(res.json).toHaveBeenCalledWith({ error: '账号已被禁用' });
+  expect(res.cookie).not.toHaveBeenCalled();
+});
+
+test('wrong passwords do not reveal that an account is disabled', async () => {
+  (query as jest.Mock).mockResolvedValue([{ ...profile, status: 0, password_hash: await bcrypt.hash('valid-password', 4) }]);
+  const res = response(); await UserController.login(req({ email: valid.email, password: 'wrong' }), res);
+  expect(res.status).toHaveBeenCalledWith(401);
+  expect(res.json).toHaveBeenCalledWith({ error: '邮箱或密码错误' });
 });
 
 test('profile GET projects public fields even if a future model returns private columns', async () => {

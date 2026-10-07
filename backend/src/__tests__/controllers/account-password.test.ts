@@ -29,7 +29,7 @@ function configureMail() {
 function connection() {
   const conn = { beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(), query: jest.fn() };
   conn.query.mockImplementation(async (sql: string) => {
-    if (sql.startsWith('SELECT auth_version')) return [[{ auth_version: 0 }]];
+    if (sql.startsWith('SELECT auth_version')) return [[{ auth_version: 0, status: 1 }]];
     if (sql.startsWith('SELECT')) return [[]];
     return [{ affectedRows: 1 }];
   });
@@ -52,7 +52,7 @@ test('unconfigured recovery returns safe unavailable response before any account
 test('login binds the session to the database authentication version', async () => {
   const password = 'old-password';
   (query as jest.Mock).mockResolvedValue([{ user_id: 7, username: 'customer', email: 'user@example.test',
-    auth_version: 3, password_hash: await bcrypt.hash(password, 4) }]);
+    auth_version: 3, status: 1, password_hash: await bcrypt.hash(password, 4) }]);
   const res = response(); await UserController.login(req({ email: 'user@example.test', password }), res);
   // The session token goes only into an httpOnly cookie that expires with it, scoped to the API.
   const [name, token, options] = res.cookie.mock.calls[0];

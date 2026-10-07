@@ -29,4 +29,29 @@ integration('真实 Redis 跨实例限流', () => {
     expect(await client.pttl('api:127.0.0.1')).toBeGreaterThan(0);
     expect(await client.pttl('auth:127.0.0.1')).toBeGreaterThan(0);
   });
+
+  test('真实客户端终止后，连接入口恢复 PING 和限流计数', async () => {
+    const previous = { url: process.env.REDIS_URL, prefix: process.env.REDIS_KEY_PREFIX };
+    process.env.REDIS_URL = process.env.REDIS_TEST_URL;
+    process.env.REDIS_KEY_PREFIX = `ecommerce:test:recovery:${process.pid}:${Date.now()}:`;
+    const { connectRedis, getRedisClient } = require('../../database/redis');
+    try {
+      await connectRedis();
+      const first = getRedisClient();
+      expect(await first.ping()).toBe('PONG');
+      await new Promise<void>(resolve => { first.once('end', resolve); first.disconnect(); });
+      await Promise.all([connectRedis(), connectRedis()]);
+      expect(await getRedisClient().ping()).toBe('PONG');
+      const { RedisRateLimitStore } = require('../../middleware/redis-rate-limit-store');
+      const app = express();
+      app.get('/recovered', rateLimit({ windowMs: 60000, limit: 1,
+        store: new RedisRateLimitStore('recovered:') }), (_req, res) => res.json({ ok: true }));
+      await request(app).get('/recovered').expect(200);
+      await request(app).get('/recovered').expect(429);
+    } finally {
+      try { getRedisClient().disconnect(); } catch {}
+      if (previous.url === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = previous.url;
+      if (previous.prefix === undefined) delete process.env.REDIS_KEY_PREFIX; else process.env.REDIS_KEY_PREFIX = previous.prefix;
+    }
+  });
 });

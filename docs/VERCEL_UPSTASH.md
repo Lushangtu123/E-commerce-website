@@ -47,6 +47,10 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 已有数据库升级时，编译后依次运行 `backend/dist/database/migrate-account-security.js` 和 `backend/dist/database/migrate-fulfillment.js`。两者只添加缺失字段和新表，重复运行安全，不重建账户或订单。账户安全迁移保留历史密码，将历史会话版本设为 0；改密后旧会话立即失效。物流迁移添加快递公司、运单号和售后审核记录。
 
+账户安全迁移还会补齐 `users.status`（既有用户默认启用）与 `admins.auth_version`。禁用用户会撤销旧会话，重新启用后需要重新登录。发布包含这些字段的新代码前，使用目标环境的数据库配置，从 `backend` 目录先执行 `npm run build`，再执行 `npm run schema:check`。该检查只读取数据库结构；缺列会列出字段并以非零状态退出。核对目标库并备份后运行 `npm run migrate:account-security`，然后重复 `npm run schema:check`，结果必须是 `ready`。不要把迁移放进构建命令或每次 API 请求，也不要在共享数据库上运行 `seed`。
+
+后台销售额与累计消费只统计已支付、已发货、已完成订单（状态 1、2、3）；订单数量仍包含全部状态。趋势按订单创建日期分组，不代表支付渠道对账或自动退款记录。仪表盘统计接口要求 `statistics:view`，最近订单要求 `order:view`；各区域独立加载，有权区域不会被其他区域的权限错误阻断。
+
 ## QStash 订单超时任务
 
 待支付订单超过 30 分钟后取消，并通过现有事务恢复库存和优惠券；重复投递不会重复恢复库存。任务每次最多检查 50 笔，定时每 5 分钟触发一次。

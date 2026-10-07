@@ -163,7 +163,7 @@ describe('admin dashboard', () => {
   });
 
   it('returns an expired administrator to admin login and keeps the customer signed in', async () => {
-    signIn('expired-admin-session', '{"admin_id":2}');
+    signIn('expired-admin-session', '{"admin_id":2,"username":"Expired Admin"}');
     const adapter: AxiosAdapter = async config => {
       throw Object.assign(new Error('Unauthorized'), { config, response: { status: 401 } });
     };

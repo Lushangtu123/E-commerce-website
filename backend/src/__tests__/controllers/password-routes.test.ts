@@ -7,7 +7,7 @@ import { query } from '../../database/mysql';
 import { passwordRecoveryClock } from '../../services/password-recovery.service';
 
 const app = express(); app.use(express.json()); app.use('/api/users', userRoutes);
-beforeEach(() => { jest.clearAllMocks(); (query as jest.Mock).mockResolvedValue([{ auth_version: 0 }]);
+beforeEach(() => { jest.clearAllMocks(); (query as jest.Mock).mockResolvedValue([{ auth_version: 0, status: 1 }]);
   jest.spyOn(passwordRecoveryClock, 'sleep').mockResolvedValue(undefined);
   delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM; delete process.env.APP_URL; });
 afterEach(() => jest.restoreAllMocks());

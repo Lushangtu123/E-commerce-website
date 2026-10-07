@@ -15,6 +15,7 @@ const migrations = [
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '1:启用 0:禁用',
     auth_version INT UNSIGNED NOT NULL DEFAULT 0,
     phone VARCHAR(20),
     avatar_url VARCHAR(255),

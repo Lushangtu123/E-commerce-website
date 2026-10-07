@@ -14,7 +14,7 @@ jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn() 
 const OLD_SECRET = process.env.JWT_SECRET;
 
 beforeEach(() => {
-  (query as jest.Mock).mockResolvedValue([{ auth_version: 0 }]);
+  (query as jest.Mock).mockResolvedValue([{ auth_version: 0, status: 1 }]);
   (getPool as jest.Mock).mockReturnValue({
     query: jest.fn(async () => [[{ admin_id: 9, username: 'root', role_id: 1, status: 1, auth_version: 0 }]]),
   });

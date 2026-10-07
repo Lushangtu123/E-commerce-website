@@ -12,7 +12,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const [orderStats] = await pool.query(
       `SELECT 
         COUNT(*) as today_orders,
-        COALESCE(SUM(total_amount), 0) as today_revenue
+        COALESCE(SUM(CASE WHEN status IN (1,2,3) THEN total_amount ELSE 0 END), 0) as today_revenue
        FROM orders 
        WHERE DATE(created_at) = ?`,
       [today]
@@ -46,7 +46,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const [yesterdayStats] = await pool.query(
       `SELECT 
         COUNT(*) as yesterday_orders,
-        COALESCE(SUM(total_amount), 0) as yesterday_revenue
+        COALESCE(SUM(CASE WHEN status IN (1,2,3) THEN total_amount ELSE 0 END), 0) as yesterday_revenue
        FROM orders 
        WHERE DATE(created_at) = ?`,
       [yesterday]
@@ -131,7 +131,7 @@ export const getTopProducts = async (req: Request, res: Response) => {
        FROM products p
        LEFT JOIN order_items oi ON p.product_id = oi.product_id
        LEFT JOIN orders o ON oi.order_id = o.order_id
-       WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+       WHERE o.status IN (1,2,3) AND o.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
        GROUP BY p.product_id
        ORDER BY total_sales DESC
        LIMIT ?`,
@@ -155,7 +155,7 @@ export const getSalesTrend = async (req: Request, res: Response) => {
       `SELECT 
         DATE(created_at) as date,
         COUNT(*) as order_count,
-        SUM(total_amount) as revenue
+        COALESCE(SUM(CASE WHEN status IN (1,2,3) THEN total_amount ELSE 0 END), 0) as revenue
        FROM orders
        WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
        GROUP BY DATE(created_at)

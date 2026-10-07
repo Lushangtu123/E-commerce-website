@@ -7,6 +7,9 @@ export async function migrateAccountSecurity(pool: Pool): Promise<void> {
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"
   );
   if (!columns.length) throw new Error('请先运行基础迁移创建 users 表');
+  if (!columns.some(column => column.COLUMN_NAME === 'status')) {
+    await pool.query("ALTER TABLE users ADD COLUMN status TINYINT NOT NULL DEFAULT 1 COMMENT '1:启用 0:禁用'");
+  }
   if (!columns.some(column => column.COLUMN_NAME === 'auth_version')) {
     await pool.query('ALTER TABLE users ADD COLUMN auth_version INT UNSIGNED NOT NULL DEFAULT 0');
   }

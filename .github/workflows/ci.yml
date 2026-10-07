@@ -11,6 +11,15 @@ jobs:
     name: 后端：编译 + 测试
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
       mysql:
         image: mysql:8.0
         env:
@@ -27,6 +36,7 @@ jobs:
       MYSQL_TEST_HOST: 127.0.0.1
       MYSQL_TEST_USER: root
       MYSQL_TEST_PASSWORD: order_test_password
+      REDIS_TEST_URL: redis://127.0.0.1:6379
     defaults:
       run:
         working-directory: backend

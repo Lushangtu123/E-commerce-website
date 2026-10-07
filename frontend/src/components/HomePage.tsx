@@ -4,7 +4,7 @@ import { useI18n } from '@/lib/i18n';
 
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
-import { useAuthStore } from '@/store/useAuthStore';
+import { storedSessionId, useAuthStore } from '@/store/useAuthStore';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -13,22 +13,33 @@ import { FiArrowRight, FiGift, FiRotateCcw, FiShield, FiTruck } from 'react-icon
 
 export default function Home() {
   const { t } = useI18n();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, sessionId, user } = useAuthStore();
   const [hotProducts, setHotProducts] = useState<Product[]>([]);
   const [newProducts, setNewProducts] = useState<Product[]>([]);
   // The subtitle must describe the session the recommendations were fetched for.
-  const [recommendations, setRecommendations] = useState<{ products: Product[]; personalized: boolean }>({ products: [], personalized: false });
+  const [recommendations, setRecommendations] = useState<{ scope: string | null; products: Product[]; personalized: boolean }>({ scope: null, products: [], personalized: false });
   const recommendationRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const scope = JSON.stringify([sessionId, user?.user_id, isAuthenticated]);
+  const isCurrentSession = () => {
+    const auth = useAuthStore.getState();
+    try {
+      return auth.isAuthenticated === isAuthenticated &&
+        auth.sessionId === sessionId && auth.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null);
+    } catch { return false; }
+  };
+  const shownRecommendations = recommendations.scope === scope && isCurrentSession() ? recommendations : null;
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    loadRecommendations();
-  }, [isAuthenticated]);
+    let active = true;
+    loadRecommendations(() => active);
+    return () => { active = false; };
+  }, [isAuthenticated, sessionId, user?.user_id]);
 
   // Hot and new products load independently, so one failing request cannot blank both sections.
   const loadData = async () => {
@@ -46,19 +57,21 @@ export default function Home() {
   };
 
   // Login state hydrates after mount, so requests can overlap; only the latest one may update the page.
-  const loadRecommendations = async () => {
+  const loadRecommendations = async (isActive: () => boolean) => {
     const request = ++recommendationRequest.current;
+    if (!isActive() || !isCurrentSession()) return;
     const personalized = isAuthenticated;
     setLoadingRecommendations(true);
+    const isCurrentRequest = () => isActive() && request === recommendationRequest.current && isCurrentSession();
     try {
       const data = await recommendationApi.getGuessYouLike(8);
-      if (request === recommendationRequest.current) setRecommendations({ products: data.recommendations || [], personalized });
+      if (isCurrentRequest()) setRecommendations({ scope, products: data.recommendations || [], personalized });
     } catch (error) {
-      if (request !== recommendationRequest.current) return;
+      if (!isCurrentRequest()) return;
       logger.error('加载推荐失败:', error);
-      setRecommendations({ products: [], personalized });
+      setRecommendations({ scope, products: [], personalized });
     } finally {
-      if (request === recommendationRequest.current) setLoadingRecommendations(false);
+      if (isCurrentRequest()) setLoadingRecommendations(false);
     }
   };
 
@@ -120,12 +133,12 @@ export default function Home() {
 
       <ProductSection title={t("热门商品")} href="/products?sort=sales_count DESC" products={hotProducts} loading={loading} />
       <ProductSection title={t("新品推荐")} href="/products?sort=created_at DESC" products={newProducts} loading={loading} />
-      {recommendations.products.length > 0 && (
+      {shownRecommendations && shownRecommendations.products.length > 0 && (
         <ProductSection
           title={t("猜你喜欢")}
-          subtitle={recommendations.personalized ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
+          subtitle={shownRecommendations.personalized ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
           href="/products"
-          products={recommendations.products}
+          products={shownRecommendations.products}
           loading={loadingRecommendations}
         />
       )}

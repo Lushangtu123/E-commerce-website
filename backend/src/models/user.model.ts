@@ -7,6 +7,7 @@ export interface User {
   username: string;
   email: string;
   password_hash: string;
+  status: number;
   auth_version?: number;
   phone?: string | null;
   avatar_url?: string | null;
@@ -24,8 +25,9 @@ export interface UserStats {
 
 export class UserModel {
   static async getAuthVersion(userId: number): Promise<number | null> {
-    const rows = await query<RowDataPacket[]>('SELECT auth_version FROM users WHERE user_id = ?', [userId]);
-    if (!rows.length) return null;
+    const rows = await query<RowDataPacket[]>('SELECT auth_version, status FROM users WHERE user_id = ?', [userId]);
+    // Disabled accounts never authenticate, even when a token carries the current version.
+    if (!rows.length || rows[0].status !== 1) return null;
     const version = rows[0].auth_version;
     if (!Number.isSafeInteger(version) || version < 0) throw new Error('账户认证版本无效');
     return version;

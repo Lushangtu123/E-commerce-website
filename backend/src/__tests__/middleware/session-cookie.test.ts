@@ -22,7 +22,7 @@ const admin = (adminId: number) => jwt.sign({ adminId, type: 'admin' }, SECRET, 
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (query as jest.Mock).mockResolvedValue([{ auth_version: 0 }]);
+  (query as jest.Mock).mockResolvedValue([{ auth_version: 0, status: 1 }]);
   (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async () => [[{ admin_id: 9, username: 'root', role_id: 1, status: 1 }]]) });
 });
 
@@ -81,7 +81,7 @@ describe('customer session cookie', () => {
   });
 
   test('still rejects a cookie whose account version was revoked', async () => {
-    (query as jest.Mock).mockResolvedValue([{ auth_version: 1 }]);
+    (query as jest.Mock).mockResolvedValue([{ auth_version: 1, status: 1 }]);
     await request(customerApp()).get('/me').set('Cookie', `customer_session=${customer(5)}`).expect(401);
   });
 

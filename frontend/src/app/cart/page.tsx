@@ -29,11 +29,15 @@ export default function CartPage() {
   const linkedCouponId = useRef<number | undefined>(undefined);
   const previousSession = useRef<string | null>(null);
   const submittingRequest = useRef(false);
+  // Lock writes synchronously, including clicks received before the disabled controls render.
+  const cartMutation = useRef<object | null>(null);
+  const [updatingSession, setUpdatingSession] = useState<string | null>(null);
   const mounted = useRef(true);
   const [addressResult, setAddressResult] = useState<{ key: string; addresses: ShippingAddress[]; error?: string } | null>(null);
   const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
   const [addressRevision, setAddressRevision] = useState(0);
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
+  const cartUpdating = updatingSession === sessionKey;
   const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
   const addressLoading = addressResult?.key !== sessionKey;
   const addressError = addressResult?.key === sessionKey ? addressResult.error : null;
@@ -75,6 +79,8 @@ export default function CartPage() {
       setQuoteFailure(null);
       setSubmitting(false);
       submittingRequest.current = false;
+      cartMutation.current = null;
+      setUpdatingSession(null);
     }
     previousSession.current = session;
   }, [isHydrated, sessionId, user?.user_id]);
@@ -158,8 +164,11 @@ export default function CartPage() {
   };
 
   const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
-    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || !isCurrentSession()) return;
+    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
 
+    const operation = {};
+    cartMutation.current = operation;
+    setUpdatingSession(sessionKey);
     try {
       await cartApi.updateQuantity({ product_id: item.product_id, quantity: newQuantity, ...(item.sku_id != null && { sku_id: item.sku_id }) });
       if (!isCurrentSession()) return;
@@ -170,11 +179,19 @@ export default function CartPage() {
       } else updateQuantity(item.product_id, newQuantity, item.sku_id);
     } catch {
       if (isCurrentSession()) toast.error(t('更新失败'));
+    } finally {
+      if (cartMutation.current === operation) {
+        cartMutation.current = null;
+        if (isCurrentSession()) setUpdatingSession(null);
+      }
     }
   };
 
   const handleRemove = async (item: CartItem) => {
-    if (submittingRequest.current || !isCurrentSession()) return;
+    if (submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
+    const operation = {};
+    cartMutation.current = operation;
+    setUpdatingSession(sessionKey);
     try {
       await cartApi.remove(item.product_id, item.sku_id);
       if (!isCurrentSession()) return;
@@ -183,10 +200,16 @@ export default function CartPage() {
       toast.success(t('已删除'));
     } catch {
       if (isCurrentSession()) toast.error(t('删除失败'));
+    } finally {
+      if (cartMutation.current === operation) {
+        cartMutation.current = null;
+        if (isCurrentSession()) setUpdatingSession(null);
+      }
     }
   };
 
   const handleSelectAll = () => {
+    if (submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
     if (orderItems.length === availableItems.length) {
       setSelectedItems([]);
     } else {
@@ -195,7 +218,7 @@ export default function CartPage() {
   };
 
   const handleToggleSelect = (item: CartItem) => {
-    if (!isAvailable(item) || submittingRequest.current) return;
+    if (!isAvailable(item) || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
     const key = cartItemKey(item);
     setSelectedItems(selected => selected.includes(key) ? selected.filter(id => id !== key) : [...selected, key]);
   };
@@ -205,7 +228,7 @@ export default function CartPage() {
       toast.error(t('请选择要结算的商品'));
       return;
     }
-    if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || !isCurrentSession()) return;
+    if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
 
     submittingRequest.current = true;
     setSubmitting(true);
@@ -275,7 +298,7 @@ export default function CartPage() {
                 type="checkbox"
                 aria-label={t("全选")}
                 checked={availableItems.length > 0 && orderItems.length === availableItems.length}
-                disabled={submitting || availableItems.length === 0}
+                disabled={submitting || cartUpdating || availableItems.length === 0}
                 onChange={handleSelectAll}
                 className="h-5 w-5 rounded-sm accent-primary-600"
               />
@@ -284,7 +307,7 @@ export default function CartPage() {
 
             {/* 商品列表 */}
             {items.map((item) => (
-              <CartItemRow key={cartItemKey(item)} item={item} selected={selectedItems.includes(cartItemKey(item))} submitting={submitting}
+              <CartItemRow key={cartItemKey(item)} item={item} selected={selectedItems.includes(cartItemKey(item))} submitting={submitting || cartUpdating}
                 onToggle={() => handleToggleSelect(item)} onQuantityChange={quantity => handleQuantityChange(item, quantity)}
                 onRemove={() => handleRemove(item)} />
             ))}
@@ -292,7 +315,7 @@ export default function CartPage() {
 
           {/* 结算信息 */}
           <div className="lg:col-span-1">
-            <CheckoutSummary itemCount={orderItems.length} submitting={submitting}
+            <CheckoutSummary itemCount={orderItems.length} submitting={submitting} cartUpdating={cartUpdating}
               addresses={addresses} addressLoading={addressLoading} addressError={addressError}
               selectedAddressId={selectedAddress?.address_id}
               onSelectAddress={id => setAddressSelection({ key: sessionKey, id })}

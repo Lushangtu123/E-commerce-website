@@ -193,7 +193,7 @@ integration('真实 MySQL 收藏与浏览历史边界', () => {
     await expect(FavoriteModel.getUserFavorites(1, 0)).rejects.toThrow(); await expect(BrowseHistoryModel.getRecentProductIds(1, 101)).rejects.toThrow();
     expect((query as jest.Mock).mock.calls).toHaveLength(13);
     for (const [sql, params] of (query as jest.Mock).mock.calls) {
-      expect(sql).toBe('SELECT auth_version FROM users WHERE user_id = ?'); expect(params).toEqual([1]);
+      expect(sql).toBe('SELECT auth_version, status FROM users WHERE user_id = ?'); expect(params).toEqual([1]);
     }
     expect(await raw('favorites')).toEqual(favorites); expect(await raw('browse_history')).toEqual(history);
   });
