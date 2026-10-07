@@ -1,4 +1,5 @@
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { createHash } from 'crypto';
 import { PoolConnection } from 'mysql2/promise';
 import { getPool } from '../database/mysql';
 import { getRedisClient } from '../database/redis';
@@ -71,14 +72,22 @@ export async function createOrder(
   items: unknown,
   shippingAddressId?: number,
   remark?: string,
-  userCouponId?: number
-): Promise<{ orderId: number; productIds: number[]; original_amount: number; discount_amount: number; total_amount: number }> {
+  userCouponId?: number,
+  checkoutKey?: string
+): Promise<{ orderId: number; productIds: number[]; original_amount: number; discount_amount: number; total_amount: number; created: boolean }> {
   const normalizedItems = normalizeItems(items);
   validateCouponId(userCouponId);
   if (remark !== undefined && (typeof remark !== 'string' || remark.length > 2000)) throw new OrderError('订单备注无效');
   if (shippingAddressId === undefined || !Number.isSafeInteger(shippingAddressId) || shippingAddressId <= 0) {
     throw new OrderError('请选择有效的收货地址');
   }
+  if (checkoutKey !== undefined && (typeof checkoutKey !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(checkoutKey))) {
+    throw new OrderError('结算请求号无效，请刷新页面后重试');
+  }
+  const key = checkoutKey?.toLowerCase();
+  const fingerprint = createHash('sha256').update(JSON.stringify({
+    items: normalizedItems, shippingAddressId, remark: remark ?? '', userCouponId: userCouponId ?? null,
+  })).digest('hex');
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -88,6 +97,23 @@ export async function createOrder(
       'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]
     );
     if (!users.length) throw new OrderError('用户不存在', 404);
+    // The user lock serializes same-user attempts across processes. This is the transaction's
+    // first consistent read, after that lock, so it sees the previous attempt's commit.
+    // Do not gap-lock missing keys: different users must be able to create their first orders.
+    if (key !== undefined) {
+      const [existing] = await connection.execute<RowDataPacket[]>(
+        `SELECT order_id, checkout_fingerprint, original_amount, discount_amount, total_amount
+         FROM orders WHERE user_id = ? AND checkout_key = ?`, [userId, key]
+      );
+      if (existing[0]) {
+        const order = existing[0];
+        if (order.checkout_fingerprint !== fingerprint) throw new OrderError('结算请求号已用于其他结算内容，请重新结算', 409);
+        await connection.commit();
+        return { orderId: order.order_id, productIds: [...new Set(normalizedItems.map(item => item.product_id))],
+          original_amount: Number(order.original_amount), discount_amount: Number(order.discount_amount),
+          total_amount: Number(order.total_amount), created: false };
+      }
+    }
     const [addresses] = await connection.execute<RowDataPacket[]>(
       `SELECT receiver_name, phone, province, city, district, detail_address
        FROM shipping_addresses WHERE address_id = ? AND user_id = ? FOR UPDATE`,
@@ -126,12 +152,12 @@ export async function createOrder(
     }
     const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO orders (order_no, user_id, total_amount, shipping_address_id, remark, status,
-                          original_amount, discount_amount, user_coupon_id, coupon_name, coupon_code, shipping_address_snapshot)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          original_amount, discount_amount, user_coupon_id, coupon_name, coupon_code, shipping_address_snapshot${key === undefined ? '' : ', checkout_key, checkout_fingerprint'})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${key === undefined ? '' : ', ?, ?'})`,
       [OrderModel.generateOrderNo(), userId, ((totalCents - discountCents) / 100).toFixed(2),
         shippingAddressId ?? null, remark ?? null, OrderStatus.PENDING,
         (totalCents / 100).toFixed(2), (discountCents / 100).toFixed(2), userCouponId ?? null, coupon?.name ?? null, coupon?.code ?? null,
-        JSON.stringify(addressSnapshot)]
+        JSON.stringify(addressSnapshot), ...(key === undefined ? [] : [key, fingerprint])]
     );
     const orderId = result.insertId;
     if (coupon && userCouponId !== undefined) {
@@ -168,7 +194,7 @@ export async function createOrder(
       [userId, ...normalizedItems.flatMap(item => [item.product_id, item.sku_id ?? 0])]
     );
     await connection.commit();
-    return { orderId, productIds, original_amount: totalCents / 100, discount_amount: discountCents / 100, total_amount: (totalCents - discountCents) / 100 };
+    return { orderId, productIds, original_amount: totalCents / 100, discount_amount: discountCents / 100, total_amount: (totalCents - discountCents) / 100, created: true };
   } catch (error) {
     await connection.rollback();
     throw error;

@@ -22,13 +22,14 @@ export class OrderController {
   // 创建订单
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { items, shipping_address_id, remark, user_coupon_id } = req.body || {};
-      const { orderId, productIds, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id);
-      await invalidateOrderProductCache(productIds);
+      const { items, shipping_address_id, remark, user_coupon_id, checkout_key } = req.body || {};
+      if (checkout_key === undefined) throw new OrderError('结算请求号无效，请刷新页面后重试');
+      const { orderId, productIds, created, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id, checkout_key);
+      if (created) await invalidateOrderProductCache(productIds);
 
       // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）
       // MQ 不可用不影响订单创建，订单超时检查定时任务会兜底处理
-      try {
+      if (created) try {
         const timeoutMsgSent = await sendOrderTimeoutCheckMessage(orderId, req.userId!);
         if (!timeoutMsgSent) {
           logger.warn('订单超时检查消息发送失败，将由定时任务兜底取消超时订单');

@@ -22,7 +22,7 @@ export function deferred<T = unknown>() {
 
 /** An axios-style rejection carrying a server error message. */
 export function apiError(error: string, field: 'error' | 'message' = 'error') {
-  return Object.assign(new Error(error), { response: { data: { [field]: error } } });
+  return Object.assign(new Error(error), { response: { status: 400, data: { [field]: error } } });
 }
 
 /** Let pending promise chains finish and React commit what they set, several hops deep. */

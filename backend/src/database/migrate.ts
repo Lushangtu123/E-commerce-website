@@ -6,6 +6,7 @@ import { migrateSkuTables } from './migrate-sku';
 import { migrateAddressTables } from './migrate-address';
 import { migrateReviewTables } from './migrate-review';
 import { migrateAccountSecurity } from './migrate-account-security';
+import { migrateOrderCheckout } from './migrate-order-checkout';
 import { migrateFulfillment } from './migrate-fulfillment';
 
 const migrations = [
@@ -66,6 +67,8 @@ const migrations = [
     order_no VARCHAR(32) UNIQUE NOT NULL,
     user_id BIGINT NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
+    checkout_key CHAR(36) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+    checkout_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
     original_amount DECIMAL(10,2) DEFAULT NULL,
     discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     user_coupon_id INT DEFAULT NULL,
@@ -85,7 +88,8 @@ const migrations = [
     INDEX idx_user (user_id),
     INDEX idx_status (status),
     INDEX idx_created (created_at),
-    INDEX idx_order_no (order_no)
+    INDEX idx_order_no (order_no),
+    UNIQUE KEY unique_user_checkout_key (user_id, checkout_key)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
   // 订单详情表
@@ -220,6 +224,7 @@ async function runMigrations() {
     await migrateReviewTables(pool);
     await migrateAccountSecurity(pool);
     await migrateFulfillment(pool);
+    await migrateOrderCheckout(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

@@ -56,7 +56,7 @@ router.post('/preview', OrderController.preview);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [items, shipping_address_id]
+ *             required: [items, shipping_address_id, checkout_key]
  *             properties:
  *               items:
  *                 type: array
@@ -67,6 +67,7 @@ router.post('/preview', OrderController.preview);
  *                     product_id: { type: integer, minimum: 1 }
  *                     sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *                     quantity: { type: integer, minimum: 1 }
+ *               checkout_key: { type: string, format: uuid, description: 同一次结算重试必须沿用；新结算使用新请求号 }
  *               shipping_address_id: { type: integer, minimum: 1, description: 本人完整收货地址 ID（必填） }
  *               remark: { type: string, description: 订单备注 }
  *               user_coupon_id: { type: integer, minimum: 1, description: 用户已领取的优惠券 ID }

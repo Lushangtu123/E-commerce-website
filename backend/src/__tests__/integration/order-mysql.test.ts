@@ -20,6 +20,7 @@ import cartRoutes from '../../routes/cart.routes';
 import { migrateSkuTables } from '../../database/migrate-sku';
 import { migrateCouponTables } from '../../database/migrate-coupon';
 import { migrateAddressTables } from '../../database/migrate-address';
+import { migrateOrderCheckout } from '../../database/migrate-order-checkout';
 import { migrateFulfillment } from '../../database/migrate-fulfillment';
 import addressRoutes from '../../routes/address.routes';
 import { AddressModel } from '../../models/address.model';
@@ -118,7 +119,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     const token = jwt.sign({ userId: 1 }, 'test-jwt-secret');
     for (const addressId of [undefined, null, '101', 0, -1, 102, 999]) {
       await request(app).post('/orders').set('Authorization', `Bearer ${token}`).send({
-        items: [{ product_id: 1, quantity: 2 }], shipping_address_id: addressId, user_coupon_id: 1,
+        items: [{ product_id: 1, quantity: 2 }], shipping_address_id: addressId, user_coupon_id: 1, checkout_key: '11111111-1111-4111-8111-111111111111',
       }).expect(400);
     }
     expect(await product()).toMatchObject({ stock: 10, sales_count: 0 });
@@ -137,7 +138,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     app.use('/addresses', addressRoutes);
     const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
     const created = await request(app).post('/orders').set(auth).send({
-      items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 101,
+      items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 101, checkout_key: '11111111-1111-4111-8111-111111111111',
       shipping_address_snapshot: { ...ADDRESS, receiver_name: '客户端伪造的收件人' },
     }).expect(201);
     const orderId = created.body.order_id;
@@ -357,7 +358,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     await db.query('INSERT INTO user_coupons (user_coupon_id,user_id,coupon_id,expired_at) VALUES (1,1,1,DATE_ADD(NOW(), INTERVAL 1 DAY))');
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     await OrderController.create({ userId: 1, body: {
-      items: [{ product_id: 1, quantity: 2 }], shipping_address_id: 101, user_coupon_id: 1, discount_amount: 10000, total_amount: 0,
+      items: [{ product_id: 1, quantity: 2 }], shipping_address_id: 101, checkout_key: '11111111-1111-4111-8111-111111111111', user_coupon_id: 1, discount_amount: 10000, total_amount: 0,
     } } as any, res as any);
     expect(res.status).toHaveBeenCalledWith(201);
     const orderId = res.json.mock.calls[0][0].order_id;
@@ -772,6 +773,127 @@ integration('真实 MySQL 订单事务及并发', () => {
     } finally {
       releaseParent(); (getPool as jest.Mock).mockReturnValue(db);
     }
+  });
+
+  const checkoutKey = '11111111-1111-4111-8111-111111111111';
+  const checkout = (key = checkoutKey, items = [{ product_id: 1, quantity: 2 }], userId = 1, addressId = 100 + userId, couponId?: number, remark?: string) =>
+    createOrderService(userId, items, addressId, remark, couponId, key).then(({ created, ...result }) => result);
+
+  test('同一次结算重试返回原订单，购物车和库存只修改一次', async () => {
+    await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,2)');
+    const first = await checkout();
+    await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,1)');
+    expect(await checkout()).toEqual(first);
+    const [newCart] = await db.query<RowDataPacket[]>('SELECT quantity FROM cart WHERE user_id = 1');
+    expect(newCart).toEqual([{ quantity: 1 }]);
+    expect(await product()).toMatchObject({ stock: 8 });
+    const [orders] = await db.query<RowDataPacket[]>('SELECT order_id FROM orders');
+    expect(orders).toHaveLength(1);
+  });
+
+  test('同一次结算并发重试只有一个订单，另一用户和新结算仍可购买', async () => {
+    const results = await Promise.all([checkout(), checkout()]);
+    expect(results[0]).toEqual(results[1]);
+    expect(await product()).toMatchObject({ stock: 8 });
+    const other = await checkout(checkoutKey, undefined, 2);
+    const next = await checkout('22222222-2222-4222-8222-222222222222');
+    expect(new Set([results[0].orderId, other.orderId, next.orderId]).size).toBe(3);
+    expect(await product()).toMatchObject({ stock: 4 });
+  });
+
+  test('重试沿用原金额及已消费优惠券，地址删除和商品变更不妨碍恢复订单', async () => {
+    await receivedCoupon();
+    const first = await checkout(checkoutKey, undefined, 1, 101, 1);
+    await db.query('DELETE FROM shipping_addresses WHERE address_id = 101');
+    await db.query('UPDATE products SET stock = 0, price = 100, status = 0 WHERE product_id = 1');
+    expect(await checkout(checkoutKey, undefined, 1, 101, 1)).toEqual(first);
+    const [logs] = await db.query<RowDataPacket[]>('SELECT order_id FROM coupon_usage_logs');
+    expect(logs).toHaveLength(1);
+  });
+
+  test('同一请求号修改商品、地址、备注或优惠券拒绝，原订单保持不变', async () => {
+    await checkout();
+    for (const args of [
+      [checkoutKey, [{ product_id: 1, quantity: 3 }]],
+      [checkoutKey, undefined, 1, 102],
+      [checkoutKey, undefined, 1, 101, 1],
+      [checkoutKey, undefined, 1, 101, undefined, 'changed'],
+    ]) await expect((checkout as any)(...args)).rejects.toMatchObject({ statusCode: 409 });
+    expect(await product()).toMatchObject({ stock: 8 });
+  });
+
+  test('取消后的结算重试仍返回原订单，不再扣库存', async () => {
+    const first = await checkout();
+    await transitionOrder(first.orderId, OrderStatus.CANCELLED, { userId: 1 });
+    expect(await checkout()).toEqual(first);
+    expect(await product()).toMatchObject({ stock: 10 });
+  });
+
+  test('商品合并和顺序变化不产生新结算，价格字段由服务器忽略', async () => {
+    const first = await checkout();
+    const retried = await createOrderService(1, [{ product_id: 1, quantity: 1, price: 0 }, { product_id: 1, quantity: 1 }], 101, '', undefined, checkoutKey.toUpperCase());
+    expect(retried).toMatchObject({ ...first, created: false });
+    expect(await product()).toMatchObject({ stock: 8 });
+  });
+
+  test('未提交的失败事务不占用结算请求号，可用同一请求号安全重试', async () => {
+    (getPool as jest.Mock).mockReturnValue({ getConnection: async () => {
+      const connection = await db.getConnection();
+      return new Proxy(connection, { get(target, property) {
+        if (property === 'execute') return async (sql: string, values: any[]) => {
+          if (sql.includes('INSERT INTO order_items')) throw new Error('injected checkout failure');
+          return target.execute(sql, values);
+        };
+        const value = Reflect.get(target, property);
+        return typeof value === 'function' ? value.bind(target) : value;
+      } });
+    } });
+    try { await expect(checkout()).rejects.toThrow('injected checkout failure'); }
+    finally { (getPool as jest.Mock).mockReturnValue(db); }
+    expect(await product()).toMatchObject({ stock: 10 });
+    const [before] = await db.query<RowDataPacket[]>('SELECT order_id FROM orders');
+    expect(before).toHaveLength(0);
+    await checkout();
+    expect(await product()).toMatchObject({ stock: 8 });
+  });
+
+  test('旧订单迁移保留记录、金额和库存，重复迁移不改变结果', async () => {
+    const legacy = await createOrder(1, [{ product_id: 1, quantity: 2 }]);
+    await db.query('ALTER TABLE orders DROP INDEX unique_user_checkout_key, DROP COLUMN checkout_key, DROP COLUMN checkout_fingerprint');
+    await migrateOrderCheckout(db);
+    await migrateOrderCheckout(db);
+    const [rows] = await db.query<RowDataPacket[]>('SELECT order_id,total_amount,checkout_key,checkout_fingerprint FROM orders');
+    expect(rows).toEqual([{ order_id: legacy.orderId, total_amount: '20.20', checkout_key: null, checkout_fingerprint: null }]);
+    expect(await product()).toMatchObject({ stock: 8 });
+    const first = await checkout();
+    expect(await checkout()).toEqual(first);
+    expect(await product()).toMatchObject({ stock: 6 });
+  });
+
+  test('不同用户同时首次结算不形成订单索引间隙锁死锁', async () => {
+    let lookups = 0;
+    let release!: () => void;
+    const bothLookedUp = new Promise<void>(resolve => { release = resolve; });
+    (getPool as jest.Mock).mockReturnValue({ getConnection: async () => {
+      const connection = await db.getConnection();
+      return new Proxy(connection, { get(target, property) {
+        if (property === 'execute') return async (sql: string, values: any[]) => {
+          const result = await target.execute(sql, values);
+          if (sql.includes('checkout_key =')) {
+            if (++lookups === 2) release();
+            await bothLookedUp;
+          }
+          return result;
+        };
+        const value = Reflect.get(target, property);
+        return typeof value === 'function' ? value.bind(target) : value;
+      } });
+    } });
+    try {
+      const results = await Promise.all([checkout(), checkout(checkoutKey, undefined, 2)]);
+      expect(results[0].orderId).not.toBe(results[1].orderId);
+      expect(await product()).toMatchObject({ stock: 6 });
+    } finally { release(); (getPool as jest.Mock).mockReturnValue(db); }
   });
 
 });

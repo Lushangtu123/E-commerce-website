@@ -15,6 +15,7 @@ vi.mock('@/lib/confirm', async importOriginal => ({
 // Stores are module singletons shared by every test in a file; start each test signed out with an empty cart.
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   window.history.replaceState(null, '', '/');
   useAuthStore.setState(useAuthStore.getInitialState(), true);
   useCartStore.setState(useCartStore.getInitialState(), true);
