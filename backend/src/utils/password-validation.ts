@@ -1,7 +1,8 @@
 import Joi from 'joi';
 import { UserValidationError } from './user-validation';
+import { newPasswordSchema, NEW_PASSWORD_ERROR } from './new-password';
 
-const newPassword = Joi.string().min(12).required();
+const newPassword = newPasswordSchema;
 const email = Joi.string().max(100).email({ tlds: { allow: false } }).required();
 const changeSchema = Joi.object({ currentPassword: Joi.string().max(1024).required(), newPassword }).required().unknown(false).prefs({ convert: false });
 const resetSchema = Joi.object({ token: Joi.string().pattern(/^[a-f0-9]{64}$/).required(), newPassword }).required().unknown(false).prefs({ convert: false });
@@ -9,10 +10,7 @@ const forgotSchema = Joi.object({ email }).required().unknown(false).prefs({ con
 
 function validated<T>(schema: Joi.Schema, body: unknown): T {
   const { error, value } = schema.validate(body);
-  if (error) throw new UserValidationError('密码或请求字段无效；新密码至少12个字符且最多72个UTF-8字节');
-  if (value.newPassword && (Buffer.byteLength(value.newPassword, 'utf8') > 72 || !value.newPassword.trim())) {
-    throw new UserValidationError('新密码至少12个字符且最多72个UTF-8字节，不能只包含空白');
-  }
+  if (error) throw new UserValidationError(error.details[0]?.path[0] === 'newPassword' ? NEW_PASSWORD_ERROR : '密码或请求字段无效；新密码至少12个字符且最多72个UTF-8字节');
   return value;
 }
 export function normalizePasswordChange(body: unknown): { currentPassword: string; newPassword: string } {

@@ -11,6 +11,7 @@ export const errorTranslations: Record<string, string> = {
   '重试确认订单': 'Retry to confirm order',
   '确认中...': 'Confirming...',
   '查看我的订单': 'View my orders',
+  '请输入密码（至少12位）': 'Enter a password (at least 12 characters)',
   // Authentication and shared failures.
   '请求体过大': 'The request body is too large',
   '请求格式无效': 'The request format is invalid',

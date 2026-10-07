@@ -69,11 +69,11 @@ describe('registration errors', () => {
   });
 
   it('trims account fields, accepts a one-character username and keeps password whitespace', async () => {
-    const password = '  密码123 ';
+    const password = '  密码 password123 ';
     await setup();
     expect(input('username')).toHaveAttribute('maxlength', '50');
     expect(input('email')).toHaveAttribute('maxlength', '100');
-    expect(input('password')).toHaveAttribute('minlength', '6');
+    expect(input('password')).toHaveAttribute('minlength', '12');
 
     await register({ username: '  单  ', email: '  customer@example.test  ', password, confirmPassword: password });
 
@@ -100,6 +100,14 @@ describe('registration errors', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(router.push).not.toHaveBeenCalled();
   });
+  it.each(['abc123', 'x'.repeat(11), ' '.repeat(12), '\u3000'.repeat(12), '\u0085'.repeat(12), ' \t\u0085\u3000'.repeat(3)])('registration rejects invalid new passwords before requests: %p', async password => {
+    await setup();
+    await register({ username: 'Customer', email: 'customer@example.test', password, confirmPassword: password });
+    expect(sent).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
 });
 
 describe('error translations', () => {
