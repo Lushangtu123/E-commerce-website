@@ -70,6 +70,36 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '注册', exact: true }).click();
   await page.waitForURL('http://127.0.0.1:3100/');
   console.log('PASS browser registration');
+  const searchForm = page.getByRole('search');
+  const searchInput = searchForm.getByRole('textbox', { name: '搜索商品', exact: true });
+  const searchKeyword = '浏览器交易测试商品';
+  await searchInput.fill(searchKeyword);
+  const recordedSearch = page.waitForResponse(response => response.url() === 'http://127.0.0.1:3101/api/search/record' && response.request().method() === 'POST');
+  await searchForm.getByRole('button', { name: '搜索', exact: true }).click();
+  assert.equal((await recordedSearch).status(), 200);
+  await page.waitForURL(`http://127.0.0.1:3100/products?keyword=${encodeURIComponent(searchKeyword)}`);
+  await searchInput.focus();
+  const historyEntry = searchForm.getByText(searchKeyword, { exact: true });
+  await historyEntry.waitFor({ state: 'visible' });
+  await historyEntry.hover();
+  const searchUrl = page.url();
+  const unintendedSearches = [];
+  const watchSearch = request => {
+    if (request.url() === 'http://127.0.0.1:3101/api/search/record' && request.method() === 'POST') unintendedSearches.push(request.postDataJSON());
+  };
+  page.on('request', watchSearch);
+  const deletedSearch = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().startsWith('http://127.0.0.1:3101/api/search/history/'));
+  await historyEntry.locator('..').getByRole('button', { name: '删除', exact: true }).click();
+  assert.equal((await deletedSearch).status(), 200);
+  await historyEntry.waitFor({ state: 'hidden' });
+  const history = await context.request.get('http://127.0.0.1:3101/api/search/history');
+  assert.equal(history.status(), 200);
+  assert.deepEqual(unintendedSearches, [], 'deleting history must not submit another search');
+  assert.equal((await history.json()).history.some(entry => entry.keyword === searchKeyword), false, 'deleted keyword stays absent from real MySQL history');
+  assert.equal(page.url(), searchUrl);
+  assert.equal(await searchInput.inputValue(), searchKeyword);
+  page.off('request', watchSearch);
+  console.log('PASS browser history deletion preserves search input and URL without re-recording the keyword');
   await page.goto('http://127.0.0.1:3100/profile/address');
   await page.getByRole('button', { name: '新增地址', exact: true }).click();
   for (const [field, value] of Object.entries({ receiver_name: '浏览器测试收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '仅测试地址1号' })) {

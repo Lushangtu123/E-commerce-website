@@ -177,6 +177,7 @@ export default function Header() {
                           >
                             <span className="text-sm text-gray-700">{item.keyword}</span>
                             <button
+                              type="button"
                               onClick={(e) => handleDeleteHistory(item.keyword, e)}
                               className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded-sm"
                               title={t("删除")}
