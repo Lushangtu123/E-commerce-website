@@ -53,6 +53,10 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 已有数据库升级时，编译后依次运行 `backend/dist/database/migrate-account-security.js` 和 `backend/dist/database/migrate-fulfillment.js`。两者只添加缺失字段和新表，重复运行安全，不重建账户或订单。账户安全迁移保留历史密码，将历史会话版本设为 0；改密后旧会话立即失效。物流迁移添加快递公司、运单号和售后审核记录。
 
+结算重试保护需要 `orders.checkout_key`、`orders.checkout_fingerprint` 和 `(user_id, checkout_key)` 唯一索引。发布此功能前，核对目标库并备份，在 `backend` 目录运行 `npm run build`、`npm run schema:checkout`；若提示 `migration_required`，执行 `npm run migrate:checkout`，再检查，必须返回 `ready`。迁移只增加可空列和索引，既有订单保持不变，可重复执行；回滚旧代码时保留这些列。迁移不在构建或请求中自动执行。完整基础迁移也包含此升级。
+
+`POST /api/orders` 必须携带 UUID 格式的 `checkout_key`。新结算生成新请求号，同一次结算重试保留原请求号、商品、地址、备注和优惠券；同号修改内容返回 409。浏览器在提交前把待确认结算保存到当前标签页的会话存储；保存失败时不发请求，网络错误或 5xx 后显示“重试确认订单”，重新打开购物车也可恢复。重试返回原订单和原金额，不再次扣库存、使用优惠券或移除新加入购物车的同种商品；已取消订单仍返回原订单。
+
 账户安全迁移还会补齐 `users.status`（既有用户默认启用）与 `admins.auth_version`。禁用用户会撤销旧会话，重新启用后需要重新登录。发布包含这些字段的新代码前，使用目标环境的数据库配置，从 `backend` 目录先执行 `npm run build`，再执行 `npm run schema:check`。该检查只读取数据库结构；缺列会列出字段并以非零状态退出。核对目标库并备份后运行 `npm run migrate:account-security`，然后重复 `npm run schema:check`，结果必须是 `ready`。不要把迁移放进构建命令或每次 API 请求，也不要在共享数据库上运行 `seed`。
 
 后台销售额与累计消费只统计已支付、已发货、已完成订单（状态 1、2、3）；订单数量仍包含全部状态。趋势按订单创建日期分组，不代表支付渠道对账或自动退款记录。仪表盘统计接口要求 `statistics:view`，最近订单要求 `order:view`；各区域独立加载，有权区域不会被其他区域的权限错误阻断。

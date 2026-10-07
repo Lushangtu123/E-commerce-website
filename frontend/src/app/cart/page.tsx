@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { addressApi, cartApi, orderApi, type OrderPreview, type ShippingAddress } from '@/lib/api';
+import Link from 'next/link';
+import { addressApi, cartApi, orderApi, type OrderCreateInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
@@ -12,6 +13,7 @@ import CheckoutSummary from '@/components/CheckoutSummary';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
+import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 
 export default function CartPage() {
   const router = useRouter();
@@ -29,6 +31,8 @@ export default function CartPage() {
   const linkedCouponId = useRef<number | undefined>(undefined);
   const previousSession = useRef<string | null>(null);
   const submittingRequest = useRef(false);
+  const pendingCheckout = useRef<PendingCheckout | null>(null);
+  const [unconfirmedSession, setUnconfirmedSession] = useState<string | null>(null);
   // Lock writes synchronously, including clicks received before the disabled controls render.
   const cartMutation = useRef<object | null>(null);
   const [updatingSession, setUpdatingSession] = useState<string | null>(null);
@@ -37,6 +41,7 @@ export default function CartPage() {
   const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
   const [addressRevision, setAddressRevision] = useState(0);
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
+  const hasUnconfirmedCheckout = unconfirmedSession === sessionKey;
   const cartUpdating = updatingSession === sessionKey;
   const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
   const addressLoading = addressResult?.key !== sessionKey;
@@ -63,11 +68,12 @@ export default function CartPage() {
   const quoteKey = JSON.stringify([sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
   const quote = quoteResult?.key === quoteKey ? quoteResult.data : null;
   const quoteError = quoteFailure?.key === quoteKey ? quoteFailure.message : null;
-  const isCurrentSession = () => {
+  const isSameCustomerSession = () => {
     const currentAuth = useAuthStore.getState();
-    return mounted.current && currentAuth.isAuthenticated && currentAuth.sessionId === sessionId && currentAuth.user?.user_id === user?.user_id &&
+    return currentAuth.isAuthenticated && currentAuth.sessionId === sessionId && currentAuth.user?.user_id === user?.user_id &&
       storedSessionId() === (sessionId ?? null);
   };
+  const isCurrentSession = () => mounted.current && isSameCustomerSession();
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -83,6 +89,8 @@ export default function CartPage() {
       setUpdatingSession(null);
     }
     previousSession.current = session;
+    pendingCheckout.current = readPendingCheckout(session);
+    setUnconfirmedSession(pendingCheckout.current ? session : null);
   }, [isHydrated, sessionId, user?.user_id]);
 
   useEffect(() => {
@@ -224,27 +232,58 @@ export default function CartPage() {
   };
 
   const handleCheckout = async () => {
+    if (pendingCheckout.current?.sessionKey === sessionKey) return;
     if (orderItems.length === 0) {
       toast.error(t('请选择要结算的商品'));
       return;
     }
     if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
 
+    await submitCheckout({ items: orderItems, shipping_address_id: selectedAddress.address_id,
+      ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }), checkout_key: crypto.randomUUID() });
+  };
+
+  const submitCheckout = async (input: OrderCreateInput, recovering = false) => {
+    if (submittingRequest.current || !isCurrentSession()) return;
+    const attempt = { sessionKey, input };
+    if (!storePendingCheckout(attempt)) {
+      toast.error(t('无法保存结算信息，请允许浏览器存储后重试'));
+      return;
+    }
     submittingRequest.current = true;
     setSubmitting(true);
+    pendingCheckout.current = attempt;
     try {
-      const data = await orderApi.create({ items: orderItems, shipping_address_id: selectedAddress.address_id, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) });
+      const data = await orderApi.create(input);
       if (!isCurrentSession()) return;
-      orderItems.forEach(item => removeItem(item.product_id, item.sku_id));
+      clearPendingCheckout(sessionKey);
+      pendingCheckout.current = null;
+      setUnconfirmedSession(null);
+      if (recovering) {
+        // The customer may have added new rows on another page after the original commit.
+        const previousItems = useCartStore.getState().items;
+        void cartApi.list().then(cart => {
+          if (isSameCustomerSession() && useCartStore.getState().items === previousItems) setItems(cart.items || []);
+        }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
+      } else input.items.forEach(item => removeItem(item.product_id, item.sku_id));
       setSelectedItems([]);
       toast.success(t('订单创建成功'));
       router.push(`/orders/${data.order_id}`);
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || '创建订单失败'));
-      setSelectedCouponId(undefined);
-      setQuoteRevision(value => value + 1);
-      setAddressRevision(value => value + 1);
+      const failure = requestFailure(error);
+      toast.error(t(failure.response?.data?.error || failure.response?.data?.message || '创建订单失败'));
+      const status = failure.response?.status;
+      if (status === undefined || status >= 500) {
+        setUnconfirmedSession(sessionKey);
+      } else {
+        clearPendingCheckout(sessionKey);
+        pendingCheckout.current = null;
+        setUnconfirmedSession(null);
+        setSelectedCouponId(undefined);
+        setQuoteRevision(value => value + 1);
+        setAddressRevision(value => value + 1);
+      }
     } finally {
       if (isCurrentSession()) {
         submittingRequest.current = false;
@@ -253,7 +292,7 @@ export default function CartPage() {
     }
   };
 
-  if (!isHydrated || !isAuthenticated || loading) {
+  if (!isHydrated || !isAuthenticated || (loading && !hasUnconfirmedCheckout)) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -265,6 +304,18 @@ export default function CartPage() {
         </div>
       </div>
     );
+  }
+
+  if (hasUnconfirmedCheckout) {
+    return <div className="py-12 container-custom"><div className="card p-6 space-y-4" role="alert">
+      <h1 className="text-xl font-bold">{t('确认订单结果')}</h1>
+      <p>{t('上次下单结果尚未确认，请先重试确认订单。重试会保留原商品、地址和优惠券。')}</p>
+      <button className="btn btn-primary" disabled={submitting} onClick={() => {
+        const attempt = pendingCheckout.current;
+        if (attempt?.sessionKey === sessionKey) void submitCheckout(attempt.input, true);
+      }}>{t(submitting ? '确认中...' : '重试确认订单')}</button>
+      <Link href="/orders" className="block text-primary-600 underline">{t('查看我的订单')}</Link>
+    </div></div>;
   }
 
   if (items.length === 0) {

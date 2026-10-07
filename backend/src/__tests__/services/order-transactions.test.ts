@@ -30,7 +30,7 @@ function response() {
 }
 
 function request(body: any = {}, userId = 7) {
-  return { userId, body: { shipping_address_id: 3, ...body }, params: { id: '1001', orderId: '1001' }, query: {}, admin: { adminId: 1 }, get: () => undefined } as any;
+  return { userId, body: { shipping_address_id: 3, checkout_key: '11111111-1111-4111-8111-111111111111', ...body }, params: { id: '1001', orderId: '1001' }, query: {}, admin: { adminId: 1 }, get: () => undefined } as any;
 }
 
 function matching(pattern: string) {
@@ -58,6 +58,7 @@ beforeEach(() => {
       if (sql.includes('FROM order_items')) {
         return [[{ item_id: 1, order_id: 1001, product_id: 1, sku_id: null, quantity: 2 }], []];
       }
+      if (sql.includes('checkout_key =')) return [[], []];
       if (sql.includes('FROM orders')) return [[{ ...order }], []];
       if (sql.includes('INSERT INTO orders')) return [{ insertId: 1001, affectedRows: 1 }, []];
       if (sql.includes('stock = stock -')) return [{ affectedRows: deductionFails ? 0 : 1 }, []];

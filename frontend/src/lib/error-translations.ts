@@ -3,6 +3,14 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '无法保存结算信息，请允许浏览器存储后重试': 'Unable to save checkout details. Allow browser storage and try again',
+  '结算请求号无效，请刷新页面后重试': 'Invalid checkout request ID. Refresh the page and try again',
+  '结算请求号已用于其他结算内容，请重新结算': 'This request ID belongs to a different checkout. Start a new checkout',
+  '确认订单结果': 'Confirm your order',
+  '上次下单结果尚未确认，请先重试确认订单。重试会保留原商品、地址和优惠券。': 'Your previous checkout result is unconfirmed. Retry to confirm the order with its original items, address and coupon.',
+  '重试确认订单': 'Retry to confirm order',
+  '确认中...': 'Confirming...',
+  '查看我的订单': 'View my orders',
   // Authentication and shared failures.
   '请求体过大': 'The request body is too large',
   '请求格式无效': 'The request format is invalid',

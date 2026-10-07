@@ -164,7 +164,7 @@ describe('checkout', () => {
     expect(amountRow('应付金额')).toBe('应付金额¥70.00');
 
     await click(checkoutButton());
-    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7, shipping_address_id: 41 }]);
+    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7, shipping_address_id: 41, checkout_key: expect.any(String) }]);
     expect(router.push.mock.calls).toEqual([['/orders/55']]);
   });
 
@@ -357,7 +357,7 @@ describe('checkout', () => {
 
     await click(checkoutButton());
 
-    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 41 }]);
+    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 41, checkout_key: expect.any(String) }]);
     expect(cartItems().map(item => item.product_id)).toEqual([22]);
     expect(useCartStore.getState().getTotalCount()).toBe(1);
     expect(router.push.mock.calls).toEqual([['/orders/55']]);
@@ -582,4 +582,100 @@ describe('checkout', () => {
     expect(cartItems()).toHaveLength(1);
     expect(notifications).toContain('收货地址不存在');
   });
+  it('retries a lost response with the same key and coupon instead of creating a new purchase', async () => {
+    let calls = 0;
+    await setupCheckout({ create: async () => {
+      if (++calls === 1) throw new Error('Network response lost');
+      return { message: 'ok', order_id: 55 };
+    }, preview: async input => quote(90, input.user_coupon_id === 7) });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    expect(creates()[0].checkout_key).toMatch(/^[a-f0-9-]{36}$/i);
+    expect(screen.getByRole('button', { name: '重试确认订单' })).toBeEnabled();
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(creates()[1]).toEqual(creates()[0]);
+    expect(creates()[1].user_coupon_id).toBe(7);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+  });
+
+  it('recovers the same pending checkout after remount even if the cart is empty and quoting fails', async () => {
+    const { view } = await setupCheckout({ create: async () => { throw Object.assign(new Error('Server error'), { response: { status: 500 } }); } });
+    await click(checkoutButton());
+    const original = creates()[0];
+    view.unmount();
+    vi.mocked(cartApi.list).mockResolvedValue({ items: [] });
+    vi.mocked(orderApi.preview).mockRejectedValue(apiError('商品已下架'));
+    vi.mocked(orderApi.create).mockResolvedValue({ message: 'ok', order_id: 55 });
+    render(<CartPage />);
+    await settle();
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(creates()[1]).toEqual(original);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+  });
+
+  it('keeps newly added cart rows after recovering an older confirmed checkout', async () => {
+    let calls = 0;
+    await setupCheckout({ create: async () => {
+      if (++calls === 1) throw new Error('Lost response');
+      return { message: 'ok', order_id: 55 };
+    } });
+    await click(checkoutButton());
+    const newRow = { ...firstItem, cart_id: 99, quantity: 1 };
+    vi.mocked(cartApi.list).mockResolvedValue({ items: [newRow] });
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(cartItems()).toEqual([newRow]);
+  });
+
+  it('does not reuse a pending checkout across customers', async () => {
+    let calls = 0;
+    await setupCheckout({ create: async () => {
+      if (++calls === 1) throw new Error('Lost response');
+      return { message: 'ok', order_id: 55 };
+    } });
+    await click(checkoutButton());
+    const originalKey = creates()[0].checkout_key;
+    switchCustomer();
+    await settle();
+    expect(screen.queryByRole('button', { name: '重试确认订单' })).not.toBeInTheDocument();
+    await click(checkoutButton());
+    expect(creates()[1].checkout_key).not.toBe(originalKey);
+  });
+
+  it('issues a new request key only after a definite rejected checkout', async () => {
+    let calls = 0;
+    await setupCheckout({ create: async () => {
+      if (++calls === 1) throw apiError('库存不足');
+      return { message: 'ok', order_id: 55 };
+    } });
+    await click(checkoutButton());
+    await click(checkoutButton());
+    expect(creates()[1].checkout_key).not.toBe(creates()[0].checkout_key);
+  });
+
+  it('sends no checkout when pending recovery storage cannot be saved', async () => {
+    await setupCheckout();
+    const denied = vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => { throw new Error('Storage unavailable'); });
+    try {
+      await click(checkoutButton());
+      expect(denied).toHaveBeenCalled();
+      expect(creates()).toHaveLength(0);
+      expect(checkoutButton()).toBeEnabled();
+    } finally { denied.mockRestore(); }
+  });
+
+  it('shows recovery and navigates to the confirmed order without waiting for cart requests', async () => {
+    const { view } = await setupCheckout({ create: async () => { throw new Error('Lost response'); } });
+    await click(checkoutButton());
+    const original = creates()[0];
+    view.unmount();
+    vi.mocked(cartApi.list).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(orderApi.create).mockResolvedValue({ message: 'ok', order_id: 55 });
+    render(<CartPage />);
+    await settle();
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(creates()[1]).toEqual(original);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+  });
+
 });

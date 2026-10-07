@@ -51,6 +51,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Order status management (pending payment / paid / shipped / completed)
 - Order cancellation
 - Delivery confirmation
+- Durable checkout retry protection: one order per user and request ID, with pending checkout recovery after network failures
 - Carrier and tracking number, after-sales requests, withdrawal and admin review (approval does not refund automatically)
 - Order details
 - **Coupons at checkout** - Choose a coupon when placing an order

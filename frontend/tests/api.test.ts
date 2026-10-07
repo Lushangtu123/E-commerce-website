@@ -157,7 +157,7 @@ describe('API client requests', () => {
   it("checks the invoking customer's session when the request starts, not after another tab changes storage", async () => {
     const { orderApi, requests } = await setupApi({ session: 'customer-A' });
 
-    const request = orderApi.create({ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 1 });
+    const request = orderApi.create({ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 1, checkout_key: '11111111-1111-4111-8111-111111111111' });
     localStorage.setItem('session', 'customer-B');
     await request;
 
@@ -170,11 +170,11 @@ describe('API client requests', () => {
     localStorage.setItem('session', 'customer-B');
     localStorage.setItem('user', '{"user_id":2,"username":"second","email":"second@example.test"}');
 
-    await expect(orderApi.create({ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 1 })).rejects.toThrow(/登录状态已变化/);
+    await expect(orderApi.create({ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 1, checkout_key: '11111111-1111-4111-8111-111111111111' })).rejects.toThrow(/登录状态已变化/);
     expect(requests).toHaveLength(0);
 
     useAuthStore.getState().hydrate();
-    await orderApi.create({ items: [{ product_id: 22, quantity: 1 }], shipping_address_id: 1 });
+    await orderApi.create({ items: [{ product_id: 22, quantity: 1 }], shipping_address_id: 1, checkout_key: '11111111-1111-4111-8111-111111111111' });
     expect(requests).toHaveLength(1);
     expect(JSON.parse(requests[0].data).items).toEqual([{ product_id: 22, quantity: 1 }]);
   });
