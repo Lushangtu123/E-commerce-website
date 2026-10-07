@@ -110,11 +110,21 @@ export async function listPublicProducts(options: { env?: Env; fetcher?: typeof 
   const maxPages = options.maxPages ?? 50;
   for (let page = 1; page <= maxPages; page++) {
     const result = await fetchApiResult<{ products?: PublicProduct[]; totalPages?: number }>(`/products?page=${page}&limit=100`, { env: options.env, fetcher: options.fetcher, revalidate: 0 });
-    if (result.kind !== 'ok' || !Array.isArray(result.data?.products)) {
+    if (result.kind !== 'ok') {
       throw new Error('Unable to load a complete product sitemap');
     }
-    products.push(...result.data.products);
-    if (!result.data.totalPages || page >= result.data.totalPages) break;
+    const pageProducts = result.data?.products;
+    const totalPages = result.data?.totalPages;
+    if (!Array.isArray(pageProducts) || typeof totalPages !== 'number' || !Number.isSafeInteger(totalPages) || totalPages < 0
+      || !pageProducts.every(product => Number.isSafeInteger(product?.product_id) && product.product_id > 0)) {
+      throw new Error('Invalid product sitemap response');
+    }
+    // A real empty catalogue has zero pages; inconsistent pagination is a failed read.
+    if (totalPages === 0 ? page !== 1 || pageProducts.length !== 0 : page > totalPages || pageProducts.length === 0) {
+      throw new Error('Invalid product sitemap pagination');
+    }
+    products.push(...pageProducts);
+    if (page >= totalPages) break;
   }
   return products;
 }

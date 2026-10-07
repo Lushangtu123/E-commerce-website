@@ -17,10 +17,12 @@ function sitemapServer() {
   let fetchStale = false;
   let failedPage = 0;
   let count = 101;
+  let malformed = false;
   let routeEntry: IncrementalResponseCacheEntry | null = null;
   const upstream = vi.fn(async (input: RequestInfo | URL) => {
     const page = Number(new URL(String(input)).searchParams.get('page'));
     if (page === failedPage) return Response.json({ error: 'Temporary outage' }, { status: 503 });
+    if (malformed) return Response.json({ products: [{ product_id: 1 }] });
     const start = (page - 1) * 100;
     const products = Array.from({ length: Math.max(0, Math.min(100, count - start)) }, (_, index) => ({
       product_id: start + index + 1, title: `Product ${start + index + 1}`,
@@ -66,6 +68,7 @@ function sitemapServer() {
     routeRevalidate: () => routeEntry?.cacheControl?.revalidate,
     setCount: (value: number) => { count = value; },
     failPage: (page: number) => { failedPage = page; },
+    malform: (value = true) => { malformed = value; },
     expire: (staleFetch = false) => { if (routeEntry) routeEntry.isStale = true; fetchStale = staleFetch; },
     async read() {
       const background: Promise<unknown>[] = [];
@@ -124,6 +127,33 @@ describe('sitemap regeneration through the Next caches', () => {
     expect(server.routeRevalidate()).toBe(3600);
     expect(await server.read()).toBe(xml);
     expect(server.upstream).toHaveBeenCalledTimes(1);
+    expect(server.fetchCacheSize()).toBe(0);
+  });
+
+  it('retains the last complete XML when a successful API response has invalid pagination', async () => {
+    const server = sitemapServer();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const complete = await server.read();
+    server.malform();
+    server.expire();
+    expect(await server.read()).toBe(complete);
+    expect(server.cachedXML()).toBe(complete);
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(server.upstream).toHaveBeenCalledTimes(3);
+    server.malform(false);
+    server.setCount(102);
+    server.expire();
+    await server.read();
+    expect(productIds(await server.read())).toHaveLength(102);
+    expect(server.routeRevalidate()).toBe(3600);
+  });
+
+  it('fails initial generation without publishing partial XML during an outage', async () => {
+    const server = sitemapServer();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    server.failPage(1);
+    await expect(server.read()).rejects.toThrow();
+    expect(server.cachedXML()).toBe('');
     expect(server.fetchCacheSize()).toBe(0);
   });
 

@@ -106,6 +106,20 @@ describe('server API reads', () => {
     await expect(listPublicProducts({ env: backend, fetcher })).rejects.toThrow();
   });
 
+  it.each([
+    ['missing totalPages', { products: [{ product_id: 7 }] }],
+    ['negative totalPages', { products: [{ product_id: 7 }], totalPages: -1 }],
+    ['fractional totalPages', { products: [{ product_id: 7 }], totalPages: 1.5 }],
+    ['string totalPages', { products: [{ product_id: 7 }], totalPages: 'unknown' }],
+    ['nonempty zero-page catalogue', { products: [{ product_id: 7 }], totalPages: 0 }],
+    ['empty nonzero-page catalogue', { products: [], totalPages: 2 }],
+    ['missing product ID', { products: [{}], totalPages: 1 }],
+    ['nonpositive product ID', { products: [{ product_id: 0 }], totalPages: 1 }],
+    ['string product ID', { products: [{ product_id: '7' }], totalPages: 1 }],
+  ])('rejects malformed product listings: %s', async (_, data) => {
+    await expect(listPublicProducts({ env: backend, fetcher: async () => jsonResponse(data) })).rejects.toThrow();
+  });
+
   it('accepts a genuinely empty catalog and can retry after a failed listing', async () => {
     expect(await listPublicProducts({ env: backend, fetcher: async () => jsonResponse({ products: [], totalPages: 0 }) })).toEqual([]);
     const fetcher = vi.fn<Fetcher>()
