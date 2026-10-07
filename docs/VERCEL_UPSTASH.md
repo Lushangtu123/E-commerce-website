@@ -29,6 +29,7 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 | `NEXT_PUBLIC_SUPPORT_PHONE`、`NEXT_PUBLIC_SUPPORT_EMAIL` | 可选的公开商家客服联系信息。留空或格式不可用时不发布示例联系方式；仅配置一项时只显示该项。这些值会打包到客户端，修改后须重新构建和部署，勿填写密钥 |
 | `PAYMENT_MODE=demo` | 仅 Preview 演示交易，不实际扣款；默认 disabled，生产环境强制关闭模拟支付 |
 | `RESEND_API_KEY`、`EMAIL_FROM`、`APP_URL` | 可选的 Resend 密码找回；发件域名须验证，APP_URL 为可信 HTTPS 网站根地址 |
+| `EMAIL_PROVIDER=gmail`、`GMAIL_USER`、`GMAIL_APP_PASSWORD`、`APP_URL` | 可选的个人 Gmail 密码找回，无需独立域名；使用 Google 应用专用密码，通过 smtp.gmail.com:465 验证 TLS 后发信 |
 
 连接初始化可复用并在失败后重试，MySQL 与 Redis 均保留 TLS 验证。Vercel API 不启动监听器、RabbitMQ 消费者或后台定时器；`/api/health` 检查 MySQL 和 Redis，`/api/openapi.json` 提供接口定义。
 
@@ -75,6 +76,21 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 Vercel 方案不需要 RabbitMQ 或 Elasticsearch：商品搜索（含 `/api/search/es`）和推荐在未配置 `ELASTICSEARCH_URL` 时使用 MySQL，订单超时由下文的 QStash 定时任务取消。演示支付会明确显示未实际扣款，并记录 payment_method=demo，尚未对接实际收款渠道。发货必须填写快递公司和运单号；售后仅支持申请、撤回、管理员批准或拒绝，批准不会自动退款、恢复库存或改变订单状态。每个订单最多创建一次售后申请。Vercel 文件系统不能作为持久上传存储。
 
 邮件服务未配置时，找回密码页面禁用发送，接口返回 503；已登录用户仍可验证当前密码并修改密码。配置邮件服务后，重置链接使用一次性凭据，30 分钟有效，重置后撤销所有旧会话。邮件发送和真实支付需要运营方准备外部服务，本仓库不会自动注册付费服务。
+
+### 使用个人 Gmail 发送找回密码邮件
+
+没有独立域名时，可使用运营方能登录的个人 `@gmail.com` 邮箱。先自行开启 Google 两步验证并生成应用专用密码；不要提供 Google 登录密码，也不要将应用密码写入 Git、聊天、公开前端变量或日志。
+
+在商城 Vercel 项目的 Settings → Environment Variables 中，分别配置需要启用发信的 Preview / Production 环境：
+
+- `EMAIL_PROVIDER=gmail`。
+- `GMAIL_USER`：发件人 Gmail 地址。
+- `GMAIL_APP_PASSWORD`：16 字符的 Google 应用专用密码；界面显示的分组空格可保留。凭据变量应选择 Sensitive。
+- `APP_URL`：可信商城 HTTPS 根地址，例如 `https://e-commerce-website-blush-rho.vercel.app`。Preview 验证时请使用对应的测试商城地址，避免测试链接误指向正式数据库。
+
+重新部署后生效。Gmail 的 From 固定使用 `GMAIL_USER`，不读取 `EMAIL_FROM`；原有 Resend 配置无需删除。`EMAIL_PROVIDER` 未设置时仍使用 Resend；选择 Gmail 但凭据缺失、格式不正确或网站地址不可信时保持关闭，不自动切换其他服务。SMTP 验证证书和主机名，整个发送最多等待 5 秒后关闭连接，协议日志关闭；失败仅记录通用提示，接口不暴露账户是否存在或邮件服务错误。
+
+用自有测试账户在部署上请求一次密码找回，实际检查收信、链接打开、重置成功、重复链接失效及旧会话撤销；不要只根据 API 返回成功判断投递成功。本地回归使用测试 SMTP 服务器，不向真实用户发信。Gmail 的风控可能限制云端登录或发送，需检查 Google 账号与邮箱中的提示。个人 Gmail 的发送额度参见 [Google 官方说明](https://support.google.com/mail/answer/22839)，应用密码设置参见 [Google 官方说明](https://support.google.com/accounts/answer/185833)。修改 Google 登录密码会撤销应用密码，之后需更新 Vercel 凭据并重新部署。若暂不发信，移除 Gmail 应用密码即可恢复未配置状态。
 
 浏览器回归在本机或 CI 使用独立 MySQL 测试库，不访问云端商城数据。在后端编译后，从前端目录执行 `npx playwright install chromium`，再设置本机 `MYSQL_TEST_HOST`、`MYSQL_TEST_PORT`、`MYSQL_TEST_USER`、`MYSQL_TEST_PASSWORD`（或 `MYSQL_TEST_SOCKET`）并运行 `npm run test:e2e`。数据库账户须能创建和删除测试库。测试覆盖注册、地址、结算、演示支付、发货、收货、售后审核和修改密码；缓存接口隔离模拟，交易与账户存储使用真实 MySQL。
 

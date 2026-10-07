@@ -39,6 +39,7 @@
     "joi": "^18.2.9",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.6.5",
+    "nodemailer": "10.0.16",
     "pino": "^10.3.1",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
