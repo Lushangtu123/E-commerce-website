@@ -51,6 +51,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Order status management (pending payment / paid / shipped / completed)
 - Order cancellation
 - Delivery confirmation
+- Registration, password change and reset share a minimum 12-character, maximum 72-byte UTF-8 policy; existing short passwords remain usable for sign-in
 - Carrier and tracking number, after-sales requests, withdrawal and admin review (approval does not refund automatically)
 - Order details
 - **Coupons at checkout** - Choose a coupon when placing an order

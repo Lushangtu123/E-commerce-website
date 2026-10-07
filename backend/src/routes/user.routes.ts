@@ -153,7 +153,7 @@ router.get('/stats', authMiddleware, UserController.getStats);
  *             properties:
  *               username: { type: string, minLength: 1, maxLength: 50, example: zhangsan }
  *               email: { type: string, format: email, maxLength: 100, example: zhangsan@example.com }
- *               password: { type: string, format: password, minLength: 6, description: 最多72个UTF-8字节，不去除空白 }
+ *               password: { type: string, format: password, minLength: 12, description: 最多72个UTF-8字节，不去除空白 }
  *     responses:
  *       201:
  *         description: 注册成功，返回用户信息并设置 customer_session Cookie

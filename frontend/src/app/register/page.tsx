@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import { passwordError } from '@/lib/password-validation';
 
 export default function RegisterPage() {
   const { t } = useI18n();
@@ -47,13 +48,9 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error(t("密码长度不能少于6位"));
-      return;
-    }
-
-    if (new TextEncoder().encode(password).length > 72) {
-      toast.error(t('密码不能超过72个UTF-8字节'));
+    const invalidPassword = passwordError(password);
+    if (invalidPassword) {
+      toast.error(t(invalidPassword));
       return;
     }
 
@@ -126,8 +123,8 @@ export default function RegisterPage() {
                 value={formData.password}
                 onChange={handleChange}
                 className="input"
-                placeholder={t("请输入密码（至少6位）")}
-                minLength={6}
+                placeholder={t("请输入密码（至少12位）")}
+                minLength={12}
                 required
               />
             </div>
@@ -144,7 +141,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="input"
                 placeholder={t("请再次输入密码")}
-                minLength={6}
+                minLength={12}
                 required
               />
             </div>
