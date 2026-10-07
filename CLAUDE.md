@@ -47,5 +47,5 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main`: backend build +
 
 1. Work on a branch, never on `main`; keep one concern per PR.
 2. Run `/verify` before committing, and `/integration` when SQL, transactions, Redis, migrations or startup code change.
-3. Open the PR with `/pr`. A human merges after CI passes; Claude does not merge, force-push or push to `main`.
+3. Open the PR with `/pr`. Claude merges it with a merge commit once every CI check has passed, never with a failing or pending check, and does not force-push or push to `main`.
 4. After a merge: delete the branch (remote and local) and fast-forward local `main`.
