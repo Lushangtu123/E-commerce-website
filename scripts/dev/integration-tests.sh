@@ -34,3 +34,9 @@ mysql_ready || { echo "MySQL did not start" >&2; exit 1; }
 MYSQL_TEST_HOST=127.0.0.1 MYSQL_TEST_PORT="$mysql_port" MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD="$password" \
 REDIS_TEST_URL="redis://127.0.0.1:$redis_port" \
   npx jest "$@"
+
+# Reuse these isolated services for the real Chromium commerce flow when requested.
+if [ "${RUN_BROWSER_TESTS:-false}" = "true" ]; then
+  MYSQL_TEST_HOST=127.0.0.1 MYSQL_TEST_PORT="$mysql_port" MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD="$password" \
+    npm --prefix ../frontend run test:e2e
+fi

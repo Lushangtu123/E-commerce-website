@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePage from '@/components/HomePage';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { deferred, render, settle } from './helpers';
+import { CommitLog, deferred, render, settle } from './helpers';
 
 const toasts = vi.hoisted(() => [] as string[]);
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
@@ -31,8 +31,10 @@ async function setup({ hot = async () => ({ products: [product(1)] }), recommend
   vi.mocked(productApi.getHotProducts).mockImplementation(hot as never);
   vi.mocked(productApi.list).mockResolvedValue({ products: [product(2)] } as never);
   vi.mocked(recommendationApi.getGuessYouLike).mockImplementation(recommend);
-  render(<HomePage />);
+  const commits: HTMLElement[] = [];
+  const view = render(<CommitLog commits={commits}><HomePage /></CommitLog>);
   await settle();
+  return { view, commits };
 }
 
 /** A product section by its heading, or null when the section is not rendered. */
@@ -99,5 +101,73 @@ describe('home page', () => {
     await settle();
 
     expect(section('猜你喜欢'), 'generic picks must not stay labelled as personal ones').toBeNull();
+  });
+
+  it('hides the previous account\'s recommendations in the next account\'s first render', async () => {
+    signIn();
+    const next = deferred<Recommendations>();
+    let calls = 0;
+    const { commits } = await setup({ recommend: () => ++calls === 1 ? Promise.resolve({ recommendations: [product(7)] }) : next.promise });
+    expect(ids('猜你喜欢')).toEqual([7]);
+    const before = commits.length;
+
+    act(() => useAuthStore.getState().login({ user_id: 2, username: 'second', email: 'second@example.test' }, 'second-session'));
+
+    expect(within(commits[before]).queryAllByTestId('product-card').map(card => card.textContent)).not.toContain('7');
+    await settle();
+    expect(calls).toBe(2);
+    await act(async () => next.resolve({ recommendations: [product(9)] }));
+    await settle();
+    expect(ids('猜你喜欢')).toEqual([9]);
+  });
+
+  it.each(['success', 'failure'] as const)('ignores a late previous-account recommendation %s after an authenticated account switch', async (outcome) => {
+    signIn();
+    const pending = [deferred<Recommendations>(), deferred<Recommendations>()];
+    let calls = 0;
+    await setup({ recommend: () => pending[calls++].promise });
+
+    act(() => useAuthStore.getState().login({ user_id: 2, username: 'second', email: 'second@example.test' }, 'second-session'));
+    await settle();
+    expect(calls).toBe(2);
+    await act(async () => pending[1].resolve({ recommendations: [product(9)] }));
+    await settle();
+    await act(async () => {
+      if (outcome === 'success') pending[0].resolve({ recommendations: [product(7)] });
+      else pending[0].reject(new Error('Old account unavailable'));
+    });
+    await settle();
+
+    expect(ids('猜你喜欢')).toEqual([9]);
+    expect(within(section('猜你喜欢')!).getByText('基于您的浏览历史为您推荐')).toBeInTheDocument();
+  });
+
+  it('hides signed-in recommendations immediately on logout and displays the anonymous response as generic', async () => {
+    signIn();
+    const anonymous = deferred<Recommendations>();
+    let calls = 0;
+    const { commits } = await setup({ recommend: () => ++calls === 1 ? Promise.resolve({ recommendations: [product(7)] }) : anonymous.promise });
+    const before = commits.length;
+
+    act(() => useAuthStore.getState().logout());
+
+    expect(within(commits[before]).queryAllByTestId('product-card').map(card => card.textContent)).not.toContain('7');
+    await settle();
+    await act(async () => anonymous.resolve({ recommendations: [product(5)] }));
+    await settle();
+    expect(ids('猜你喜欢')).toEqual([5]);
+    expect(within(section('猜你喜欢')!).getByText('热门商品推荐')).toBeInTheDocument();
+  });
+
+  it('rejects a recommendation response when browser storage changes before the auth store catches up', async () => {
+    signIn();
+    const pending = deferred<Recommendations>();
+    await setup({ recommend: () => pending.promise });
+    localStorage.setItem('session', 'another-session');
+
+    await act(async () => pending.resolve({ recommendations: [product(7)] }));
+    await settle();
+
+    expect(section('猜你喜欢')).toBeNull();
   });
 });

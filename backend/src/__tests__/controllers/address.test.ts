@@ -15,7 +15,7 @@ let rows: any[];
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (query as jest.Mock).mockResolvedValue([{ auth_version: 0 }]);
+  (query as jest.Mock).mockResolvedValue([{ auth_version: 0, status: 1 }]);
   rows = [{ address_id: 3, user_id: 1, receiver_name: '收件人', phone: '13800000000', province: '省', city: '市', district: '区', detail_address: '道路1号', is_default: 1, created_at: '2026-10-02' }];
   connection = {
     beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),

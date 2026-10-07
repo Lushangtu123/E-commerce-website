@@ -22,7 +22,7 @@ const expectOnlyAuthentication = () => {
 beforeEach(() => {
   jest.clearAllMocks(); available = true; favorited = false; orphan = false;
   (query as jest.Mock).mockImplementation(async (sql: string) => {
-    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     if (sql.startsWith('INSERT')) return { insertId: available ? 50 : 0, affectedRows: available ? 1 : 0 };
     if (sql.startsWith('DELETE')) return { affectedRows: 1 };
     if (sql.startsWith('SELECT 1 FROM favorites')) return favorited ? [{ 1: 1 }] : [];
@@ -157,7 +157,7 @@ test('直接模型商品/批量/recent边界拒绝无效值', async () => {
 
 test('未知数据库异常仍是500且不泄露内部信息', async () => {
   (query as jest.Mock).mockImplementation(async sql => {
-    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     throw new Error('private database secret');
   });
   const result = await request(app).get('/api/favorites/my').set(auth).expect(500);

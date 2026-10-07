@@ -104,7 +104,7 @@ integration('真实 MySQL 个人统计与订单分页', () => {
     const response = await request(app).get('/api/users/stats?user_id=2').set(auth()).expect(200);
     expect(response.body).toEqual({ stats: { totalOrders: 6, pendingOrders: 2, totalCoupons: 5, availableCoupons: 3, favoriteCount: 3 } });
     expect(query).toHaveBeenCalledTimes(2);
-    expect(query).toHaveBeenNthCalledWith(1, 'SELECT auth_version FROM users WHERE user_id = ?', [1]);
+    expect(query).toHaveBeenNthCalledWith(1, 'SELECT auth_version, status FROM users WHERE user_id = ?', [1]);
     expect(await UserModel.getStats(2)).toEqual({ totalOrders: 1, pendingOrders: 1, totalCoupons: 1, availableCoupons: 1, favoriteCount: 1 });
   });
 
@@ -162,7 +162,7 @@ integration('真实 MySQL 个人统计与订单分页', () => {
     await expect(OrderModel.listByUser(1, undefined, 0, 10)).rejects.toThrow();
     expect((query as jest.Mock).mock.calls).toHaveLength(8);
     for (const [sql, params] of (query as jest.Mock).mock.calls) {
-      expect(sql).toBe('SELECT auth_version FROM users WHERE user_id = ?'); expect(params).toEqual([1]);
+      expect(sql).toBe('SELECT auth_version, status FROM users WHERE user_id = ?'); expect(params).toEqual([1]);
     }
     const [after] = await db.query<RowDataPacket[]>('SELECT * FROM orders ORDER BY order_id'); expect(after).toEqual(before);
   });

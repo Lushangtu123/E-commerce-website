@@ -81,13 +81,13 @@ router.get('/profile', getAdminProfile);
  *   get:
  *     tags: [管理后台]
  *     summary: 仪表盘核心指标
- *     description: 今日销售额、订单数、用户数、商品数等
+ *     description: 需要 statistics:view 权限；返回今日销售额、订单数、用户数、商品数等
  *     security: [{ adminAuth: [] }]
  *     responses:
  *       200:
  *         description: 统计指标
  */
-router.get('/dashboard/stats', getDashboardStats);
+router.get('/dashboard/stats', requirePermission('statistics:view'), getDashboardStats);
 
 /**
  * @openapi
@@ -95,6 +95,7 @@ router.get('/dashboard/stats', getDashboardStats);
  *   get:
  *     tags: [管理后台]
  *     summary: 仪表盘最新订单
+ *     description: 需要 order:view 权限
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: limit
@@ -104,7 +105,7 @@ router.get('/dashboard/stats', getDashboardStats);
  *       200:
  *         description: 最新订单列表
  */
-router.get('/dashboard/recent-orders', getRecentOrders);
+router.get('/dashboard/recent-orders', requirePermission('order:view'), getRecentOrders);
 
 /**
  * @openapi
@@ -112,6 +113,7 @@ router.get('/dashboard/recent-orders', getRecentOrders);
  *   get:
  *     tags: [管理后台]
  *     summary: 仪表盘热销商品 Top
+ *     description: 需要 statistics:view 权限
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: days
@@ -125,7 +127,7 @@ router.get('/dashboard/recent-orders', getRecentOrders);
  *       200:
  *         description: 热销商品排行
  */
-router.get('/dashboard/top-products', getTopProducts);
+router.get('/dashboard/top-products', requirePermission('statistics:view'), getTopProducts);
 
 /**
  * @openapi
@@ -133,6 +135,7 @@ router.get('/dashboard/top-products', getTopProducts);
  *   get:
  *     tags: [管理后台]
  *     summary: 仪表盘销售趋势
+ *     description: 需要 statistics:view 权限
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: days
@@ -143,7 +146,7 @@ router.get('/dashboard/top-products', getTopProducts);
  *       200:
  *         description: 每日销售额趋势
  */
-router.get('/dashboard/sales-trend', getSalesTrend);
+router.get('/dashboard/sales-trend', requirePermission('statistics:view'), getSalesTrend);
 
 /**
  * @openapi

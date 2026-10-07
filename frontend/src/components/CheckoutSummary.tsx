@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 interface Props {
   itemCount: number;
   submitting: boolean;
+  cartUpdating?: boolean;
   addresses: ShippingAddress[];
   addressLoading: boolean;
   addressError?: string | null;
@@ -26,11 +27,11 @@ interface Props {
 
 /** The cart's order summary: shipping address, server-priced totals, coupon and the checkout button. */
 export default function CheckoutSummary({
-  itemCount, submitting, addresses, addressLoading, addressError, selectedAddressId, onSelectAddress, onReloadAddresses,
+  itemCount, submitting, cartUpdating = false, addresses, addressLoading, addressError, selectedAddressId, onSelectAddress, onReloadAddresses,
   quote, quoteLoading, quoteError, onRetryQuote, selectedCouponId, onSelectCoupon, onCheckout,
 }: Props) {
   const { t } = useI18n();
-  const canCheckout = itemCount > 0 && !submitting && !!quote && !quoteLoading && !quoteError &&
+  const canCheckout = itemCount > 0 && !submitting && !cartUpdating && !!quote && !quoteLoading && !quoteError &&
     !addressLoading && !addressError && selectedAddressId !== undefined;
 
   return (

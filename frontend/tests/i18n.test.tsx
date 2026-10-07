@@ -330,6 +330,8 @@ describe('language changes on rendered pages', () => {
     });
 
   it('keeps UTC calendar days on the sales chart while order timestamps use local time', async () => {
+    localStorage.setItem('admin_session', 'chart-session');
+    localStorage.setItem('admin_user', JSON.stringify({ username: 'chart-admin' }));
     // West of UTC, midnight UTC is still the previous local day; only the UTC option keeps Oct 2.
     vi.stubEnv('TZ', 'America/Los_Angeles');
     vi.mocked(api.get).mockImplementation((async (url: string) => url === '/admin/dashboard/sales-trend'

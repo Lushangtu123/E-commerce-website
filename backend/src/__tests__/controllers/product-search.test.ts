@@ -23,7 +23,7 @@ beforeEach(() => {
   mysqlRows = [row(1), row(2)];
   (getESClient as jest.Mock).mockReturnValue(null);
   (query as jest.Mock).mockImplementation(async (sql: string, params: unknown[]) => {
-    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     if (sql.includes('COUNT(*)')) return [{ total: mysqlRows.length }];
     if (sql.includes('product_id IN')) return mysqlRows.filter(r => params.includes(r.product_id));
     return mysqlRows;

@@ -39,6 +39,42 @@ test('Upstash rediss URL 启用 TLS，商城缓存隔离且并发请求复用连
   expect(getRedisClient()).toBe(client);
 });
 
+test('已连接 Redis 终止后，并发请求重建同一个客户端并恢复服务', async () => {
+  const Redis = require('ioredis').default;
+  const makeClient = () => ({ status: 'ready', on: jest.fn(), connect: jest.fn().mockResolvedValue(undefined),
+    ping: jest.fn().mockResolvedValue('PONG'), disconnect: jest.fn() });
+  const ended = makeClient(), recovered = makeClient();
+  Redis.mockReturnValueOnce(ended).mockReturnValueOnce(recovered);
+  const { connectRedis, getRedisClient } = require('../../database/redis');
+  await connectRedis();
+  expect(await getRedisClient().ping()).toBe('PONG');
+  ended.status = 'end';
+  ended.ping.mockRejectedValue(new Error('Connection is closed.'));
+
+  await Promise.all([connectRedis(), connectRedis()]);
+
+  expect(Redis).toHaveBeenCalledTimes(2);
+  expect(getRedisClient()).toBe(recovered);
+  expect(await getRedisClient().ping()).toBe('PONG');
+});
+
+test('Redis 恢复失败会丢弃终止客户端，下一次请求可以再次恢复', async () => {
+  const Redis = require('ioredis').default;
+  const makeClient = () => ({ status: 'ready', on: jest.fn(), connect: jest.fn().mockResolvedValue(undefined),
+    ping: jest.fn().mockResolvedValue('PONG'), disconnect: jest.fn() });
+  const ended = makeClient(), failed = makeClient(), recovered = makeClient();
+  failed.connect.mockRejectedValue(new Error('offline'));
+  Redis.mockReturnValueOnce(ended).mockReturnValueOnce(failed).mockReturnValueOnce(recovered);
+  const { connectRedis, getRedisClient } = require('../../database/redis');
+  await connectRedis();
+  ended.status = 'end';
+  await expect(connectRedis()).rejects.toThrow('offline');
+  expect(failed.disconnect).toHaveBeenCalledTimes(1);
+  expect(() => getRedisClient()).toThrow('Redis未初始化');
+  await connectRedis();
+  expect(await getRedisClient().ping()).toBe('PONG');
+});
+
 test('并发冷启动只初始化一个 MySQL 池，连接失败后释放资源并允许重试', async () => {
   const mysql = require('mysql2/promise');
   const connection = { ping: jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined), release: jest.fn() };

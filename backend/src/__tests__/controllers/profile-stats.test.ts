@@ -12,7 +12,7 @@ const auth = (userId = 7) => ({ Authorization: `Bearer ${jwt.sign({ userId }, 't
 const stats = { totalOrders: 8, pendingOrders: 2, totalCoupons: 9, availableCoupons: 3, favoriteCount: 4 };
 
 function mockStats(rows: unknown[]) {
-  (query as jest.Mock).mockImplementation(async sql => sql.startsWith('SELECT auth_version') ? [{ auth_version: 0 }] : rows);
+  (query as jest.Mock).mockImplementation(async sql => sql.startsWith('SELECT auth_version') ? [{ auth_version: 0, status: 1 }] : rows);
 }
 beforeEach(() => { jest.clearAllMocks(); mockStats([{ ...stats }]); });
 
@@ -28,7 +28,7 @@ test('只按登录用户单次查询，query user_id不能更改范围，DTO不�
   const response = await request(app).get('/api/users/stats?user_id=999').set(auth()).expect(200);
   expect(response.body).toEqual({ stats });
   expect(query).toHaveBeenCalledTimes(2);
-  expect(query).toHaveBeenNthCalledWith(1, 'SELECT auth_version FROM users WHERE user_id = ?', [7]);
+  expect(query).toHaveBeenNthCalledWith(1, 'SELECT auth_version, status FROM users WHERE user_id = ?', [7]);
   expect(query).toHaveBeenCalledWith(expect.any(String), [7]);
 });
 
@@ -42,7 +42,7 @@ test('有效空用户返回五项零，删除的用户撤销会话返回401', as
 
 test('数据库未知错误返回500且不暴露内部信息', async () => {
   (query as jest.Mock).mockImplementation(async sql => {
-    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     throw new Error('private db secret');
   });
   const response = await request(app).get('/api/users/stats').set(auth()).expect(500);

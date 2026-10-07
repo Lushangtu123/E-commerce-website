@@ -35,7 +35,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
         u.created_at,
         u.updated_at,
         (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) as order_count,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3,4)) as total_spent
+        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3)) as total_spent
        FROM users u
        WHERE ${whereClause}
        ORDER BY u.created_at DESC
@@ -82,7 +82,7 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
         u.created_at,
         u.updated_at,
         (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) as order_count,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3,4)) as total_spent
+        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3)) as total_spent
        FROM users u
        WHERE u.user_id = ?`,
       [userId]
@@ -127,13 +127,15 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
 // 更新用户状态
 export const updateUserStatus = async (req: Request, res: Response) => {
   try {
-    const pool = getPool();
     const { userId } = req.params;
-    const { status } = req.body;
-
-    if (status === undefined || (status !== 0 && status !== 1)) {
+    const body = req.body;
+    if (typeof userId !== 'string' || !/^[1-9]\d*$/.test(userId) || !Number.isSafeInteger(Number(userId)) ||
+        !body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 ||
+        (body.status !== 0 && body.status !== 1)) {
       return res.status(400).json({ error: '无效的状态值' });
     }
+    const { status } = body;
+    const pool = getPool();
 
     // 获取用户信息
     const [users] = await pool.query(
@@ -147,10 +149,11 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 
     const user = users[0] as any;
 
-    // 更新状态
+    // Revoke existing sessions atomically when disabling. Re-enabling retains the version,
+    // so cookies and legacy Bearer tokens issued before the disable cannot become valid again.
     await pool.query(
-      'UPDATE users SET status = ?, updated_at = NOW() WHERE user_id = ?',
-      [status, userId]
+      'UPDATE users SET auth_version = auth_version + IF(? = 0, 1, 0), status = ?, updated_at = NOW() WHERE user_id = ?',
+      [status, status, userId]
     );
 
     // 记录操作日志
@@ -254,4 +257,3 @@ export const getUserOrders = async (req: Request, res: Response) => {
     res.status(500).json({ error: '获取订单失败' });
   }
 };
-

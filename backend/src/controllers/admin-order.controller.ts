@@ -193,8 +193,8 @@ export const getOrderStatistics = async (req: Request, res: Response) => {
         SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) as shipped,
         SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN status = 4 THEN 1 ELSE 0 END) as cancelled,
-        SUM(total_amount) as total_revenue,
-        AVG(total_amount) as avg_order_value
+        COALESCE(SUM(CASE WHEN status IN (1,2,3) THEN total_amount ELSE 0 END), 0) as total_revenue,
+        COALESCE(AVG(CASE WHEN status IN (1,2,3) THEN total_amount END), 0) as avg_order_value
        FROM orders
        WHERE ${whereClause}`,
       params

@@ -4,12 +4,16 @@ import logger from '../utils/logger';
 
 dotenv.config({ quiet: true });
 
-let redisClient: Redis;
+let redisClient: Redis | undefined;
 let connecting: Promise<void> | undefined;
 
 export async function connectRedis(): Promise<void> {
-  if (redisClient) return;
+  if (redisClient && redisClient.status !== 'end') return;
   if (connecting) return connecting;
+  // A client whose reconnect budget was exhausted will never recover by itself.
+  // Retire it before initialization so a failed recovery remains retryable.
+  redisClient?.disconnect();
+  redisClient = undefined;
   connecting = initializeRedis();
   try { await connecting; } finally { connecting = undefined; }
 }

@@ -9,6 +9,23 @@ import api from '@/lib/api';
 import type { DashboardStats, RecentOrder, SalesTrendPoint, TopProduct } from '@/lib/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { logger } from '@/lib/logger';
+import { useAdminQuery } from '@/hooks/use-admin-query';
+import { requestFailure } from '@/lib/api-error';
+
+function useDashboardQuery<T>(name: string, load: () => Promise<T>) {
+  const query = useAdminQuery({ name, params: [], load });
+  useEffect(() => {
+    if (query.error) logger.error('获取数据失败:', query.error);
+  }, [query.error]);
+  return query;
+}
+
+function dashboardError(error: unknown) {
+  if (!error) return undefined;
+  const failure = requestFailure(error);
+  return failure.response?.status === 403 ? '权限不足'
+    : failure.response?.data?.error || failure.response?.data?.message || '获取数据失败';
+}
 
 interface StatCardProps {
   icon: ReactNode;
@@ -46,41 +63,32 @@ function StatCard({ icon, title, value, growth, color }: StatCardProps) {
 
 export default function AdminDashboardPage() {
   const { t, formatDate } = useI18n();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
-  const [salesTrend, setSalesTrend] = useState<SalesTrendPoint[]>([]);
-  const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const statsQuery = useDashboardQuery('dashboard-stats', () => api.get<unknown, DashboardStats>('/admin/dashboard/stats'));
+  const ordersQuery = useDashboardQuery('dashboard-recent-orders', async () => {
+    const data = await api.get<unknown, RecentOrder[] | { orders?: RecentOrder[] }>('/admin/dashboard/recent-orders', { params: { limit: 5 } });
+    return Array.isArray(data) ? data : data.orders || [];
+  });
+  const productsQuery = useDashboardQuery('dashboard-top-products', async () => {
+    const data = await api.get<unknown, TopProduct[] | { products?: TopProduct[] }>('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } });
+    return Array.isArray(data) ? data : data.products || [];
+  });
+  const trendQuery = useDashboardQuery('dashboard-sales-trend', async () => {
+    const data = await api.get<unknown, SalesTrendPoint[] | { trend?: SalesTrendPoint[] }>('/admin/dashboard/sales-trend', { params: { days: 7 } });
+    return Array.isArray(data) ? data : data.trend || [];
+  });
+  const stats = statsQuery.data;
+  const recentOrders = ordersQuery.data ?? [];
+  const topProducts = productsQuery.data ?? [];
+  const salesTrend = trendQuery.data ?? [];
+  const statsError = dashboardError(statsQuery.error);
+  const ordersError = dashboardError(ordersQuery.error);
+  const productsError = dashboardError(productsQuery.error);
+  const trendError = dashboardError(trendQuery.error);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      // 获取统计数据
-      const [statsData, ordersData, productsData, trendData] = await Promise.all([
-        api.get<unknown, DashboardStats>('/admin/dashboard/stats'),
-        api.get<unknown, RecentOrder[] | { orders?: RecentOrder[] }>('/admin/dashboard/recent-orders', { params: { limit: 5 } }),
-        api.get<unknown, TopProduct[] | { products?: TopProduct[] }>('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } }),
-        api.get<unknown, SalesTrendPoint[] | { trend?: SalesTrendPoint[] }>('/admin/dashboard/sales-trend', { params: { days: 7 } })
-      ]);
-
-      setStats(statsData);
-      setRecentOrders(Array.isArray(ordersData) ? ordersData : ordersData.orders || []);
-      setTopProducts(Array.isArray(productsData) ? productsData : productsData.products || []);
-      setSalesTrend(Array.isArray(trendData) ? trendData : trendData.trend || []);
-    } catch (error) {
-      logger.error('获取数据失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getStatusBadge = (status: number) => {
     const statusMap: Record<number, { text: string; class: string }> = {
@@ -94,7 +102,7 @@ export default function AdminDashboardPage() {
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.class}`}>{s.text}</span>;
   };
 
-  if (!mounted || loading) {
+  if (!mounted || !statsQuery.sessionId) {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-96">
@@ -117,6 +125,11 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* 核心指标卡片 */}
+        {statsError ? (
+          <div role="alert" className="bg-white rounded-lg shadow-sm p-6 text-center text-red-600">{t(statsError)}</div>
+        ) : !stats ? (
+          <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500">{t("加载中...")}</div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             icon={<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}
@@ -145,12 +158,17 @@ export default function AdminDashboardPage() {
             color="bg-orange-500"
           />
         </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 销售趋势图 */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("销售趋势（最近7天）")}</h3>
-            {salesTrend && salesTrend.length > 0 ? (
+            {trendError ? (
+              <div role="alert" className="h-[300px] flex items-center justify-center text-red-600">{t(trendError)}</div>
+            ) : !trendQuery.data ? (
+              <div className="h-[300px] flex items-center justify-center text-gray-500">{t("加载中...")}</div>
+            ) : salesTrend && salesTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={salesTrend}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -174,7 +192,11 @@ export default function AdminDashboardPage() {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("热门商品（最近7天）")}</h3>
             <div className="space-y-3">
-              {topProducts && topProducts.length > 0 ? topProducts.map((product, index) => (
+              {productsError ? (
+                <p role="alert" className="text-center text-red-600 py-4">{t(productsError)}</p>
+              ) : !productsQuery.data ? (
+                <p className="text-center text-gray-500 py-4">{t("加载中...")}</p>
+              ) : topProducts && topProducts.length > 0 ? topProducts.map((product, index) => (
                 <div key={product.product_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center flex-1">
                     <span className="text-lg font-bold text-gray-400 w-6">#{index + 1}</span>
@@ -198,6 +220,11 @@ export default function AdminDashboardPage() {
             <h3 className="text-lg font-semibold text-gray-900">{t("最近订单")}</h3>
           </div>
           <div className="overflow-x-auto">
+            {ordersError ? (
+              <p role="alert" className="px-6 py-4 text-center text-red-600">{t(ordersError)}</p>
+            ) : !ordersQuery.data ? (
+              <p className="px-6 py-4 text-center text-gray-500">{t("加载中...")}</p>
+            ) : (
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -226,6 +253,7 @@ export default function AdminDashboardPage() {
                 )}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       </div>

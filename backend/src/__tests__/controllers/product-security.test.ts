@@ -30,7 +30,7 @@ beforeEach(() => {
     return [[{ role_name: 'editor' }]];
   });
   (query as jest.Mock).mockImplementation(async (statement: string) => {
-    if (statement.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    if (statement.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     if (statement.includes('COUNT(*)')) return [{ total: 0 }];
     if (statement.startsWith('SELECT')) return [];
     return { insertId: 9, affectedRows: 1 };
@@ -87,7 +87,7 @@ test.each([{ price: -1 }, { stock: -2 }, { stock: 1.5 }, { product_id: 9 }, {}])
 test.each([-1, 0, 1.5, '2', null])('购物车添加拒绝非法数量 %j', async quantity => {
   await request(app).post('/cart').set('Authorization', `Bearer ${userToken}`).send({ product_id: 1, quantity }).expect(400);
   expect(query).toHaveBeenCalledTimes(1);
-  expect(query).toHaveBeenCalledWith('SELECT auth_version FROM users WHERE user_id = ?', [1]);
+  expect(query).toHaveBeenCalledWith('SELECT auth_version, status FROM users WHERE user_id = ?', [1]);
 });
 
 test('购物车保留数量为零时删除及正常添加', async () => {

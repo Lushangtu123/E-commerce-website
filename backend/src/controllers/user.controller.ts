@@ -143,6 +143,9 @@ export class UserController {
       if (!isValid) {
         return res.status(401).json({ error: '邮箱或密码错误' });
       }
+      if (user.status !== 1) {
+        return res.status(403).json({ error: '账号已被禁用' });
+      }
 
       // 生成token
       // @ts-ignore

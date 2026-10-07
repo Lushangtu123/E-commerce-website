@@ -14,7 +14,7 @@ const app = express(); app.use('/api/orders', orderRoutes);
 const auth = { Authorization: `Bearer ${jwt.sign({ userId: 7 }, 'test-jwt-secret')}` };
 beforeEach(() => {
   jest.clearAllMocks();
-  (query as jest.Mock).mockImplementation(async (sql: string) => sql.startsWith('SELECT auth_version') ? [{ auth_version: 0 }] : sql.includes('COUNT(*)') ? [{ total: 3 }] : [{ order_id: 2, user_id: 7, status: 0 }]);
+  (query as jest.Mock).mockImplementation(async (sql: string) => sql.startsWith('SELECT auth_version') ? [{ auth_version: 0, status: 1 }] : sql.includes('COUNT(*)') ? [{ total: 3 }] : [{ order_id: 2, user_id: 7, status: 0 }]);
 });
 
 test('未认证不能列订单；默认分页使用10且同时间按订单ID稳定排序', async () => {
@@ -39,7 +39,7 @@ test.each([
 ])('非法订单查询仅检查会话且不执行订单SQL：%s', async params => {
   await request(app).get(`/api/orders?${params}`).set(auth).expect(400);
   expect(query).toHaveBeenCalledTimes(1);
-  expect(query).toHaveBeenCalledWith('SELECT auth_version FROM users WHERE user_id = ?', [7]);
+  expect(query).toHaveBeenCalledWith('SELECT auth_version, status FROM users WHERE user_id = ?', [7]);
 });
 
 test('最大page与limit可安全计算并绑定offset', async () => {
@@ -67,7 +67,7 @@ test('controller非HTTP调用的null或数组分页也返回400', async () => {
 
 test('数据库失败保持500且隐藏驱动细节', async () => {
   (query as jest.Mock).mockImplementation(async sql => {
-    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0 }];
+    if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     throw new Error('driver secret');
   });
   const response = await request(app).get('/api/orders').set(auth).expect(500);

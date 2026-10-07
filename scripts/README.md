@@ -14,6 +14,8 @@
 
 停止进程时只匹配本仓库 `backend/`、`frontend/` 下的 `node_modules` 路径，不会影响编辑器或其他项目的 Node 进程。
 
+运行浏览器交易回归时，先构建后端并确保现有 Playwright Chromium 已安装，再执行 `RUN_BROWSER_TESTS=true ./scripts/dev/integration-tests.sh --runInBand`。它先验证后端全部测试，再使用同一临时 MySQL 运行前端浏览器流程；测试库和容器在结束时清理，不读取云端商城配置。
+
 ## manual-tests/ — 手工接口检查
 
 对本地运行中的后端（`http://localhost:3001/api`）发起 curl 请求，逐步检查优惠券、收藏、浏览历史等功能，便于人工排查。自动化回归以 `backend` 的 Jest 测试和 `frontend` 的浏览器端到端测试为准。

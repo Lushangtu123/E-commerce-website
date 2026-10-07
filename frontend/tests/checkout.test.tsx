@@ -200,6 +200,96 @@ describe('checkout', () => {
     expect(amountRow('应付金额')).toBe('应付金额¥120.00');
   });
 
+  it.each(['quantity', 'remove'] as const)('cannot check out during a pending cart %s or before its replacement quote arrives', async (operation) => {
+    const mutation = deferred(), replacementQuote = deferred<OrderPreview>();
+    await setupCheckout({
+      cartItems: [firstItem, { ...firstItem, cart_id: 2, product_id: 22, quantity: 1 }],
+      updateQuantity: () => mutation.promise, remove: () => mutation.promise,
+      preview: input => input.items.length === 2 && input.items[0].quantity === 3 ? Promise.resolve(quote(120)) : replacementQuote.promise,
+    });
+    const checkout = checkoutButton();
+
+    clickTogether(operation === 'quantity' ? increase()[0] : removeButtons()[0], checkout);
+
+    expect(creates()).toEqual([]);
+    expect(checkoutButton()).toBeDisabled();
+    await act(async () => mutation.resolve({}));
+    await settle();
+    expect(checkoutButton()).toBeDisabled();
+    expect(previews().at(-1)?.items).toEqual(operation === 'quantity'
+      ? [{ product_id: 12, quantity: 4 }, { product_id: 22, quantity: 1 }]
+      : [{ product_id: 22, quantity: 1 }]);
+
+    await act(async () => replacementQuote.resolve(quote(150)));
+    await settle();
+    expect(checkoutButton()).toBeEnabled();
+    await click(checkoutButton());
+    expect(creates()[0].items).toEqual(previews().at(-1)?.items);
+  });
+
+  it('serializes rapid quantity and remove clicks before React renders the disabled controls', async () => {
+    const mutation = deferred();
+    let calls = 0;
+    await setupCheckout({ updateQuantity: () => ++calls === 1 ? mutation.promise : Promise.resolve({}) });
+
+    clickTogether(increase()[0], decrease()[0], removeButtons()[0]);
+
+    expect(vi.mocked(cartApi.updateQuantity).mock.calls).toEqual([[{ product_id: 12, quantity: 4 }]]);
+    expect(cartApi.remove).not.toHaveBeenCalled();
+    expect(increase()[0]).toBeDisabled();
+    expect(decrease()[0]).toBeDisabled();
+    expect(removeButtons()[0]).toBeDisabled();
+
+    await act(async () => mutation.resolve({}));
+    await settle();
+    expect(cartItems()[0].quantity).toBe(4);
+    await click(decrease()[0]);
+    expect(vi.mocked(cartApi.updateQuantity).mock.calls).toEqual([
+      [{ product_id: 12, quantity: 4 }], [{ product_id: 12, quantity: 3 }],
+    ]);
+    expect(cartItems()[0].quantity).toBe(3);
+  });
+
+  it.each(['quantity', 'remove'] as const)('releases a failed cart %s without changing its quantity or losing checkout', async (operation) => {
+    const mutation = deferred();
+    await setupCheckout({ updateQuantity: () => mutation.promise, remove: () => mutation.promise });
+    await click(operation === 'quantity' ? increase()[0] : removeButtons()[0]);
+    expect(checkoutButton()).toBeDisabled();
+
+    await act(async () => mutation.reject(apiError('服务暂不可用')));
+    await settle();
+
+    expect(cartItems()).toHaveLength(1);
+    expect(cartItems()[0].quantity).toBe(3);
+    expect(checkoutButton()).toBeEnabled();
+    expect(increase()[0]).toBeEnabled();
+    expect(notifications).toContain(operation === 'quantity' ? '更新失败' : '删除失败');
+    await click(checkoutButton());
+    expect(creates()[0].items).toEqual([{ product_id: 12, quantity: 3 }]);
+  });
+
+  it('cannot let the previous customer release the new customer\'s pending cart lock', async () => {
+    const pending = [deferred(), deferred()];
+    let calls = 0;
+    await setupCheckout({ updateQuantity: () => pending[calls++].promise });
+    await click(increase()[0]);
+    switchCustomer();
+    await settle();
+    expect(increase()[0]).toBeEnabled();
+    await click(increase()[0]);
+    expect(checkoutButton()).toBeDisabled();
+
+    await act(async () => pending[0].resolve({}));
+    await settle();
+    expect(checkoutButton()).toBeDisabled();
+    expect(cartItems()[0].quantity).toBe(3);
+
+    await act(async () => pending[1].resolve({}));
+    await settle();
+    expect(cartItems()[0].quantity).toBe(4);
+    expect(checkoutButton()).toBeEnabled();
+  });
+
   it('invalidates the previous quote in the same render that changes the selected items', async () => {
     const secondItem = { ...firstItem, cart_id: 2, product_id: 22, quantity: 1 };
     const { commits } = await setupCheckout({
