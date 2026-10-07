@@ -53,7 +53,7 @@ docker-compose exec backend npm run migrate
 5. **访问应用**
 - 前端应用: http://localhost:3000
 - 后端API: http://localhost:3001
-- RabbitMQ管理界面: http://localhost:15672 (用户名: admin, 密码: admin123)
+- RabbitMQ管理界面: http://localhost:15672（用户名 admin，密码为根目录 .env 中的 RABBITMQ_PASSWORD）
 - Elasticsearch: http://localhost:9200
 
 6. **停止服务**
@@ -94,7 +94,7 @@ kubectl create secret generic ecommerce-secrets \
 ```bash
 # 使用Helm部署MySQL
 helm install mysql bitnami/mysql \
-  --set auth.rootPassword=root123456 \
+  --set auth.rootPassword=<generated-password> \
   --set auth.database=ecommerce \
   -n ecommerce
 
@@ -106,7 +106,7 @@ helm install redis bitnami/redis \
 # 部署RabbitMQ
 helm install rabbitmq bitnami/rabbitmq \
   --set auth.username=admin \
-  --set auth.password=admin123 \
+  --set auth.password=<generated-password> \
   -n ecommerce
 
 # 部署Elasticsearch

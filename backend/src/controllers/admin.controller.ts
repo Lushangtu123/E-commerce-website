@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Admin } from '../models/admin.model';
 import logger from '../utils/logger';
-import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasCsrfHeader, setSessionCookie } from '../utils/session-cookie';
+import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasCsrfHeader, readCookie, setSessionCookie } from '../utils/session-cookie';
 import { logAdminAction } from './admin-log.controller';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-admin-secret-key';
@@ -51,6 +51,7 @@ export const adminLogin = async (req: Request, res: Response) => {
         adminId: admin.admin_id, 
         username: admin.username,
         roleId: admin.role_id,
+        authVersion: Number(admin.auth_version ?? 0),
         type: 'admin'
       },
       JWT_SECRET,
@@ -135,9 +136,31 @@ export const getAdminProfile = async (req: Request, res: Response) => {
   }
 };
 
-// 管理员退出登录：清除会话 Cookie。即使令牌已过期也能退出，所以不经过管理员认证。
-export const adminLogout = (req: Request, res: Response) => {
+/**
+ * 管理员退出登录：清除会话 Cookie，并递增 auth_version，使该管理员所有已签发的令牌立即失效。
+ * 即使令牌已过期也能退出，所以不经过管理员认证；只有有效且版本仍为当前值的令牌才会触发撤销。
+ */
+export const adminLogout = async (req: Request, res: Response) => {
   if (!hasCsrfHeader(req)) return res.status(403).json({ error: CSRF_ERROR });
   clearSessionCookie(res, ADMIN_COOKIE);
+
+  let session: jwt.JwtPayload | undefined;
+  try {
+    const verified = jwt.verify(readCookie(req, ADMIN_COOKIE) || '', JWT_SECRET);
+    if (typeof verified === 'object' && verified.type === 'admin' && Number.isSafeInteger(verified.adminId)) session = verified;
+  } catch {
+    // 过期或无效的令牌已无法使用，只需清除 Cookie
+  }
+  if (session) {
+    try {
+      await getPool().query(
+        'UPDATE admins SET auth_version = auth_version + 1 WHERE admin_id = ? AND auth_version = ?',
+        [session.adminId, session.authVersion ?? 0]
+      );
+    } catch (error) {
+      logger.error({ err: error }, '管理员会话撤销失败');
+      return res.status(503).json({ error: '已在本设备退出，但未能注销其他会话，请稍后重试' });
+    }
+  }
   return res.json({ message: '已退出登录' });
 };

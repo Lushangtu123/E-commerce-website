@@ -172,7 +172,8 @@ cd E-commerce-website
 2. **Start all services**
 ```bash
 cp .env.example .env
-# Set JWT_SECRET in the root .env using the output of openssl rand -hex 32
+# In the root .env: set JWT_SECRET to the output of openssl rand -hex 32, and
+# MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD, RABBITMQ_PASSWORD to the output of openssl rand -hex 16 each
 docker-compose up -d
 ```
 
@@ -187,7 +188,9 @@ docker-compose ps
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:3001
 - Admin Panel: http://localhost:3000/admin
-- RabbitMQ Management: http://localhost:15672 (admin/admin123)
+- RabbitMQ Management: http://localhost:15672 (user admin, password from RABBITMQ_PASSWORD in .env)
+
+The database, Redis, RabbitMQ and Elasticsearch ports are bound to 127.0.0.1 only and are not reachable from the network.
 - Elasticsearch: http://localhost:9200
 
 5. **Initialize the database**

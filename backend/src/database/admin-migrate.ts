@@ -34,6 +34,7 @@ async function runAdminMigrations() {
         phone VARCHAR(20),
         role_id INT,
         status TINYINT DEFAULT 1 COMMENT '1:启用 0:禁用',
+        auth_version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '退出登录时递增，使旧令牌失效',
         last_login_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

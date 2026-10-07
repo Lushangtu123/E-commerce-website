@@ -50,7 +50,7 @@ fi
 docker-compose up -d 2>/dev/null
 echo "⏳ 等待MySQL启动..."
 for i in {1..30}; do
-    if docker exec ecommerce-mysql mysqladmin ping -h localhost -uroot -proot123456 > /dev/null 2>&1; then
+    if docker exec ecommerce-mysql mysqladmin ping -h localhost > /dev/null 2>&1; then
         echo "✅ MySQL已就绪"
         break
     fi

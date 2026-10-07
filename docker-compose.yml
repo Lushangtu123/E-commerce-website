@@ -4,12 +4,13 @@ services:
     image: mysql:8.0
     container_name: ecommerce-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in the root .env before starting Compose}
       MYSQL_DATABASE: ecommerce
       MYSQL_USER: ecommerce
-      MYSQL_PASSWORD: ecommerce123
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in the root .env before starting Compose}
+    # 基础设施端口只绑定本机回环地址，局域网无法直接访问；容器之间走内部网络
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -24,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: ecommerce-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -41,10 +42,10 @@ services:
     container_name: ecommerce-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin123
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in the root .env before starting Compose}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -64,8 +65,7 @@ services:
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "127.0.0.1:9200:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
     networks:
@@ -88,13 +88,13 @@ services:
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_USER=ecommerce
-      - DB_PASSWORD=ecommerce123
+      - DB_PASSWORD=${MYSQL_PASSWORD}
       - DB_NAME=ecommerce
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       # 可选依赖：去掉下面两行即可不用 Elasticsearch（搜索回退 MySQL）或 RabbitMQ（超时取消由定时任务处理）
       - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
+      - RABBITMQ_URL=amqp://admin:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env before starting Compose}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     ports:

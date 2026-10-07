@@ -451,8 +451,8 @@ curl -I "https://placehold.co/400x400/1E90FF/FFFFFF/png?text=iPhone+15+Pro"
 # HTTP/2 200 ✅
 
 # 2. 检查数据库中的数据
-docker-compose exec mysql mysql -uroot -proot123456 \
-  -e "USE ecommerce; SELECT title, main_image FROM products LIMIT 1;"
+docker-compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
+  -e "USE ecommerce; SELECT title, main_image FROM products LIMIT 1;"'
 # 应该显示新的 placehold.co URL
 
 # 3. 测试 API
@@ -549,7 +549,7 @@ curl http://localhost:3001/api/products | jq '.products[0].main_image'
 - **前端应用**: http://localhost:3000
 - **后端 API**: http://localhost:3001
 - **API 文档**: http://localhost:3001/health
-- **RabbitMQ 管理**: http://localhost:15672 (admin/admin123)
+- **RabbitMQ 管理**: http://localhost:15672（用户 admin，密码为 .env 中的 RABBITMQ_PASSWORD）
 
 ### 测试账号
 

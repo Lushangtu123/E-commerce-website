@@ -10,6 +10,13 @@ export async function migrateAccountSecurity(pool: Pool): Promise<void> {
   if (!columns.some(column => column.COLUMN_NAME === 'auth_version')) {
     await pool.query('ALTER TABLE users ADD COLUMN auth_version INT UNSIGNED NOT NULL DEFAULT 0');
   }
+  // 管理员表由 admin-migrate 创建；已存在时补上会话版本列，未创建时留给 admin-migrate
+  const [adminColumns] = await pool.query<RowDataPacket[]>(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admins'"
+  );
+  if (adminColumns.length && !adminColumns.some(column => column.COLUMN_NAME === 'auth_version')) {
+    await pool.query("ALTER TABLE admins ADD COLUMN auth_version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '退出登录时递增，使旧令牌失效'");
+  }
   await pool.query(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
     token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
     user_id BIGINT NOT NULL UNIQUE,
