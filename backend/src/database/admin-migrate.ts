@@ -156,6 +156,9 @@ async function runAdminMigrations() {
       ('查看订单', 'order:view', 'order', 'view', '查看订单列表和详情'),
       ('编辑订单', 'order:edit', 'order', 'edit', '编辑订单状态'),
       ('导出订单', 'order:export', 'order', 'export', '导出订单数据'),
+      ('查看优惠券', 'coupon:view', 'coupon', 'view', '查看优惠券列表和详情'),
+      ('创建优惠券', 'coupon:create', 'coupon', 'create', '创建新优惠券'),
+      ('编辑优惠券', 'coupon:edit', 'coupon', 'edit', '启用或停用优惠券'),
       ('查看统计', 'statistics:view', 'statistics', 'view', '查看统计数据'),
       ('查看日志', 'log:view', 'log', 'view', '查看操作日志'),
       ('管理权限', 'permission:manage', 'permission', 'manage', '管理角色和权限')
@@ -165,7 +168,9 @@ async function runAdminMigrations() {
     logger.info('为超级管理员分配权限...');
     await connection.query(`
       INSERT IGNORE INTO role_permissions (role_id, permission_id)
-      SELECT 1, permission_id FROM permissions
+      SELECT r.role_id, p.permission_id
+      FROM roles r CROSS JOIN permissions p
+      WHERE r.role_name = 'super_admin'
     `);
 
     // Production must never expose the repository's development password.
