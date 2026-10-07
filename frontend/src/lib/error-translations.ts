@@ -4,6 +4,9 @@
  */
 export const errorTranslations: Record<string, string> = {
   // Authentication and shared failures.
+  '请求体过大': 'The request body is too large',
+  '请求格式无效': 'The request format is invalid',
+  '已在本设备退出，但未能注销其他会话，请稍后重试': 'Signed out on this device, but other sessions could not be signed out. Please try again later',
   '请先登录': 'Please sign in first',
   '未登录，请先登录': 'Please sign in first',
   '未认证': 'Authentication required',
@@ -217,6 +220,8 @@ export const errorTranslations: Record<string, string> = {
   '删除浏览记录失败': 'Unable to delete the browsing record',
 
   // Reviews, search and recommendations.
+  '搜索参数无效': 'Invalid search parameters',
+  '商品搜索失败，请稍后重试': 'Product search failed. Please try again later',
   '评论参数或字段无效': 'Invalid review parameters or fields',
   '用户或商品或订单ID无效': 'Invalid user, product or order ID',
   '该商品不属于此订单': 'This product does not belong to this order',
