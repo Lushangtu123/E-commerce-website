@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
