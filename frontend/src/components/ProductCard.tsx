@@ -51,7 +51,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   const soldOut = Number(product.stock) <= 0;
-  const onSale = product.original_price && product.original_price > product.price;
+  const onSale = Number(product.original_price) > Number(product.price);
 
   return (
     <Link

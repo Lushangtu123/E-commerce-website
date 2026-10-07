@@ -1,7 +1,8 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import ProductCard from '@/components/ProductCard';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { render } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -25,5 +26,36 @@ it.each([
   } else {
     expect(button).toBeEnabled();
     expect(button).toHaveTextContent(has_sku ? '选规格' : '加入');
+  }
+});
+
+it.each([
+  { price: '99.00', original_price: '100.00', discounted: true },
+  { price: '9.99', original_price: '10.00', discounted: true },
+  { price: '100.00', original_price: '99.00', discounted: false },
+  { price: '10.00', original_price: '9.99', discounted: false },
+  { price: '10.00', original_price: '10.00', discounted: false },
+  { price: '10', original_price: '10.00', discounted: false },
+  { price: 99, original_price: 100, discounted: true },
+  { price: '99.00', original_price: 100, discounted: true },
+  { price: 99, original_price: '100.00', discounted: true },
+  { price: '0.00', original_price: '10.00', discounted: true },
+  { price: '10.00', original_price: 0, discounted: false },
+  { price: '10.00', original_price: '0.00', discounted: false },
+  { price: '10.00', original_price: null, discounted: false },
+  { price: '10.00', original_price: undefined, discounted: false },
+])('shows a promotion only when original price $original_price exceeds selling price $price', ({ price, original_price, discounted }) => {
+  const product = { product_id: 1, title: 'Coffee', price, original_price, stock: 2, sales_count: 7, rating: 4.5 };
+  const { container, rerender } = render(<ProductCard product={product} />);
+
+  for (const [locale, badge] of [['zh-CN', '促销'], ['en', 'Sale']] as const) {
+    act(() => useLocaleStore.setState({ locale }));
+    rerender(<ProductCard product={product} />);
+    expect(screen.queryByText(badge, { exact: true }) !== null).toBe(discounted);
+    const crossedOutPrice = container.querySelector('.line-through');
+    if (discounted) expect(crossedOutPrice).toHaveTextContent(`¥${original_price}`);
+    else expect(crossedOutPrice).toBeNull();
+    expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText(`¥${price}`, { exact: true })).toBeVisible();
   }
 });
