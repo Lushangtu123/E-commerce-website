@@ -208,7 +208,7 @@ docker-compose down -v
 - Node.js 24 LTS（可在根目录执行 `nvm use`）
 - MySQL 8.0
 - Redis 7
-- 可选：Elasticsearch 8（商品搜索，未配置时用 MySQL）、RabbitMQ 3（订单精确超时，未配置时由定时任务处理）
+- 可选：Elasticsearch 9（商品搜索，未配置时用 MySQL）、RabbitMQ 3（订单精确超时，未配置时由定时任务处理）
 
 ### 后端开发
 

@@ -823,7 +823,7 @@ For detailed setup, see [Quick Start Guide](./QUICK_START_GUIDE.md).
 
 ### 📚 Resources
 
-- [Project Documentation](./README_EN.md)
+- [Project Documentation](./README.md)
 - [API Documentation](./API.md)
 - [Environment Setup](./ENV_SETUP.md)
 - [Quick Start Guide](./QUICK_START_GUIDE.md)
@@ -836,7 +836,7 @@ For questions or suggestions:
 
 - 📧 Submit an [Issue](https://github.com/Lushangtu123/E-commerce-website/issues)
 - 💬 Join [Discussions](https://github.com/Lushangtu123/E-commerce-website/discussions)
-- 📖 Read the [Documentation](./README_EN.md)
+- 📖 Read the [Documentation](./README.md)
 
 ---
 
