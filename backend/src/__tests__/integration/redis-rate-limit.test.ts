@@ -25,6 +25,8 @@ integration('真实 Redis 跨实例限流', () => {
     await request(two).get('/api').expect(200);
     await request(one).get('/api').expect(429);
     await request(two).get('/auth').expect(200);
-    expect(await client.pttl('api:::ffff:127.0.0.1')).toBeGreaterThan(0);
+    // express-rate-limit 8 keys IPv4-mapped IPv6 addresses (::ffff:127.0.0.1) by their IPv4 form
+    expect(await client.pttl('api:127.0.0.1')).toBeGreaterThan(0);
+    expect(await client.pttl('auth:127.0.0.1')).toBeGreaterThan(0);
   });
 });

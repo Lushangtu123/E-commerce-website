@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Request, Response } from 'express';
 import { createApp } from './app';

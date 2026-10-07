@@ -2,7 +2,7 @@ import Redis, { RedisOptions } from 'ioredis';
 import dotenv from 'dotenv';
 import logger from '../utils/logger';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 let redisClient: Redis;
 let connecting: Promise<void> | undefined;
@@ -17,6 +17,8 @@ export async function connectRedis(): Promise<void> {
 async function initializeRedis(): Promise<void> {
   const options: RedisOptions = {
     lazyConnect: true,
+    // ioredis 6 defaults to RESP3; keep RESP2, which every supported Redis (including Upstash) speaks
+    protocol: 2,
     keyPrefix: process.env.REDIS_KEY_PREFIX || 'ecommerce:',
     maxRetriesPerRequest: 1,
     connectTimeout: 10000,
