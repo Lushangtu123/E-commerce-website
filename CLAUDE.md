@@ -34,7 +34,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main`: backend build +
 
 ## Pitfalls already paid for
 
-- `src/load-env.ts` must stay the first import of `app.ts`, `index.ts` and `serverless.ts`: modules read env vars at load time (`JWT_SECRET` in admin auth).
+- `src/load-env.ts` must stay the first import of `app.ts`, `index.ts` and `serverless.ts`: modules read env vars at load time. Read `JWT_SECRET` only through `jwtSecret()` (`utils/jwt-secret.ts`), shared by customer and admin tokens.
 - Express 5 leaves `req.body` undefined without a parsed body; `app.ts` defaults it to `{}` so Joi does not pass `undefined` through. `req.query` is read-only.
 - RabbitMQ and Elasticsearch are optional: without `RABBITMQ_URL` timed-out orders are cancelled by the 5-minute poller (or `POST /api/internal/order-timeouts` with `CRON_SECRET`), and without `ELASTICSEARCH_URL` search uses MySQL. `/health` returns 503 only for MySQL or Redis.
 - The Elasticsearch client is 9.x and only talks to Elasticsearch 9 servers. ES only decides matches and order; price, stock and status always come from MySQL. Product/SKU writes call `syncProductsToSearchIndex` through `afterProductWrite`.
@@ -47,5 +47,5 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main`: backend build +
 
 1. Work on a branch, never on `main`; keep one concern per PR.
 2. Run `/verify` before committing, and `/integration` when SQL, transactions, Redis, migrations or startup code change.
-3. Open the PR with `/pr`. A human merges after CI passes; Claude does not merge, force-push or push to `main`.
+3. Open the PR with `/pr`. Claude merges it with a merge commit once every CI check has passed, never with a failing or pending check, and does not force-push or push to `main`.
 4. After a merge: delete the branch (remote and local) and fast-forward local `main`.

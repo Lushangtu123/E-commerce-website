@@ -14,4 +14,4 @@ Prepare a pull request for the current change. Title: $ARGUMENTS (if empty, deri
    The body has "## What changed", "## Verification" (exact commands and counts from step 2) and any rollout notes (migrations, env vars, Docker volumes).
 6. Give the user the link. If a browser tool is connected and the user asked for it, open the link and click "Create pull request", waiting until GitHub finishes "Checking mergeability" first.
 
-Merging is the user's job after CI passes; do not merge or enable auto-merge. When the user reports the merge: confirm it via the GitHub API, delete the branch on GitHub and locally, and fast-forward local `main`.
+Once the PR exists, Claude merges it with a merge commit after every CI check has passed, never with a failing or pending check (if a check fails, report it and stop). After the merge: confirm it via the GitHub API, delete the branch on GitHub and locally, and fast-forward local `main`.

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserModel } from '../models/user.model';
 import { CSRF_ERROR, CUSTOMER_COOKIE, sessionToken } from '../utils/session-cookie';
+import { jwtSecret } from '../utils/jwt-secret';
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -24,7 +25,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: '未登录，请先登录' });
     }
 
-    const verified = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const verified = jwt.verify(token, jwtSecret());
     if (!userPayload(verified)) return res.status(401).json({ error: '无效的用户令牌' });
     decoded = verified;
   } catch (error) {
@@ -49,7 +50,7 @@ export async function optionalAuth(req: AuthRequest, res: Response, next: NextFu
     const { token } = sessionToken(req, CUSTOMER_COOKIE);
 
     if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
+      const decoded = jwt.verify(token, jwtSecret()) as any;
       if (userPayload(decoded) && (await UserModel.getAuthVersion(decoded.userId)) === (decoded.authVersion ?? 0)) {
         req.userId = decoded.userId;
         req.user = decoded;

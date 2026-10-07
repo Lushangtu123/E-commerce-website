@@ -11,6 +11,7 @@ import { PasswordResetModel } from '../models/password-reset.model';
 import { normalizePasswordChange, normalizePasswordForgot, normalizePasswordReset } from '../utils/password-validation';
 import { createHash } from 'crypto';
 import { requestPasswordRecovery } from '../services/password-recovery.service';
+import { jwtSecret } from '../utils/jwt-secret';
 
 export class UserController {
   static passwordCapabilities(_req: AuthRequest, res: Response) {
@@ -101,7 +102,7 @@ export class UserController {
       // @ts-ignore
       const token = jwt.sign(
         { userId, username, email, type: 'user', authVersion: 0 },
-        process.env.JWT_SECRET || 'secret',
+        jwtSecret(),
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
@@ -147,7 +148,7 @@ export class UserController {
       // @ts-ignore
       const token = jwt.sign(
         { userId: user.user_id, username: user.username, email: user.email, type: 'user', authVersion: user.auth_version ?? 0 },
-        process.env.JWT_SECRET || 'secret',
+        jwtSecret(),
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 

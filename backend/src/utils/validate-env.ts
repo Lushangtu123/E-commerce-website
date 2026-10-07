@@ -1,8 +1,9 @@
 import logger from './logger';
+import { DEV_JWT_SECRET } from './jwt-secret';
 
 /** 已知的弱密钥默认值，生产环境禁止使用 */
 const WEAK_SECRETS = new Set([
-  'secret',
+  DEV_JWT_SECRET,
   'your-secret-key',
   'your-super-secret-jwt-key-change-in-production',
   'your_production_jwt_secret_key',
