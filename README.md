@@ -37,6 +37,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 ### Product Features
 - Product list (pagination and sorting)
+- Promotion badges and crossed-out original prices appear only when the original price exceeds the selling price, including decimal strings returned by MySQL
 - Product details
 - **Product SKUs** - Products with multiple variants
 - Categories and filtering
