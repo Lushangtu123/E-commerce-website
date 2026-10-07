@@ -8,7 +8,7 @@ import {
   getSearchSuggestions,
   elasticsearchSearch
 } from '../controllers/search.controller';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, optionalAuth } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -17,13 +17,12 @@ const router = express.Router();
  * /api/search/es:
  *   get:
  *     tags: [搜索]
- *     summary: Elasticsearch 高级搜索
- *     description: 公开接口，支持关键词、分类、价格区间、品牌筛选与排序
+ *     summary: 商品搜索（Elasticsearch，可回退 MySQL）
+ *     description: 公开接口，支持关键词、分类、价格区间、品牌筛选与排序。已配置 ELASTICSEARCH_URL 时用 Elasticsearch 匹配和排序，未配置或不可用时回退到 MySQL，响应的 engine 字段标明实际使用的引擎。价格、库存和上架状态始终取自 MySQL。登录用户的搜索计入本人搜索历史。page × page_size 不能超过 10000。
  *     parameters:
  *       - name: keyword
  *         in: query
- *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, maxLength: 200 }
  *       - name: category_id
  *         in: query
  *         schema: { type: integer }
@@ -47,12 +46,14 @@ const router = express.Router();
  *         schema: { type: integer, default: 1 }
  *       - name: page_size
  *         in: query
- *         schema: { type: integer, default: 20 }
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
  *     responses:
  *       200:
  *         description: 搜索结果（分页）
+ *       400:
+ *         description: 搜索参数无效
  */
-router.get('/es', elasticsearchSearch);
+router.get('/es', optionalAuth, elasticsearchSearch);
 
 /**
  * @openapi

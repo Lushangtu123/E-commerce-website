@@ -6,12 +6,15 @@ import {
   initProductIndex,
   bulkSyncProductsToES,
   checkESConnection,
+  getESClient,
 } from './elasticsearch';
+import { customerProducts } from '../models/product.model';
 import logger from '../utils/logger';
 
 async function syncAllProducts() {
   try {
     logger.info('🚀 开始同步商品数据到 Elasticsearch...');
+    if (!getESClient()) throw new Error('未配置 ELASTICSEARCH_URL');
 
     // 连接数据库
     await connectDatabase();
@@ -26,24 +29,8 @@ async function syncAllProducts() {
     // 初始化索引
     await initProductIndex();
 
-    // 从 MySQL 获取所有商品
-    const [products] = await pool.execute(
-      `SELECT 
-        product_id,
-        title,
-        description,
-        price,
-        original_price,
-        stock,
-        sales_count,
-        category_id,
-        brand,
-        main_image,
-        status,
-        created_at,
-        updated_at
-      FROM products`
-    );
+    // 从 MySQL 获取所有商品（顾客视图：SKU 商品取启用规格的最低价和合计库存）
+    const [products] = await pool.execute(`SELECT * FROM (${customerProducts}) AS products`);
 
     const productArray = products as any[];
     logger.info(`📦 从 MySQL 获取到 ${productArray.length} 个商品`);

@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { SearchHistoryModel } from '../models/search-history.model';
 import { AuthRequest } from '../middleware/auth';
-import { searchProducts as esSearchProducts } from '../database/elasticsearch';
+import Joi from 'joi';
+import { searchProducts } from '../services/product-search.service';
 import logger from '../utils/logger';
 
 // 记录搜索历史
@@ -115,59 +116,49 @@ export const getSearchSuggestions = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Elasticsearch 高级搜索
+// Elasticsearch 只能分页到前 10000 条结果
+const MAX_RESULT_WINDOW = 10000;
+const productSearchSchema = Joi.object({
+  keyword: Joi.string().trim().max(200).allow('').default(''),
+  category_id: Joi.number().integer().min(1).max(2147483647),
+  min_price: Joi.number().min(0).max(99999999.99),
+  max_price: Joi.number().max(99999999.99).min(Joi.ref('min_price', { adjust: value => value ?? 0 })),
+  brand: Joi.string().trim().min(1).max(100),
+  sort_by: Joi.string().valid('price', 'sales', 'created_at').default('sales'),
+  sort_order: Joi.string().valid('asc', 'desc').default('desc'),
+  page: Joi.number().integer().min(1).default(1),
+  page_size: Joi.number().integer().min(1).max(100).default(20),
+}).unknown(false).custom((value, helpers) =>
+  value.page * value.page_size > MAX_RESULT_WINDOW ? helpers.error('any.invalid') : value);
+
+// 商品搜索：优先 Elasticsearch，未配置或不可用时回退到 MySQL
 export const elasticsearchSearch = async (req: AuthRequest, res: Response) => {
+  const { error, value: params } = productSearchSchema.validate(req.query);
+  if (error) return res.status(400).json({ success: false, message: '搜索参数无效' });
   try {
-    const {
-      keyword = '',
-      category_id,
-      min_price,
-      max_price,
-      brand,
-      sort_by = 'sales',
-      sort_order = 'desc',
-      page = 1,
-      page_size = 20,
-    } = req.query;
+    const { products, total, engine } = await searchProducts(params);
 
-    // 参数转换
-    const searchParams = {
-      keyword: keyword.toString().trim(),
-      category_id: category_id ? parseInt(category_id.toString()) : undefined,
-      min_price: min_price ? parseFloat(min_price.toString()) : undefined,
-      max_price: max_price ? parseFloat(max_price.toString()) : undefined,
-      brand: brand?.toString(),
-      sort_by: sort_by as 'price' | 'sales' | 'created_at',
-      sort_order: sort_order as 'asc' | 'desc',
-      page: parseInt(page.toString()),
-      page_size: parseInt(page_size.toString()),
-    };
-
-    // 执行搜索
-    const result = await esSearchProducts(searchParams);
-
-    // 记录搜索历史
-    if (searchParams.keyword && result.total > 0) {
-      const userId = req.user?.userId;
-      await SearchHistoryModel.add(searchParams.keyword, userId, result.total);
+    if (params.keyword && total > 0) {
+      try {
+        await SearchHistoryModel.add(params.keyword, req.userId, total);
+      } catch (historyError) {
+        logger.warn({ err: historyError }, '搜索历史记录失败');
+      }
     }
 
     res.json({
       success: true,
-      data: result.products,
+      engine,
+      data: products,
       pagination: {
-        page: result.page,
-        page_size: result.page_size,
-        total: result.total,
-        total_pages: result.total_pages,
+        page: params.page,
+        page_size: params.page_size,
+        total,
+        total_pages: Math.ceil(total / params.page_size),
       },
     });
-  } catch (error) {
-    logger.error({ err: error }, 'Elasticsearch 搜索失败');
-    res.status(500).json({ 
-      success: false,
-      message: 'Elasticsearch 搜索失败，请稍后重试' 
-    });
+  } catch (searchError) {
+    logger.error({ err: searchError }, '商品搜索失败');
+    res.status(500).json({ success: false, message: '商品搜索失败，请稍后重试' });
   }
 };
-

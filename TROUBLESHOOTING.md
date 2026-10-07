@@ -20,7 +20,7 @@
 
 **错误信息**:
 ```
-unable to get image 'mongo:7': Cannot connect to the Docker daemon at 
+unable to get image 'mysql:8.0': Cannot connect to the Docker daemon at 
 unix:///Users/chenyinqi/.docker/run/docker.sock. Is the docker daemon running?
 ```
 
@@ -522,7 +522,6 @@ curl http://localhost:3001/api/products | jq '.products[0].main_image'
 |------|--------|------|------|
 | MySQL | ecommerce-mysql | 3306 | ✅ Running |
 | Redis | ecommerce-redis | 6379 | ✅ Running |
-| MongoDB | ecommerce-mongodb | 27017 | ✅ Running |
 | RabbitMQ | ecommerce-rabbitmq | 5672, 15672 | ✅ Running |
 | Elasticsearch | ecommerce-elasticsearch | 9200, 9300 | ✅ Running |
 | Backend API | ecommerce-backend | 3001 | ✅ Running |

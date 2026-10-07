@@ -24,7 +24,6 @@ export const errorTranslations: Record<string, string> = {
   '服务器内部错误': 'Internal server error',
   '未知错误': 'Unknown error',
   '检查超时': 'Health check timed out',
-  'MongoDB未初始化': 'MongoDB is not initialized',
   '参数错误': 'Invalid parameters',
   '分页参数无效': 'Invalid pagination parameters',
   '状态不能为空': 'Status is required',

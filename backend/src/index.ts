@@ -3,14 +3,12 @@ import { createApp } from './app';
 import logger from './utils/logger';
 import { connectDatabase } from './database/mysql';
 import { connectRedis } from './database/redis';
-import { connectMongoDB } from './database/mongodb';
 import { connectRabbitMQ } from './database/rabbitmq';
-import { checkESConnection } from './database/elasticsearch';
+import { checkESConnection, getESClient } from './database/elasticsearch';
 import { startOrderTimeoutChecker } from './services/order-timeout.service';
 import { startMessageQueueConsumers } from './services/message-queue.service';
 import { getPool } from './database/mysql';
 import { getRedisClient } from './database/redis';
-import mongoose from './database/mongodb';
 import { closeRabbitMQ } from './database/rabbitmq';
 const app = createApp();
 const PORT = process.env.PORT || 3001;
@@ -25,38 +23,31 @@ async function startServer() {
     await connectRedis();
     logger.info('✓ Redis连接成功');
     
-    await connectMongoDB();
-    logger.info('✓ MongoDB连接成功');
-    
-    // 连接 RabbitMQ
-    await connectRabbitMQ();
-    logger.info('✓ RabbitMQ连接成功');
-    
-    // 检查 Elasticsearch 连接（不阻塞启动）
-    checkESConnection().then((connected) => {
-      if (connected) {
-        logger.info('✓ Elasticsearch连接成功');
-      } else {
-        logger.warn('⚠️ Elasticsearch连接失败，搜索功能可能不可用');
-      }
-    });
+    // 可选依赖：连接失败或未配置都不阻塞启动
+    // RabbitMQ 每次（重）连成功后注册消费者；不可用时订单超时由定时任务取消
+    await connectRabbitMQ(startMessageQueueConsumers);
+
+    // Elasticsearch 不可用时商品搜索回退到 MySQL
+    if (getESClient()) {
+      checkESConnection().then((connected) => {
+        if (connected) {
+          logger.info('✓ Elasticsearch连接成功');
+        } else {
+          logger.warn('⚠️ Elasticsearch连接失败，商品搜索将回退到 MySQL');
+        }
+      });
+    } else {
+      logger.info('未配置 ELASTICSEARCH_URL，商品搜索使用 MySQL');
+    }
     
     // 启动订单超时检查服务
     startOrderTimeoutChecker();
     logger.info('✓ 订单超时检查服务已启动');
     
-    // 启动消息队列消费者
-    await startMessageQueueConsumers();
-    logger.info('✓ 消息队列消费者已启动');
-    
     // 启动服务器
     const server = app.listen(PORT, () => {
       logger.info(`\n🚀 服务器运行在 http://localhost:${PORT}`);
       logger.info(`📝 环境: ${process.env.NODE_ENV}`);
-      logger.info(`\n📚 新功能已启用:`);
-      logger.info(`  • Elasticsearch 商品搜索`);
-      logger.info(`  • RabbitMQ 消息队列`);
-      logger.info(`  • 优惠券系统`);
     });
 
     // 优雅关闭：先停新连接，再关各依赖连接
@@ -107,13 +98,6 @@ function gracefulShutdown(server: import('http').Server) {
         logger.info('Redis 连接已关闭');
       } catch (err) {
         logger.error({ err }, '关闭 Redis 连接失败');
-      }
-
-      try {
-        await mongoose.disconnect();
-        logger.info('MongoDB 连接已关闭');
-      } catch (err) {
-        logger.error({ err }, '关闭 MongoDB 连接失败');
       }
 
       clearTimeout(forceTimer);
