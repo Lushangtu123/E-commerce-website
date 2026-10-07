@@ -1,888 +1,352 @@
 # 系统架构文档 | System Architecture
 
-本文档详细描述了电商平台的系统架构设计。
+本文档描述电商平台当前代码的实际架构。规则和常用命令见 [CLAUDE.md](./CLAUDE.md)，接口细节见 [API.md](./API.md) 和运行时的 `/api-docs`。
 
-**版本**: 2.0.0  
-**最后更新**: 2025年10月31日
+**最后更新**: 2026年10月7日
 
 ---
 
-## 📋 目录
+## 目录
 
 - [架构概览](#架构概览)
 - [技术栈](#技术栈)
-- [系统分层](#系统分层)
-- [数据库设计](#数据库设计)
-- [缓存策略](#缓存策略)
-- [API 设计](#api-设计)
-- [安全架构](#安全架构)
-- [部署架构](#部署架构)
-- [扩展性设计](#扩展性设计)
-- [性能优化](#性能优化)
+- [前端](#前端)
+- [后端分层](#后端分层)
+- [数据库](#数据库)
+- [缓存与限流](#缓存与限流)
+- [认证与安全](#认证与安全)
+- [订单流程](#订单流程)
+- [搜索与推荐](#搜索与推荐)
+- [API 约定](#api-约定)
+- [部署](#部署)
+- [扩展性现状](#扩展性现状)
 
 ---
 
-## 🏗️ 架构概览
-
-### 整体架构图
+## 架构概览
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        用户层 (Client)                       │
-│                    Web Browser / Mobile                      │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTPS
-┌────────────────────────▼────────────────────────────────────┐
-│                     前端层 (Frontend)                        │
-│              Next.js 16 + React 19 + TypeScript              │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ 用户界面 │  │ 管理后台 │  │ 状态管理 │  │ 路由管理 │   │
-│  │  Pages   │  │  Admin   │  │ Zustand  │  │  Router  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└────────────────────────┬────────────────────────────────────┘
-                         │ REST API (JSON)
-┌────────────────────────▼────────────────────────────────────┐
-│                      API 网关 (Gateway)                      │
-│                    Express.js + Middleware                   │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ 认证中间 │  │ 限流中间 │  │ 日志中间 │  │ 错误处理 │   │
-│  │   件     │  │   件     │  │   件     │  │   中间件 │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                   业务逻辑层 (Business)                      │
-│                      Controllers + Models                    │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ 用户服务 │  │ 商品服务 │  │ 订单服务 │  │ 支付服务 │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ 购物车   │  │ 评论服务 │  │ 收藏服务 │  │ 搜索服务 │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│  ┌──────────┐  ┌──────────┐                                │
-│  │ 浏览历史 │  │ 管理服务 │                                │
-│  └──────────┘  └──────────┘                                │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                    数据访问层 (Data)                         │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  MySQL   │  │  Redis   │  │ RabbitMQ │  │Elasticsearch│ │
-│  │ 关系数据 │  │  缓存    │  │ 延迟队列 │  │  全文搜索  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ 浏览器                                                        │
+└───────────────┬──────────────────────────────────────────────┘
+                │ HTTPS（会话在 httpOnly Cookie 中）
+┌───────────────▼──────────────────────────────────────────────┐
+│ 前端 Next.js 16 + React 19（App Router）                       │
+│ 商品列表/详情服务端渲染 · 其余页面客户端渲染 · 中英文界面         │
+└───────────────┬──────────────────────────────────────────────┘
+                │ REST /api（JSON）
+┌───────────────▼──────────────────────────────────────────────┐
+│ 后端 Express 5（单进程模块化单体）                               │
+│ 中间件 → routes → controllers → services / models              │
+└──────┬──────────────┬───────────────┬──────────────┬─────────┘
+       │              │               │              │
+┌──────▼─────┐ ┌──────▼─────┐ ┌───────▼──────┐ ┌─────▼────────┐
+│ MySQL 8.0  │ │ Redis 7    │ │ Elasticsearch│ │ RabbitMQ 3   │
+│ 必需       │ │ 必需       │ │ 9（可选）    │ │ （可选）     │
+│ 数据与事务 │ │ 缓存/限流  │ │ 商品搜索     │ │ 订单超时队列 │
+└────────────┘ └────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ### 架构特点
 
-- **前后端分离**: 前端 Next.js，后端 Express.js
-- **模块化单体**: 按业务功能划分路由、控制器和服务，作为单个 Express 应用部署
-- **存储**: MySQL + Redis；Elasticsearch（搜索）和 RabbitMQ（订单超时延迟队列）为可选依赖，不可用时分别回退 MySQL 搜索和定时任务
-- **RESTful API**: 标准化的 API 设计
-- **容器化部署**: Docker + Docker Compose
+- **前后端分离**：前端 Next.js，后端 Express。Vercel 部署时，后端以函数形式嵌入 Next.js（见[部署](#部署)）。
+- **模块化单体**：路由、控制器、服务按业务域拆分，作为一个 Express 应用部署。
+- **必需依赖只有 MySQL 和 Redis**：`/health` 仅在两者异常时返回 503。未配置或连不上 Elasticsearch 时，搜索回退到 MySQL。没有 RabbitMQ 时，订单超时由定时任务取消。
+- **MySQL 是唯一的事实来源**：价格、库存和上架状态始终从 MySQL 读取，Elasticsearch 只决定匹配哪些商品以及排序。
 
 ---
 
-## 🛠️ 技术栈
+## 技术栈
 
-### 前端技术栈
+### 前端（`frontend/package.json`）
 
-```
-┌─────────────────────────────────────────┐
-│           前端技术栈                     │
-├─────────────────────────────────────────┤
-│ 框架层                                   │
-│  • Next.js 16 (React Framework)         │
-│  • React 19 (UI Library)                │
-│  • TypeScript 5 (Type System)           │
-├─────────────────────────────────────────┤
-│ 状态管理                                 │
-│  • Zustand 4 (Global State)             │
-│  • React Hooks (Local State)            │
-├─────────────────────────────────────────┤
-│ 样式层                                   │
-│  • TailwindCSS 4 (Utility CSS)          │
-│  • PostCSS (CSS Processing)             │
-├─────────────────────────────────────────┤
-│ 数据请求                                 │
-│  • Axios (HTTP Client)                  │
-│  • SWR (Data Fetching)                  │
-├─────────────────────────────────────────┤
-│ UI 组件                                  │
-│  • React Icons (Icons)                  │
-│  • React Hot Toast (Notifications)      │
-│  • Recharts (Charts)                    │
-│  • Swiper (Carousel)                    │
-└─────────────────────────────────────────┘
-```
+| 用途 | 依赖 |
+|------|------|
+| 框架 | Next.js 16（App Router）、React 19、TypeScript 5 |
+| 样式 | Tailwind CSS 4（`@tailwindcss/postcss`） |
+| 服务端状态 | TanStack React Query 5 |
+| 客户端状态 | Zustand 5（`useAuthStore`、`useCartStore`、`useLocaleStore`） |
+| HTTP | Axios |
+| UI | React Icons、React Hot Toast、Recharts 3（后台图表） |
+| 监控 | `@vercel/analytics`、`@vercel/speed-insights` |
+| 测试 | Vitest + Testing Library + happy-dom；Playwright 下单流程（`npm run test:e2e`） |
 
-### 后端技术栈
+### 后端（`backend/package.json`）
 
-```
-┌─────────────────────────────────────────┐
-│           后端技术栈                     │
-├─────────────────────────────────────────┤
-│ 运行时                                   │
-│  • Node.js 24+ (Runtime)                │
-│  • TypeScript 5 (Language)              │
-├─────────────────────────────────────────┤
-│ Web 框架                                 │
-│  • Express 4 (Web Framework)            │
-│  • CORS (Cross-Origin)                  │
-│  • Helmet (Security Headers)            │
-│  • Compression (Response Compression)   │
-├─────────────────────────────────────────┤
-│ 数据库                                   │
-│  • MySQL 8.0 (Relational DB)            │
-│  • mysql2 (MySQL Driver)                │
-│  • Redis 7 (Cache & Session)            │
-│  • ioredis (Redis Client)               │
-├─────────────────────────────────────────┤
-│ 认证与安全                               │
-│  • JWT (jsonwebtoken)                   │
-│  • Bcrypt (Password Hashing)            │
-│  • express-rate-limit (Rate Limiting)   │
-├─────────────────────────────────────────┤
-│ 工具库                                   │
-│  • dotenv (Environment Variables)       │
-│  • uuid (Unique ID Generation)          │
-│  • joi (Validation)                     │
-│  • multer (File Upload)                 │
-└─────────────────────────────────────────┘
-```
+| 用途 | 依赖 |
+|------|------|
+| 运行时 | Node.js 24、TypeScript 5.9（不能升到 7，见 CLAUDE.md） |
+| Web | Express 5、helmet、cors、compression、express-rate-limit 8 |
+| 数据 | mysql2（MySQL 8.0）、ioredis 6（Redis 7，固定 `protocol: 2`） |
+| 可选组件 | `@elastic/elasticsearch` 9（只能连 ES 9 服务器）、amqplib（RabbitMQ） |
+| 认证 | jsonwebtoken、bcryptjs |
+| 校验 | Joi，以及 `utils/*-validation.ts` 中的 `normalize*` 函数 |
+| 日志 | pino（开发环境用 pino-pretty） |
+| 文档 | swagger-jsdoc + swagger-ui-express |
+| 测试 | Jest + ts-jest + supertest |
 
 ---
 
-## 📚 系统分层
-
-### 1. 表现层 (Presentation Layer)
-
-**职责**: 用户界面展示和交互
-
-```typescript
-// 组件结构
-src/app/
-├── page.tsx                 // 首页
-├── products/
-│   ├── page.tsx            // 商品列表
-│   └── [id]/page.tsx       // 商品详情
-├── cart/page.tsx           // 购物车
-├── orders/page.tsx         // 订单列表
-├── admin/                  // 管理后台
-│   ├── dashboard/
-│   ├── products/
-│   ├── orders/
-│   └── users/
-└── components/             // 共享组件
-    ├── Header.tsx
-    ├── ProductCard.tsx
-    └── AdminLayout.tsx
-```
-
-**技术实现**:
-- Server-Side Rendering (SSR) 首屏渲染
-- Client-Side Rendering (CSR) 交互页面
-- 响应式设计，支持多端适配
-
-### 2. API 层 (API Layer)
-
-**职责**: 提供 RESTful API 接口
-
-```typescript
-// 路由结构
-src/routes/
-├── user.routes.ts          // 用户相关
-├── product.routes.ts       // 商品相关
-├── cart.routes.ts          // 购物车
-├── order.routes.ts         // 订单
-├── review.routes.ts        // 评论
-├── favorite.routes.ts      // 收藏
-├── search.routes.ts        // 搜索
-├── browse.routes.ts        // 浏览历史
-└── admin/                  // 管理员路由
-    ├── admin.routes.ts
-    ├── admin-product.routes.ts
-    ├── admin-order.routes.ts
-    └── admin-user.routes.ts
-```
-
-**中间件链**:
-```
-Request → CORS → Helmet → Compression → Rate Limit → Auth → Controller → Response
-```
-
-### 3. 业务逻辑层 (Business Logic Layer)
-
-**职责**: 处理业务逻辑和数据验证
-
-```typescript
-// 控制器结构
-src/controllers/
-├── user.controller.ts      // 用户业务逻辑
-├── product.controller.ts   // 商品业务逻辑
-├── cart.controller.ts      // 购物车业务逻辑
-├── order.controller.ts     // 订单业务逻辑
-└── ...
-
-// 典型控制器结构
-export async function createOrder(req: Request, res: Response) {
-  try {
-    // 1. 参数验证
-    const { address_id, items } = req.body;
-    
-    // 2. 业务逻辑
-    const order = await orderModel.create({...});
-    
-    // 3. 返回结果
-    return res.status(201).json({ order });
-  } catch (error) {
-    // 4. 错误处理
-    return res.status(500).json({ error: error.message });
-  }
-}
-```
-
-### 4. 数据访问层 (Data Access Layer)
-
-**职责**: 数据库操作和数据持久化
-
-```typescript
-// 模型结构
-src/models/
-├── user.model.ts           // 用户数据模型
-├── product.model.ts        // 商品数据模型
-├── order.model.ts          // 订单数据模型
-├── cart.model.ts           // 购物车数据模型
-└── ...
-
-// 典型模型方法
-export const productModel = {
-  // 查询
-  findById: async (id: number) => {...},
-  findAll: async (filters: any) => {...},
-  
-  // 创建
-  create: async (data: any) => {...},
-  
-  // 更新
-  update: async (id: number, data: any) => {...},
-  
-  // 删除
-  delete: async (id: number) => {...}
-};
-```
-
-### 5. 数据库层 (Database Layer)
-
-**职责**: 数据存储和管理
+## 前端
 
 ```
-MySQL (主数据库)
-├── users                   // 用户表
-├── products                // 商品表
-├── product_skus            // SKU表
-├── orders                  // 订单表
-├── order_items             // 订单详情表
-├── cart                    // 购物车表
-├── reviews                 // 评论表
-├── favorites               // 收藏表
-├── search_history          // 搜索历史表
-└── ...
-
-Redis (缓存)
-├── product:hot             // 热门商品
-├── product:{id}            // 商品详情
-├── user:session:{id}       // 用户会话
-└── ...
-
+frontend/src/
+├── app/                      # App Router 页面
+│   ├── page.tsx              # 首页
+│   ├── products/             # 列表 + [id] 详情（服务端读取，可被搜索引擎收录）
+│   ├── cart/  orders/[id]/  coupons/  my/coupons/  favorites/  history/
+│   ├── login/  register/  forgot-password/  reset-password/
+│   ├── profile/（address/、settings/）
+│   ├── help/  shipping/  returns/        # 信息页
+│   ├── admin/                # 后台：dashboard、products、orders、after-sales、
+│   │                         #       users、coupons、logs、login
+│   ├── sitemap.ts  robots.ts
+│   └── error.tsx  global-error.tsx  not-found.tsx
+├── components/               # 共享组件（Header、ProductDetail、AdminLayout 等）
+├── hooks/                    # React Query 封装、会话 hooks
+├── lib/
+│   ├── api/                  # client.ts（Axios 实例）+ 按领域拆分的接口函数
+│   ├── site.ts               # 服务端读取 API（fetchApiResult，带 revalidate）
+│   ├── i18n.ts  *-translations.ts  error-translations.ts
+│   └── query-client.ts
+├── store/                    # Zustand
+└── pages/api/[[...path]].ts  # 嵌入式后端入口（仅 Vercel）
 ```
+
+- **服务端渲染**：商品列表（`revalidate: 60`）、商品详情（默认 300 秒）和 sitemap（3600 秒）在服务端读取 API。容器内通过 `INTERNAL_API_URL` 访问后端。API 不可用时页面照常渲染；已删除或已下架的商品返回真正的 404。
+- **客户端数据**：使用 React Query。查询失败不会自动重试，也不会在窗口聚焦时重新请求，页面会显示重试按钮。
+- **API 客户端**（`lib/api/client.ts`）：
+  - 设置 `withCredentials` 和 `X-Requested-With: XMLHttpRequest`，并删除调用方传入的 `Authorization` 头。
+  - 每个请求都记下自己属于哪次登录。迟到的 401 不会登出更新的登录；其他标签页切换账号后，请求会被拒绝并提示刷新。
+- **会话状态**：令牌只在 httpOnly Cookie 中，页面脚本读不到。localStorage 只存会话 id 和用户资料，用来在标签页之间同步登录状态。
+- **国际化**：界面支持中英文切换，商品、用户和地址等内容保持原文。后端返回中文错误消息，前端用 `error-translations.ts` 翻译成英文。
 
 ---
 
-## 🗄️ 数据库设计
-
-### ER 图
+## 后端分层
 
 ```
-┌─────────────┐         ┌─────────────┐         ┌─────────────┐
-│    Users    │         │  Products   │         │   Orders    │
-├─────────────┤         ├─────────────┤         ├─────────────┤
-│ id (PK)     │         │ id (PK)     │         │ id (PK)     │
-│ username    │         │ name        │         │ order_no    │
-│ email       │◄───┐    │ price       │◄───┐    │ user_id (FK)│
-│ password    │    │    │ stock       │    │    │ total_amount│
-│ phone       │    │    │ category_id │    │    │ status      │
-│ created_at  │    │    │ status      │    │    │ created_at  │
-└─────────────┘    │    └─────────────┘    │    └─────────────┘
-                   │            │           │            │
-                   │            │           │            │
-                   │    ┌───────▼───────┐   │    ┌───────▼───────┐
-                   │    │ Product_SKUs  │   │    │ Order_Items   │
-                   │    ├───────────────┤   │    ├───────────────┤
-                   │    │ id (PK)       │   │    │ id (PK)       │
-                   │    │ product_id(FK)│   │    │ order_id (FK) │
-                   │    │ sku_name      │   │    │ product_id(FK)│
-                   │    │ price         │   │    │ quantity      │
-                   │    │ stock         │   │    │ price         │
-                   │    └───────────────┘   │    └───────────────┘
-                   │                        │
-           ┌───────┴────────┐       ┌──────┴──────┐
-           │     Cart       │       │  Favorites  │
-           ├────────────────┤       ├─────────────┤
-           │ id (PK)        │       │ id (PK)     │
-           │ user_id (FK)   │       │ user_id (FK)│
-           │ product_id (FK)│       │ product_id  │
-           │ sku_id (FK)    │       │ created_at  │
-           │ quantity       │       └─────────────┘
-           └────────────────┘
+backend/src/
+├── app.ts            # createApp()：中间件与路由挂载
+├── index.ts          # 常驻进程：连接依赖、启动定时任务、监听端口、优雅关闭
+├── serverless.ts     # Vercel 函数入口：每次调用确保 MySQL/Redis 已连接
+├── load-env.ts       # 必须是上面三个入口文件的第一个 import
+├── routes/           # 20 个路由文件，按业务域平铺（admin-*.routes.ts 为后台）
+├── controllers/      # 请求校验、调用服务/模型、把领域错误映射为 HTTP 状态码
+├── services/         # 跨表业务：order、purchase-items、after-sales、order-timeout、
+│                     # message-queue、product-search、recommendation、password-*
+├── models/           # 单表/单领域的 SQL 访问
+├── middleware/       # auth、admin-auth、rate-limit、request-logger 等
+├── database/         # mysql/redis/rabbitmq/elasticsearch 连接、迁移、seed、sync-es
+└── utils/            # 校验、金额、会话 Cookie、环境校验、OpenAPI、health
 ```
 
-### 表关系说明
+### 中间件顺序（`app.ts`）
 
-1. **用户 → 订单**: 一对多 (一个用户可以有多个订单)
-2. **用户 → 购物车**: 一对多 (一个用户可以有多个购物车项)
-3. **用户 → 收藏**: 一对多 (一个用户可以收藏多个商品)
-4. **商品 → SKU**: 一对多 (一个商品可以有多个SKU)
-5. **订单 → 订单项**: 一对多 (一个订单包含多个商品)
-6. **商品 → 评论**: 一对多 (一个商品可以有多个评论)
-
-### 索引策略
-
-```sql
--- 主键索引（自动创建）
-PRIMARY KEY (id)
-
--- 唯一索引
-UNIQUE INDEX idx_email ON users(email)
-UNIQUE INDEX idx_order_no ON orders(order_no)
-
--- 普通索引
-INDEX idx_user_id ON orders(user_id)
-INDEX idx_product_id ON order_items(product_id)
-INDEX idx_category_id ON products(category_id)
-INDEX idx_status ON orders(status)
-
--- 复合索引
-INDEX idx_user_product ON favorites(user_id, product_id)
-INDEX idx_user_status ON orders(user_id, status)
-
--- 全文索引
-FULLTEXT INDEX idx_name ON products(name)
 ```
+helmet → cors → compression → express.json / urlencoded（上限 1mb）
+→ req.body 默认 {} → 响应 Content-Type → /uploads 静态文件 → requestLogger
+→ /health、/api/health（不限流）
+→ /api-docs、/api/openapi.json
+→ /api/internal（在限流之前）
+→ /api 通用限流 → 业务路由（各路由自带 authMiddleware / authenticateAdmin / requirePermission）
+→ 404 → 错误处理（413 请求体过大、400 JSON 无效，其余 500）
+```
+
+### 路由挂载
+
+| 前缀 | 路由文件 |
+|------|----------|
+| `/api/users` | user（含注册、登录、改密、找回密码） |
+| `/api/products` | product |
+| `/api/cart` | cart |
+| `/api/orders` | after-sales、order |
+| `/api/payments` | payment（`GET /settings`：模拟支付是否可用） |
+| `/api/addresses`、`/api/reviews`、`/api/favorites` | address、review、favorite |
+| `/api/search`、`/api/browse`、`/api/recommendations` | search、browse、recommendation |
+| `/api/coupons` | coupon |
+| `/api/admin` | admin（登录、登出、仪表盘、日志等） |
+| `/api/admin/products`、`/orders`、`/after-sales`、`/users`、`/coupons` | 对应的 admin-*.routes.ts |
+| `/api/internal` | internal（`POST /order-timeouts`，凭 `CRON_SECRET` 调用） |
+
+### 错误处理约定
+
+- 输入用 Joi 或 `normalize*` 校验，拒绝未知字段，坏输入返回 400。
+- 领域错误使用 `OrderError`（即 `PurchaseError`）、`SKUError`、`AddressError` 等类，`statusCode` 默认 400，控制器用 `res.status(error.statusCode)` 返回。
+- 未预期的异常记录到 pino 日志，返回 `500 { error: '服务器内部错误' }`。只有开发环境附带 `message`。
 
 ---
 
-## 💾 缓存策略
+## 数据库
 
-### 缓存架构
+MySQL 8.0，共 24 张表。`npm run migrate`（开发用 `migrate:dev`）执行 `database/migrate.ts`，它先建基础表，再依次运行 coupon、sku、address、review、account-security、fulfillment 六个迁移。迁移都可重复执行。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    应用层                                │
-└────────────┬────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│                  L1 缓存 (Redis)                         │
-│  • 热门商品 (10min TTL)                                  │
-│  • 商品详情 (5min TTL)                                   │
-│  • 用户会话 (7day TTL)                                   │
-│  • 分类数据 (1hour TTL)                                  │
-└────────────┬────────────────────────────────────────────┘
-             │ Cache Miss
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│                  L2 缓存 (Query Cache)                   │
-│  • MySQL Query Cache                                     │
-│  • 应用层查询结果缓存                                     │
-└────────────┬────────────────────────────────────────────┘
-             │ Cache Miss
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│                    数据库 (MySQL)                        │
-└─────────────────────────────────────────────────────────┘
-```
+| 领域 | 表 |
+|------|----|
+| 用户 | `users`、`shipping_addresses`、`password_reset_tokens` |
+| 商品 | `products`、`product_skus`、`categories`、`reviews` |
+| 交易 | `cart`、`orders`、`order_items`、`after_sales_requests` |
+| 优惠券 | `coupons`、`user_coupons`、`coupon_usage_logs` |
+| 用户行为 | `favorites`、`search_history`、`browse_history` |
+| 后台 | `admins`、`roles`、`permissions`、`role_permissions`、`admin_logs` |
+| 统计 | `traffic_statistics`、`page_visits` |
 
-### 缓存键设计
+### 关键字段与约束
 
-```typescript
-// 缓存键命名规范
-const CACHE_KEYS = {
-  // 商品相关
-  PRODUCT_DETAIL: (id: number) => `product:${id}`,
-  PRODUCT_HOT: 'product:hot',
-  PRODUCT_LIST: (page: number, limit: number) => `product:list:${page}:${limit}`,
-  
-  // 用户相关
-  USER_SESSION: (userId: number) => `user:session:${userId}`,
-  USER_CART: (userId: number) => `user:cart:${userId}`,
-  
-  // 分类相关
-  CATEGORIES: 'categories:all',
-  CATEGORY_PRODUCTS: (catId: number) => `category:${catId}:products`
-};
-
-// TTL 配置
-const CACHE_TTL = {
-  PRODUCT_HOT: 600,      // 10分钟
-  PRODUCT_DETAIL: 300,   // 5分钟
-  CATEGORIES: 3600,      // 1小时
-  USER_SESSION: 604800   // 7天
-};
-```
-
-### 缓存更新策略
-
-```typescript
-// 1. Cache Aside (旁路缓存)
-async function getProduct(id: number) {
-  // 1. 先查缓存
-  const cached = await redis.get(CACHE_KEYS.PRODUCT_DETAIL(id));
-  if (cached) return JSON.parse(cached);
-  
-  // 2. 缓存未命中，查数据库
-  const product = await db.query('SELECT * FROM products WHERE id = ?', [id]);
-  
-  // 3. 写入缓存
-  await redis.setex(
-    CACHE_KEYS.PRODUCT_DETAIL(id),
-    CACHE_TTL.PRODUCT_DETAIL,
-    JSON.stringify(product)
-  );
-  
-  return product;
-}
-
-// 2. Write Through (写穿)
-async function updateProduct(id: number, data: any) {
-  // 1. 更新数据库
-  await db.query('UPDATE products SET ? WHERE id = ?', [data, id]);
-  
-  // 2. 更新缓存
-  const product = await db.query('SELECT * FROM products WHERE id = ?', [id]);
-  await redis.setex(
-    CACHE_KEYS.PRODUCT_DETAIL(id),
-    CACHE_TTL.PRODUCT_DETAIL,
-    JSON.stringify(product)
-  );
-}
-
-// 3. Cache Invalidation (缓存失效)
-async function deleteProduct(id: number) {
-  // 1. 删除数据库记录
-  await db.query('DELETE FROM products WHERE id = ?', [id]);
-  
-  // 2. 删除缓存
-  await redis.del(CACHE_KEYS.PRODUCT_DETAIL(id));
-  
-  // 3. 清除相关缓存
-  await redis.del('product:hot');
-  await redis.del('product:list:*');
-}
-```
+- `orders.status`：`0` 待支付、`1` 已支付、`2` 已发货、`3` 已完成、`4` 已取消。
+- `after_sales_requests.status`：`requested`、`approved`、`rejected`、`withdrawn`。每个订单最多一条售后申请。审核通过不会自动退款。
+- `products.status`、`product_skus.status`：`1` 上架/启用，`0` 下架/禁用。
+- `users.auth_version`、`admins.auth_version`：会话版本号，见[认证与安全](#认证与安全)。
+- 唯一约束：购物车 `(user_id, product_id, sku_key)`、收藏 `(user_id, product_id)`、评价 `(order_id, product_id)`、`role_permissions (role_id, permission_id)`。
+- 全文索引：`products` 的 `FULLTEXT idx_title (title)`，供 MySQL 搜索使用。
+- 其余普通索引覆盖常用过滤条件，例如 `orders` 的 user/status/created/order_no、`products` 的 category/price/status、`browse_history (user_id, browsed_at)`。
 
 ---
 
-## 🔌 API 设计
+## 缓存与限流
 
-### RESTful 设计原则
+Redis 键统一带前缀 `REDIS_KEY_PREFIX`（默认 `ecommerce:`）。
 
-```
-资源命名:
-GET    /api/products          # 获取商品列表
-GET    /api/products/:id      # 获取单个商品
-POST   /api/products          # 创建商品
-PUT    /api/products/:id      # 更新商品
-DELETE /api/products/:id      # 删除商品
+| 键 | 内容 | TTL | 失效时机 |
+|----|------|-----|----------|
+| `product:{id}` | 商品详情（含上架 SKU、汇总库存、最低价） | 300 秒 | 后台改商品或 SKU、下单、取消等改动库存时删除 |
+| `products:hot` | 热门商品前 100 个 | 600 秒 | 同上 |
+| `limits:api:*`、`limits:auth:*` | 限流计数 | 与限流窗口相同 | 自动过期 |
 
-子资源:
-GET    /api/products/:id/skus      # 获取商品的SKU列表
-POST   /api/products/:id/skus      # 为商品添加SKU
-GET    /api/products/:id/reviews   # 获取商品的评论
+- 读取商品详情时，先从 MySQL 确认商品存在且已上架，再使用缓存，所以下架的商品不会因为缓存而仍然可买。
+- Redis 读写失败只记警告，商品详情改从数据库读取。
+- 没有会话缓存（会话是无状态 JWT），也没有多级缓存。
 
-操作:
-POST   /api/orders/:id/pay         # 支付订单
-POST   /api/orders/:id/cancel      # 取消订单
-POST   /api/orders/:id/confirm     # 确认收货
-```
+### 限流（`middleware/rate-limit.ts`、`password-recovery-limit.ts`）
 
-### 统一响应格式
+| 限流器 | 默认值 | 环境变量 |
+|--------|--------|----------|
+| `apiLimiter`（所有 `/api`，`/api/internal` 除外） | 每个 IP 每 60 秒 100 次 | `RATE_LIMIT_WINDOW`、`RATE_LIMIT_MAX` |
+| `authLimiter`（顾客和管理员登录、注册、改密码、重置密码） | 每 60 秒 10 次 | `RATE_LIMIT_AUTH_MAX` |
+| `passwordRecoveryLimiter`（申请找回密码） | 每 15 分钟 5 次 | — |
 
-```typescript
-// 成功响应
-interface SuccessResponse<T> {
-  success: true;
-  data: T;
-  message?: string;
-}
-
-// 错误响应
-interface ErrorResponse {
-  success: false;
-  error: string;
-  code: string;
-  details?: any;
-}
-
-// 分页响应
-interface PaginatedResponse<T> {
-  items: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-```
-
-### API 版本控制
-
-```
-当前版本: v1 (默认)
-/api/products          # v1 (默认)
-/api/v1/products       # v1 (显式)
-/api/v2/products       # v2 (未来版本)
-```
+计数默认存在进程内存里。在 Vercel 上，或设置了 `RATE_LIMIT_STORE=redis` 时，改存 Redis（`RedisRateLimitStore`），多个实例共享同一份计数。
 
 ---
 
-## 🔒 安全架构
+## 认证与安全
 
-### 认证流程
+### 会话
 
 ```
-┌──────────┐                                    ┌──────────┐
-│  Client  │                                    │  Server  │
-└─────┬────┘                                    └────┬─────┘
-      │                                              │
-      │  1. POST /api/users/login                   │
-      │  { email, password }                         │
-      ├─────────────────────────────────────────────>│
-      │                                              │
-      │                           2. 验证用户名密码   │
-      │                           3. 生成 JWT Token  │
-      │                                              │
-      │  4. Response                                 │
-      │  { token, user }                             │
-      │<─────────────────────────────────────────────┤
-      │                                              │
-      │  5. 存储 Token (localStorage)                │
-      │                                              │
-      │  6. GET /api/products                        │
-      │  Authorization: Bearer <token>               │
-      ├─────────────────────────────────────────────>│
-      │                                              │
-      │                           7. 验证 Token      │
-      │                           8. 提取用户信息     │
-      │                           9. 处理请求         │
-      │                                              │
-      │  10. Response                                │
-      │  { products }                                │
-      │<─────────────────────────────────────────────┤
+POST /api/users/login            POST /api/admin/login
+        │                                │
+        ▼                                ▼
+JWT { userId, username, email,    JWT { adminId, username, roleId,
+      type:'user', authVersion }        type:'admin', authVersion }
+有效期 JWT_EXPIRES_IN（默认 7d）    有效期 24h
+        │                                │
+        ▼                                ▼
+Cookie customer_session           Cookie admin_session
+（httpOnly、SameSite=Lax、Path=/api、生产环境 Secure）
 ```
 
-### JWT Token 结构
+- **密钥**：顾客和管理员共用 `JWT_SECRET`，只通过 `utils/jwt-secret.ts` 的 `jwtSecret()` 读取，令牌身份靠 `type` 字段区分。生产环境缺失或使用弱密钥时，`validateEnv()` 会拒绝启动。
+- **令牌来源**：显式的 `Authorization: Bearer` 头优先，供 API 客户端和测试使用；否则读取 Cookie。
+- **CSRF**：用 Cookie 认证的写请求必须带 `X-Requested-With`，否则返回 403。`optionalAuth` 遇到这类请求时按匿名处理。
+- **会话撤销**：每个请求都会核对令牌里的 `authVersion` 与数据库中的值。顾客改密码或重置密码、管理员登出时，版本号加一，旧令牌立即失效。
+- **后台权限**：`authenticateAdmin` 校验管理员令牌和账号状态，`requirePermission(code)` 按 `roles → role_permissions → permissions` 检查权限码，超级管理员不受限制。后台操作写入 `admin_logs`。
+- **密码**：bcryptjs，注册用 10 轮，改密码和重置用 12 轮。找回密码使用一次性令牌（`password_reset_tokens`），邮件经 Resend 发送，未配置 Resend 时该功能关闭。
 
-```typescript
-// Token Payload
-interface JWTPayload {
-  userId: number;
-  email: string;
-  role: 'user' | 'admin';
-  iat: number;  // issued at
-  exp: number;  // expiration
-}
+### 其他措施
 
-// Token 生成
-const token = jwt.sign(
-  { userId: user.id, email: user.email, role: 'user' },
-  process.env.JWT_SECRET,
-  { expiresIn: '7d' }
-);
-
-// Token 验证
-const decoded = jwt.verify(token, process.env.JWT_SECRET);
-```
-
-### 安全措施
-
-```typescript
-// 1. 密码加密
-const hashedPassword = await bcrypt.hash(password, 10);
-
-// 2. SQL 注入防护
-const [users] = await pool.execute(
-  'SELECT * FROM users WHERE email = ?',
-  [email]
-);
-
-// 3. XSS 防护
-app.use(helmet());
-
-// 4. CORS 配置
-app.use(cors({
-  origin: process.env.CORS_ORIGIN,
-  credentials: true
-}));
-
-// 5. 限流
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 100
-});
-app.use('/api/', limiter);
-
-// 6. 请求体大小限制
-app.use(express.json({ limit: '10mb' }));
-```
+- 所有 SQL 都使用参数化查询（mysql2 的 `?` 占位符）。
+- `helmet` 设置安全头，Next.js 在 `next.config.js` 中也为所有响应加了基础安全头。
+- CORS：`CORS_ORIGIN` 中列出的来源可以带 Cookie。生产环境必须配置它；开发环境未配置时允许任何来源，但不带凭据。
+- 请求体上限 1mb。最大的合法请求是批量创建 100 个 SKU，约 350KB。
+- 模拟支付只在显式开启的本地和 Preview 环境可用，生产环境禁用。
 
 ---
 
-## 🐳 部署架构
+## 订单流程
 
-### Docker 容器架构
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Docker Network                         │
-│                  (ecommerce-network)                     │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   Frontend   │  │   Backend    │  │    MySQL     │  │
-│  │   (Next.js)  │  │  (Express)   │  │   (8.0)      │  │
-│  │   Port 3000  │  │  Port 3001   │  │  Port 3306   │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │    Redis     │  │   RabbitMQ   │  │Elasticsearch │  │
-│  │    (7.x)     │  │    (3.x)     │  │   (9.5)      │  │
-│  │  Port 6379   │  │  Port 5672   │  │  Port 9200   │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
-│                                                          │
-│  ┌──────────────┐                                       │
-│  │   RabbitMQ   │                                       │
-│  │    (3.x)     │                                       │
-│  │  Port 5672   │                                       │
-│  │  Port 15672  │                                       │
-│  └──────────────┘                                       │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 生产环境架构
-
-```
-                    ┌──────────────┐
-                    │   用户请求    │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │   CDN/DNS    │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │ Load Balancer│
-                    │   (Nginx)    │
-                    └──────┬───────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         │                 │                 │
-    ┌────▼────┐      ┌────▼────┐      ┌────▼────┐
-    │Frontend │      │Frontend │      │Frontend │
-    │Instance1│      │Instance2│      │Instance3│
-    └────┬────┘      └────┬────┘      └────┬────┘
-         │                 │                 │
-         └─────────────────┼─────────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │ API Gateway  │
-                    └──────┬───────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         │                 │                 │
-    ┌────▼────┐      ┌────▼────┐      ┌────▼────┐
-    │Backend  │      │Backend  │      │Backend  │
-    │Instance1│      │Instance2│      │Instance3│
-    └────┬────┘      └────┬────┘      └────┬────┘
-         │                 │                 │
-         └─────────────────┼─────────────────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         │                 │                 │
-    ┌────▼────┐      ┌────▼────┐      ┌────▼────┐
-    │ MySQL   │      │  Redis  │      │RabbitMQ │
-    │ Master  │      │ Cluster │      │ Cluster │
-    └────┬────┘      └─────────┘      │  (opt)  │
-         │                             └─────────┘
-    ┌────▼────┐
-    │ MySQL   │
-    │ Slave   │
-    └─────────┘
-```
+1. **预览与下单**（`services/order.service.ts`、`purchase-items.service.ts`）：金额一律用整数"分"计算（`couponMoneyToCents`、`calculateDiscountCents`）。下单、扣库存和核销优惠券在同一个 MySQL 事务中完成，按固定顺序加 `FOR UPDATE` 行锁：用户 → 地址 → 商品 → SKU → 优惠券。
+2. **状态流转**（`transitionOrder`）：支付、发货（承运商和运单号）、确认收货和取消都要先锁订单行；取消时恢复库存。事务提交后删除相关商品的缓存。
+3. **超时取消**（创建后 30 分钟未支付）：
+   - 配置了 RabbitMQ 时，下单会向 `order.timeout_check.delay` 队列发送一条带 30 分钟 TTL 的消息。消息过期后经死信路由进入 `order.timeout_check`，由消费者检查订单并取消。这种方式不需要延迟插件。
+   - 常驻进程还会每 5 分钟扫描一次超时订单（`startOrderTimeoutChecker`），作为兜底。
+   - Serverless 环境没有常驻进程，由外部定时任务调用 `POST /api/internal/order-timeouts`（`CRON_SECRET`）。
+4. **售后**：订单可以提交、撤回售后申请，后台审核通过或驳回。
 
 ---
 
-## 📈 扩展性设计
+## 搜索与推荐
 
-> 本节是扩展规划：当前实现为单个 Express 应用和一个 MySQL 连接池，尚未实现读写分离或分库分表。
-
-### 水平扩展
-
-```typescript
-// 1. 无状态设计
-// ❌ 不要在服务器内存中存储状态
-let userSessions = {};  // 错误
-
-// ✅ 使用 Redis 存储状态
-await redis.set(`session:${userId}`, JSON.stringify(session));
-
-// 2. 数据库连接池
-const pool = mysql.createPool({
-  connectionLimit: 10,
-  host: process.env.DB_HOST,
-  // ...
-});
-
-// 3. 负载均衡
-// 使用 Nginx 或云服务的负载均衡器
-```
-
-### 垂直扩展
-
-```yaml
-# Docker Compose 资源限制
-services:
-  backend:
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
-```
-
-### 数据库扩展
-
-```
-读写分离:
-┌─────────┐
-│ Master  │ ← Write Operations
-└────┬────┘
-     │ Replication
-     ├──────────┬──────────┐
-     │          │          │
-┌────▼────┐┌───▼────┐┌───▼────┐
-│ Slave 1 ││ Slave 2││ Slave 3│ ← Read Operations
-└─────────┘└────────┘└────────┘
-
-分库分表:
-Users DB
-├── users_0 (id % 4 = 0)
-├── users_1 (id % 4 = 1)
-├── users_2 (id % 4 = 2)
-└── users_3 (id % 4 = 3)
-```
+- **搜索**（`services/product-search.service.ts`）：配置了 `ELASTICSEARCH_URL` 时，Elasticsearch 返回匹配的商品 id 和排序，再从 MySQL 读取商品的当前数据。ES 未配置或出错时回退到 MySQL 查询。结果里带 `engine: 'elasticsearch' | 'mysql'`。
+- **索引同步**：后台写商品或 SKU 后，`afterProductWrite` 调用 `syncProductsToSearchIndex` 增量同步。`npm run sync-es` 做全量重建。
+- **推荐**（`services/recommendation.service.ts`）：全部是 MySQL 查询，包括按浏览历史中的分类推荐、同分类相关商品和热门商品，只返回上架且有库存的商品。
+- **用户行为**：搜索历史、浏览历史和收藏分别存在对应的表中。
 
 ---
 
-## ⚡ 性能优化
+## API 约定
 
-### 前端优化
-
-```typescript
-// 1. 代码分割
-const AdminDashboard = dynamic(() => import('./admin/dashboard'), {
-  loading: () => <Loading />,
-  ssr: false
-});
-
-// 2. 图片优化
-import Image from 'next/image';
-<Image
-  src="/product.jpg"
-  width={300}
-  height={300}
-  loading="lazy"
-  alt="Product"
-/>
-
-// 3. 缓存策略
-export const revalidate = 60; // ISR: 60秒重新验证
-```
-
-### 后端优化
-
-```typescript
-// 1. 数据库查询优化
-// ❌ N+1 查询问题
-for (const order of orders) {
-  const items = await db.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-}
-
-// ✅ 使用 JOIN
-const orders = await db.query(`
-  SELECT o.*, oi.*
-  FROM orders o
-  LEFT JOIN order_items oi ON o.id = oi.order_id
-  WHERE o.user_id = ?
-`, [userId]);
-
-// 2. 批量操作
-// ❌ 循环插入
-for (const item of items) {
-  await db.query('INSERT INTO cart ...', [item]);
-}
-
-// ✅ 批量插入
-await db.query('INSERT INTO cart VALUES ?', [items.map(i => [i.user_id, i.product_id])]);
-
-// 3. 异步处理
-// 发送邮件等耗时操作放入队列
-await rabbitmq.sendToQueue('email', { type: 'order_confirmation', orderId });
-```
-
-### 监控指标
-
-```typescript
-// 关键性能指标 (KPI)
-const metrics = {
-  // 响应时间
-  apiResponseTime: '<100ms (P95)',
-  pageLoadTime: '<2s',
-  
-  // 吞吐量
-  requestsPerSecond: '1000 RPS',
-  
-  // 可用性
-  uptime: '99.9%',
-  
-  // 错误率
-  errorRate: '<0.1%',
-  
-  // 缓存命中率
-  cacheHitRate: '>80%'
-};
-```
+- **路径**：资源前缀见[路由挂载](#路由挂载)，没有 `/api/v1` 这类版本前缀。
+- **参数**：路由参数一律是字符串，用 `positiveId()` 或 `req.params.id as string` 解析。
+- **成功响应**：直接返回资源对象，没有统一的 `success/data` 外层包装，例如 `{ product }`、`{ products }`、`{ order }`。少数后台接口（如优惠券）另带 `success: true`。
+- **分页**：常见格式为 `pagination: { page, limit, total, totalPages }`，后台优惠券接口用的是 `total_pages`。
+- **错误响应**：`{ error: '<中文消息>' }`，状态码 400、401、403、404、409、413、503 或 500。
+- **文档**：Swagger UI 在 `/api-docs`，JSON 在 `/api/openapi.json`；`npm run build` 会同时生成 OpenAPI 文件。
 
 ---
 
-## 📚 相关文档
+## 部署
 
+### Docker Compose（`docker-compose.yml`）
+
+| 服务 | 镜像 | 端口 |
+|------|------|------|
+| mysql | mysql:8.0 | `127.0.0.1:3306` |
+| redis | redis:7-alpine | `127.0.0.1:6379` |
+| rabbitmq | rabbitmq:3-management-alpine | `127.0.0.1:5672`、`127.0.0.1:15672` |
+| elasticsearch | elasticsearch:9.5.5 | `127.0.0.1:9200` |
+| backend | `backend/Dockerfile` | `3001` |
+| frontend | `frontend/Dockerfile` | `3000` |
+
+所有服务都在 `ecommerce-network` 网络中，基础设施端口只绑定本机。启动前必须在根目录 `.env` 中设置 `JWT_SECRET`。
+
+### 本地开发
+
+前后端分别启动：后端 `npm run dev`，端口 3001；前端 `npm run dev`，端口 3000。MySQL 和 Redis 可以用 Compose 启动。
+
+### Vercel
+
+- `frontend/src/pages/api/[[...path]].ts` 在 `ECOMMERCE_SERVERLESS_API=true` 时加载编译好的 `backend/dist/serverless`，同一次部署同时提供前端和 `/api`。
+- 函数中没有端口监听、RabbitMQ 消费者或定时器。每次调用确保 MySQL 和 Redis 已连接，连接池上限默认 2（`DB_CONNECTION_LIMIT`）。
+- Redis 通常用 Upstash，详见 [docs/VERCEL_UPSTASH.md](./docs/VERCEL_UPSTASH.md)。
+
+### 运维接口
+
+- `GET /health`（也可用 `/api/health`）：返回 MySQL、Redis 以及已配置的 RabbitMQ、Elasticsearch 的状态。只有 MySQL 或 Redis 异常时返回 503。
+- 常驻进程收到退出信号时，先停止接收新连接，再关闭 MySQL、Redis 和 RabbitMQ 连接。
+
+---
+
+## 扩展性现状
+
+当前实现是一个 Express 进程加一个 MySQL 连接池（默认 10 个连接），没有读写分离、分库分表或网关层。下列特性已经可以支持多实例部署：
+
+- 会话是无状态 JWT，放在 Cookie 中，服务器不在内存里保存会话。
+- 限流计数可以切换为存 Redis（`RATE_LIMIT_STORE=redis`）。
+- 库存和优惠券的并发安全由 MySQL 行锁保证，不依赖进程内的锁。
+
+多实例部署时需要注意：
+
+- 内存限流在每个实例中单独计数，应改为存 Redis。
+- 每个常驻实例都会运行 5 分钟一次的超时扫描。取消订单时会锁行并检查状态，所以多个实例重复扫描不会重复取消，但会产生多余的查询。
+
+---
+
+## 相关文档
+
+- [CLAUDE.md](./CLAUDE.md)：开发规则、命令与已知坑
 - [API 文档](./API.md)
 - [部署文档](./DEPLOYMENT.md)
 - [环境配置](./ENV_SETUP.md)
+- [Vercel + Upstash](./docs/VERCEL_UPSTASH.md)
 - [贡献指南](./CONTRIBUTING.md)
-
----
-
-**维护者**: Full-Stack Development Team  
-**最后更新**: 2025年10月31日  
-**版本**: 2.0.0
-
-
