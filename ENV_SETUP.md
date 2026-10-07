@@ -183,7 +183,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 
 ## 🐳 Docker 环境变量
 
-使用 Docker Compose 时，先复制根目录 `.env.example` 为 `.env`，填写生成的 `JWT_SECRET`，并配置前端域名及 API 地址。Compose 将这些值传入容器；`NEXT_PUBLIC_API_URL` 同时作为前端构建参数传入：
+使用 Docker Compose 时，先复制根目录 `.env.example` 为 `.env`，填写生成的 `JWT_SECRET`、`MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD` 和 `RABBITMQ_PASSWORD`（缺任何一个 Compose 都会拒绝启动；已有 MySQL 数据卷时须沿用创建时的密码），并配置前端域名及 API 地址。Compose 将这些值传入容器；`NEXT_PUBLIC_API_URL` 同时作为前端构建参数传入：
 
 ```yaml
 services:
@@ -194,7 +194,7 @@ services:
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_USER=ecommerce
-      - DB_PASSWORD=ecommerce123
+      - DB_PASSWORD=${MYSQL_PASSWORD}
       - DB_NAME=ecommerce
       - REDIS_HOST=redis
       - REDIS_PORT=6379

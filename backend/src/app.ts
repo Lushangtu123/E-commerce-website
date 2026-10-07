@@ -46,8 +46,9 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
   app.use(helmet()); // 安全头
   app.use(cors(corsOptions())); // 跨域：CORS_ORIGIN 限制来源，只有列出的来源能带会话 Cookie
   app.use(compression()); // 压缩
-  app.use(express.json({ limit: '10mb' })); // JSON解析
-  app.use(express.urlencoded({ extended: true, limit: '10mb' })); // URL编码解析
+  // 请求体上限：最大的合法请求（批量创建 100 个 SKU）约 350KB
+  app.use(express.json({ limit: '1mb' })); // JSON解析
+  app.use(express.urlencoded({ extended: true, limit: '1mb' })); // URL编码解析
 
   // 设置响应头字符编码
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -117,7 +118,10 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
   });
 
   // 错误处理中间件
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  app.use((err: Error & { status?: number; type?: string }, req: Request, res: Response, next: NextFunction) => {
+    // 请求体解析错误是客户端问题，不按服务器错误处理
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: '请求体过大' });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: '请求格式无效' });
     logger.error({ err }, '错误');
     res.status(500).json({
       error: '服务器内部错误',

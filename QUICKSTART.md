@@ -100,7 +100,8 @@ cd E-commerce-website
 
 ```bash
 cp .env.example .env
-# 编辑根目录 .env，将 openssl rand -hex 32 的结果填入 JWT_SECRET
+# 编辑根目录 .env：JWT_SECRET 填 openssl rand -hex 32 的结果，
+# MYSQL_ROOT_PASSWORD、MYSQL_PASSWORD、RABBITMQ_PASSWORD 各填一个 openssl rand -hex 16 的结果
 # 启动所有服务（包括数据库、Redis、后端、前端等）
 docker-compose up -d
 ```

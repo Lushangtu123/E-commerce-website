@@ -172,7 +172,8 @@ cd E-commerce-website
 2. **配置并启动所有服务**
 ```bash
 cp .env.example .env
-# 编辑根目录 .env，将 openssl rand -hex 32 的结果填入 JWT_SECRET
+# 编辑根目录 .env：JWT_SECRET 填 openssl rand -hex 32 的结果，
+# MYSQL_ROOT_PASSWORD、MYSQL_PASSWORD、RABBITMQ_PASSWORD 各填一个 openssl rand -hex 16 的结果
 docker-compose up -d
 ```
 
@@ -186,7 +187,9 @@ docker-compose ps
 4. **访问应用**
 - 前端: http://localhost:3000
 - 后端API: http://localhost:3001
-- RabbitMQ管理界面: http://localhost:15672 (admin/admin123)
+- RabbitMQ管理界面: http://localhost:15672（用户 admin，密码为 .env 中的 RABBITMQ_PASSWORD）
+
+数据库、Redis、RabbitMQ、Elasticsearch 的端口只绑定在本机 127.0.0.1，局域网无法访问。
 - Elasticsearch: http://localhost:9200
 
 5. **初始化数据库**

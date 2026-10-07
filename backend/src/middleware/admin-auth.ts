@@ -53,7 +53,7 @@ export const authenticateAdmin = async (
     // 查询管理员信息
     const pool = getPool();
     const [admins] = await pool.query(
-      'SELECT admin_id, username, role_id, status FROM admins WHERE admin_id = ?',
+      'SELECT admin_id, username, role_id, status, auth_version FROM admins WHERE admin_id = ?',
       [decoded.adminId]
     );
 
@@ -66,6 +66,11 @@ export const authenticateAdmin = async (
     // 检查账号状态
     if (admin.status === 0) {
       return res.status(403).json({ error: '账号已被禁用' });
+    }
+
+    // 退出登录会递增 auth_version，旧令牌（含未携带版本号的历史令牌，视为 0）随之失效
+    if (Number(admin.auth_version ?? 0) !== (decoded.authVersion ?? 0)) {
+      return res.status(401).json({ error: '登录已过期，请重新登录' });
     }
 
     // 将管理员信息附加到请求对象

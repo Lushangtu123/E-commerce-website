@@ -447,7 +447,7 @@ npm install recharts
 
 ```bash
 # 进入MySQL容器
-docker-compose exec mysql mysql -u ecommerce -pecommerce123 ecommerce
+docker-compose exec mysql sh -c 'mysql -u ecommerce -p"$MYSQL_PASSWORD" ecommerce'
 
 # 删除所有管理员相关表
 DROP TABLE IF EXISTS admin_logs;
