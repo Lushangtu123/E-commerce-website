@@ -11,7 +11,7 @@ fi
 
 # 检查 Docker 服务
 echo "📊 检查 Docker 服务状态..."
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 docker-compose ps | grep -q "Up" || {
     echo "🐳 启动 Docker 服务..."
     docker-compose up -d

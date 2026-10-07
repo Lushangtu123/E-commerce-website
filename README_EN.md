@@ -5,13 +5,13 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 
-A modern, full-featured e-commerce platform built with a microservices architecture, implementing complete core e-commerce functionalities with a separation of frontend and backend.
+A modern, full-featured e-commerce platform with a separate frontend and a modular Express backend (a single deployable application organised by business domain), implementing complete core e-commerce functionality.
 
 **📚 Chinese Documentation**: [README.md](./README.md) | **🚀 Quick Start**: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
 
 ## 🎯 Project Highlights
 
-- 🏗️ **Microservices Architecture** - Modular design for easy scalability
+- 🏗️ **Modular Monolith** - Routes, controllers and services split by domain, deployed as one Express app (or embedded in Next.js on Vercel)
 - 🔐 **Complete Permission System** - Dual system for users and administrators
 - 💾 **Storage** - MySQL + Redis, with optional Elasticsearch search and a RabbitMQ delay queue
 - 🚀 **High Performance Optimization** - Redis caching + database indexing
@@ -63,9 +63,8 @@ A modern, full-featured e-commerce platform built with a microservices architect
 - ✅ **Permission Control** - JWT authentication, operation permission verification
 
 ### Technical Features
-- 🚀 Microservices architecture
+- 🚀 Modular monolith (Express)
 - 💾 Redis caching optimization
-- 📊 Database read-write separation design
 - 🔍 Elasticsearch full-text search (optional; index synced on writes, MySQL fallback)
 - 📨 RabbitMQ delay queue (optional; exact 30-minute order timeout, polling job as fallback)
 - ⏰ **Automatic Order Timeout Handling** - Task-based order status management 🆕
@@ -104,15 +103,12 @@ A modern, full-featured e-commerce platform built with a microservices architect
 │  Frontend Layer │  Next.js + React
 └────────┬────────┘
          │
-┌────────▼────────┐
-│   API Gateway   │  Express
-└────────┬────────┘
-         │
 ┌────────▼──────────────────────────────┐
-│         Microservices Layer           │
+│   Express application (one process)   │
+│   Middleware: auth / rate limit / CSRF│
 ├───────────────────────────────────────┤
-│ User Service │ Product │ Order Service│
-│ Cart Service │ Review  │ Payment      │
+│ Users │ Products │ Cart │ Orders      │
+│ Reviews │ Coupons │ Search │ Admin    │
 └────────┬──────────────────────────────┘
          │
 ┌────────▼──────────────────────────────┐
@@ -124,7 +120,7 @@ A modern, full-featured e-commerce platform built with a microservices architect
 
 ## 📦 Database Design
 
-### Core Tables (17 Tables)
+### Tables (24)
 | Table Name | Description | Status |
 |------------|-------------|--------|
 | `users` | User information | ✅ |
@@ -144,6 +140,13 @@ A modern, full-featured e-commerce platform built with a microservices architect
 | `coupon_usage_logs` | Coupon usage logs | 🆕 |
 | `admins` | Admin accounts | ✅ |
 | `admin_logs` | Admin operation logs | ✅ |
+| `roles` | Admin roles | ✅ |
+| `permissions` | Permissions | ✅ |
+| `role_permissions` | Role–permission mapping | ✅ |
+| `traffic_statistics` | Traffic statistics | ✅ |
+| `page_visits` | Page visits | ✅ |
+| `password_reset_tokens` | One-time password reset tokens | ✅ |
+| `after_sales_requests` | After-sales requests | ✅ |
 
 ### Database Features
 - ✅ Normalized design (3rd normal form)
@@ -201,7 +204,7 @@ docker-compose exec backend npm run seed
 
 6. **Initialize admin account**
 ```bash
-./init-admin.sh
+./scripts/dev/init-admin.sh
 # Default admin credentials:
 # Username: admin
 # Password: admin123
@@ -291,12 +294,13 @@ E-commerce-website/
 │   └── Dockerfile
 │
 ├── docker-compose.yml         # Docker orchestration
+├── scripts/                   # Dev helpers (dev/) and manual API checks (manual-tests/)
 ├── README.md                  # Project documentation (Chinese)
 ├── README_EN.md              # Project documentation (English)
 └── DEPLOYMENT.md             # Deployment guide
 ```
 
-## 🔌 API Endpoints (80+ APIs)
+## 🔌 API Endpoints (100+)
 
 ### User APIs
 - `POST /api/users/register` - User registration
@@ -320,10 +324,13 @@ E-commerce-website/
 - `GET /api/favorites/check/:productId` - Check if favorited
 
 ### Search APIs 🆕
-- `POST /api/search/history` - Record search history
-- `GET /api/search/history` - Get search history
-- `DELETE /api/search/history/:keyword` - Delete search record
+- `GET /api/search/es` - Product search: Elasticsearch full-text when configured, MySQL otherwise (public; signed-in searches go to the user's history)
 - `GET /api/search/hot` - Get popular searches
+- `GET /api/search/suggestions` - Suggestions from search history
+- `POST /api/search/record` - Record a search
+- `GET /api/search/history` - Get own search history (sign-in required)
+- `DELETE /api/search/history` - Clear own search history (sign-in required)
+- `DELETE /api/search/history/:keyword` - Delete one search entry (sign-in required)
 
 ### Browse History APIs 🆕
 - `POST /api/browse` - Record browse history
@@ -501,10 +508,10 @@ Frontend tests use Vitest + React Testing Library + happy-dom. Tests are `tests/
 
 | Metric | Count |
 |--------|-------|
-| Lines of Code | 19,600+ |
-| Frontend Pages | 24+ |
-| API Endpoints | 80+ |
-| Database Tables | 17 |
+| Lines of Code (excluding tests) | 22,000+ |
+| Frontend Pages | 29 |
+| API Endpoints | 100+ |
+| Database Tables | 24 |
 | Feature Modules | 15 |
 | Git Commits | 110+ |
 | Documentation Lines | 7,000+ |
@@ -614,7 +621,7 @@ MIT License
 
 ## 🎓 Technical Highlights
 
-1. **Microservices Architecture**: Modular, scalable design
+1. **Modular Monolith**: Domain-organised modules in one deployable Express app
 2. **Full TypeScript Stack**: Type-safe development
 3. **Docker Containerization**: One-command deployment
 4. **Redis Caching**: Optimized performance

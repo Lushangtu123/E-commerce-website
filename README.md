@@ -5,13 +5,13 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 
-这是一个基于微服务架构的现代化电商平台，采用前后端分离设计，实现了完整的电商核心功能和管理后台。
+这是一个前后端分离的现代化电商平台，后端为按业务模块划分的 Express 单体应用，实现了完整的电商核心功能和管理后台。
 
 **📚 English Documentation**: [README_EN.md](./README_EN.md) | **🚀 快速开始**: [QUICKSTART.md](./QUICKSTART.md)
 
 ## 🎯 项目亮点
 
-- 🏗️ **微服务架构** - 模块化设计，易于扩展
+- 🏗️ **模块化单体** - 路由、控制器、服务按业务划分，单个 Express 应用部署，也可嵌入 Next.js 部署到 Vercel
 - 🔐 **完整权限系统** - 用户和管理员双系统
 - 💾 **多存储协同** - MySQL + Redis，可选 Elasticsearch 搜索与 RabbitMQ 延迟队列
 - 🚀 **高性能优化** - Redis缓存 + 数据库索引优化
@@ -65,9 +65,8 @@
 - ✅ **权限控制** - JWT认证、操作权限验证
 
 ### 技术特性 (Technical Features)
-- 🚀 微服务架构
+- 🚀 模块化单体架构（Express）
 - 💾 Redis缓存优化
-- 📊 数据库读写分离设计
 - 🔍 Elasticsearch全文搜索（可选，写入自动同步索引，故障回退 MySQL）
 - 📨 RabbitMQ延迟队列（可选，订单 30 分钟精确超时；不可用时由定时任务兜底）
 - ⏰ **订单超时自动处理** - 基于定时任务的订单状态管理 🆕
@@ -104,15 +103,12 @@
 │   前端层    │  Next.js + React
 └──────┬──────┘
        │
-┌──────▼──────┐
-│  API网关    │  Express
-└──────┬──────┘
-       │
 ┌──────▼──────────────────────────────┐
-│          微服务层                    │
+│   Express 应用（单进程）             │
+│   中间件：认证 / 限流 / 日志 / CSRF  │
 ├─────────────────────────────────────┤
-│ 用户服务 │ 商品服务 │ 订单服务      │
-│ 购物车   │ 评论服务 │ 支付服务      │
+│ 用户 │ 商品 │ 购物车 │ 订单 │ 售后  │
+│ 评价 │ 优惠券 │ 搜索 │ 推荐 │ 管理  │
 └──────┬──────────────────────────────┘
        │
 ┌──────▼──────────────────────────────┐
@@ -124,7 +120,7 @@
 
 ## 📦 数据库设计
 
-### 核心表（17个表）
+### 数据表（24 个）
 | 表名 | 说明 | 状态 |
 |------|------|------|
 | `users` | 用户表 | ✅ |
@@ -144,6 +140,13 @@
 | `coupon_usage_logs` | 优惠券使用日志表 | 🆕 |
 | `admins` | 管理员表 | ✅ |
 | `admin_logs` | 管理员日志表 | ✅ |
+| `roles` | 管理员角色表 | ✅ |
+| `permissions` | 权限表 | ✅ |
+| `role_permissions` | 角色权限关联表 | ✅ |
+| `traffic_statistics` | 流量统计表 | ✅ |
+| `page_visits` | 页面访问记录表 | ✅ |
+| `password_reset_tokens` | 一次性密码重置凭据表 | ✅ |
+| `after_sales_requests` | 售后申请表 | ✅ |
 
 ### 数据库特性
 - ✅ 规范化设计（第三范式）
@@ -276,11 +279,12 @@ E-commerce-website/
 │   └── Dockerfile
 │
 ├── docker-compose.yml      # Docker编排配置
+├── scripts/               # 开发辅助脚本（dev/）和手工接口测试（manual-tests/）
 ├── docs/                  # 文档（设计稿在 docs/archive/design_plan.txt）
 └── README.md              # 项目说明
 ```
 
-## 🔌 API接口（80+个）
+## 🔌 API接口（100+ 个）
 
 ### 用户相关 (User APIs)
 - `POST /api/users/register` - 用户注册
@@ -324,10 +328,13 @@ E-commerce-website/
 - `POST /api/favorites/check-multiple` - 批量检查，body 为 `{ product_ids }`（1–100 个正整数）
 
 ### 搜索相关 (Search APIs) 🆕
-- `POST /api/search/history` - 记录搜索历史
-- `GET /api/search/history` - 获取搜索历史
-- `DELETE /api/search/history/:keyword` - 删除搜索记录
+- `GET /api/search/es` - 商品搜索：配置 Elasticsearch 时全文搜索，否则回退 MySQL（公开，登录用户记入本人搜索历史）
 - `GET /api/search/hot` - 获取热门搜索
+- `GET /api/search/suggestions` - 根据搜索历史给出搜索建议
+- `POST /api/search/record` - 记录搜索历史
+- `GET /api/search/history` - 获取本人搜索历史（需登录）
+- `DELETE /api/search/history` - 清空本人搜索历史（需登录）
+- `DELETE /api/search/history/:keyword` - 删除一条搜索记录（需登录）
 
 ### 浏览历史 (Browse History APIs) 🆕
 - `POST /api/browse/record` - 记录浏览，body 为 `{ product_id }`，商品必须存在且上架
@@ -525,10 +532,10 @@ npx vitest run tests/search-pages.test.tsx tests/admin-session.test.tsx tests/ad
 
 | 指标 | 数量 |
 |------|------|
-| 代码行数 | 19,600+ |
-| 前端页面 | 24+ |
-| API接口 | 80+ |
-| 数据库表 | 17 |
+| 代码行数（不含测试） | 22,000+ |
+| 前端页面 | 29 |
+| API接口 | 100+ |
+| 数据库表 | 24 |
 | 功能模块 | 15 |
 | 提交次数 | 110+ |
 | 开发文档 | 7,000+ 行 |

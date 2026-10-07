@@ -21,7 +21,7 @@ done
 # 2. 启动Docker服务
 echo ""
 echo "🐳 启动Docker服务..."
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 docker-compose down 2>/dev/null
 docker-compose up -d
 
@@ -45,7 +45,7 @@ done
 # 4. 停止旧的后端进程
 echo ""
 echo "🛑 停止旧的后端进程..."
-pkill -9 -f "nodemon.*ts-node" 2>/dev/null || true
+pkill -f "$(pwd)/backend/node_modules/" 2>/dev/null || true  # 只停止本项目的后端
 sleep 2
 
 # 5. 启动后端
