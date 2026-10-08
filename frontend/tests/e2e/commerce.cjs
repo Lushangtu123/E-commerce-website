@@ -623,7 +623,10 @@ async function localPlatformScripts(context) {
   await visibleText(admin, '演示订单，未实际扣款');
   await admin.getByRole('button', { name: '通过审核', exact: true }).first().click();
   await admin.getByLabel('审核说明').fill('仅审核通过，不产生真实退款');
+  const approvalSaved = admin.waitForResponse(response => new URL(response.url()).pathname.startsWith('/api/admin/after-sales/') &&
+    response.url().endsWith('/review') && response.request().method() === 'POST');
   await admin.getByRole('button', { name: '保存审核结果', exact: true }).click();
+  assert.equal((await approvalSaved).status(), 200);
   await page.getByRole('button', { name: '刷新售后进度', exact: true }).click();
   await visibleText(page, '审核通过');
   await visibleText(page, '不会自动退款');
@@ -641,7 +644,10 @@ async function localPlatformScripts(context) {
   await closureForm.getByText('可记录退款上限：¥0.00', { exact: true }).waitFor({ state: 'visible' });
   await admin.getByLabel('实际退款金额').fill('0.00');
   await admin.getByLabel('结案说明').fill('演示订单未实际付款，仅记录人工处理完成');
+  const closureSaved = admin.waitForResponse(response => new URL(response.url()).pathname.startsWith('/api/admin/after-sales/') &&
+    response.url().endsWith('/complete') && response.request().method() === 'POST');
   await admin.getByRole('button', { name: '保存结案记录', exact: true }).click();
+  assert.equal((await closureSaved).status(), 200);
   await visibleText(admin, '已结案');
   await page.getByRole('button', { name: '刷新售后进度', exact: true }).click();
   await visibleText(page, '已结案');

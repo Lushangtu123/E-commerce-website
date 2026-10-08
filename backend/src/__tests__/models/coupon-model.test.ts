@@ -50,15 +50,26 @@ test('合法创建可省略可选描述和封顶，status=0保持禁用', async 
   ]);
 });
 
-test('领取条件扣减失败时回滚且不创建用户券', async () => {
+test('锁定有余量的券在扣减时失效，回滚且不创建用户券', async () => {
   affectedRows = 0;
-  await expect(CouponModel.receiveCoupon(7, 10)).rejects.toThrow('优惠券已领完');
+  await expect(CouponModel.receiveCoupon(7, 10)).rejects.toThrow('优惠券不存在或已失效');
   expect(connection.execute.mock.calls[0][0]).toContain('FOR UPDATE');
   expect(connection.execute.mock.calls.find(([sql]: [string]) => sql.includes('UPDATE coupons'))[0]).toContain('remain_quantity > 0');
   expect(connection.execute.mock.calls.some(([sql]: [string]) => sql.includes('INSERT INTO user_coupons'))).toBe(false);
   expect(connection.rollback).toHaveBeenCalledTimes(1);
   expect(connection.commit).not.toHaveBeenCalled();
   expect(connection.release).toHaveBeenCalledTimes(1);
+});
+
+test('锁定时已无余量仍返回领完，既不扣减也不创建用户券', async () => {
+  const original = connection.execute.getMockImplementation();
+  connection.execute.mockImplementation(async (sql: string) => sql.includes('FROM coupons')
+    ? [[{ coupon_id: 10, remain_quantity: 0 }], []]
+    : original(sql));
+  await expect(CouponModel.receiveCoupon(7, 10)).rejects.toThrow('优惠券已领完');
+  expect(connection.execute.mock.calls.some(([sql]: [string]) => /UPDATE coupons|INSERT INTO user_coupons/.test(sql))).toBe(false);
+  expect(connection.rollback).toHaveBeenCalledTimes(1);
+  expect(connection.commit).not.toHaveBeenCalled();
 });
 
 test('用户券列表按有效状态筛选，不把过期未使用券当作可用', async () => {
