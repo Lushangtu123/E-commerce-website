@@ -84,8 +84,8 @@ export interface ActivityPage<T> {
 }
 
 export const favoriteApi = {
-  add: (productId: number) => api.post('/favorites', { product_id: productId }),
-  remove: (productId: number) => api.delete(`/favorites/${productId}`),
+  add: (productId: number) => api.post<unknown, { message: string; favorite_id?: number; already_favorited?: boolean }>('/favorites', { product_id: productId }),
+  remove: (productId: number) => api.delete<unknown, { message: string }>(`/favorites/${productId}`),
   toggle: (productId: number) => api.post<unknown, { message: string; is_favorited: boolean; favorite_id?: number }>('/favorites/toggle', { product_id: productId }),
   check: (productId: number) => api.get<unknown, { is_favorited: boolean }>(`/favorites/check/${productId}`),
   checkMultiple: (productIds: number[]) => api.post('/favorites/check-multiple', { product_ids: productIds }),

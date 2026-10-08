@@ -50,6 +50,7 @@ export const commonTranslations: Record<string, string> = {
   '正在加载收藏状态...': 'Loading favorite status...',
   '加载收藏状态失败，请重试': 'Unable to load favorite status. Please try again.',
   '重新加载收藏状态': 'Retry favorite status',
+  '操作结果尚未确认，正在重新加载收藏状态': 'The result is not confirmed. Reloading favorite status.',
   '加载邮件服务状态失败，请重试': 'Unable to check the email service. Please try again.',
   '共 {count} 条评价': '{count} reviews',
   '评价分页': 'Review pagination',

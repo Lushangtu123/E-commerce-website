@@ -25,7 +25,7 @@ vi.mock('@/lib/api', () => ({
   cartApi: { add: vi.fn(async () => ({})) },
   reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [], total: 0, totalPages: 0 })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
-  favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), toggle: vi.fn(async () => ({ is_favorited: true })) },
+  favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功' })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
   browseApi: { record: vi.fn(async () => ({})) },
 }));
 // The page reads through the same cached fetchApiResult as the layout; the seo-pages tests cover the real one.
@@ -104,7 +104,7 @@ describe('server-rendered product page', () => {
     await earlyFavorite();
     await settle();
     expect(cartApi.add).not.toHaveBeenCalled();
-    expect(favoriteApi.toggle).not.toHaveBeenCalled();
+    expect(favoriteApi.add).not.toHaveBeenCalled(); expect(favoriteApi.remove).not.toHaveBeenCalled();
 
     await act(async () => client.resolve({ product: serverCopy }));
     await settle();
