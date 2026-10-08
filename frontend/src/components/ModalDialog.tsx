@@ -1,26 +1,37 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 
 /** Native modality makes the background inert; explicit boundary wrapping keeps Tab in the editor. */
-export default function ModalDialog({ titleId, busy, onClose, children }: {
+export default function ModalDialog({ titleId, busy, onClose, children, role = 'dialog', initialFocus, returnFocus, dismissOnBackdrop = false }: {
   titleId: string; busy: boolean; onClose: () => void; children: ReactNode;
+  role?: 'dialog' | 'alertdialog'; initialFocus?: RefObject<HTMLElement | null>; dismissOnBackdrop?: boolean;
+  returnFocus?: HTMLElement | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previous = returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     element.showModal();
-    (element.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)') ??
+    (initialFocus?.current ?? element.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)') ??
       element.querySelector<HTMLElement>('button:not(:disabled)'))?.focus();
     return () => {
       element.close();
-      if (previous?.isConnected) previous.focus();
+      if (previous?.isConnected) {
+        previous.focus();
+        // Callers may lock the opener until the confirmation promise settles.
+        if (document.activeElement !== previous && previous.matches(':disabled')) {
+          requestAnimationFrame(() => {
+            if (previous.isConnected && !previous.matches(':disabled') && document.activeElement === document.body) previous.focus();
+          });
+        }
+      }
     };
-  }, []);
+  }, [initialFocus, returnFocus]);
 
-  return <dialog ref={dialog} aria-modal="true" aria-labelledby={titleId}
+  return <dialog ref={dialog} role={role} aria-modal="true" aria-labelledby={titleId}
+    onClick={event => { if (dismissOnBackdrop && !busy && event.target === event.currentTarget) onClose(); }}
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}
     onKeyDown={event => {
       if (event.key !== 'Tab') return;

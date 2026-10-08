@@ -258,6 +258,31 @@ async function localPlatformScripts(context) {
   await page.getByRole('button', { name: '收藏', exact: true }).waitFor({ state: 'visible' });
   assert.equal((await (await context.request.get(favoriteCheckEndpoint)).json()).is_favorited, false);
   console.log('PASS browser favorite reads block premature mutation and recover without removing an existing favorite');
+  await page.goto('http://127.0.0.1:3100/history');
+  for (const locale of ['zh-CN', 'en']) {
+    await page.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).selectOption(locale);
+    const opener = page.getByRole('button', { name: locale === 'en' ? 'Clear history' : '清空历史', exact: true });
+    await opener.click();
+    const confirmation = page.getByRole('alertdialog'); await confirmation.waitFor({ state: 'visible' });
+    assert.equal(await confirmation.evaluate(element => element.matches(':modal')), true);
+    await page.keyboard.press('Tab');
+    assert.equal(await confirmation.getByRole('button', { name: locale === 'en' ? 'Cancel' : '取消', exact: true }).evaluate(element => element === document.activeElement), true);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await confirmation.getByRole('button', { name: locale === 'en' ? 'OK' : '确定', exact: true }).evaluate(element => element === document.activeElement), true);
+    await page.locator('header input').first().evaluate(element => element.focus());
+    assert.equal(await confirmation.evaluate(element => element.contains(document.activeElement)), true, 'background input stays inert');
+    await confirmation.locator('p').click();
+    assert.equal(await confirmation.isVisible(), true);
+    await page.keyboard.press('Escape'); await confirmation.waitFor({ state: 'hidden' });
+    await page.waitForFunction(element => element === document.activeElement, await opener.elementHandle());
+    assert.equal(await opener.evaluate(element => element === document.activeElement), true);
+    await opener.click(); await confirmation.waitFor({ state: 'visible' });
+    await confirmation.click({ position: { x: 4, y: 4 } }); await confirmation.waitFor({ state: 'hidden' });
+    await page.waitForFunction(element => element === document.activeElement, await opener.elementHandle());
+    assert.equal(await opener.evaluate(element => element === document.activeElement), true);
+  }
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser bilingual confirmation contains Tab focus, blocks background focus and restores the opener');
   const reviewEndpoint = 'http://127.0.0.1:3101/api/reviews/product/2';
   let reviewsUnavailable = true, reviewAttempts = 0;
   const reviewFault = route => { reviewAttempts++; return reviewsUnavailable

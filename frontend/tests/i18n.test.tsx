@@ -288,7 +288,7 @@ describe('language changes on rendered pages', () => {
   it('mounts the site confirmation dialog for every page', async () => {
     render(<AppShell>page</AppShell>);
     await settle();
-    act(() => useConfirmStore.setState({ request: { message: '确定要取消订单吗？', resolve: vi.fn() } }));
+    act(() => useConfirmStore.setState({ request: { message: '确定要取消订单吗？', resolve: vi.fn(), returnFocus: null } }));
     expect(screen.getByRole('alertdialog')).toHaveAccessibleName('确定要取消订单吗？');
     act(() => useConfirmStore.setState({ request: null }));
   });
