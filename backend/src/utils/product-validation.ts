@@ -3,15 +3,15 @@ import { searchKeyword } from './search-validation';
 import { specsTranslationSchema } from './product-i18n';
 
 export const PRODUCT_SORTS: Record<string, string> = Object.freeze({
-  'created_at DESC': 'created_at DESC',
-  'created_at ASC': 'created_at ASC',
-  'price ASC': 'price ASC',
-  'price DESC': 'price DESC',
-  'sales_count DESC': 'sales_count DESC',
-  'sales_count ASC': 'sales_count ASC',
-  'rating DESC': 'rating DESC',
-  price: 'price ASC',
-  sales: 'sales_count DESC',
+  'created_at DESC': 'created_at DESC, product_id DESC',
+  'created_at ASC': 'created_at ASC, product_id DESC',
+  'price ASC': 'price ASC, product_id DESC',
+  'price DESC': 'price DESC, product_id DESC',
+  'sales_count DESC': 'sales_count DESC, product_id DESC',
+  'sales_count ASC': 'sales_count ASC, product_id DESC',
+  'rating DESC': 'rating DESC, product_id DESC',
+  price: 'price ASC, product_id DESC',
+  sales: 'sales_count DESC, product_id DESC',
 });
 
 const integer = Joi.number().integer().min(1).max(2147483647);
