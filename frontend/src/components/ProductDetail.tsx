@@ -47,6 +47,8 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const productRequest = useRef<{ context: string } | null>(null);
   const mounted = useRef(true);
   const addingRequest = useRef<string | null>(null);
+  const favoriteRequest = useRef<{ context: string } | null>(null);
+  const favoriteRevision = useRef(0);
   const productId = parseInt(params.id as string);
   const context = JSON.stringify([productId, sessionId, user?.user_id, isAuthenticated]);
   const reviewPage = reviewView?.context === context ? reviewView.page : 1;
@@ -79,6 +81,8 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     addingRequest.current = null;
     setIsFavorited(false);
     setFavoriting(false);
+    favoriteRequest.current = null;
+    const favoriteRead = ++favoriteRevision.current;
     setLoadingRecommendations(true);
     recommendationApi.getRelated(productId, 4).then((data) => {
       if (isCurrentRequest()) setRelatedProducts(data.related_products || []);
@@ -86,8 +90,8 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       .finally(() => { if (isCurrentRequest()) setLoadingRecommendations(false); });
     if (isAuthenticated) {
       favoriteApi.check(productId).then((data) => {
-        if (isCurrentRequest()) setIsFavorited(data.is_favorited);
-      }).catch((error) => { if (isCurrentRequest()) logger.error('检查收藏状态失败:', error); });
+        if (isCurrentRequest() && favoriteRevision.current === favoriteRead) setIsFavorited(data.is_favorited);
+      }).catch((error) => { if (isCurrentRequest() && favoriteRevision.current === favoriteRead) logger.error('检查收藏状态失败:', error); });
       browseApi.record(productId).catch((error) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
     return () => { active = false; };
@@ -237,22 +241,28 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   };
 
   const handleToggleFavorite = async () => {
-    if (!ready || !isCurrentContext() || favoriting) return;
+    if (!ready || !isCurrentContext() || favoriteRequest.current?.context === context) return;
     if (!isAuthenticated) {
       toast.error(t("请先登录"));
       router.push('/login');
       return;
     }
+    const operation = { context };
+    favoriteRequest.current = operation;
     setFavoriting(true);
     try {
       const data = await favoriteApi.toggle(productId);
       if (!isCurrentContext()) return;
+      favoriteRevision.current += 1;
       setIsFavorited(data.is_favorited);
       toast.success(t(data.message));
     } catch (error) {
       if (isCurrentContext()) toast.error(t(requestFailure(error).response?.data?.message || "操作失败"));
     } finally {
-      if (isCurrentContext()) setFavoriting(false);
+      if (isCurrentContext() && favoriteRequest.current === operation) {
+        favoriteRequest.current = null;
+        setFavoriting(false);
+      }
     }
   };
 

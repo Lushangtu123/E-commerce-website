@@ -1,9 +1,9 @@
-jest.mock('../../database/mysql', () => ({ query: jest.fn() }));
+jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn() }));
 
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { query } from '../../database/mysql';
+import { getPool, query } from '../../database/mysql';
 import favoriteRoutes from '../../routes/favorite.routes';
 import browseRoutes from '../../routes/browse.routes';
 import { FavoriteModel } from '../../models/favorite.model';
@@ -21,7 +21,13 @@ const expectOnlyAuthentication = () => {
 
 beforeEach(() => {
   jest.clearAllMocks(); available = true; favorited = false; orphan = false;
+  (getPool as jest.Mock).mockReturnValue({ getConnection: async () => ({
+    beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {},
+    query: async (sql: string, values?: unknown[]) => [await query(sql, values)],
+  }) });
   (query as jest.Mock).mockImplementation(async (sql: string) => {
+    if (sql.startsWith('SELECT user_id FROM users')) return [{ user_id: 7 }];
+    if (sql.startsWith('SELECT favorite_id FROM favorites')) return favorited ? [{ favorite_id: 1 }] : [];
     if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     if (sql.startsWith('INSERT')) return { insertId: available ? 50 : 0, affectedRows: available ? 1 : 0 };
     if (sql.startsWith('DELETE')) return { affectedRows: 1 };

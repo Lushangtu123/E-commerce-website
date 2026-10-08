@@ -65,6 +65,76 @@ integration('真实 MySQL 收藏与浏览历史边界', () => {
     const [rows] = await db.query<RowDataPacket[]>(`SELECT * FROM ${table} ORDER BY ${table === 'favorites' ? 'favorite_id' : 'id'}`); return rows;
   }
 
+  test.each([false, true])('two concurrent toggles preserve both transitions from initial favorite=%s', async initial => {
+    if (initial) await db.query('INSERT INTO favorites(user_id,product_id) VALUES(1,1)');
+    // Hold the account lock until both operations have started; a correct implementation waits here.
+    const barrier = await db.getConnection(); await barrier.beginTransaction();
+    await barrier.query('SELECT user_id FROM users WHERE user_id=1 FOR UPDATE');
+    const operations = [request(app).post('/api/favorites/toggle').set(auth()).send({ product_id: 1 }),
+      request(app).post('/api/favorites/toggle').set(auth()).send({ product_id: 1 })].map(operation => operation.then(result => result));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await barrier.commit(); barrier.release();
+    const results = await Promise.all(operations);
+    expect(results.map(result => result.status)).toEqual([200, 200]);
+    expect(results.map(result => result.body.is_favorited).sort()).toEqual([false, true]);
+    expect(await FavoriteModel.isFavorited(1, 1)).toBe(initial);
+    expect(await FavoriteModel.isFavorited(2, 1)).toBe(false);
+  });
+
+  test('different accounts can both first-toggle the same product without a shared gap-lock deadlock', async () => {
+    let arrived = 0, releaseReads!: () => void;
+    const bothReads = new Promise<void>(resolve => { releaseReads = resolve; });
+    (getPool as jest.Mock).mockReturnValue({ getConnection: async () => {
+      const connection = await db.getConnection();
+      return {
+        beginTransaction: () => connection.beginTransaction(), commit: () => connection.commit(),
+        rollback: () => connection.rollback(), release: () => connection.release(),
+        query: async (sql: string, values: unknown[]) => {
+          const result = await connection.query(sql, values);
+          if (sql.startsWith('SELECT favorite_id FROM favorites')) {
+            if (++arrived === 2) releaseReads();
+            await bothReads;
+          }
+          return result;
+        },
+      };
+    } });
+    try {
+      const results = await Promise.all([1, 2].map(userId => request(app).post('/api/favorites/toggle').set(auth(userId)).send({ product_id: 1 })));
+      expect(results.map(result => result.status)).toEqual([200, 200]);
+      expect(results.map(result => result.body.is_favorited)).toEqual([true, true]);
+      expect((await raw('favorites')).map(row => row.user_id).sort()).toEqual([1, 2]);
+    } finally { (getPool as jest.Mock).mockReturnValue(db); }
+  });
+
+  test('add and remove wait behind the same account lock used by toggles', async () => {
+    await db.query('INSERT INTO favorites(user_id,product_id) VALUES(1,2)');
+    const barrier = await db.getConnection(); await barrier.beginTransaction();
+    await barrier.query('SELECT user_id FROM users WHERE user_id=1 FOR UPDATE');
+    let settled = 0;
+    const operations = [FavoriteModel.add(1, 1), FavoriteModel.remove(1, 2)]
+      .map(operation => operation.finally(() => { settled++; }));
+    try {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(settled).toBe(0);
+    } finally { await barrier.commit(); barrier.release(); }
+    await Promise.all(operations);
+    expect(await FavoriteModel.isFavorited(1, 1)).toBe(true);
+    expect(await FavoriteModel.isFavorited(1, 2)).toBe(false);
+  });
+
+  test.each(['add', 'remove'])('toggle remains consistent with concurrent explicit %s', async operation => {
+    if (operation === 'remove') await db.query('INSERT INTO favorites(user_id,product_id) VALUES(1,1)');
+    const toggle = request(app).post('/api/favorites/toggle').set(auth()).send({ product_id: 1 });
+    const explicit = operation === 'add' ? request(app).post('/api/favorites').set(auth()).send({ product_id: 1 })
+      : request(app).delete('/api/favorites/1').set(auth());
+    const [changed, other] = await Promise.all([toggle, explicit]);
+    expect(changed.status).toBe(200);
+    expect(operation === 'add' ? [200] : [200, 404]).toContain(other.status);
+    expect(await FavoriteModel.isFavorited(1, 1)).toBe(changed.body.is_favorited);
+    expect(await FavoriteModel.getFavoriteCount(1)).toBe(changed.body.is_favorited ? 1 : 0);
+  });
+
   test('真实HTTP鉴权、隔离和正常收藏/浏览响应保持原合同', async () => {
     await request(app).get('/api/favorites/my').expect(401); await request(app).get('/api/browse/history').expect(401);
     await request(app).post('/api/favorites').set(auth()).send({ product_id: 1 }).expect(200);

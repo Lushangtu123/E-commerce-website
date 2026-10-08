@@ -61,22 +61,8 @@ export const toggleFavorite = async (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
     const product_id = productInput(req.body);
 
-    const isFavorited = await FavoriteModel.isFavorited(userId, product_id);
-
-    if (isFavorited) {
-      await FavoriteModel.remove(userId, product_id);
-      return res.json({ 
-        message: '取消收藏成功',
-        is_favorited: false 
-      });
-    } else {
-      const favoriteId = await FavoriteModel.add(userId, product_id);
-      return res.json({ 
-        message: '收藏成功',
-        is_favorited: true,
-        favorite_id: favoriteId 
-      });
-    }
+    const result = await FavoriteModel.toggle(userId, product_id);
+    return res.json({ message: result.is_favorited ? '收藏成功' : '取消收藏成功', ...result });
   } catch (error) {
     if (error instanceof CustomerActivityError) return res.status(error.statusCode).json({ message: error.message });
     logger.error({ err: error }, '切换收藏状态失败');

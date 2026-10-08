@@ -194,6 +194,28 @@ async function visibleText(page, text) {
     assert.equal(Number(product.original_price), 100);
   }
   console.log('PASS browser catalog card, search, hot and related products share the cheapest SKU promotion price');
+  const favoriteCheckEndpoint = 'http://127.0.0.1:3101/api/favorites/check/2';
+  let releaseFavoriteRead, favoriteReadReady;
+  const favoriteGate = new Promise(resolve => { releaseFavoriteRead = resolve; });
+  const favoriteStarted = new Promise(resolve => { favoriteReadReady = resolve; });
+  const delayedFavoriteRead = async route => {
+    const response = await route.fetch();
+    assert.equal(response.status(), 200); favoriteReadReady();
+    await favoriteGate; await route.fulfill({ response });
+  };
+  await page.route(favoriteCheckEndpoint, delayedFavoriteRead);
+  await page.goto('http://127.0.0.1:3100/products/2');
+  await favoriteStarted;
+  await page.getByRole('button', { name: '收藏', exact: true }).click();
+  await page.getByRole('button', { name: '取消收藏', exact: true }).waitFor({ state: 'visible' });
+  const staleFavoriteRead = page.waitForResponse(response => response.url() === favoriteCheckEndpoint);
+  releaseFavoriteRead(); await staleFavoriteRead;
+  await page.getByRole('button', { name: '取消收藏', exact: true }).waitFor({ state: 'visible' });
+  assert.equal((await (await context.request.get(favoriteCheckEndpoint)).json()).is_favorited, true);
+  await page.unroute(favoriteCheckEndpoint, delayedFavoriteRead);
+  await page.getByRole('button', { name: '取消收藏', exact: true }).click();
+  await page.getByRole('button', { name: '收藏', exact: true }).waitFor({ state: 'visible' });
+  console.log('PASS browser successful favorite mutation survives a delayed same-session read');
   const reviewEndpoint = 'http://127.0.0.1:3101/api/reviews/product/2';
   let reviewsUnavailable = true, reviewAttempts = 0;
   const reviewFault = route => { reviewAttempts++; return reviewsUnavailable
