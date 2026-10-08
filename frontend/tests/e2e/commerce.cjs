@@ -505,6 +505,58 @@ async function localPlatformScripts(context) {
   }
   console.log('PASS browser all three admin keyword drafts submit one list request on Enter');
   const categoriesEndpoint = 'http://127.0.0.1:3101/api/products/categories';
+  // The real browser owns native modality: happy-dom cannot emulate focus containment.
+  for (const locale of ['zh-CN', 'en']) {
+    for (const kind of ['products', 'coupons']) {
+      await admin.goto(`http://127.0.0.1:3100/admin/${kind}`);
+      await admin.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).selectOption(locale);
+      const opener = admin.getByRole('button', { name: kind === 'products'
+        ? locale === 'en' ? 'Add product' : '添加商品' : locale === 'en' ? '+ Create coupon' : '+ 创建优惠券', exact: true }).first();
+      await opener.focus(); await opener.click();
+      const dialog = admin.getByRole('dialog'); await dialog.waitFor({ state: 'visible' });
+      assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true);
+      assert.equal(await dialog.evaluate(element => element.matches(':modal')), true);
+      fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+      await admin.screenshot({ path: path.join(root, 'test-results', `admin-${kind}-dialog-${locale}.png`), fullPage: true });
+      await dialog.locator('button:enabled').last().focus(); await admin.keyboard.press('Tab');
+      assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true, 'Tab stays inside the editor');
+      await dialog.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).focus(); await admin.keyboard.press('Shift+Tab');
+      assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true, 'Shift+Tab stays inside the editor');
+      await admin.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
+      assert.equal(await opener.evaluate(element => document.activeElement === element), true, 'Escape restores the opener');
+      await opener.click(); await dialog.waitFor({ state: 'visible' });
+      await dialog.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true }).click();
+      await dialog.waitFor({ state: 'hidden' });
+      assert.equal(await opener.evaluate(element => document.activeElement === element), true);
+    }
+  }
+  await admin.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser bilingual editor modality, Tab containment, Escape and close restore focus');
+  await admin.goto('http://127.0.0.1:3100/admin/products');
+  await admin.getByRole('button', { name: '添加商品', exact: true }).first().click();
+  const pendingEditor = admin.getByRole('dialog');
+  await pendingEditor.locator('#newProduct-title').fill('Browser keyboard editor product');
+  await pendingEditor.locator('#newProduct-price').fill('12.50');
+  await pendingEditor.locator('#newProduct-category-id option[value="1"]').waitFor({ state: 'attached' });
+  await pendingEditor.locator('#newProduct-category-id').selectOption('1');
+  let releaseEditorSave, editorSaveStarted;
+  const editorSaveGate = new Promise(resolve => { releaseEditorSave = resolve; });
+  const editorStarted = new Promise(resolve => { editorSaveStarted = resolve; });
+  const editorWritesEndpoint = 'http://127.0.0.1:3101/api/admin/products';
+  const delayEditorSave = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    editorSaveStarted(); await editorSaveGate; await route.continue();
+  };
+  await admin.route(editorWritesEndpoint, delayEditorSave);
+  const editorSaved = admin.waitForResponse(response => response.url() === editorWritesEndpoint && response.request().method() === 'POST');
+  await pendingEditor.getByRole('button', { name: '添加商品', exact: true }).click(); await editorStarted;
+  await admin.keyboard.press('Escape');
+  assert.equal(await pendingEditor.isVisible(), true);
+  assert.equal(await pendingEditor.getByRole('button', { name: '关闭', exact: true }).isDisabled(), true);
+  assert.equal(await pendingEditor.getByRole('button', { name: '取消', exact: true }).isDisabled(), true);
+  releaseEditorSave(); assert.equal((await editorSaved).status(), 201);
+  await pendingEditor.waitFor({ state: 'hidden' }); await admin.unroute(editorWritesEndpoint, delayEditorSave);
+  console.log('PASS browser native editor ignores Escape during an in-flight save');
   let categoryAttempts = 0, releaseCategoryRetry;
   const categoryRetryGate = new Promise(resolve => { releaseCategoryRetry = resolve; });
   const categoryFault = async route => {
@@ -522,7 +574,7 @@ async function localPlatformScripts(context) {
   await admin.locator('#newProduct-title').fill('Category recovery draft');
   await admin.locator('#newProduct-price').fill('19.90');
   assert.equal(await admin.locator('#newProduct-category-id').isDisabled(), true);
-  await admin.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await admin.getByRole('dialog').getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
   await admin.getByRole('alert').getByText('Categories could not be loaded. Please reload.', { exact: true }).waitFor({ state: 'visible' });
   await admin.getByRole('button', { name: 'Reload categories', exact: true }).click();
   await admin.getByRole('status').getByText('Loading categories...', { exact: true }).waitFor({ state: 'visible' });

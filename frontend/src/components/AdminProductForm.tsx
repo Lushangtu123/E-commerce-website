@@ -5,6 +5,8 @@ import type { Category } from '@/lib/api';
 import type { SpecTranslations } from '@/lib/product-content';
 import { useI18n } from '@/lib/i18n';
 import ProductImage from '@/components/ProductImage';
+import ModalDialog from '@/components/ModalDialog';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 /** The product form keeps numbers as strings while the administrator types. */
 export interface ProductFormValues {
@@ -112,16 +114,19 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
   const missingSelectedCategory = values.category_id !== '' && !categories.some(category => String(category.category_id) === values.category_id);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <ModalDialog titleId={id('heading')} busy={busy} onClose={onClose}>
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">{heading}</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <h2 id={id('heading')} className="text-2xl font-bold text-gray-900">{heading}</h2>
+            <div className="flex items-center gap-3">
+              <LanguageSwitcher />
+              <button type="button" onClick={onClose} disabled={busy} aria-label={t('关闭')} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
+                <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -224,7 +229,7 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
           </div>
 
           <div className="flex justify-end space-x-3 mt-6">
-            <button onClick={onClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            <button onClick={onClose} disabled={busy} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
               {t('取消')}
             </button>
             <button onClick={onSubmit} disabled={busy || categoriesUnavailable} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
@@ -233,6 +238,6 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
           </div>
         </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 }
