@@ -148,7 +148,8 @@ async function visibleText(page, text) {
   assert.equal(myCouponAttempts, 2);
   await page.unroute(`${myCouponsEndpoint}*`, myCouponFault); expectedReadFailure = undefined;
   console.log('PASS browser my coupons 503 shows an error and retry restores the real claimed coupon');
-  await page.goto('http://127.0.0.1:3100/');
+  // The shared search header is already hydrated here. A full reload immediately before
+  // typing can reset its input while the stored customer session is being restored.
   const searchForm = page.getByRole('search');
   const searchInput = searchForm.getByRole('textbox', { name: '搜索商品', exact: true });
   const searchKeyword = '浏览器交易测试商品';
