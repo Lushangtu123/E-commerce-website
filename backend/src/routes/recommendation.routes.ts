@@ -15,7 +15,7 @@ const router = Router();
  *     parameters:
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 10 }
+ *         schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
  *     responses:
  *       200:
  *         description: 推荐商品列表
@@ -38,10 +38,10 @@ router.get('/personalized', authMiddleware, RecommendationController.getPersonal
  *       - name: productId
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, minimum: 1, maximum: 2147483647 }
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 10 }
+ *         schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
  *     responses:
  *       200:
  *         description: 相关商品列表
@@ -63,7 +63,7 @@ router.get('/related/:productId', optionalAuth, RecommendationController.getRela
  *     parameters:
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 10 }
+ *         schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
  *     responses:
  *       200:
  *         description: 推荐商品列表

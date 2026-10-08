@@ -267,6 +267,7 @@ export const errorTranslations: Record<string, string> = {
   '获取搜索建议失败': 'Unable to load search suggestions',
   'Elasticsearch 搜索失败，请稍后重试': 'Search is unavailable. Please try again later',
   '获取推荐失败': 'Unable to load recommendations',
+  '推荐查询参数无效': 'Invalid recommendation query parameters',
   '获取相关商品失败': 'Unable to load related products',
 
   // API success messages can be displayed by the same message translator.
