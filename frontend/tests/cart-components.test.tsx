@@ -1,10 +1,11 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import CartItemRow from '@/components/CartItemRow';
 import CheckoutSummary from '@/components/CheckoutSummary';
 import type { OrderPreview } from '@/lib/api';
 import type { CartItem } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { render } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -23,6 +24,16 @@ const plus = () => screen.getByRole('button', { name: '+' });
 const checkbox = () => screen.getByRole('checkbox', { name: '选择 Lamp' });
 
 describe('cart item row', () => {
+  it('updates bilingual titles and variant labels without changing the cart identity', () => {
+    renderRow({ item: { ...item, title: '棉质衬衫', title_en: 'Cotton shirt', sku_specs: { 颜色: '红色', 尺寸: 42 },
+      sku_specs_en: { 颜色: { name: 'Color', value: 'Red' }, 尺寸: { name: 'Size' } } } });
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByRole('heading', { name: 'Cotton shirt' })).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Select Cotton shirt' })).toBeChecked();
+    expect(screen.getByText('Color: Red / Size: 42')).toBeVisible();
+    act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
+    expect(screen.getByText('颜色: 红色 / 尺寸: 42')).toBeVisible();
+  });
   it('shows the line subtotal and steps the quantity within stock', () => {
     const { onQuantityChange, onRemove, onToggle } = renderRow();
     expect(screen.getByText('¥25.00')).toBeInTheDocument();

@@ -57,14 +57,18 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-coupon', 'migrateCouponTables'], ['migrate-sku', 'migrateSkuTables'],
     ['migrate-address', 'migrateAddressTables'], ['migrate-review', 'migrateReviewTables'],
     ['migrate-account-security', 'migrateAccountSecurity'], ['migrate-fulfillment', 'migrateFulfillment'],
+    ['migrate-product-i18n', 'migrateProductI18n'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
-  await pool.query("INSERT INTO products(product_id,title,category_id,price,stock,status) VALUES(1,'浏览器交易测试商品',1,10.10,20,1)");
-  await pool.query("INSERT INTO products(product_id,title,category_id,price,original_price,stock,status) VALUES(2,'浏览器规格价格商品',1,99.00,150.00,0,1)");
-  await pool.query(`INSERT INTO product_skus(sku_id,product_id,sku_code,specs,price,original_price,stock,status) VALUES
-    (201,2,'PRICE-SALE','{"颜色":"红色"}',99.00,100.00,3,1),
-    (202,2,'PRICE-EQUAL','{"颜色":"蓝色"}',100.00,100.00,3,1),
-    (203,2,'PRICE-NONE','{"颜色":"绿色"}',150.00,NULL,3,1)`);
+  await pool.query(`INSERT INTO products(product_id,title,title_en,description,description_en,specs,specs_en,category_id,price,stock,status)
+    VALUES(1,'浏览器交易测试商品','Browser checkout product','浏览器中文描述','Browser English description',?,?,1,10.10,20,1)`,
+    [JSON.stringify({ 材质: '棉' }), JSON.stringify({ 材质: { name: 'Material', value: 'Cotton' } })]);
+  await pool.query("INSERT INTO products(product_id,title,title_en,category_id,price,original_price,stock,status) VALUES(2,'浏览器规格价格商品','Browser variant product',1,99.00,150.00,0,1)");
+  await pool.query(`INSERT INTO product_skus(sku_id,product_id,sku_code,specs,specs_en,price,original_price,stock,status) VALUES
+    (201,2,'PRICE-SALE','{"颜色":"红色"}',?,99.00,100.00,3,1),
+    (202,2,'PRICE-EQUAL','{"颜色":"蓝色"}',?,100.00,100.00,3,1),
+    (203,2,'PRICE-NONE','{"颜色":"绿色"}',?,150.00,NULL,3,1)`,
+    ['Red', 'Blue', 'Green'].map(value => JSON.stringify({ 颜色: { name: 'Color', value } })));
   const app = require(path.join(backend, 'dist/app')).createApp();
   listener = app.listen(3101, '127.0.0.1', () => console.log('E2E fixture ready on 127.0.0.1:3101'));
 })().catch(async () => { console.error('E2E fixture initialization failed'); await stop(); process.exit(1); });

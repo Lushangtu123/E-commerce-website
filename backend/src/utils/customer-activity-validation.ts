@@ -46,6 +46,6 @@ export function assertActivityBatch(ids: unknown): asserts ids is number[] {
 export function activityProductDTO<T extends Record<string, any>>(row: T) {
   const { existing_product_id, ...item } = row;
   return existing_product_id == null
-    ? { ...item, title: '商品已不存在', price: 0, stock: 0, status: -1, has_sku: 0 }
+    ? { ...item, title: '商品已不存在', title_en: 'Product no longer exists', price: 0, stock: 0, status: -1, has_sku: 0 }
     : item;
 }

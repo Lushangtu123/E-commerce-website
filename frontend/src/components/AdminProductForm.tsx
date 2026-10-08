@@ -2,13 +2,19 @@
 
 import '@/lib/admin-i18n';
 import type { Category } from '@/lib/api';
+import type { SpecTranslations } from '@/lib/product-content';
 import { useI18n } from '@/lib/i18n';
 import ProductImage from '@/components/ProductImage';
 
 /** The product form keeps numbers as strings while the administrator types. */
 export interface ProductFormValues {
   title: string;
+  title_en: string;
   description: string;
+  description_en: string;
+  /** Chinese attributes are reference data; editing their English text never rewrites this JSON. */
+  specs?: unknown;
+  specs_en?: SpecTranslations | null;
   price: string;
   stock: string;
   category_id: string;
@@ -18,20 +24,47 @@ export interface ProductFormValues {
 }
 
 export const EMPTY_PRODUCT_FORM: ProductFormValues = {
-  title: '', description: '', price: '', stock: '', category_id: '', brand: '', main_image: '', status: 1,
+  title: '', title_en: '', description: '', description_en: '', price: '', stock: '', category_id: '', brand: '', main_image: '', status: 1,
 };
 
 /** Whether the fields the API requires are filled in. */
 export const isProductFormComplete = (values: ProductFormValues) => !!(values.title && values.price && values.category_id);
 
 /** The create and update request body for a filled-in form. */
-export function toProductPayload(values: ProductFormValues) {
+const specEntries = (specs: unknown): [string, unknown][] => specs && typeof specs === 'object' && !Array.isArray(specs) ? Object.entries(specs) : [];
+
+function translatedSpecs(values: ProductFormValues, allowTypedValues = false) {
+  const englishEntries: [string, SpecTranslations[string]][] = [];
+  for (const [key, originalValue] of specEntries(values.specs)) {
+    const translation = values.specs_en && Object.hasOwn(values.specs_en, key) ? values.specs_en[key] : undefined;
+    const name = translation?.name?.trim() ?? '';
+    const value = allowTypedValues || typeof originalValue === 'string' ? translation?.value?.trim() ?? '' : '';
+    if (name.length > 50 || value.length > 100) throw new Error('英文规格名称最多50个字符，英文规格值最多100个字符');
+    if (name || value) englishEntries.push([key, { ...(name && { name }), ...(value && { value }) }]);
+  }
+  return englishEntries.length ? Object.fromEntries(englishEntries) : null;
+}
+
+export function toProductPayload(values: ProductFormValues, includeEmptyEnglish = false) {
+  const titleEn = values.title_en.trim(), descriptionEn = values.description_en.trim();
+  if (titleEn.length > 200) throw new Error('英文商品标题最多200个字符');
+  const specsEn = translatedSpecs(values);
   return {
     title: values.title, description: values.description,
+    ...((titleEn || includeEmptyEnglish) && { title_en: titleEn || null }),
+    ...((descriptionEn || includeEmptyEnglish) && { description_en: descriptionEn || null }),
+    ...((specsEn || includeEmptyEnglish) && { specs_en: specsEn }),
     price: parseFloat(values.price), stock: parseInt(values.stock) || 0,
     category_id: parseInt(values.category_id), brand: values.brand,
     image_url: values.main_image, status: values.status,
   };
+}
+
+/** Updates only what the administrator changed, so an English edit cannot reset live inventory. */
+export function toProductChanges(values: ProductFormValues, previous: ProductFormValues) {
+  const payload = toProductPayload(values, true), original = { ...toProductPayload(previous, true), specs_en: translatedSpecs(previous, true) };
+  return Object.fromEntries(Object.entries(payload).filter(([key, value]) =>
+    JSON.stringify(value) !== JSON.stringify(original[key as keyof typeof original]))) as Partial<typeof payload>;
 }
 
 interface Props {
@@ -56,6 +89,9 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
   const { t } = useI18n();
   const id = (field: string) => `${idPrefix}-${field}`;
   const set = <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => onChange({ ...values, [field]: value });
+  const setSpec = (key: string, field: 'name' | 'value', value: string) => set('specs_en', {
+    ...values.specs_en, [key]: { ...(values.specs_en && Object.hasOwn(values.specs_en, key) ? values.specs_en[key] : {}), [field]: value },
+  });
   const required = <span className="text-red-500">*</span>;
 
   return (
@@ -79,10 +115,40 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
             </div>
 
             <div>
+              <label htmlFor={id('title-en')} className={labelClass}>{t('英文商品标题（可选）')}</label>
+              <input id={id('title-en')} type="text" value={values.title_en} maxLength={200} onChange={e => set('title_en', e.target.value)}
+                className={inputClass} placeholder={t('请输入英文商品标题')} />
+            </div>
+
+            <div>
               <label htmlFor={id('description')} className={labelClass}>{t('商品描述')}</label>
               <textarea id={id('description')} value={values.description} onChange={e => set('description', e.target.value)}
                 rows={3} className={inputClass} placeholder={t('请输入商品描述')} />
             </div>
+
+            <div>
+              <label htmlFor={id('description-en')} className={labelClass}>{t('英文商品描述（可选）')}</label>
+              <textarea id={id('description-en')} value={values.description_en} onChange={e => set('description_en', e.target.value)}
+                rows={3} className={inputClass} placeholder={t('请输入英文商品描述')} />
+            </div>
+
+            {specEntries(values.specs).length > 0 && <fieldset className="space-y-3">
+              <legend className="text-sm font-medium text-gray-700">{t('商品属性英文翻译')}</legend>
+              {specEntries(values.specs).map(([key, value], index) => {
+                const translation = values.specs_en && Object.hasOwn(values.specs_en, key) ? values.specs_en[key] : undefined;
+                return <div key={key} className="rounded-lg border border-gray-200 p-3 space-y-3">
+                  <p className="text-sm text-gray-600 wrap-break-word">{key}: {typeof value === 'object' ? JSON.stringify(value) : String(value)}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label htmlFor={id(`spec-name-en-${index}`)} className={labelClass}>{t('英文规格名称 {index}（可选）', { index: index + 1 })}</label>
+                      <input id={id(`spec-name-en-${index}`)} type="text" value={translation?.name ?? ''} maxLength={50} className={inputClass} onChange={e => setSpec(key, 'name', e.target.value)} /></div>
+                    <div><label htmlFor={id(`spec-value-en-${index}`)} className={labelClass}>{t('英文规格值 {index}（可选）', { index: index + 1 })}</label>
+                      <input id={id(`spec-value-en-${index}`)} type="text" value={typeof value === 'string' ? translation?.value ?? '' : ''} maxLength={100} disabled={typeof value !== 'string'} className={inputClass} onChange={e => setSpec(key, 'value', e.target.value)} />
+                      {typeof value !== 'string' && <p className="mt-1 text-xs text-gray-500">{t('数字和布尔值保持原值')}</p>}</div>
+                  </div>
+                </div>;
+              })}
+            </fieldset>}
+            <p className="text-sm text-gray-500">{t('英文内容可选，留空显示中文；清空已有英文可删除翻译')}</p>
 
             <div className="grid grid-cols-2 gap-4">
               <div>

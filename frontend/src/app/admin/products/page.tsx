@@ -9,16 +9,17 @@ import type { AdminPage, AdminProductRow, Category } from '@/lib/api';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import AdminLayout from '@/components/AdminLayout';
 import ProductImage from '@/components/ProductImage';
-import AdminProductForm, { EMPTY_PRODUCT_FORM, isProductFormComplete, toProductPayload, type ProductFormValues } from '@/components/AdminProductForm';
+import AdminProductForm, { EMPTY_PRODUCT_FORM, isProductFormComplete, toProductPayload, toProductChanges, type ProductFormValues } from '@/components/AdminProductForm';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import { localizedText } from '@/lib/product-content';
 
-type EditProductForm = ProductFormValues & { product_id: number };
+type EditProductForm = ProductFormValues & { product_id: number; previous: ProductFormValues };
 
 export default function AdminProductsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const sessionId = useAdminSessionId();
   // The page and filters belong to the administrator who chose them; another one starts unfiltered on page one.
   const [view, setView] = useState({ sessionId, page: 1, filters: { keyword: '', status: '' } });
@@ -183,7 +184,9 @@ export default function AdminProductsPage() {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
     }
-    const payload = toProductPayload(newProduct);
+    let payload;
+    try { payload = toProductPayload(newProduct); }
+    catch (error) { toast.error(t((error as Error).message)); return; }
     return runMutation(() => api.post('/admin/products', payload), '商品添加成功', '添加商品失败', () => {
       setShowAddModal(false);
       setNewProduct(EMPTY_PRODUCT_FORM);
@@ -193,17 +196,21 @@ export default function AdminProductsPage() {
   const openEditModal = (product: AdminProductRow) => {
     if (!isDisplayedScope() || mutation.current || !products.some(row => row.product_id === product.product_id)) return;
     setFormScope(scopeKey);
-    setEditProduct({
-      product_id: product.product_id,
+    const values: ProductFormValues = {
       title: product.title,
+      title_en: product.title_en || '',
       description: product.description || '',
+      description_en: product.description_en || '',
+      specs: product.specs,
+      specs_en: product.specs_en,
       price: product.price.toString(),
       stock: product.stock.toString(),
       category_id: product.category_id.toString(),
       brand: product.brand || '',
       main_image: product.main_image || '',
       status: product.status
-    });
+    };
+    setEditProduct({ ...values, product_id: product.product_id, previous: values });
     setShowEditModal(true);
   };
 
@@ -214,7 +221,10 @@ export default function AdminProductsPage() {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
     }
-    const payload = toProductPayload(editProduct);
+    let payload;
+    try { payload = toProductChanges(editProduct, editProduct.previous); }
+    catch (error) { toast.error(t((error as Error).message)); return; }
+    if (!Object.keys(payload).length) { toast.success(t('没有需要保存的修改')); return; }
     return runMutation(() => api.put(`/admin/products/${editProduct.product_id}`, payload), '商品更新成功', '更新商品失败', () => {
       setShowEditModal(false);
       setEditProduct(null);
@@ -361,7 +371,7 @@ export default function AdminProductsPage() {
                       <td className="px-6 py-4">
                         <input
                           type="checkbox"
-                          aria-label={t("选择 {title}", { title: product.title })}
+                          aria-label={t("选择 {title}", { title: localizedText(product.title, product.title_en, locale) })}
                           checked={selectedIds.includes(product.product_id)}
                           onChange={() => toggleSelect(product.product_id)}
                           disabled={busy}
@@ -370,9 +380,9 @@ export default function AdminProductsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-                          <ProductImage src={product.main_image} alt={product.title} compact className="h-12 w-12 shrink-0 rounded-lg" />
+                          <ProductImage src={product.main_image} alt={localizedText(product.title, product.title_en, locale)} compact className="h-12 w-12 shrink-0 rounded-lg" />
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{product.title}</div>
+                            <div className="text-sm font-medium text-gray-900">{localizedText(product.title, product.title_en, locale)}</div>
                             <div className="text-sm text-gray-500">{product.category_name}</div>
                           </div>
                         </div>
@@ -459,7 +469,7 @@ export default function AdminProductsPage() {
         {formScope === scopeKey && showEditModal && editProduct && (
           <AdminProductForm idPrefix="editProduct" heading={t('编辑商品')} submitLabel={t('保存修改')}
             values={editProduct} categories={categories} busy={busy}
-            onChange={values => updateEditProduct({ ...values, product_id: editProduct.product_id })}
+            onChange={values => updateEditProduct({ ...values, product_id: editProduct.product_id, previous: editProduct.previous })}
             onClose={() => { setShowEditModal(false); setEditProduct(null); }} onSubmit={handleEditProduct} />
         )}
       </div>

@@ -2,6 +2,7 @@ import { getPool, query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { skuCreateSchema, skuUpdateSchema, validSKUId } from '../utils/sku-validation';
+import { SpecsTranslation } from '../utils/product-i18n';
 
 export class SKUError extends Error {
   constructor(message: string, public readonly statusCode: number = 400) { super(message); }
@@ -59,6 +60,7 @@ export interface ProductSKU {
   product_id: number;
   sku_code: string;
   specs: any; // JSON格式：{"颜色":"红色","尺寸":"M"}
+  specs_en?: SpecsTranslation | null;
   price: number;
   original_price?: number;
   stock: number;
@@ -68,12 +70,21 @@ export interface ProductSKU {
   updated_at: Date;
 }
 
+function parseSKU(sku: ProductSKU): ProductSKU {
+  return {
+    ...sku,
+    specs: typeof sku.specs === 'string' ? JSON.parse(sku.specs) : sku.specs,
+    specs_en: typeof sku.specs_en === 'string' ? JSON.parse(sku.specs_en) : sku.specs_en,
+  };
+}
+
 export class SKUModel {
   // 创建SKU
   static async create(data: {
     product_id: number;
     sku_code: string;
     specs: any;
+    specs_en?: SpecsTranslation | null;
     price: number;
     original_price?: number;
     stock: number;
@@ -84,9 +95,9 @@ export class SKUModel {
     return skuTransaction(async connection => {
       await lockProductSKUs(connection, fields.product_id);
       const [result] = await connection.execute<ResultSetHeader>(
-        `INSERT INTO product_skus (product_id, sku_code, specs, price, original_price, stock, image, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [fields.product_id, fields.sku_code, JSON.stringify(fields.specs), fields.price,
+        `INSERT INTO product_skus (product_id, sku_code, specs, specs_en, price, original_price, stock, image, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [fields.product_id, fields.sku_code, JSON.stringify(fields.specs), fields.specs_en == null ? null : JSON.stringify(fields.specs_en), fields.price,
           fields.original_price ?? null, fields.stock, fields.image ?? null, fields.status]
       );
       return result.insertId;
@@ -104,9 +115,9 @@ export class SKUModel {
       for (const productId of productIds) await lockProductSKUs(connection, productId);
       for (const sku of fields) {
         await connection.execute(
-          `INSERT INTO product_skus (product_id, sku_code, specs, price, original_price, stock, image, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [sku.product_id, sku.sku_code, JSON.stringify(sku.specs), sku.price,
+          `INSERT INTO product_skus (product_id, sku_code, specs, specs_en, price, original_price, stock, image, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [sku.product_id, sku.sku_code, JSON.stringify(sku.specs), sku.specs_en == null ? null : JSON.stringify(sku.specs_en), sku.price,
             sku.original_price ?? null, sku.stock, sku.image ?? null, sku.status]
         );
       }
@@ -122,9 +133,7 @@ export class SKUModel {
     
     if (results.length === 0) return null;
     
-    const sku = results[0];
-    sku.specs = typeof sku.specs === 'string' ? JSON.parse(sku.specs) : sku.specs;
-    return sku;
+    return parseSKU(results[0]);
   }
 
   // 根据SKU编码获取
@@ -136,9 +145,7 @@ export class SKUModel {
     
     if (results.length === 0) return null;
     
-    const sku = results[0];
-    sku.specs = typeof sku.specs === 'string' ? JSON.parse(sku.specs) : sku.specs;
-    return sku;
+    return parseSKU(results[0]);
   }
 
   // 获取商品的所有SKU
@@ -149,10 +156,7 @@ export class SKUModel {
       [productId]
     );
     
-    return results.map(sku => ({
-      ...sku,
-      specs: typeof sku.specs === 'string' ? JSON.parse(sku.specs) : sku.specs
-    }));
+    return results.map(parseSKU);
   }
 
   // 更新SKU
@@ -170,7 +174,7 @@ export class SKUModel {
       const keys = Object.keys(value);
       const [result] = await connection.execute<ResultSetHeader>(
         `UPDATE product_skus SET ${keys.map(key => `${key} = ?`).join(', ')} WHERE sku_id = ? AND product_id = ?`,
-        [...keys.map(key => key === 'specs' ? JSON.stringify(value[key]) : value[key]), skuId, parentId]
+        [...keys.map(key => ['specs', 'specs_en'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), skuId, parentId]
       );
       return result.affectedRows > 0;
     });
@@ -235,9 +239,7 @@ export class SKUModel {
     
     if (results.length === 0) return null;
     
-    const sku = results[0];
-    sku.specs = typeof sku.specs === 'string' ? JSON.parse(sku.specs) : sku.specs;
-    return sku;
+    return parseSKU(results[0]);
   }
 
   // 获取总库存

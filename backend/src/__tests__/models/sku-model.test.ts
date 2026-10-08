@@ -51,7 +51,7 @@ test('SKU创建先锁父商品再按ID锁SKU，同连接提交且不覆盖基础
   expect(sqlCalls()[0]).toMatch(/FROM products.+FOR UPDATE/);
   expect(sqlCalls()[1]).toMatch(/FROM product_skus.+ORDER BY sku_id FOR UPDATE/);
   const insert = connection.execute.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO product_skus'));
-  expect(insert[1]).toEqual([1, 'BLUE-M', '{"color":"blue"}', 0, null, 0, null, 1]);
+  expect(insert[1]).toEqual([1, 'BLUE-M', '{"color":"blue"}', null, 0, null, 0, null, 1]);
   expect(connection.commit).toHaveBeenCalledTimes(1);
   expect(connection.release).toHaveBeenCalledTimes(1);
   expect(sqlCalls().some((sql: string) => sql.includes('UPDATE products'))).toBe(false);

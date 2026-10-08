@@ -9,6 +9,17 @@ import { render } from './helpers';
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
+it('switches product content with the locale and falls back for missing translations', () => {
+  const product = { product_id: 1, title: '棉质衬衫', title_en: 'Cotton shirt', price: 15, stock: 2, sales_count: 0, rating: 5 };
+  render(<ProductCard product={product} />);
+  expect(screen.getByRole('heading', { name: '棉质衬衫' })).toBeVisible();
+  act(() => useLocaleStore.setState({ locale: 'en' }));
+  expect(screen.getByRole('heading', { name: 'Cotton shirt' })).toBeVisible();
+  expect(screen.getByRole('img')).toHaveAccessibleName('Cotton shirt');
+  act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
+  expect(screen.getByRole('heading', { name: '棉质衬衫' })).toBeVisible();
+});
+
 it.each([
   { has_sku: true, stock: '0' }, { has_sku: true, stock: 0 }, { has_sku: true, stock: '2' },
   { has_sku: false, stock: '0' }, { has_sku: false, stock: 0 }, { has_sku: false, stock: '2' },

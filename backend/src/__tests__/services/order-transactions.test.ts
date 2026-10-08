@@ -82,6 +82,28 @@ beforeEach(() => {
 });
 
 describe('下单原子性', () => {
+  test('双语商品与SKU快照只取服务器锁定内容，忽略客户端伪造翻译', async () => {
+    const original = connection.execute.getMockImplementation();
+    const specs = { 颜色: '红色', 尺寸: 42, 防水: false };
+    const specs_en = { 颜色: { name: 'Color', value: 'Red' }, 尺寸: { name: 'Size' } };
+    connection.execute.mockImplementation(async (sql: string, params: any[]) => {
+      if (sql.includes('FROM products')) return [[{ ...PRODUCT, title_en: 'Server shirt' }], []];
+      if (sql.includes('FROM product_skus')) return [[{ sku_id: 11, product_id: 1, sku_code: 'RED', specs, specs_en, stock: 3, price: '19.99', status: 1 }], []];
+      return original(sql, params);
+    });
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, sku_id: 11, quantity: 1, title_en: 'Forged', specs_en: { 颜色: { value: 'Forged' } } }] }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(matching('FROM products')[0][0]).toContain('title_en');
+    expect(matching('FROM product_skus')[0][0]).toContain('specs_en');
+    const [sql, params] = matching('INSERT INTO order_items')[0];
+    expect(sql).toContain('product_name_en');
+    expect(sql).toContain('sku_specs_en');
+    expect(params).toContain('Server shirt');
+    expect(params).toContain(JSON.stringify(specs_en));
+    expect(params).not.toContain('Forged');
+  });
+
   test('重复商品合并、按商品 ID 加锁，并按服务器价格写入订单', async () => {
     const res = response();
     await OrderController.create(request({ items: [

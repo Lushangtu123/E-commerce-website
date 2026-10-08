@@ -5,6 +5,7 @@ import HistoryPage from '@/app/history/page';
 import { browseApi, cartApi, favoriteApi, productApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { CommitLog, apiError, captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -100,6 +101,15 @@ beforeEach(() => {
 
 describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
   const emptyText = kind === 'favorites' ? '暂无收藏商品' : '暂无浏览记录';
+
+  it('changes saved product names with the language and falls back only for untranslated content', async () => {
+    await setup(kind, { rows: [{ ...product(1, '棉质衬衫'), title_en: 'Cotton shirt' } as Row, product(2, '未翻译商品')] });
+    expect(titles()).toEqual(['棉质衬衫', '未翻译商品']);
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(titles()).toEqual(['Cotton shirt', '未翻译商品']);
+    act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
+    expect(titles()).toEqual(['棉质衬衫', '未翻译商品']);
+  });
 
   it('shows an alert with a retry instead of an empty list after a failure', async () => {
     let calls = 0;

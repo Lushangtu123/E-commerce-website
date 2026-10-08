@@ -24,8 +24,8 @@ export const getAdminProducts = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (keyword) {
-      whereClause += ' AND (p.title LIKE ? OR p.description LIKE ?)';
-      params.push(`%${keyword}%`, `%${keyword}%`);
+      whereClause += ' AND (p.title LIKE ? OR p.description LIKE ? OR p.title_en LIKE ? OR p.description_en LIKE ?)';
+      params.push(...Array(4).fill(`%${keyword}%`));
     }
     if (categoryId) {
       whereClause += ' AND p.category_id = ?';

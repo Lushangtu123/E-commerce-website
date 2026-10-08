@@ -1,6 +1,7 @@
 'use client';
 
 import { useI18n } from '@/lib/i18n';
+import { localizedText, localizedSpecs, specSummary, specValue } from '@/lib/product-content';
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -21,7 +22,7 @@ import { requestFailure } from '@/lib/api-error';
  * client then loads it again for the signed-in context, and only that copy can be bought.
  */
 export default function ProductDetail({ initialProduct = null }: { initialProduct?: Product | null }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const params = useParams() || {};
   const router = useRouter();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
@@ -108,6 +109,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   // Until the client has loaded the product for this context, show the server's copy with every control locked.
   const ready = isHydrated && !loading && loadedContext === context;
   const product = ready ? loadedProduct : initialProduct?.product_id === productId ? initialProduct : null;
+  const title = localizedText(product?.title, product?.title_en, locale);
   const locked = adding || !ready;
   const hasSku = !!product?.has_sku;
   const skus = product?.skus || [];
@@ -140,9 +142,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       await cartApi.add({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) });
       if (!isCurrentContext()) return false;
       addItem({
-        cart_id: Date.now(), product_id: productId, quantity, title: product.title,
+        cart_id: Date.now(), product_id: productId, quantity, title: product.title, title_en: product.title_en,
         price: Number(price), main_image: image ?? undefined, stock,
-        ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs }),
+        ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs, sku_specs_en: selectedSku.specs_en }),
       });
       toast.success(t("已加入购物车"));
       return true;
@@ -206,14 +208,14 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
         <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:gap-12">
           {/* 商品图片 */}
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <ProductImage src={image} alt={product.title} className="aspect-square" fit="contain" priority />
+            <ProductImage src={image} alt={title} className="aspect-square" fit="contain" priority />
           </div>
 
           {/* 商品信息 */}
           <div className="space-y-6">
             <div>
               <h1 className="mb-3 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
-                {product.title}
+                {title}
               </h1>
               
               <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
@@ -252,7 +254,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
                   <option value="">{skus.length === 0 ? t("暂无可用规格") : t("请选择规格")}</option>
                   {skus.map(sku => (
                     <option key={sku.sku_id} value={sku.sku_id} disabled={Number(sku.stock) <= 0}>
-                      {Object.entries(sku.specs || {}).map(([name, value]) => `${name}: ${value}`).join(' / ') || sku.sku_code}
+                      {specSummary(sku.specs, sku.specs_en, locale) || sku.sku_code}
                       {t(' — ¥{price}（库存 {stock}）', { price: sku.price, stock: sku.stock })}
                     </option>
                   ))}
@@ -329,9 +331,21 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
             <div className="border-t border-gray-200 pt-6">
               <h2 className="mb-3 text-base font-semibold text-gray-900">{t("商品详情")}</h2>
               <p className="whitespace-pre-wrap text-sm leading-6 text-gray-600">
-                {product.description || t("暂无描述")}
+                {localizedText(product.description, product.description_en, locale) || t("暂无描述")}
               </p>
             </div>
+            {product.specs && Object.keys(product.specs).length > 0 && (
+              <section className="border-t border-gray-200 pt-6">
+                <h2 className="mb-3 text-base font-semibold text-gray-900">{t('商品参数')}</h2>
+                <dl className="space-y-2 text-sm">
+                  {localizedSpecs(product.specs, product.specs_en, locale).map(([name, value], index) => (
+                    <div key={index} className="grid grid-cols-2 gap-4">
+                      <dt className="text-gray-500">{name}</dt><dd className="text-gray-900">{specValue(value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
           </div>
         </div>
 
@@ -342,4 +356,3 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     </div>
   );
 }
-

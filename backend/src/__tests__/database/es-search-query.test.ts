@@ -41,3 +41,10 @@ test('没有关键词时只按筛选条件查询', async () => {
   expect(bool.must).toEqual([]);
   expect(bool.filter).toEqual(expect.arrayContaining([{ term: { status: 1 } }, { term: { 'brand.keyword': 'Acme' } }]));
 });
+
+test('英文关键词同时匹配英文标题和描述', async () => {
+  const { must } = await sentQuery({ keyword: 'Cotton shirt' });
+  for (const clause of must[0].bool.should) {
+    expect(clause.multi_match.fields).toEqual(expect.arrayContaining(['title_en^3', 'description_en']));
+  }
+});

@@ -1,11 +1,14 @@
 import { query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PRODUCT_SORTS, productCreateSchema, productQuerySchema, productUpdateSchema } from '../utils/product-validation';
+import { SpecsTranslation } from '../utils/product-i18n';
 
 export interface Product {
   product_id: number;
   title: string;
+  title_en?: string | null;
   description?: string;
+  description_en?: string | null;
   category_id?: number;
   brand?: string;
   price: number;
@@ -17,6 +20,7 @@ export interface Product {
   main_image?: string;
   images?: string[];
   specs?: any;
+  specs_en?: SpecsTranslation | null;
   status: number;
   created_at: Date;
   updated_at: Date;
@@ -34,11 +38,11 @@ export interface ProductQuery {
 }
 
 // Customer prices and availability come from enabled variants; legacy parent stock remains independent.
-export const customerProducts = `SELECT p.product_id, p.title, p.description, p.category_id, p.brand,
+export const customerProducts = `SELECT p.product_id, p.title, p.title_en, p.description, p.description_en, p.category_id, p.brand,
   CASE WHEN s.product_id IS NULL THEN p.price ELSE COALESCE(s.price, p.price) END AS price,
   CASE WHEN s.product_id IS NULL THEN p.original_price ELSE display_sku.original_price END AS original_price,
   CASE WHEN s.product_id IS NULL THEN p.stock ELSE COALESCE(s.stock, 0) END AS stock,
-  p.sales_count, p.rating, p.main_image, p.images, p.specs, p.status, p.created_at, p.updated_at,
+  p.sales_count, p.rating, p.main_image, p.images, p.specs, p.specs_en, p.status, p.created_at, p.updated_at,
   (s.product_id IS NOT NULL) AS has_sku
   FROM products p LEFT JOIN (
     SELECT product_id, MIN(CASE WHEN status = 1 THEN price END) AS price,
@@ -55,13 +59,13 @@ export class ProductModel {
   static async create(product: Partial<Product>): Promise<number> {
     const { error, value } = productCreateSchema.validate(product);
     if (error) throw error;
-    const { title, description, category_id, brand, price, original_price, stock, main_image, images, specs, status } = value;
+    const { title, title_en, description, description_en, category_id, brand, price, original_price, stock, main_image, images, specs, specs_en, status } = value;
     
     const result = await query<ResultSetHeader>(
-      `INSERT INTO products (title, description, category_id, brand, price, original_price, stock, main_image, images, specs, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, description ?? null, category_id ?? null, brand ?? null, price, original_price ?? null, stock, main_image ?? null,
-        images == null ? null : JSON.stringify(images), specs == null ? null : JSON.stringify(specs), status]
+      `INSERT INTO products (title, title_en, description, description_en, category_id, brand, price, original_price, stock, main_image, images, specs, specs_en, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [title, title_en ?? null, description ?? null, description_en ?? null, category_id ?? null, brand ?? null, price, original_price ?? null, stock, main_image ?? null,
+        images == null ? null : JSON.stringify(images), specs == null ? null : JSON.stringify(specs), specs_en == null ? null : JSON.stringify(specs_en), status]
     );
     return result.insertId;
   }
@@ -82,8 +86,8 @@ export class ProductModel {
     }
 
     if (keyword) {
-      whereClauses.push('(title LIKE ? OR description LIKE ?)');
-      queryParams.push(`%${keyword}%`, `%${keyword}%`);
+      whereClauses.push('(title LIKE ? OR description LIKE ? OR title_en LIKE ? OR description_en LIKE ?)');
+      queryParams.push(...Array(4).fill(`%${keyword}%`));
     }
 
     if (brand) {
@@ -135,7 +139,7 @@ export class ProductModel {
     if (error) throw error;
     const keys = Object.keys(value);
     const fields = keys.map(key => `${key} = ?`).join(', ');
-    const values = [...keys.map(key => ['images', 'specs'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), productId];
+    const values = [...keys.map(key => ['images', 'specs', 'specs_en'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), productId];
     
     const result = await query<ResultSetHeader>(
       `UPDATE products SET ${fields} WHERE product_id = ?`,

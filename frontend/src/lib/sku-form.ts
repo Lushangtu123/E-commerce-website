@@ -1,12 +1,14 @@
 import type { AdminSKU, AdminSKUInput } from '@/lib/api';
+import type { SpecTranslations } from '@/lib/product-content';
 
-export type SpecRow = { name: string; value: string; originalValue?: string | number | boolean };
+export type SpecRow = { name: string; value: string; nameEn?: string; valueEn?: string; originalValue?: string | number | boolean };
 export type SKUDraft = { sku_code: string; price: string; original_price: string; stock: string; image: string; status: string; specs: SpecRow[] };
 
 export function skuDraft(sku?: AdminSKU): SKUDraft {
   return { sku_code: sku?.sku_code ?? '', price: sku ? String(sku.price) : '', original_price: sku?.original_price == null ? '' : String(sku.original_price),
     stock: String(sku?.stock ?? 0), image: sku?.image ?? '', status: String(sku?.status ?? 1),
-    specs: sku ? Object.entries(sku.specs).map(([name, value]) => ({ name, value: String(value), originalValue: value })) : [{ name: '', value: '' }] };
+    specs: sku ? Object.entries(sku.specs).map(([name, value]) => ({ name, value: String(value), originalValue: value,
+      nameEn: sku.specs_en?.[name]?.name ?? '', valueEn: typeof value === 'string' ? sku.specs_en?.[name]?.value ?? '' : '' })) : [{ name: '', value: '', nameEn: '', valueEn: '' }] };
 }
 
 export function parseSKUForm(draft: SKUDraft): AdminSKUInput {
@@ -25,6 +27,7 @@ export function parseSKUForm(draft: SKUDraft): AdminSKUInput {
   if (draft.image.trim().length > 255) fail('图片地址最多255个字符');
   if (draft.specs.length < 1 || draft.specs.length > 20) fail('请填写1至20项规格，每项名称最多50个字符，文本值最多100个字符');
   const names = new Set<string>();
+  const englishEntries: [string, SpecTranslations[string]][] = [];
   const entries = draft.specs.map(row => {
     const name = row.name.trim(), text = row.value.trim();
     if (!name || name.length > 50 || !text || (typeof row.originalValue !== 'number' && typeof row.originalValue !== 'boolean' && text.length > 100)) fail('请填写1至20项规格，每项名称最多50个字符，文本值最多100个字符');
@@ -32,9 +35,12 @@ export function parseSKUForm(draft: SKUDraft): AdminSKUInput {
     names.add(name);
     const value = row.originalValue !== undefined && row.value === String(row.originalValue) ? row.originalValue : text;
     if ((typeof value === 'string' && value.length > 100) || (typeof value === 'number' && !Number.isFinite(value))) fail('请填写1至20项规格，每项名称最多50个字符，文本值最多100个字符');
+    const nameEn = row.nameEn?.trim() ?? '', valueEn = typeof value === 'string' ? row.valueEn?.trim() ?? '' : '';
+    if (nameEn.length > 50 || valueEn.length > 100) fail('英文规格名称最多50个字符，英文规格值最多100个字符');
+    if (nameEn || valueEn) englishEntries.push([name, { ...(nameEn && { name: nameEn }), ...(valueEn && { value: valueEn }) }]);
     return [name, value] as const;
   });
-  return { sku_code: code, specs: Object.fromEntries(entries), price: money(draft.price), original_price: draft.original_price.trim() ? money(draft.original_price) : null,
+  return { sku_code: code, specs: Object.fromEntries(entries), ...(englishEntries.length && { specs_en: Object.fromEntries(englishEntries) }), price: money(draft.price), original_price: draft.original_price.trim() ? money(draft.original_price) : null,
     stock, image: draft.image.trim() || null, status: Number(draft.status) as 0 | 1 };
 }
 
@@ -49,5 +55,10 @@ export function skuChanges(input: AdminSKUInput, previous: AdminSKU): Partial<Ad
   if (input.status !== previous.status) changes.status = input.status;
   if (Object.keys(input.specs).length !== Object.keys(previous.specs).length ||
     Object.entries(input.specs).some(([name, value]) => !Object.hasOwn(previous.specs, name) || previous.specs[name] !== value)) changes.specs = input.specs;
+  const english = input.specs_en ?? {}, previousEnglish = previous.specs_en ?? {};
+  if (Object.keys(english).length !== Object.keys(previousEnglish).length || Object.entries(english).some(([key, value]) =>
+    !Object.hasOwn(previousEnglish, key) || previousEnglish[key].name !== value.name || previousEnglish[key].value !== value.value)) {
+    changes.specs_en = Object.keys(english).length ? english : null;
+  }
   return changes;
 }

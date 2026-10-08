@@ -127,6 +127,13 @@ async function visibleText(page, text) {
   await pricing.getByText('¥100.00', { exact: true }).waitFor({ state: 'visible' });
   assert.equal(await pricing.locator('.line-through').textContent(), '¥100.00');
   await pricing.getByText('¥99.00', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await page.getByRole('heading', { name: 'Browser variant product', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await page.getByLabel('Product options', { exact: true }).inputValue(), '201');
+  assert.match(await page.getByLabel('Product options', { exact: true }).locator('option:checked').textContent(), /Color: Red/);
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  assert.equal(await variant.inputValue(), '201');
+  console.log('PASS browser English variant labels preserve selected SKU identity');
   await variant.selectOption('202');
   await pricing.getByText('¥100.00', { exact: true }).waitFor({ state: 'visible' });
   assert.equal(await pricing.locator('.line-through').count(), 0, 'equal variant prices have no discount');
@@ -142,9 +149,24 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '保存地址', exact: true }).click();
   await visibleText(page, '仅测试地址1号');
   await page.goto('http://127.0.0.1:3100/products/1');
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
+  await visibleText(page, 'Browser English description');
+  await visibleText(page, 'Cotton');
+  const englishSearch = await context.request.get('http://127.0.0.1:3101/api/products?keyword=Browser%20checkout');
+  assert.equal(englishSearch.status(), 200);
+  assert.equal((await englishSearch.json()).products.some(product => product.product_id === 1), true);
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  await visibleText(page, '浏览器中文描述');
+  console.log('PASS browser bilingual product name, description, attributes and English search');
   await page.getByRole('button', { name: '加入购物车', exact: true }).click();
   await visibleText(page, '已加入购物车');
   await page.goto('http://127.0.0.1:3100/cart');
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('checkbox', { name: 'Select Browser checkout product', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser bilingual cart content');
   const checkoutRequests = [];
   let committedOrderId;
   const checkoutFaults = async route => {
@@ -192,6 +214,15 @@ async function visibleText(page, text) {
   console.log('PASS browser lost checkout response, HTTP 408/429 and reload preserve one order and stock deduction');
   const orderUrl = page.url();
   const detailEndpoint = `${checkoutEndpoint}/${committedOrderId}`;
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
+  const bilingualOrder = await context.request.get(detailEndpoint);
+  assert.equal(bilingualOrder.status(), 200);
+  const bilingualItem = (await bilingualOrder.json()).items[0];
+  assert.equal(bilingualItem.product_name, '浏览器交易测试商品');
+  assert.equal(bilingualItem.product_name_en, 'Browser checkout product');
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser bilingual order snapshot');
   const apiHeaders = { 'X-Requested-With': 'XMLHttpRequest', Origin: 'http://127.0.0.1:3100' };
   for (const id of [`${committedOrderId}abc`, '1e3']) {
     for (const [method, suffix] of [['get', ''], ['get', '/remaining-time'], ['post', '/cancel'], ['post', '/pay'], ['post', '/confirm']]) {

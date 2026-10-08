@@ -49,7 +49,10 @@ router.get('/', requirePermission('product:view'), getAdminProducts);
  *             required: [title, price]
  *             properties:
  *               title: { type: string }
+ *               title_en: { type: string, nullable: true, maxLength: 200 }
  *               description: { type: string }
+ *               description_en: { type: string, nullable: true }
+ *               specs_en: { $ref: '#/components/schemas/SpecsTranslation' }
  *               price: { type: number }
  *               stock: { type: integer }
  *               category_id: { type: integer }
@@ -109,7 +112,10 @@ router.put('/batch/status', requirePermission('product:edit'), batchUpdateProduc
  *             type: object
  *             properties:
  *               title: { type: string }
+ *               title_en: { type: string, nullable: true, maxLength: 200 }
  *               description: { type: string }
+ *               description_en: { type: string, nullable: true }
+ *               specs_en: { $ref: '#/components/schemas/SpecsTranslation' }
  *               price: { type: number }
  *               stock: { type: integer }
  *               category_id: { type: integer }
@@ -195,6 +201,7 @@ router.delete('/:productId', requirePermission('product:delete'), deleteProduct)
  *                   properties:
  *                     product_id: { type: integer }
  *                     title: { type: string }
+ *                     title_en: { type: string, nullable: true }
  *                     status: { type: integer, enum: [0, 1] }
  *                 skus:
  *                   type: array
@@ -227,6 +234,7 @@ router.get('/:productId/skus', requirePermission('product:view'), getProductSKUs
  *               specs:
  *                 type: object
  *                 example: { 颜色: 红, 尺码: M }
+ *               specs_en: { $ref: '#/components/schemas/SpecsTranslation' }
  *               price: { type: number }
  *               original_price: { type: number }
  *               stock: { type: integer }
@@ -266,6 +274,7 @@ router.post('/:productId/skus', requirePermission('product:create'), createSKU);
  *                   properties:
  *                     sku_code: { type: string }
  *                     specs: { type: object }
+ *                     specs_en: { $ref: '#/components/schemas/SpecsTranslation' }
  *                     price: { type: number }
  *                     original_price: { type: number }
  *                     stock: { type: integer }
@@ -297,6 +306,7 @@ router.post('/:productId/skus/batch', requirePermission('product:create'), batch
  *             type: object
  *             properties:
  *               specs: { type: object }
+ *               specs_en: { $ref: '#/components/schemas/SpecsTranslation' }
  *               price: { type: number }
  *               original_price: { type: number }
  *               stock: { type: integer }
@@ -336,6 +346,7 @@ router.put('/skus/:skuId', requirePermission('product:edit'), updateSKU);
  *             properties:
  *               sku_code: { type: string, maxLength: 50 }
  *               specs: { type: object, minProperties: 1, maxProperties: 20 }
+ *               specs_en: { $ref: '#/components/schemas/SpecsTranslation' }
  *               price: { type: number, minimum: 0, maximum: 99999999.99 }
  *               original_price: { type: number, nullable: true }
  *               stock: { type: integer, minimum: 0, maximum: 2147483647 }

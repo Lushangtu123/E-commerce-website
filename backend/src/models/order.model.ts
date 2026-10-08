@@ -1,6 +1,7 @@
 import { query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import Joi from 'joi';
+import { SpecsTranslation } from '../utils/product-i18n';
 
 export class OrderListError extends Error {
   readonly statusCode = 400;
@@ -52,10 +53,12 @@ export interface OrderItem {
   order_id: number;
   product_id: number;
   product_name: string;
+  product_name_en?: string | null;
   product_image?: string;
   sku_id?: number | null;
   sku_code?: string | null;
   sku_specs?: Record<string, unknown> | null;
+  sku_specs_en?: SpecsTranslation | null;
   quantity: number;
   price: number;
 }
@@ -72,7 +75,7 @@ export class OrderModel {
   // 创建订单
   static async create(
     userId: number,
-    items: Array<{ product_id: number; quantity: number; price: number; product_name: string; product_image?: string }>,
+    items: Array<{ product_id: number; quantity: number; price: number; product_name: string; product_name_en?: string | null; product_image?: string }>,
     totalAmount: number,
     shippingAddressId?: number,
     remark?: string
@@ -92,9 +95,9 @@ export class OrderModel {
     // 插入订单商品
     for (const item of items) {
       await query(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_image, quantity, price)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.product_id, item.product_name, item.product_image, item.quantity, item.price]
+        `INSERT INTO order_items (order_id, product_id, product_name, product_name_en, product_image, quantity, price)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, item.product_id, item.product_name, item.product_name_en ?? null, item.product_image, item.quantity, item.price]
       );
     }
 

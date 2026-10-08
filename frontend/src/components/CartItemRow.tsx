@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { FiTrash2 } from 'react-icons/fi';
 import ProductImage from '@/components/ProductImage';
 import { useI18n } from '@/lib/i18n';
+import { localizedText, specSummary } from '@/lib/product-content';
 import type { CartItem } from '@/store/useCartStore';
 
 export const isCartItemAvailable = (item: CartItem) => item.available !== false && item.available !== 0;
@@ -23,7 +24,8 @@ interface Props {
 /** One cart line: its selection, product details, quantity stepper, subtotal and remove button. */
 export default function CartItemRow({ item, selected, submitting, onToggle, onQuantityChange, onRemove }: Props) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const title = localizedText(item.title, item.title_en, locale);
   const available = isCartItemAvailable(item);
 
   return (
@@ -31,18 +33,18 @@ export default function CartItemRow({ item, selected, submitting, onToggle, onQu
       <div className="flex flex-wrap items-center gap-4">
         <input
           type="checkbox"
-          aria-label={t("选择 {title}", { title: item.title })}
+          aria-label={t("选择 {title}", { title })}
           checked={available && selected}
           disabled={submitting || !available}
           onChange={onToggle}
           className="h-5 w-5 rounded-sm accent-primary-600"
         />
 
-        <ProductImage src={item.main_image} alt={item.title} compact className="h-24 w-24 shrink-0 rounded-lg border border-gray-200" />
+        <ProductImage src={item.main_image} alt={title} compact className="h-24 w-24 shrink-0 rounded-lg border border-gray-200" />
 
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-gray-900">{item.title}</h3>
-          {item.sku_specs && <p className="text-sm text-gray-600 mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
+          <h3 className="truncate font-medium text-gray-900">{title}</h3>
+          {item.sku_specs && <p className="text-sm text-gray-600 mt-1">{specSummary(item.sku_specs, item.sku_specs_en, locale)}</p>}
           {item.sku_code && <p className="text-xs text-gray-500 mt-1">{t("规格编号：")}{item.sku_code}</p>}
           {!available && (
             <div className="text-sm text-red-600 mt-1">

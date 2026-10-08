@@ -1,6 +1,7 @@
 import api from './client';
 import type { Money, Product } from './catalog';
 import type { Order } from './orders';
+import type { SpecTranslations } from '@/lib/product-content';
 
 // 管理后台
 export interface AdminSKU {
@@ -8,6 +9,7 @@ export interface AdminSKU {
   product_id: number;
   sku_code: string;
   specs: Record<string, string | number | boolean>;
+  specs_en?: SpecTranslations | null;
   price: number | string;
   original_price?: number | string | null;
   stock: number;
@@ -17,6 +19,7 @@ export interface AdminSKU {
 export interface AdminSKUInput {
   sku_code: string;
   specs: Record<string, string | number | boolean>;
+  specs_en?: SpecTranslations | null;
   price: number;
   original_price: number | null;
   stock: number;
@@ -24,7 +27,7 @@ export interface AdminSKUInput {
   status: 0 | 1;
 }
 export interface AdminSKUList {
-  product: { product_id: number; title: string; status: number };
+  product: { product_id: number; title: string; title_en?: string | null; status: number };
   skus: AdminSKU[];
 }
 export const adminApi = {
@@ -75,7 +78,7 @@ export interface DashboardStats {
 }
 /** Dashboard lists come back as bare arrays; SUM() columns are DECIMAL strings. */
 export interface RecentOrder { order_id: number; order_no: string; total_amount: Money; status: number; created_at: string; username?: string | null }
-export interface TopProduct { product_id: number; title: string; order_count?: number; total_sales: Money; total_revenue: Money }
+export interface TopProduct { product_id: number; title: string; title_en?: string | null; order_count?: number; total_sales: Money; total_revenue: Money }
 export interface SalesTrendPoint { date: string; order_count: number; revenue: Money | null }
 
 // 管理员优惠券API

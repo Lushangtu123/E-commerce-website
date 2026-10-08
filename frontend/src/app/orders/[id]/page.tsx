@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { FiAlertTriangle, FiClock } from 'react-icons/fi';
 import ProductImage from '@/components/ProductImage';
 import { useI18n } from '@/lib/i18n';
+import { localizedText, specSummary } from '@/lib/product-content';
 import OrderReviews from '@/components/OrderReviews';
 import OrderAfterSales from '@/components/OrderAfterSales';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
@@ -26,7 +27,7 @@ const ORDER_STATUS = {
 export default function OrderDetailPage() {
   const params = useParams() || {};
   const router = useRouter();
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, locale } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -275,10 +276,10 @@ export default function OrderDetailPage() {
           <div className="space-y-4">
             {items.map((item) => (
               <div key={item.item_id} className="flex items-center space-x-4 pb-4 border-b last:border-0">
-                <ProductImage src={item.product_image} alt={item.product_name} compact className="h-20 w-20 shrink-0 rounded-lg border border-gray-200" />
+                <ProductImage src={item.product_image} alt={localizedText(item.product_name, item.product_name_en, locale)} compact className="h-20 w-20 shrink-0 rounded-lg border border-gray-200" />
                 <div className="flex-1">
-                  <h3 className="font-medium">{item.product_name}</h3>
-                  {item.sku_specs && <p className="text-gray-600 text-sm mt-1">{Object.entries(item.sku_specs).map(([name, value]) => `${name}: ${value}`).join(' / ')}</p>}
+                  <h3 className="font-medium">{localizedText(item.product_name, item.product_name_en, locale)}</h3>
+                  {item.sku_specs && <p className="text-gray-600 text-sm mt-1">{specSummary(item.sku_specs, item.sku_specs_en, locale)}</p>}
                   {item.sku_code && <p className="text-gray-500 text-xs mt-1">{t("规格编号：")}{item.sku_code}</p>}
                   <p className="text-gray-600 text-sm mt-1">¥{item.price} × {item.quantity}</p>
                 </div>

@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { reviewApi, type PurchaseReview } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
+import { localizedText } from '@/lib/product-content';
 import { requestFailure } from '@/lib/api-error';
 
-type Item = { product_id: number; product_name: string };
+type Item = { product_id: number; product_name: string; product_name_en?: string | null };
 type Draft = { rating: string; content: string };
 type Result = { key: string; reviews?: PurchaseReview[]; error?: string };
 const initialDraft: Draft = { rating: '5', content: '' };
 
 export default function OrderReviews({ orderId, items }: { orderId: number; items: Item[] }) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, locale } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const products = Array.from(new Map(items.map(item => [item.product_id, item])).values());
   const key = JSON.stringify([sessionId, user?.user_id, orderId, products.map(item => item.product_id)]);
@@ -125,7 +126,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
         const draft = drafts[item.product_id] ?? initialDraft;
         const message = notice?.key === key && notice.productId === item.product_id ? notice : null;
         return <div key={item.product_id} className="border-t pt-5">
-          <h3 className="font-medium mb-3">{item.product_name}</h3>
+          <h3 className="font-medium mb-3">{localizedText(item.product_name, item.product_name_en, locale)}</h3>
           {review ? <div>
             <p className="text-green-700">{t('已评价')} · {t('{rating}分', { rating: review.rating })}</p>
             {review.content && <p className="mt-2 whitespace-pre-wrap wrap-break-word text-gray-700">{review.content}</p>}

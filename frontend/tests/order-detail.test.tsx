@@ -39,6 +39,17 @@ const amountRow = (label: string) => screen.queryByText(label, { selector: 'span
 describe('order detail', () => {
   beforeEach(() => { params.id = '1'; });
 
+  it('shows bilingual order snapshots and keeps old orders readable with Chinese fallback', async () => {
+    await setupDetail({}, [item({ product_name: '旧款衬衫', product_name_en: 'Original shirt', sku_specs: { 颜色: '红色' }, sku_specs_en: { 颜色: { name: 'Color', value: 'Red' } } }),
+      item({ item_id: 2, product_id: 12, product_name: '旧订单商品' })]);
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByRole('heading', { name: 'Original shirt' })).toBeVisible();
+    expect(screen.getByText('Color: Red')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '旧订单商品' })).toBeVisible();
+    act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
+    expect(screen.getByRole('heading', { name: '旧款衬衫' })).toBeVisible();
+  });
+
   it.each(['0', '-1', '01', '+1', '1abc', '1.5', '1e3', '0x10', ' 1', '1 ', '9007199254740992', undefined, ['1']])
   ('rejects malformed route ID %j before requesting an order', async id => {
     params.id = id;

@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import type { SpecTranslations } from '@/lib/product-content';
 
 export interface CartItem {
   cart_id: number;
   product_id: number;
   quantity: number;
   title: string;
+  title_en?: string | null;
   /** MySQL DECIMAL: the server sends a string, local additions a number. */
   price: number | string;
   main_image?: string | null;
@@ -12,6 +14,7 @@ export interface CartItem {
   sku_id?: number | null;
   sku_code?: string | null;
   sku_specs?: Record<string, string | number | boolean> | null;
+  sku_specs_en?: SpecTranslations | null;
   available?: boolean | 0 | 1;
   unavailable_reason?: string | null;
 }

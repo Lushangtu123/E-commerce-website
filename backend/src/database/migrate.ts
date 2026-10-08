@@ -8,6 +8,7 @@ import { migrateReviewTables } from './migrate-review';
 import { migrateAccountSecurity } from './migrate-account-security';
 import { migrateOrderCheckout } from './migrate-order-checkout';
 import { migrateFulfillment } from './migrate-fulfillment';
+import { migrateProductI18n } from './migrate-product-i18n';
 
 const migrations = [
   // 用户表
@@ -41,7 +42,9 @@ const migrations = [
   `CREATE TABLE IF NOT EXISTS products (
     product_id BIGINT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(200) NOT NULL,
+    title_en VARCHAR(200) DEFAULT NULL,
     description TEXT,
+    description_en TEXT DEFAULT NULL,
     category_id INT,
     brand VARCHAR(100),
     price DECIMAL(10,2) NOT NULL,
@@ -52,6 +55,7 @@ const migrations = [
     main_image VARCHAR(255),
     images JSON,
     specs JSON,
+    specs_en JSON DEFAULT NULL,
     status TINYINT DEFAULT 1 COMMENT '1:上架 0:下架',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -98,10 +102,12 @@ const migrations = [
     order_id BIGINT NOT NULL,
     product_id BIGINT NOT NULL,
     product_name VARCHAR(200),
+    product_name_en VARCHAR(200) DEFAULT NULL,
     product_image VARCHAR(255),
     sku_id BIGINT DEFAULT NULL,
     sku_code VARCHAR(50) DEFAULT NULL,
     sku_specs JSON DEFAULT NULL,
+    sku_specs_en JSON DEFAULT NULL,
     quantity INT NOT NULL,
     price DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
@@ -171,6 +177,7 @@ const migrations = [
     product_id BIGINT NOT NULL,
     sku_code VARCHAR(50) UNIQUE NOT NULL,
     specs JSON COMMENT 'SKU规格 {"颜色":"红色","尺寸":"M"}',
+    specs_en JSON DEFAULT NULL,
     price DECIMAL(10,2) NOT NULL,
     original_price DECIMAL(10,2),
     stock INT DEFAULT 0,
@@ -225,6 +232,7 @@ async function runMigrations() {
     await migrateAccountSecurity(pool);
     await migrateFulfillment(pool);
     await migrateOrderCheckout(pool);
+    await migrateProductI18n(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

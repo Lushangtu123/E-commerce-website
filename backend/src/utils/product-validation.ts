@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { searchKeyword } from './search-validation';
+import { specsTranslationSchema } from './product-i18n';
 
 export const PRODUCT_SORTS: Record<string, string> = Object.freeze({
   'created_at DESC': 'created_at DESC',
@@ -28,7 +29,9 @@ export const productQuerySchema = Joi.object({
 
 const productFields = {
   title: Joi.string().trim().min(1).max(200),
+  title_en: Joi.string().trim().max(200).allow('', null),
   description: Joi.string().allow('', null),
+  description_en: Joi.string().allow('', null),
   category_id: integer.allow(null),
   brand: Joi.string().max(100).allow('', null),
   price: money,
@@ -37,6 +40,7 @@ const productFields = {
   main_image: Joi.string().max(255).allow('', null),
   images: Joi.array().items(Joi.string().max(500)).allow(null),
   specs: Joi.object().unknown(true).allow(null),
+  specs_en: specsTranslationSchema,
   status: Joi.number().valid(0, 1),
 };
 

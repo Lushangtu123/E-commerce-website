@@ -12,6 +12,7 @@ export interface BrowseHistory {
 
 export interface BrowseHistoryWithProduct extends BrowseHistory {
   title: string;
+  title_en?: string | null;
   price: number;
   main_image?: string;
   stock: number;
@@ -50,6 +51,7 @@ export class BrowseHistoryModel {
         bh.browsed_at,
         p.product_id AS existing_product_id,
         p.title,
+        p.title_en,
         p.price,
         p.main_image,
         p.stock,

@@ -2,6 +2,7 @@ import { getPool } from './mysql';
 import { connectDatabase } from './mysql';
 import bcrypt from 'bcryptjs';
 import logger from '../utils/logger';
+import { catalogEnglish } from './catalog-english';
 
 export const categories = [
   { name: '电子产品', parent_id: null, sort_order: 1 },
@@ -143,12 +144,15 @@ async function seed() {
     // 插入商品
     logger.info('插入商品...');
     for (const product of products) {
+      const english = catalogEnglish[product.title];
       await pool.execute(
-        `INSERT INTO products (title, description, category_id, brand, price, original_price, stock, main_image, sales_count, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO products (title, title_en, description, description_en, category_id, brand, price, original_price, stock, main_image, sales_count, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.title,
+          english?.title_en ?? null,
           product.description,
+          english?.description_en ?? null,
           product.category_id,
           product.brand,
           product.price,
@@ -184,4 +188,3 @@ async function seed() {
 }
 
 if (require.main === module) seed();
-

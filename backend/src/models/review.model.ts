@@ -18,6 +18,8 @@ export interface Review {
   // 关联用户信息
   username?: string;
   avatar_url?: string;
+  product_title?: string | null;
+  product_title_en?: string | null;
 }
 
 export class ReviewModel {
@@ -116,7 +118,7 @@ export class ReviewModel {
     const total = countResult[0].total;
 
     const reviews = await query<(Review & RowDataPacket)[]>(
-      `SELECT r.*, p.title as product_title, p.main_image as product_image
+      `SELECT r.*, p.title as product_title, p.title_en as product_title_en, p.main_image as product_image
        FROM reviews r
        LEFT JOIN products p ON r.product_id = p.product_id
        WHERE r.user_id = ?${orderId === undefined ? '' : ' AND r.order_id = ?'}

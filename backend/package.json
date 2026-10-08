@@ -14,6 +14,8 @@
     "migrate:account-security": "node dist/database/migrate-account-security.js",
     "schema:check": "node dist/database/check-account-schema.js",
     "migrate:dev": "ts-node src/database/migrate.ts",
+    "migrate:product-i18n": "node dist/database/migrate-product-i18n.js",
+    "migrate:product-i18n:dev": "ts-node src/database/migrate-product-i18n.ts",
     "seed": "node dist/database/seed.js",
     "seed:dev": "ts-node src/database/seed.ts",
     "sync-es": "node dist/database/sync-es.js",

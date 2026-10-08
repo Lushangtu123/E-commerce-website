@@ -1,6 +1,7 @@
 import { RowDataPacket } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { couponMoneyToCents } from '../utils/coupon-discount';
+import { SpecsTranslation } from '../utils/product-i18n';
 
 export class PurchaseError extends Error {
   constructor(message: string, public readonly statusCode = 400) { super(message); }
@@ -9,10 +10,11 @@ export class PurchaseError extends Error {
 export const MAX_QUANTITY = 2147483647;
 export interface PurchaseItem { product_id: number; sku_id?: number; quantity: number }
 interface Product extends RowDataPacket {
-  product_id: number; title: string; price: number | string; stock: number; status: number; main_image: string | null;
+  product_id: number; title: string; title_en: string | null; price: number | string; stock: number; status: number; main_image: string | null;
 }
 interface SKU extends RowDataPacket {
   sku_id: number; product_id: number; sku_code: string; specs: Record<string, unknown>;
+  specs_en: SpecsTranslation | null;
   price: number | string; stock: number; status: number; image: string | null;
 }
 export interface PricedItem extends PurchaseItem { product: Product; sku?: SKU; price: string }
@@ -43,14 +45,14 @@ export async function pricePurchaseItems(connection: PoolConnection, items: Purc
   const products = new Map<number, Product>();
   for (const productId of productIds) {
     const [rows] = await connection.execute<Product[]>(
-      `SELECT product_id, title, price, stock, main_image, status FROM products WHERE product_id = ?${lock ? ' FOR UPDATE' : ''}`, [productId]
+      `SELECT product_id, title, title_en, price, stock, main_image, status FROM products WHERE product_id = ?${lock ? ' FOR UPDATE' : ''}`, [productId]
     );
     if (!rows[0] || rows[0].status !== 1) throw new PurchaseError(`商品 ${productId} 不存在或已下架`);
     products.set(productId, rows[0]);
   }
   // A locking current read sees even the first SKU committed while waiting for a parent lock.
   const [skus] = await connection.execute<SKU[]>(
-    `SELECT sku_id, product_id, sku_code, specs, price, stock, status, image FROM product_skus
+    `SELECT sku_id, product_id, sku_code, specs, specs_en, price, stock, status, image FROM product_skus
      WHERE product_id IN (${productIds.map(() => '?').join(',')}) ORDER BY sku_id${lock ? ' FOR UPDATE' : ''}`, productIds
   );
   const variants = new Map(skus.map(sku => [sku.sku_id, sku]));

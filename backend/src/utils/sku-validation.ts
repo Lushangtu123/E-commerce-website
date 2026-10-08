@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { specsTranslationSchema } from './product-i18n';
 
 const money = Joi.number().min(0).max(99999999.99).precision(2);
 const skuFields = {
@@ -7,6 +8,7 @@ const skuFields = {
     Joi.string().min(1).max(50),
     Joi.alternatives().try(Joi.string().min(1).max(100), Joi.number(), Joi.boolean())
   ).min(1).max(20),
+  specs_en: specsTranslationSchema,
   price: money,
   original_price: money.allow(null),
   stock: Joi.number().integer().min(0).max(2147483647),

@@ -4,7 +4,7 @@ import { BrowseHistoryModel } from '../models/browse-history.model';
 import { customerProducts } from '../models/product.model';
 
 interface Product extends RowDataPacket {
-  product_id: number; title: string; price: number; category_id: number;
+  product_id: number; title: string; title_en?: string | null; price: number; category_id: number;
   sales_count: number; main_image: string; stock: number;
 }
 const source = `(${customerProducts}) AS products`;
