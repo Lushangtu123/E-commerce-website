@@ -32,6 +32,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - **Browsing history** - Viewed products are tracked for quick repurchase
 - Shopping cart - Add, remove and change items
 - **Coupons** - Claim coupons, apply them and calculate discounts
+- Coupon lists support pagination and explicit retry after loading failures; administrator usage counts reflect real receipts and current coupon use.
 - Order creation, payment, viewing and cancellation
 - Product reviews and ratings
 

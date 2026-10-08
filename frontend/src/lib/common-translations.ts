@@ -297,4 +297,11 @@ export const commonTranslations: Record<string, string> = {
   '确定': 'OK',
   '商品参数': 'Product specifications',
   '加载商品失败，请重试': 'Unable to load this product. Please try again.',
+  '加载优惠券失败，请重试': 'Unable to load coupons. Please try again.',
+  '重新加载优惠券': 'Reload coupons',
+  '共 {count} 张优惠券': '{count} coupons in total',
+  '第 {page} / {pages} 页': 'Page {page} of {pages}',
+  '优惠券状态': 'Coupon status',
+  '优惠券分页': 'Coupon pagination',
+  '关闭': 'Close',
 };

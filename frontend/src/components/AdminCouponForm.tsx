@@ -29,13 +29,14 @@ interface Props {
   onChange: (values: CouponFormValues) => void;
   onSubmit: (event: FormEvent) => void;
   onClose: () => void;
+  busy?: boolean;
 }
 
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500';
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
 
 /** The modal form that creates a coupon. */
-export default function AdminCouponForm({ values, onChange, onSubmit, onClose }: Props) {
+export default function AdminCouponForm({ values, onChange, onSubmit, onClose, busy = false }: Props) {
   const { t } = useI18n();
   const set = <K extends keyof CouponFormValues>(field: K, value: CouponFormValues[K]) => onChange({ ...values, [field]: value });
 
@@ -44,14 +45,15 @@ export default function AdminCouponForm({ values, onChange, onSubmit, onClose }:
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900">{t("创建优惠券")}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} disabled={busy} aria-label={t('关闭')} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit}>
+          <fieldset disabled={busy} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="formData-code" className={labelClass}>{t("优惠券代码 *")}</label>
@@ -136,10 +138,11 @@ export default function AdminCouponForm({ values, onChange, onSubmit, onClose }:
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
               {t("取消")}
             </button>
-            <button type="submit" className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+            <button type="submit" className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {t("创建")}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>

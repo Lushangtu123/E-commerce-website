@@ -233,6 +233,15 @@ const options: swaggerJSDoc.Options = {
             end_time: { type: 'string', format: 'date-time' },
           },
         },
+        AdminCoupon: {
+          allOf: [
+            { $ref: '#/components/schemas/Coupon' },
+            { type: 'object', required: ['received_count', 'used_count'], properties: {
+              received_count: { type: 'integer', minimum: 0, description: '该券全部领取记录数，包含未使用、已使用和已过期' },
+              used_count: { type: 'integer', minimum: 0, description: '当前状态为已使用的领取记录数，取消订单返还后不计入' },
+            } },
+          ],
+        },
         Review: {
           type: 'object',
           properties: {

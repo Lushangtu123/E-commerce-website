@@ -116,10 +116,37 @@ export const orderTimeoutApi = {
 };
 
 // 优惠券相关API
+export interface Coupon {
+  coupon_id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  type: number;
+  discount_value: Money;
+  min_amount: Money;
+  max_discount?: Money | null;
+  total_quantity: number;
+  remain_quantity: number;
+  per_user_limit: number;
+  status: number;
+  start_time: string;
+  end_time: string;
+  created_at?: string;
+}
+export interface CouponPagination {
+  page: number; page_size: number; total: number; total_pages: number;
+}
+export interface CouponPage { data: Coupon[]; pagination?: CouponPagination }
+export interface UserCoupon extends Pick<Coupon, 'coupon_id' | 'code' | 'name' | 'description' | 'type' | 'discount_value' | 'min_amount' | 'max_discount'> {
+  user_coupon_id: number; user_id: number; status: number;
+  received_at: string; expired_at: string;
+  used_at?: string | null; order_id?: number | null;
+  coupon_status?: number; start_time?: string; end_time?: string;
+}
 export const couponApi = {
   // 获取可领取的优惠券列表
   getAvailable: (page = 1, pageSize = 20) =>
-    api.get('/coupons/available', { params: { page, page_size: pageSize } }),
+    api.get<unknown, CouponPage>('/coupons/available', { params: { page, page_size: pageSize } }),
   
   // 领取优惠券
   receive: (code: string) =>
@@ -127,7 +154,7 @@ export const couponApi = {
   
   // 获取我的优惠券
   getMyCoupons: (status?: number) =>
-    api.get('/coupons/my/list', { params: { status } }),
+    api.get<unknown, { data: UserCoupon[] }>('/coupons/my/list', { params: { status } }),
   
   // 获取订单可用优惠券
   getAvailableForOrder: (amount: number) =>

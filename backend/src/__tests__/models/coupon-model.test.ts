@@ -102,6 +102,27 @@ test('分页绑定占位符并拒绝负数或非整页', async () => {
   await expect(CouponModel.getList({ page_size: 1.5 })).rejects.toThrow();
 });
 
+test('后台券列表聚合真实领取和当前使用次数并返回数字', async () => {
+  (pool.query as jest.Mock).mockResolvedValue([[{ coupon_id: 10, received_count: '4', used_count: '2' }], []]);
+  const result = await CouponModel.getList({ page: 2, page_size: 10, status: 0, include_usage: true } as Parameters<typeof CouponModel.getList>[0]);
+  expect(result.coupons[0]).toMatchObject({ received_count: 4, used_count: 2 });
+  const [sql, params] = (pool.query as jest.Mock).mock.calls[0];
+  expect(sql).toContain('FROM user_coupons');
+  expect(sql).toContain('status = 2');
+  expect(sql).toContain('AS received_count');
+  expect(sql).toContain('AS used_count');
+  expect(sql).toMatch(/ORDER BY created_at DESC, coupon_id DESC/);
+  expect(params).toEqual([0, 10, 10]);
+  expect(pool.query).toHaveBeenCalledTimes(1);
+});
+
+test('顾客可领券列表不查询后台使用统计且同时间分页排序稳定', async () => {
+  await CouponModel.getList({ available_only: true, page: 1, page_size: 50 });
+  const [sql] = (pool.query as jest.Mock).mock.calls[0];
+  expect(sql).not.toContain('FROM user_coupons');
+  expect(sql).toMatch(/ORDER BY created_at DESC, coupon_id DESC/);
+});
+
 test('可用券列表跳过旧库非法规则，仍返回其他合法券', async () => {
   (pool.execute as jest.Mock).mockResolvedValue([[
     { user_coupon_id: 1, type: 2, discount_value: '120.00', min_amount: '0.00', max_discount: null },

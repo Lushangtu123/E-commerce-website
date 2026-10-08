@@ -1,106 +1,91 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { couponApi } from '@/lib/api';
-import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
+import { couponApi, type Coupon } from '@/lib/api';
+import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
+import { useSessionQuery } from '@/hooks/use-session-query';
 
-interface Coupon {
-  coupon_id: number;
-  code: string;
-  name: string;
-  description: string;
-  type: number;
-  discount_value: number | string;
-  min_amount: number | string;
-  max_discount?: number | string | null;
-  total_quantity: number;
-  remain_quantity: number;
-  per_user_limit: number;
-  start_time: string;
-  end_time: string;
-  status: number;
-}
+const pageSize = 50;
 
 export default function CouponsPage() {
   const router = useRouter();
   const { t, locale, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [receivingIds, setReceivingIds] = useState<Set<number>>(new Set());
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
-  const isCurrentSession = () => {
-    const current = useAuthStore.getState();
-    return current.isAuthenticated && current.sessionId === sessionId && current.user?.user_id === user?.user_id &&
-      storedSessionId() === (sessionId ?? null);
+  const [pageState, setPageState] = useState({ session: sessionKey, page: 1 });
+  const page = pageState.session === sessionKey ? pageState.page : 1;
+  const scopeKey = JSON.stringify([sessionKey, page]);
+  const currentScope = useRef(scopeKey);
+  useLayoutEffect(() => { currentScope.current = scopeKey; }, [scopeKey]);
+  const claims = useRef(new Map<number, object>());
+  const [pending, setPending] = useState<{ session: string; ids: Set<number> }>({ session: sessionKey, ids: new Set() });
+  const receivingIds = pending.session === sessionKey ? pending.ids : new Set<number>();
+  const query = useSessionQuery({
+    name: 'customer-coupon-center', params: [page, pageSize],
+    load: async () => {
+      const response = await couponApi.getAvailable(page, pageSize);
+      const total = Number(response.pagination?.total ?? response.data?.length ?? 0);
+      return { coupons: response.data || [], total, totalPages: Number(response.pagination?.total_pages ?? Math.ceil(total / pageSize)) };
+    },
+  });
+  const { isCurrentSession } = query;
+  const lastPage = Math.max(1, query.data?.totalPages ?? 0);
+  const beyondLastPage = query.data !== undefined && page > lastPage;
+  const shown = beyondLastPage ? undefined : query.data;
+  const coupons = shown?.coupons || [];
+  const error = query.error ? requestFailure(query.error).response?.data?.message || requestFailure(query.error).response?.data?.error || '加载优惠券失败，请重试' : undefined;
+  const loading = !shown && !error;
+  const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey && shown !== undefined;
+  const goToPage = (next: number) => {
+    if (isCurrentScope()) setPageState({ session: sessionKey, page: Math.max(1, Math.min(next, lastPage)) });
   };
 
   useEffect(() => {
-    setCoupons([]);
-    setReceivingIds(new Set());
-    if (!isHydrated) return;
-    if (!isAuthenticated) {
+    claims.current = new Map();
+  }, [sessionKey]);
+
+  // Adjust before showing an empty page after the available list shrinks.
+  if (beyondLastPage) setPageState({ session: sessionKey, page: lastPage });
+
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
       toast.error(t('请先登录'));
       router.push('/login');
-      return;
     }
-    let active = true;
-    setLoading(true);
-    couponApi.getAvailable(1, 50).then(response => {
-      if (active && isCurrentSession()) setCoupons(response.data || []);
-    }).catch(error => {
-      if (!active || !isCurrentSession()) return;
-      logger.error('加载优惠券失败:', error);
-      toast.error(t(error.response?.data?.message || '加载失败'));
-    }).finally(() => {
-      if (active && isCurrentSession()) {
-        setLoadedKey(sessionKey);
-        setLoading(false);
-      }
-    });
-    return () => { active = false; };
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
+  }, [isHydrated, isAuthenticated, router, t]);
 
   const handleReceive = async (coupon: Coupon) => {
-    if (!isAuthenticated) {
-      toast.error(t('请先登录'));
-      router.push('/login');
-      return;
-    }
-    if (!isCurrentSession()) return;
-
-    setReceivingIds(prev => new Set(prev).add(coupon.coupon_id));
+    if (!isCurrentScope() || claims.current.has(coupon.coupon_id) || coupon.remain_quantity <= 0 || !coupons.some(row => row.coupon_id === coupon.coupon_id)) return;
+    const operation = {};
+    claims.current.set(coupon.coupon_id, operation);
+    setPending(prev => ({ session: sessionKey, ids: new Set(prev.session === sessionKey ? prev.ids : []).add(coupon.coupon_id) }));
 
     try {
       await couponApi.receive(coupon.code);
       if (!isCurrentSession()) return;
       toast.success(t('领取成功！'));
       
-      // 更新剩余数量
-      setCoupons(prevCoupons =>
-        prevCoupons.map(c =>
-          c.coupon_id === coupon.coupon_id
-            ? { ...c, remain_quantity: c.remain_quantity - 1 }
-            : c
-        )
-      );
+      // Exhausted coupons disappear from the available list; refresh its total and current page together.
+      await query.invalidate();
     } catch (error) {
       if (!isCurrentSession()) return;
       logger.error('领取失败:', error);
       const message = requestFailure(error).response?.data?.message || '领取失败';
       toast.error(t(message));
     } finally {
-      if (isCurrentSession()) setReceivingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(coupon.coupon_id);
-        return newSet;
-      });
+      if (claims.current.get(coupon.coupon_id) === operation) {
+        claims.current.delete(coupon.coupon_id);
+        if (isCurrentSession()) setPending(prev => {
+          const ids = new Set(prev.session === sessionKey ? prev.ids : []);
+          ids.delete(coupon.coupon_id);
+          return { session: sessionKey, ids };
+        });
+      }
     }
   };
 
@@ -130,7 +115,7 @@ export default function CouponsPage() {
       case 3:
         return t('直接抵扣{discount}元', { discount: coupon.discount_value });
       default:
-        return coupon.description;
+        return coupon.description || '';
     }
   };
 
@@ -145,7 +130,7 @@ export default function CouponsPage() {
     }
   };
 
-  if (!isHydrated || !isAuthenticated || loading || loadedKey !== sessionKey) {
+  if (!isHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -165,6 +150,7 @@ export default function CouponsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">{t("优惠券中心")}</h1>
           <p className="mt-2 text-gray-600">{t("领取优惠券，享受更多优惠")}</p>
+          <p className="mt-2 text-sm text-gray-600">{t('共 {count} 张优惠券', { count: shown?.total ?? '—' })}</p>
           
           <div className="mt-4 flex gap-4">
             <button
@@ -177,7 +163,12 @@ export default function CouponsPage() {
         </div>
 
         {/* Coupons Grid */}
-        {coupons.length === 0 ? (
+        {loading ? <div className="text-center py-12" role="status">{t('加载中...')}</div> : error ? (
+          <div className="text-center py-12 bg-white rounded-lg shadow-sm" role="alert">
+            <p className="text-red-600">{t(error)}</p>
+            <button onClick={query.refetch} className="btn btn-secondary mt-4">{t('重新加载优惠券')}</button>
+          </div>
+        ) : coupons.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -228,7 +219,7 @@ export default function CouponsPage() {
 
                   <button
                     onClick={() => handleReceive(coupon)}
-                    disabled={receivingIds.has(coupon.coupon_id) || coupon.remain_quantity === 0}
+                    disabled={receivingIds.has(coupon.coupon_id) || coupon.remain_quantity <= 0}
                     className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
                       coupon.remain_quantity === 0
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -247,6 +238,13 @@ export default function CouponsPage() {
               </div>
             ))}
           </div>
+        )}
+        {shown && shown.totalPages > 1 && (
+          <nav className="mt-8 flex items-center justify-center gap-4" aria-label={t('优惠券分页')}>
+            <button disabled={page <= 1} onClick={() => goToPage(page - 1)} className="btn btn-secondary disabled:opacity-50">{t('上一页')}</button>
+            <span>{t('第 {page} / {pages} 页', { page, pages: shown.totalPages })}</span>
+            <button disabled={page >= shown.totalPages} onClick={() => goToPage(page + 1)} className="btn btn-secondary disabled:opacity-50">{t('下一页')}</button>
+          </nav>
         )}
       </div>
     </div>

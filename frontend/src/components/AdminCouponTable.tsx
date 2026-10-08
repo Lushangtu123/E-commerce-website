@@ -2,35 +2,19 @@
 
 import '@/lib/admin-i18n';
 import { useI18n } from '@/lib/i18n';
+import type { AdminCoupon } from '@/lib/api';
 
-export interface AdminCoupon {
-  coupon_id: number;
-  code: string;
-  name: string;
-  description?: string;
-  type: number;
-  discount_value: number;
-  min_amount?: number;
-  max_discount?: number;
-  total_quantity: number;
-  remain_quantity: number;
-  received_count: number;
-  used_count: number;
-  per_user_limit: number;
-  start_time: string;
-  end_time: string;
-  status: number;
-  created_at: string;
-}
+export type { AdminCoupon } from '@/lib/api';
 
 interface Props {
   coupons: AdminCoupon[];
   onCreate: () => void;
   onToggleStatus: (coupon: AdminCoupon) => void;
+  busy?: boolean;
 }
 
 /** The administrator's coupon list, or an invitation to create the first coupon. */
-export default function AdminCouponTable({ coupons, onCreate, onToggleStatus }: Props) {
+export default function AdminCouponTable({ coupons, onCreate, onToggleStatus, busy = false }: Props) {
   const { t, locale, formatDate } = useI18n();
 
   const typeText = (type: number) => {
@@ -50,7 +34,7 @@ export default function AdminCouponTable({ coupons, onCreate, onToggleStatus }: 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
           <p className="mt-4 text-gray-500">{t("暂无优惠券")}</p>
-          <button onClick={onCreate} className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+          <button onClick={onCreate} disabled={busy} className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50">
             {t("创建第一个优惠券")}
           </button>
         </div>
@@ -85,7 +69,7 @@ export default function AdminCouponTable({ coupons, onCreate, onToggleStatus }: 
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="text-sm text-gray-900">{typeText(coupon.type)}</span>
                   <div className="text-xs text-gray-500">
-                    {coupon.type === 2 ? (locale === 'en' ? t('减免 {percent}%', { percent: Number(coupon.discount_value) }) : t('{discount}折', { discount: (100 - coupon.discount_value) / 10 })) : `¥${coupon.discount_value}`}
+                    {coupon.type === 2 ? (locale === 'en' ? t('减免 {percent}%', { percent: Number(coupon.discount_value) }) : t('{discount}折', { discount: (100 - Number(coupon.discount_value)) / 10 })) : `¥${coupon.discount_value}`}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -104,7 +88,8 @@ export default function AdminCouponTable({ coupons, onCreate, onToggleStatus }: 
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <button
                     onClick={() => onToggleStatus(coupon)}
-                    className={`px-3 py-1 rounded ${coupon.status === 1 ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'} transition-colors`}
+                    disabled={busy}
+                    className={`px-3 py-1 rounded ${coupon.status === 1 ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'} transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {coupon.status === 1 ? t("禁用") : t("启用")}
                   </button>

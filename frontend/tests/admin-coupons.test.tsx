@@ -42,6 +42,9 @@ const type = (label: RegExp, value: string) => fireEvent.change(field(label), { 
 const formHeading = () => screen.queryByRole('heading', { name: '创建优惠券' });
 
 beforeEach(() => {
+  localStorage.setItem('admin_session', 'admin-session');
+  localStorage.setItem('admin_user', JSON.stringify({ username: 'Admin' }));
+  list.mockReset();
   create.mockReset();
   updateStatus.mockReset();
 });
@@ -164,7 +167,8 @@ describe('admin coupons', () => {
     list.mockRejectedValue(apiError('无权访问'));
     render(<AdminCouponsPage />);
     await settle();
-    expect(toast.error).toHaveBeenCalledWith('无权访问');
-    expect(screen.getByText('暂无优惠券')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('无权访问');
+    expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument();
+    expect(screen.queryByText('暂无优惠券')).not.toBeInTheDocument();
   });
 });
