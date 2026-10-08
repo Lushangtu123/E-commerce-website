@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useLocaleStore, type Locale } from '@/store/useLocaleStore';
 import { commonTranslations } from '@/lib/common-translations';
 import { accountTranslations } from '@/lib/account-translations';
@@ -48,16 +49,19 @@ export function translateTitle(title: string, locale: Locale = useLocaleStore.ge
   return title.split(TITLE_SEPARATOR).map((part) => translate(part, {}, locale)).join(TITLE_SEPARATOR);
 }
 
-export function formatDate(value: string | number | Date | null | undefined, dateOnly = false, options: Intl.DateTimeFormatOptions = {}): string {
+export function formatDate(value: string | number | Date | null | undefined, dateOnly = false, options: Intl.DateTimeFormatOptions = {}, snapshot: Locale = useLocaleStore.getState().locale): string {
   if (value == null || value === '') return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  const locale = useLocaleStore.getState().locale === 'en' ? 'en-US' : 'zh-CN';
+  const locale = snapshot === 'en' ? 'en-US' : 'zh-CN';
   return dateOnly ? date.toLocaleDateString(locale, options) : date.toLocaleString(locale, options);
 }
 
 export function useI18n() {
   const locale = useLocaleStore((state) => state.locale);
-  // Stable functions also read the latest language when asynchronous requests finish.
-  return { locale, t: translate, formatDate };
+  // Render from React's snapshot, including the Chinese snapshot during hydration.
+  // Async notifications use translate() directly to read the current preference.
+  const t = useCallback((key: string, params: Params = {}) => translate(key, params, locale), [locale]);
+  const dateFormatter = useCallback((value: string | number | Date | null | undefined, dateOnly = false, options: Intl.DateTimeFormatOptions = {}) => formatDate(value, dateOnly, options, locale), [locale]);
+  return { locale, t, formatDate: dateFormatter };
 }

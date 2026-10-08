@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { couponApi, type UserCoupon } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { requestFailure } from '@/lib/api-error';
 
@@ -36,10 +36,10 @@ export default function MyCouponsPage() {
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
-      toast.error(t('请先登录'));
+      toast.error(translate('请先登录'));
       router.push('/login');
     }
-  }, [isHydrated, isAuthenticated, router, t]);
+  }, [isHydrated, isAuthenticated, router]);
 
   const getCouponTypeText = (type: number) => {
     switch (type) {
@@ -88,7 +88,7 @@ export default function MyCouponsPage() {
   const handleUse = (coupon: UserCoupon) => {
     if (!query.isCurrentSession() || currentScope.current !== requestKey || !query.data?.some(row => row.user_coupon_id === coupon.user_coupon_id)) return;
     if (!canUseCoupon(coupon)) {
-      toast.error(t('优惠券当前不可用'));
+      toast.error(translate('优惠券当前不可用'));
       return;
     }
     router.push(`/cart?user_coupon_id=${coupon.user_coupon_id}`);

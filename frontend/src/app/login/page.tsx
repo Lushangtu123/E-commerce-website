@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -25,7 +25,7 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error(t("请填写完整信息"));
+      toast.error(translate("请填写完整信息"));
       return;
     }
 
@@ -33,11 +33,11 @@ export default function LoginPage() {
     try {
       const data = await userApi.login({ email, password });
       login(data.user);
-      toast.success(t("登录成功"));
+      toast.success(translate("登录成功"));
       router.push('/');
     } catch (error) {
       logger.error('登录请求失败');
-      toast.error(t(requestFailure(error).response?.data?.error || "登录失败"));
+      toast.error(translate(requestFailure(error).response?.data?.error || "登录失败"));
     } finally {
       setLoading(false);
     }

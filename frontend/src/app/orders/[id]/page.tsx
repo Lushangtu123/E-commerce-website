@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { FiAlertTriangle, FiClock } from 'react-icons/fi';
 import ProductImage from '@/components/ProductImage';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { localizedText, specSummary } from '@/lib/product-content';
 import OrderReviews from '@/components/OrderReviews';
 import OrderAfterSales from '@/components/OrderAfterSales';
@@ -77,7 +77,7 @@ export default function OrderDetailPage() {
       return;
     }
     if (!Number.isSafeInteger(orderId)) {
-      toast.error(t('订单ID无效'));
+      toast.error(translate('订单ID无效'));
       router.push('/orders');
       return;
     }
@@ -112,7 +112,7 @@ export default function OrderDetailPage() {
       const response = requestFailure(error).response;
       if (response?.status === 401) return; // The API client handles expired sign-ins.
       if (response?.status === 400 || response?.status === 403 || response?.status === 404) {
-        toast.error(t(response.data?.error || response.data?.message ||
+        toast.error(translate(response.data?.error || response.data?.message ||
           (response.status === 404 ? '订单不存在' : response.status === 403 ? '无权访问该订单' : '订单ID无效')));
         router.push('/orders');
       } else {
@@ -147,11 +147,11 @@ export default function OrderDetailPage() {
     try {
       await orderApi.pay(orderId);
       if (!isCurrentSession()) return;
-      toast.success(t('模拟支付完成，未实际扣款'));
+      toast.success(translate('模拟支付完成，未实际扣款'));
       loadOrder();
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(requestFailure(error).response?.data?.error || '支付失败'));
+      toast.error(translate(requestFailure(error).response?.data?.error || '支付失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
@@ -166,11 +166,11 @@ export default function OrderDetailPage() {
     try {
       await orderApi.cancel(orderId);
       if (!isCurrentSession()) return;
-      toast.success(t('订单已取消'));
+      toast.success(translate('订单已取消'));
       loadOrder();
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(requestFailure(error).response?.data?.error || '取消失败'));
+      toast.error(translate(requestFailure(error).response?.data?.error || '取消失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
@@ -182,11 +182,11 @@ export default function OrderDetailPage() {
     try {
       await orderApi.confirm(orderId);
       if (!isCurrentSession()) return;
-      toast.success(t('确认收货成功'));
+      toast.success(translate('确认收货成功'));
       loadOrder();
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(requestFailure(error).response?.data?.error || '确认收货失败'));
+      toast.error(translate(requestFailure(error).response?.data?.error || '确认收货失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }

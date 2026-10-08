@@ -169,7 +169,7 @@ describe('translation', () => {
     for (const filename of walk(join(root, 'src')).filter(file => file.endsWith('.tsx'))) {
       const source = ts.createSourceFile(filename, readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       const visit = (node: ts.Node) => {
-        if (ts.isCallExpression(node) && node.expression.getText(source) === 't' && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
+        if (ts.isCallExpression(node) && ['t', 'translate'].includes(node.expression.getText(source)) && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
           if (!Object.hasOwn(dictionaries, node.arguments[0].text)) problems.push(`${filename}: untranslated key ${node.arguments[0].text}`);
         }
         if (ts.isJsxText(node) && /[一-鿿]/.test(node.text) && basename(filename) !== 'LanguageSwitcher.tsx') {
@@ -195,7 +195,7 @@ describe('translation', () => {
       const source = ts.createSourceFile(filename, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       let usesT = false;
       const visit = (node: ts.Node) => {
-        if (ts.isCallExpression(node) && node.expression.getText(source) === 't' && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
+        if (ts.isCallExpression(node) && ['t', 'translate'].includes(node.expression.getText(source)) && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
           usesT = true;
           if (!isAdmin(filename) && !Object.hasOwn(storefront, node.arguments[0].text)) {
             problems.push(`${filename}: storefront key ${node.arguments[0].text} is only in the admin dictionary`);

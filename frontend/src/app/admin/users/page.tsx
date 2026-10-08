@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
@@ -73,12 +73,12 @@ export default function AdminUsersPage() {
     setPendingSessionId(sessionId);
     try {
       await perform();
-      if (isDisplayedScope()) toast.success(t(success));
+      if (isDisplayedScope()) toast.success(translate(success));
       // The page or filters may have changed meanwhile; this reloads whichever rows are displayed now.
       // After a session change it sends nothing: the old administrator's queries are gone or fail their session check.
       await query.invalidate();
     } catch (error) {
-      if (isDisplayedScope()) toast.error(t(requestFailure(error).response?.data?.error || failure));
+      if (isDisplayedScope()) toast.error(translate(requestFailure(error).response?.data?.error || failure));
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;

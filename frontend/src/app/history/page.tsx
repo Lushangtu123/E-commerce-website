@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
 import { useRouter } from 'next/navigation';
@@ -35,14 +35,14 @@ export default function BrowseHistoryPage() {
 
   const handleRemove = (productId: number) => runMutation(() => browseApi.deleteRecord(productId), {
     productId, refresh: true,
-    onSuccess: () => toast.success(t("删除成功")),
-    onError: error => toast.error(t(requestFailure(error).response?.data?.message || "删除失败")),
+    onSuccess: () => toast.success(translate("删除成功")),
+    onError: error => toast.error(translate(requestFailure(error).response?.data?.message || "删除失败")),
   });
 
   const handleClearAll = () => runMutation(() => browseApi.clearHistory(), {
     confirm: () => confirmAction(t("确定要清空所有浏览历史吗？")), refresh: true,
-    onSuccess: () => toast.success(t("已清空浏览历史")),
-    onError: error => toast.error(t(requestFailure(error).response?.data?.message || "清空失败")),
+    onSuccess: () => toast.success(translate("已清空浏览历史")),
+    onError: error => toast.error(translate(requestFailure(error).response?.data?.message || "清空失败")),
   });
 
   const handleAddToCart = async (productId: number) => {
@@ -52,9 +52,9 @@ export default function BrowseHistoryPage() {
       productId,
       onSuccess: result => {
         if (result === 'select') router.push(`/products/${productId}`);
-        if (result === 'added') toast.success(t("已添加到购物车"));
+        if (result === 'added') toast.success(translate("已添加到购物车"));
       },
-      onError: error => toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).message || "添加失败")),
+      onError: error => toast.error(translate(requestFailure(error).response?.data?.error || requestFailure(error).message || "添加失败")),
     });
   };
 

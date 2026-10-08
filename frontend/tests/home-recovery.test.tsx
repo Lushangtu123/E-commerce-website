@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import HomePage from '@/components/HomePage';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { CommitLog, captureHandler, deferred, render, settle } from './helpers';
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
@@ -29,6 +30,22 @@ function defaults() {
 }
 
 describe('independent home section recovery', () => {
+  it('switches language without refetching and translates a delayed failure in the latest language', async () => {
+    defaults();
+    const pending = deferred<Awaited<ReturnType<typeof productApi.getHotProducts>>>();
+    vi.mocked(productApi.getHotProducts).mockReturnValue(pending.promise);
+    render(<HomePage />);
+    await settle();
+    act(() => useLocaleStore.getState().setLocale('en'));
+    await settle();
+    expect(productApi.getHotProducts).toHaveBeenCalledTimes(1);
+    expect(productApi.list).toHaveBeenCalledTimes(1);
+    expect(recommendationApi.getGuessYouLike).toHaveBeenCalledTimes(1);
+    await act(async () => pending.reject(new Error('Offline')));
+    await settle();
+    expect(toast.error).toHaveBeenLastCalledWith('Unable to load data');
+    expect(within(section('Best sellers')).getByRole('alert')).toHaveTextContent('Unable to load popular products. Please try again.');
+  });
   it('shows a settled section while another is still loading', async () => {
     defaults();
     const latest = deferred<Awaited<ReturnType<typeof productApi.list>>>();

@@ -1,7 +1,7 @@
 'use client';
 
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import Link from 'next/link';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
@@ -89,7 +89,7 @@ export default function Header() {
     e.preventDefault();
     const keyword = searchKeyword.trim();
     if (keyword.length > 100) {
-      toast.error(t('搜索关键词最多100个字符'));
+      toast.error(translate('搜索关键词最多100个字符'));
       return;
     }
     if (keyword) {

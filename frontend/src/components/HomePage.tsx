@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
@@ -20,7 +20,6 @@ type SectionResult = { scope: string; products: Product[]; loading: boolean; err
 
 /** Each section owns its request, so retrying one cannot hide a successful neighbor. */
 function useProductSection(scope: string, load: () => Promise<Product[]>, isCurrent: () => boolean, errorMessage: string, notify = false) {
-  const { t } = useI18n();
   const [result, setResult] = useState<SectionResult | null>(null);
   const mounted = useRef(true);
   const pending = useRef<{ scope: string } | null>(null);
@@ -36,7 +35,7 @@ function useProductSection(scope: string, load: () => Promise<Product[]>, isCurr
       if (!active()) return;
       logger.error(errorMessage, error);
       setResult({ scope, products: [], loading: false, error: errorMessage });
-      if (notify) toast.error(t('加载数据失败'));
+      if (notify) toast.error(translate('加载数据失败'));
     } finally {
       if (pending.current === operation) {
         pending.current = null;
@@ -44,7 +43,7 @@ function useProductSection(scope: string, load: () => Promise<Product[]>, isCurr
         if (mounted.current && !isCurrent()) setResult(null);
       }
     }
-  }, [scope, load, isCurrent, errorMessage, notify, t]);
+  }, [scope, load, isCurrent, errorMessage, notify]);
 
   useEffect(() => {
     mounted.current = true;

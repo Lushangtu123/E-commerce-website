@@ -6,7 +6,7 @@ import AdminLayout from '@/components/AdminLayout';
 import { afterSalesApi, type AfterSalesRequest } from '@/lib/api';
 import { AFTER_SALES_STATUS } from '@/components/OrderAfterSales';
 import { useAdminSession } from '@/hooks/use-admin-session';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
 import { requestFailure } from '@/lib/api-error';
 import AfterSalesProgress from '@/components/AfterSalesProgress';
@@ -59,14 +59,14 @@ export default function AdminAfterSalesPage() {
     event.preventDefault();
     if (!active() || mutation.current || review?.key !== key || !visible?.requests.some(value => value.request_id === review.id && value.status === 'requested')) return;
     const note = review.note.trim();
-    if (!note || note.length > 500) { toast.error(t('请填写1至500个字符的审核说明')); return; }
+    if (!note || note.length > 500) { toast.error(translate('请填写1至500个字符的审核说明')); return; }
     const operation = {}; mutation.current = operation; setBusy(true);
     try {
       await afterSalesApi.review(review.id, { status: review.decision, note });
       if (!session.active() || mutation.current !== operation) return;
-      if (active()) { toast.success(t('售后审核已保存，未执行资金退款')); setReview(null); }
+      if (active()) { toast.success(translate('售后审核已保存，未执行资金退款')); setReview(null); }
       await latestLoad.current?.();
-    } catch (error) { if (active() && mutation.current === operation) toast.error(t(requestFailure(error).response?.data?.error || '保存售后审核失败，请重试')); }
+    } catch (error) { if (active() && mutation.current === operation) toast.error(translate(requestFailure(error).response?.data?.error || '保存售后审核失败，请重试')); }
     finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   const complete = async (event: React.FormEvent) => {
@@ -76,18 +76,18 @@ export default function AdminAfterSalesPage() {
     const amount = completion.amount.trim(), reference = completion.reference.trim(), note = completion.note.trim();
     let cents: number, paidCents: number;
     try { cents = moneyToCents(amount); paidCents = moneyToCents(value.total_amount!); }
-    catch { toast.error(t('退款金额、凭证或结案说明无效')); return; }
-    if (!note || note.length > 500 || reference.length > 100) { toast.error(t('退款金额、凭证或结案说明无效')); return; }
-    if (value.payment_method === 'demo' && cents !== 0) { toast.error(t('演示订单未实际扣款，退款金额必须为零')); return; }
-    if (cents > paidCents) { toast.error(t('退款金额不能超过订单实付金额')); return; }
-    if (cents > 0 && !reference) { toast.error(t('实际退款必须填写退款凭证')); return; }
+    catch { toast.error(translate('退款金额、凭证或结案说明无效')); return; }
+    if (!note || note.length > 500 || reference.length > 100) { toast.error(translate('退款金额、凭证或结案说明无效')); return; }
+    if (value.payment_method === 'demo' && cents !== 0) { toast.error(translate('演示订单未实际扣款，退款金额必须为零')); return; }
+    if (cents > paidCents) { toast.error(translate('退款金额不能超过订单实付金额')); return; }
+    if (cents > 0 && !reference) { toast.error(translate('实际退款必须填写退款凭证')); return; }
     const operation = {}; mutation.current = operation; setBusy(true);
     try {
       await afterSalesApi.complete(completion.id, { refund_amount: amount, ...(reference && { refund_reference: reference }), note });
       if (!session.active() || mutation.current !== operation) return;
-      if (active()) { toast.success(t('人工处理记录已保存并结案，系统未执行资金退款')); updateCompletion(null); }
+      if (active()) { toast.success(translate('人工处理记录已保存并结案，系统未执行资金退款')); updateCompletion(null); }
       await latestLoad.current?.();
-    } catch (error) { if (active() && mutation.current === operation) toast.error(t(requestFailure(error).response?.data?.error || '保存售后结案失败')); }
+    } catch (error) { if (active() && mutation.current === operation) toast.error(translate(requestFailure(error).response?.data?.error || '保存售后结案失败')); }
     finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   return <AdminLayout><div className="space-y-6">

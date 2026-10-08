@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
 import { useRouter } from 'next/navigation';
@@ -35,8 +35,8 @@ export default function FavoritesPage() {
 
   const handleRemove = (productId: number) => runMutation(() => favoriteApi.remove(productId), {
     productId, refresh: true,
-    onSuccess: () => toast.success(t("取消收藏成功")),
-    onError: error => toast.error(t(requestFailure(error).response?.data?.message || "取消收藏失败")),
+    onSuccess: () => toast.success(translate("取消收藏成功")),
+    onError: error => toast.error(translate(requestFailure(error).response?.data?.message || "取消收藏失败")),
   });
 
   const handleAddToCart = async (productId: number) => {
@@ -46,9 +46,9 @@ export default function FavoritesPage() {
       productId,
       onSuccess: result => {
         if (result === 'select') router.push(`/products/${productId}`);
-        if (result === 'added') toast.success(t("已添加到购物车"));
+        if (result === 'added') toast.success(translate("已添加到购物车"));
       },
-      onError: error => toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).message || "添加失败")),
+      onError: error => toast.error(translate(requestFailure(error).response?.data?.error || requestFailure(error).message || "添加失败")),
     });
   };
 

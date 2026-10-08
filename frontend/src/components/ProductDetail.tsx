@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { localizedText, localizedSpecs, specSummary, specValue } from '@/lib/product-content';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -157,11 +157,11 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       logger.error('加载商品失败:', error);
       const status = requestFailure(error).response?.status;
       if (status === 404 || status === 400) {
-        toast.error(t('商品不存在'));
+        toast.error(translate('商品不存在'));
         router.push('/products');
       } else {
         setLoadFailure({ context, message: '加载商品失败，请重试' });
-        toast.error(t('加载商品失败'));
+        toast.error(translate('加载商品失败'));
       }
     }).finally(() => {
       if (isCurrentRequest()) setLoading(false);
@@ -171,7 +171,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       active = false;
       if (productRequest.current === request) productRequest.current = null;
     };
-  }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, retryRevision, context, isCurrentContext, t]);
+  }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, retryRevision, context, isCurrentContext]);
 
   // Until the client has loaded the product for this context, show the server's copy with every control locked.
   const ready = isHydrated && !loading && loadedContext === context;
@@ -201,16 +201,16 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const handleAddToCart = async (): Promise<boolean> => {
     if (!product || !ready || !isCurrentContext() || addingRequest.current) return false;
     if (!isAuthenticated) {
-      toast.error(t("请先登录"));
+      toast.error(translate("请先登录"));
       router.push('/login');
       return false;
     }
     if (!canPurchase) {
-      toast.error(t("请选择商品规格"));
+      toast.error(translate("请选择商品规格"));
       return false;
     }
     if (quantity < 1 || quantity > stock) {
-      toast.error(t("商品库存不足"));
+      toast.error(translate("商品库存不足"));
       return false;
     }
     addingRequest.current = context;
@@ -223,10 +223,10 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
         price: Number(price), main_image: image ?? undefined, stock,
         ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs, sku_specs_en: selectedSku.specs_en }),
       });
-      toast.success(t("已加入购物车"));
+      toast.success(translate("已加入购物车"));
       return true;
     } catch (error) {
-      if (isCurrentContext()) toast.error(t(requestFailure(error).response?.data?.error || "加入购物车失败"));
+      if (isCurrentContext()) toast.error(translate(requestFailure(error).response?.data?.error || "加入购物车失败"));
       return false;
     } finally {
       if (isCurrentContext()) {
@@ -243,7 +243,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const handleToggleFavorite = async () => {
     if (!ready || !isCurrentContext() || favoriteRequest.current?.context === context) return;
     if (!isAuthenticated) {
-      toast.error(t("请先登录"));
+      toast.error(translate("请先登录"));
       router.push('/login');
       return;
     }
@@ -255,9 +255,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       if (!isCurrentContext()) return;
       favoriteRevision.current += 1;
       setIsFavorited(data.is_favorited);
-      toast.success(t(data.message));
+      toast.success(translate(data.message));
     } catch (error) {
-      if (isCurrentContext()) toast.error(t(requestFailure(error).response?.data?.message || "操作失败"));
+      if (isCurrentContext()) toast.error(translate(requestFailure(error).response?.data?.message || "操作失败"));
     } finally {
       if (isCurrentContext() && favoriteRequest.current === operation) {
         favoriteRequest.current = null;

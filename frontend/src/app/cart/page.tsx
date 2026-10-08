@@ -11,7 +11,7 @@ import { FiShoppingCart } from 'react-icons/fi';
 import CartItemRow, { canReduceCartItem as canReduce, isCartItemAvailable as isAvailable } from '@/components/CartItemRow';
 import CheckoutSummary from '@/components/CheckoutSummary';
 import { logger } from '@/lib/logger';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 
@@ -140,7 +140,7 @@ export default function CartPage() {
           const carriedId = linkedCouponId.current;
           linkedCouponId.current = undefined;
           if (data.available_coupons.some(coupon => coupon.user_coupon_id === carriedId)) setSelectedCouponId(carriedId);
-          else toast.error(t('所选优惠券当前不可用，请重新选择'));
+          else toast.error(translate('所选优惠券当前不可用，请重新选择'));
         }
       })
       .catch((error) => {
@@ -148,7 +148,7 @@ export default function CartPage() {
         const message = error.response?.data?.error || error.response?.data?.message || '计算订单金额失败';
         setQuoteFailure({ key: quoteKey, message });
         if (selectedCouponId !== undefined) {
-          toast.error(t(message));
+          toast.error(translate(message));
           setSelectedCouponId(undefined);
         }
       })
@@ -173,7 +173,7 @@ export default function CartPage() {
       setSelectedItems([]);
       setCartFailure({ key: sessionKey, message: '加载购物车失败，请重试' });
       logger.error('加载购物车失败:', error);
-      toast.error(t('加载购物车失败'));
+      toast.error(translate('加载购物车失败'));
     } finally {
       if (cartLoadRequest.current === request) {
         cartLoadRequest.current = null;
@@ -197,7 +197,7 @@ export default function CartPage() {
         setItems(refreshed.items || []);
       } else updateQuantity(item.product_id, newQuantity, item.sku_id);
     } catch {
-      if (isCurrentSession()) toast.error(t('更新失败'));
+      if (isCurrentSession()) toast.error(translate('更新失败'));
     } finally {
       if (cartMutation.current === operation) {
         cartMutation.current = null;
@@ -216,9 +216,9 @@ export default function CartPage() {
       if (!isCurrentSession()) return;
       removeItem(item.product_id, item.sku_id);
       setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
-      toast.success(t('已删除'));
+      toast.success(translate('已删除'));
     } catch {
-      if (isCurrentSession()) toast.error(t('删除失败'));
+      if (isCurrentSession()) toast.error(translate('删除失败'));
     } finally {
       if (cartMutation.current === operation) {
         cartMutation.current = null;
@@ -245,7 +245,7 @@ export default function CartPage() {
   const handleCheckout = async () => {
     if (pendingCheckout.current?.sessionKey === sessionKey) return;
     if (orderItems.length === 0) {
-      toast.error(t('请选择要结算的商品'));
+      toast.error(translate('请选择要结算的商品'));
       return;
     }
     if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
@@ -258,7 +258,7 @@ export default function CartPage() {
     if (submittingRequest.current || !isCurrentSession()) return;
     const attempt = { sessionKey, input };
     if (!storePendingCheckout(attempt)) {
-      toast.error(t('无法保存结算信息，请允许浏览器存储后重试'));
+      toast.error(translate('无法保存结算信息，请允许浏览器存储后重试'));
       return;
     }
     submittingRequest.current = true;
@@ -278,12 +278,12 @@ export default function CartPage() {
         }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
       } else input.items.forEach(item => removeItem(item.product_id, item.sku_id));
       setSelectedItems([]);
-      toast.success(t('订单创建成功'));
+      toast.success(translate('订单创建成功'));
       router.push(`/orders/${data.order_id}`);
     } catch (error) {
       if (!isCurrentSession()) return;
       const failure = requestFailure(error);
-      toast.error(t(failure.response?.data?.error || failure.response?.data?.message || '创建订单失败'));
+      toast.error(translate(failure.response?.data?.error || failure.response?.data?.message || '创建订单失败'));
       const status = failure.response?.status;
       // Timeout or rate-limit responses cannot resolve an earlier checkout whose response was lost.
       if (status === undefined || status === 408 || status === 429 || status >= 500) {

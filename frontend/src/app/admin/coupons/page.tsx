@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { adminCouponApi } from '@/lib/api';
@@ -114,14 +114,14 @@ export default function AdminCouponsPage() {
       await perform();
       if (isCurrent()) {
         afterSuccess?.();
-        toast.success(t(success));
+        toast.success(translate(success));
       }
       // Refresh whichever filter this administrator now displays, retaining the lock through that read.
       if (query.isCurrentSession()) await query.invalidate();
     } catch (error) {
       if (isCurrent()) {
         logger.error(failure, error);
-        toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || failure));
+        toast.error(translate(requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || failure));
       }
     } finally {
       if (mutation.current === operation) {

@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
 import { FiPackage } from 'react-icons/fi';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
@@ -125,12 +125,12 @@ function OrdersContent() {
     try {
       await orderApi[action](orderId);
       if (!isCurrentSession()) return;
-      toast.success(t(action === 'pay' ? '模拟支付完成，未实际扣款' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
+      toast.success(translate(action === 'pay' ? '模拟支付完成，未实际扣款' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
       // The filter or page may have changed meanwhile; this reloads whichever orders are displayed now.
       await query.invalidate();
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(t(requestFailure(error).response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
+      toast.error(translate(requestFailure(error).response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
