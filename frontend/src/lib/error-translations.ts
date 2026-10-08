@@ -3,6 +3,7 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '商品不存在或已删除，请重新加载列表': 'A product is missing or deleted. Reload the list.',
   '后台查询参数无效': 'Invalid admin query parameters',
   '加载订单详情失败，请重试': 'Could not load order details. Please try again',
   '搜索关键词最多100个字符': 'Search keywords must not exceed 100 characters',

@@ -87,6 +87,16 @@ describe('admin product bilingual content', () => {
     expect(writes).toEqual([{ url: '/admin/products/1', body: { category_id: 1 } }]);
   });
 
+  it('labels a deleted product and exposes no publication, selection, edit or SKU action', async () => {
+    await setup({ ...product, status: -1 });
+    expect(screen.getByText('Deleted', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Activate$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Manage variants' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select English product' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Select all' })).toBeDisabled();
+  });
+
   it('displays the English title but opens the Chinese source and both existing English text fields', async () => {
     await setup();
     expect(screen.getByText('English product')).toBeInTheDocument();
