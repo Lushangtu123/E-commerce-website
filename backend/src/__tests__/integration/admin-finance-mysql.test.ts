@@ -85,4 +85,25 @@ integration('真实 MySQL 管理员收入统计', () => {
     expect(Number(products.body[0].total_sales)).toBe(3);
     expect(Number(products.body[0].total_revenue)).toBe(60.60);
   });
+  test.each([1, 2, 3])('用户列表与详情排除状态 %s 的演示消费，保留历史空支付方式及订单数量', async status => {
+    await db.query('INSERT INTO orders(order_no,user_id,total_amount,status,payment_method,created_at) VALUES(?,1,100,?,\'demo\',UTC_TIMESTAMP()),(?,1,20,?,\'manual\',UTC_TIMESTAMP())', [`demo-${status}`, status, `manual-${status}`, status]);
+    const stats = await request(app).get('/dashboard').expect(200);
+    const list = await request(app).get('/users').expect(200);
+    const detail = await request(app).get('/users/1').expect(200);
+    expect(Number(stats.body.today_revenue)).toBe(80.60);
+    expect(Number(list.body.users[0].total_spent)).toBe(80.60);
+    expect(Number(detail.body.user.total_spent)).toBe(80.60);
+    expect(list.body.users[0].order_count).toBe(7);
+    expect(detail.body.user.order_count).toBe(7);
+    expect(detail.body.recent_orders).toHaveLength(7);
+  });
+  test('只有演示支付时用户累计消费为零，历史订单仍可查看', async () => {
+    await db.query("UPDATE orders SET payment_method='demo'");
+    const list = await request(app).get('/users').expect(200);
+    const detail = await request(app).get('/users/1').expect(200);
+    expect(Number(list.body.users[0].total_spent)).toBe(0);
+    expect(Number(detail.body.user.total_spent)).toBe(0);
+    expect(detail.body.user.order_count).toBe(5);
+    expect(detail.body.recent_orders).toHaveLength(5);
+  });
 });
