@@ -1,4 +1,9 @@
 export const commonTranslations: Record<string, string> = {
+  '刷新售后进度': 'Refresh after-sales progress',
+  '用户编号': 'Customer ID',
+  '订单实付金额': 'Order paid amount',
+  '可记录退款上限': 'Maximum refund record',
+  '查看订单列表': 'View order list',
   '处理进度': 'Processing progress',
   '待退货': 'Awaiting return shipment',
   '待人工处理': 'Awaiting manual processing',

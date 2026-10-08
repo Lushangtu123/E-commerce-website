@@ -61,6 +61,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Payment rejects orders once their 30-minute deadline passes, using database time after taking the order lock. Timeout batches report failures for retry and keep scan progress in Redis across instances.
 - Registration, password change and reset share a minimum 12-character, maximum 72-byte UTF-8 policy; existing short passwords remain usable for sign-in
 - Carrier and tracking number, after-sales requests, withdrawal, admin review, return parcels and manual refund/closure records (no automatic payment refund or restocking)
+- Refresh after-sales progress without losing an unsent return parcel; the admin list shows customer identity, paid amount and refund limits
 - Product management separates active/off-sale products from deleted history. Deleted products cannot be selected, edited or republished; a batch containing a deleted or missing product is rejected as a whole.
 - Order details
 - **Coupons at checkout** - Choose a coupon when placing an order

@@ -164,8 +164,9 @@ export async function listAfterSales(input: unknown) {
   const pool = getPool();
   const [counts] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM after_sales_requests a${where}`, params);
   const [requests] = await pool.query<AfterSalesRequest[]>(
-    `SELECT a.*, o.order_no, o.total_amount, o.payment_method, o.status AS order_status
-     FROM after_sales_requests a JOIN orders o ON o.order_id = a.order_id${where}
+    `SELECT a.*, o.order_no, o.total_amount, o.payment_method, o.status AS order_status, u.username
+     FROM after_sales_requests a JOIN orders o ON o.order_id = a.order_id
+     LEFT JOIN users u ON u.user_id = a.user_id${where}
      ORDER BY a.created_at DESC, a.request_id DESC LIMIT ? OFFSET ?`, [...params, limit, (page - 1) * limit]
   );
   const total = Number(counts[0].total);

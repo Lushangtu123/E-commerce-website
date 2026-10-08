@@ -10,6 +10,21 @@ import { useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
 import { requestFailure } from '@/lib/api-error';
 import AfterSalesProgress from '@/components/AfterSalesProgress';
+import Link from 'next/link';
+import { moneyToCents } from '@/lib/money';
+
+function amountLabel(amount: AfterSalesRequest['total_amount']) {
+  try { return `¥${(moneyToCents(amount!) / 100).toFixed(2)}`; } catch { return '—'; }
+}
+
+function RefundContext({ value }: { value: AfterSalesRequest }) {
+  const { t } = useI18n();
+  return <div className="rounded-lg bg-gray-50 p-4 space-y-2 text-sm">
+    <p>{t('订单实付金额')}：{amountLabel(value.total_amount)}</p>
+    <p>{t('可记录退款上限')}：{amountLabel(value.payment_method === 'demo' ? 0 : value.total_amount)}</p>
+    {value.payment_method === 'demo' && <p className="text-amber-800">{t('演示订单，未实际扣款')}</p>}
+  </div>;
+}
 
 export default function AdminAfterSalesPage() {
   const { t, formatDate } = useI18n(), session = useAdminSession();
@@ -25,6 +40,7 @@ export default function AdminAfterSalesPage() {
   const request = useRef(0), mutation = useRef<object | null>(null), latestLoad = useRef<(() => Promise<void>) | null>(null);
   const active = () => session.active() && currentKey.current === key;
   const visible = result?.key === key && session.active() ? result : null;
+  const closing = visible?.requests.find(value => value.request_id === completion?.id);
   const load = async () => {
     if (!active()) return;
     const revision = ++request.current; updateResult(null);
@@ -58,8 +74,13 @@ export default function AdminAfterSalesPage() {
     const value = visible?.requests.find(value => value.request_id === completion?.id);
     if (!active() || mutation.current || currentCompletion.current !== completion || currentResult.current !== visible || completion?.key !== key || value?.status !== 'approved' || value.completed_at || (value.type === 'return' && !value.return_submitted_at)) return;
     const amount = completion.amount.trim(), reference = completion.reference.trim(), note = completion.note.trim();
-    if (!/^\d+(?:\.\d{1,2})?$/.test(amount) || !Number.isFinite(Number(amount)) || !note || note.length > 500 || reference.length > 100) { toast.error(t('退款金额、凭证或结案说明无效')); return; }
-    if (Number(amount) > 0 && !reference) { toast.error(t('实际退款必须填写退款凭证')); return; }
+    let cents: number, paidCents: number;
+    try { cents = moneyToCents(amount); paidCents = moneyToCents(value.total_amount!); }
+    catch { toast.error(t('退款金额、凭证或结案说明无效')); return; }
+    if (!note || note.length > 500 || reference.length > 100) { toast.error(t('退款金额、凭证或结案说明无效')); return; }
+    if (value.payment_method === 'demo' && cents !== 0) { toast.error(t('演示订单未实际扣款，退款金额必须为零')); return; }
+    if (cents > paidCents) { toast.error(t('退款金额不能超过订单实付金额')); return; }
+    if (cents > 0 && !reference) { toast.error(t('实际退款必须填写退款凭证')); return; }
     const operation = {}; mutation.current = operation; setBusy(true);
     try {
       await afterSalesApi.complete(completion.id, { refund_amount: amount, ...(reference && { refund_reference: reference }), note });
@@ -75,6 +96,7 @@ export default function AdminAfterSalesPage() {
     {review?.key === key && active() && <form className="card p-6 space-y-4" onSubmit={submit}><h2 className="font-bold">{t(review.decision === 'approved' ? '通过售后审核' : '拒绝售后申请')}</h2><label className="block"><span className="block mb-2">{t('审核说明')}</span><textarea className="input min-h-[100px]" maxLength={500} required disabled={busy} value={review.note} onChange={event => { if (active() && !mutation.current) setReview({ ...review, note: event.target.value }); }} /></label><div className="flex gap-3"><button className="btn btn-primary" disabled={busy}>{t('保存审核结果')}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { if (active() && !mutation.current) setReview(null); }}>{t('取消')}</button></div></form>}
     {completion?.key === key && session.active() && <form className="card p-6 space-y-4" onSubmit={complete}>
       <h2 className="font-bold">{t('记录处理并结案')}</h2>
+      {closing && <RefundContext value={closing} />}
       <p className="text-sm text-amber-800">{t('仅在人工处理完成后结案；未实际退款填零，非零金额需填写退款凭证')}</p>
       <label className="block"><span className="block mb-2">{t('实际退款金额')}</span><input className="input" inputMode="decimal" required disabled={busy} value={completion.amount} onChange={event => { if (active() && !mutation.current) updateCompletion({ ...completion, amount: event.target.value }); }} /></label>
       <label className="block"><span className="block mb-2">{t('退款凭证')}</span><input className="input" maxLength={100} disabled={busy} value={completion.reference} onChange={event => { if (active() && !mutation.current) updateCompletion({ ...completion, reference: event.target.value }); }} /></label>
@@ -85,6 +107,9 @@ export default function AdminAfterSalesPage() {
       <div className="space-y-4">{visible.requests.length === 0 && <p className="card p-6">{t('暂无售后申请')}</p>}{visible.requests.map(value => <article className="card p-6 space-y-3" key={value.request_id}>
         <div className="flex flex-wrap justify-between gap-2"><p className="font-medium">{t('订单号')}：{value.order_no || value.order_id}</p><span>{t(AFTER_SALES_STATUS[value.status])}</span></div>
         <p>{t('用户')}：{value.username || '—'}</p><p>{t('申请类型')}：{t(value.type === 'return' ? '退货申请' : '退款申请')}</p><p className="whitespace-pre-wrap wrap-break-word">{t('申请原因')}：{value.reason}</p>
+        <p>{t('用户编号')}：{value.user_id ?? '—'}</p>
+        <RefundContext value={value} />
+        <Link href="/admin/orders" className="text-primary-600 hover:underline">{t('查看订单列表')}</Link>
         {value.review_note && <p className="whitespace-pre-wrap wrap-break-word">{t('审核说明')}：{value.review_note}</p>}<p className="text-gray-500 text-sm">{t('申请时间')}：{formatDate(value.created_at)}</p>
         <AfterSalesProgress value={value} />
         {value.status === 'approved' && !value.completed_at && (value.type === 'refund' || value.return_submitted_at) && <button className="btn btn-secondary" disabled={busy} onClick={() => { if (active() && !mutation.current) { setReview(null); updateCompletion({ key, id: value.request_id, amount: '', reference: '', note: '' }); } }}>{t('记录处理并结案')}</button>}
