@@ -229,6 +229,8 @@ export const commonTranslations: Record<string, string> = {
   '处理售后申请失败，请重试': 'Unable to process your request. Try again.',
   '请填写1至500个字符的审核说明': 'Enter a review note between 1 and 500 characters.',
   '售后审核已保存，未执行资金退款': 'Review saved. No money has been refunded.',
+  '操作结果尚未确认，请刷新售后进度后再操作': 'The result is unconfirmed. Reload after-sales progress before making more changes.',
+  '售后进度已重新加载，请核对处理结果': 'After-sales progress has been reloaded. Please check the result.',
   '保存售后审核失败，请重试': 'Unable to save the review. Try again.',
   '通过售后审核': 'Approve after-sales request',
   '拒绝售后申请': 'Reject after-sales request',
