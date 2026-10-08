@@ -13,7 +13,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => pa
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
   paymentApi: { getSettings: vi.fn(async () => ({ mode: 'demo', canPay: true, isDemo: true })) },
-  orderApi: { getDetail: vi.fn(), pay: vi.fn(), cancel: vi.fn(async () => ({})) },
+  orderApi: { getDetail: vi.fn(), pay: vi.fn(), cancel: vi.fn(async () => ({})), confirm: vi.fn() },
   orderTimeoutApi: { getRemainingTime: vi.fn(async () => ({ remaining_minutes: 10 })) },
 }));
 // Both sections load their own data and have their own tests; here they only mark where they render.
@@ -198,6 +198,134 @@ describe('order detail', () => {
     await settle();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByText('已取消')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['cancel', '取消订单', 4, '已取消'],
+    ['pay', '模拟支付', 1, '已支付'],
+  ] as const)('refreshes the successful %s even when the countdown started an older detail read', async (action, label, status, statusText) => {
+    let countdown: (() => void) | undefined;
+    vi.spyOn(globalThis, 'setInterval').mockImplementation(((handler: () => void) => {
+      countdown = handler;
+      return 123;
+    }) as typeof setInterval);
+    vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => {});
+    const write = deferred();
+    const oldRead = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi[action]).mockReturnValue(write.promise as never);
+    vi.stubGlobal('confirm', () => true);
+    await setupDetail({ status: 0 });
+    vi.mocked(orderApi.getDetail).mockReturnValueOnce(oldRead.promise)
+      .mockResolvedValue({ order: { ...baseOrder, status }, items: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    await settle();
+    vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 });
+    await act(async () => countdown!());
+    await settle();
+    expect(orderApi.getDetail).toHaveBeenCalledTimes(2);
+    await act(async () => write.resolve({}));
+    await settle();
+    await act(async () => oldRead.resolve({ order: { ...baseOrder, status: 0 }, items: [] }));
+    await settle();
+
+    expect(screen.getByText(statusText)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+    expect(orderApi[action]).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an older detail failure after cancellation has refreshed the order', async () => {
+    let countdown: (() => void) | undefined;
+    vi.spyOn(globalThis, 'setInterval').mockImplementation(((handler: () => void) => {
+      countdown = handler;
+      return 123;
+    }) as typeof setInterval);
+    vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => {});
+    const write = deferred();
+    const oldRead = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi.cancel).mockReturnValue(write.promise as never);
+    vi.stubGlobal('confirm', () => true);
+    await setupDetail({ status: 0 });
+    vi.mocked(orderApi.getDetail).mockReturnValueOnce(oldRead.promise)
+      .mockResolvedValue({ order: { ...baseOrder, status: 4 }, items: [] });
+    fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
+    await settle();
+    vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 });
+    await act(async () => countdown!());
+    await settle();
+    await act(async () => write.resolve({}));
+    await settle();
+    await act(async () => oldRead.reject({ response: { status: 404 } }));
+    await settle();
+
+    expect(screen.getByText('已取消')).toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('refreshes a successfully confirmed order without replaying the write', async () => {
+    const write = deferred();
+    vi.mocked(orderApi.confirm).mockReturnValue(write.promise as never);
+    await setupDetail({ status: 2 });
+    vi.mocked(orderApi.getDetail).mockResolvedValue({ order: baseOrder, items: [] });
+    const button = screen.getByRole('button', { name: '确认收货' });
+    clickTogether(button, button);
+    await act(async () => write.resolve({}));
+    await settle();
+    expect(screen.getByText('已完成')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '确认收货' })).not.toBeInTheDocument();
+    expect(orderApi.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps actions unavailable when an old countdown read settles before the new snapshot', async () => {
+    let countdown: (() => void) | undefined;
+    vi.spyOn(globalThis, 'setInterval').mockImplementation(((handler: () => void) => {
+      countdown = handler;
+      return 123;
+    }) as typeof setInterval);
+    vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => {});
+    const write = deferred();
+    const oldRead = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    const freshRead = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi.cancel).mockReturnValue(write.promise as never);
+    vi.stubGlobal('confirm', () => true);
+    await setupDetail({ status: 0 });
+    vi.mocked(orderApi.getDetail).mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(freshRead.promise);
+    fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
+    await settle();
+    vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 });
+    await act(async () => countdown!());
+    await settle();
+    await act(async () => write.resolve({}));
+    await settle();
+    await act(async () => oldRead.resolve({ order: { ...baseOrder, status: 0 }, items: [] }));
+    await settle();
+    expect(screen.queryByRole('button', { name: '取消订单' })).not.toBeInTheDocument();
+    await act(async () => freshRead.resolve({ order: { ...baseOrder, status: 4 }, items: [] }));
+    await settle();
+    expect(screen.getByText('已取消')).toBeInTheDocument();
+    expect(orderApi.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['customer', 'route', 'unmount'] as const)('ignores a post-write detail response after %s changes', async change => {
+    vi.stubGlobal('confirm', () => true);
+    const view = await setupDetail({ status: 0 });
+    const freshRead = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi.getDetail).mockReturnValueOnce(freshRead.promise);
+    fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
+    await settle();
+    vi.mocked(orderApi.getDetail).mockResolvedValue({ order: { ...baseOrder, order_no: 'New view' }, items: [] });
+    if (change === 'customer') act(() => useAuthStore.getState().login({ user_id: 2, username: 'b', email: 'b@example.test' }, 'B'));
+    else if (change === 'route') {
+      params.id = '2';
+      act(() => view.rerender(<OrderDetailPage />));
+    } else view.unmount();
+    await settle();
+    await act(async () => freshRead.reject({ response: { status: 404 } }));
+    await settle();
+    expect(router.push).not.toHaveBeenCalled();
+    if (change !== 'unmount') expect(screen.getByText('New view')).toBeInTheDocument();
+    expect(orderApi.cancel).toHaveBeenCalledTimes(1);
   });
 
   it('renders the original shipping snapshot rather than the current address', async () => {

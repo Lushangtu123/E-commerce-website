@@ -94,8 +94,9 @@ export default function OrderDetailPage() {
     }
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status, loadError]);
 
-  const loadOrder = async () => {
-    if (!isCurrentSession() || detailInFlight.current !== null) return;
+  const loadOrder = async (afterWrite = false) => {
+    if (!isCurrentSession() || (!afterWrite && detailInFlight.current !== null)) return;
+    // A successful write needs a new snapshot; any earlier read is now obsolete.
     const request = ++detailRequest.current;
     detailInFlight.current = request;
     try {
@@ -148,7 +149,7 @@ export default function OrderDetailPage() {
       await orderApi.pay(orderId);
       if (!isCurrentSession()) return;
       toast.success(translate('模拟支付完成，未实际扣款'));
-      loadOrder();
+      loadOrder(true);
     } catch (error) {
       if (!isCurrentSession()) return;
       toast.error(translate(requestFailure(error).response?.data?.error || '支付失败'));
@@ -167,7 +168,7 @@ export default function OrderDetailPage() {
       await orderApi.cancel(orderId);
       if (!isCurrentSession()) return;
       toast.success(translate('订单已取消'));
-      loadOrder();
+      loadOrder(true);
     } catch (error) {
       if (!isCurrentSession()) return;
       toast.error(translate(requestFailure(error).response?.data?.error || '取消失败'));
@@ -183,7 +184,7 @@ export default function OrderDetailPage() {
       await orderApi.confirm(orderId);
       if (!isCurrentSession()) return;
       toast.success(translate('确认收货成功'));
-      loadOrder();
+      loadOrder(true);
     } catch (error) {
       if (!isCurrentSession()) return;
       toast.error(translate(requestFailure(error).response?.data?.error || '确认收货失败'));
@@ -195,7 +196,7 @@ export default function OrderDetailPage() {
   const errorNotice = loadError && (
     <div className="card p-6 mb-6 text-center" role="alert">
       <p className="text-red-600">{t(loadError)}</p>
-      <button onClick={loadOrder} disabled={loading} className="btn btn-secondary mt-4">{t('重新加载')}</button>
+      <button onClick={() => loadOrder()} disabled={loading} className="btn btn-secondary mt-4">{t('重新加载')}</button>
     </div>
   );
 
