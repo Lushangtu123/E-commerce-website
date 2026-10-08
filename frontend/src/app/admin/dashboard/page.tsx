@@ -4,7 +4,7 @@ import '@/lib/admin-i18n';
 import { useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
 import type { DashboardStats, RecentOrder, SalesTrendPoint, TopProduct } from '@/lib/api';
@@ -15,10 +15,26 @@ import { requestFailure } from '@/lib/api-error';
 
 function useDashboardQuery<T>(name: string, load: () => Promise<T>) {
   const query = useAdminQuery({ name, params: [], load });
+  const pending = useRef<{ sessionId: string | null } | null>(null);
+  const retry = async () => {
+    if (!query.isCurrentSession() || pending.current?.sessionId === query.sessionId) return;
+    const operation = { sessionId: query.sessionId }; pending.current = operation;
+    try { await query.refetch(); }
+    finally { if (pending.current === operation) pending.current = null; }
+  };
   useEffect(() => {
     if (query.error) logger.error('获取数据失败:', query.error);
   }, [query.error]);
-  return query;
+  return { ...query, retry };
+}
+
+function DashboardFailure({ message, retry, error }: { message: string; retry: () => Promise<void>; error: unknown }) {
+  const { t } = useI18n();
+  return <div role="alert" className="p-6 text-center text-red-600">
+    <p>{t(message)}</p>
+    {requestFailure(error).response?.status !== 403 && <button type="button" onClick={() => { void retry(); }}
+      className="mt-3 rounded-lg border px-4 py-2 text-gray-700">{t('重新加载')}</button>}
+  </div>;
 }
 
 function dashboardError(error: unknown) {
@@ -127,7 +143,7 @@ export default function AdminDashboardPage() {
 
         {/* 核心指标卡片 */}
         {statsError ? (
-          <div role="alert" className="bg-white rounded-lg shadow-sm p-6 text-center text-red-600">{t(statsError)}</div>
+          <DashboardFailure message={statsError} retry={statsQuery.retry} error={statsQuery.error} />
         ) : !stats ? (
           <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500">{t("加载中...")}</div>
         ) : (
@@ -166,7 +182,7 @@ export default function AdminDashboardPage() {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("销售趋势（最近7天）")}</h3>
             {trendError ? (
-              <div role="alert" className="h-[300px] flex items-center justify-center text-red-600">{t(trendError)}</div>
+              <DashboardFailure message={trendError} retry={trendQuery.retry} error={trendQuery.error} />
             ) : !trendQuery.data ? (
               <div className="h-[300px] flex items-center justify-center text-gray-500">{t("加载中...")}</div>
             ) : salesTrend && salesTrend.length > 0 ? (
@@ -194,7 +210,7 @@ export default function AdminDashboardPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("热门商品（最近7天）")}</h3>
             <div className="space-y-3">
               {productsError ? (
-                <p role="alert" className="text-center text-red-600 py-4">{t(productsError)}</p>
+                <DashboardFailure message={productsError} retry={productsQuery.retry} error={productsQuery.error} />
               ) : !productsQuery.data ? (
                 <p className="text-center text-gray-500 py-4">{t("加载中...")}</p>
               ) : topProducts && topProducts.length > 0 ? topProducts.map((product, index) => (
@@ -222,7 +238,7 @@ export default function AdminDashboardPage() {
           </div>
           <div className="overflow-x-auto">
             {ordersError ? (
-              <p role="alert" className="px-6 py-4 text-center text-red-600">{t(ordersError)}</p>
+              <DashboardFailure message={ordersError} retry={ordersQuery.retry} error={ordersQuery.error} />
             ) : !ordersQuery.data ? (
               <p className="px-6 py-4 text-center text-gray-500">{t("加载中...")}</p>
             ) : (

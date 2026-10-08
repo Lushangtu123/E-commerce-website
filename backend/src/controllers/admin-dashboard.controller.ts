@@ -129,7 +129,7 @@ export const getTopProducts = async (req: Request, res: Response) => {
         p.title_en,
         p.price,
         p.main_image,
-        COUNT(oi.item_id) as order_count,
+        COUNT(DISTINCT oi.order_id) as order_count,
         SUM(oi.quantity) as total_sales,
         SUM(oi.quantity * oi.price) as total_revenue
        FROM products p

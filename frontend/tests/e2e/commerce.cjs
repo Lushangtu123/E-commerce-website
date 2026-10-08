@@ -438,6 +438,21 @@ async function visibleText(page, text) {
   await admin.locator('input[type="password"]').fill('BrowserFixtureAdmin123!');
   await admin.getByRole('button', { name: '登录', exact: true }).click();
   await admin.waitForURL(/\/admin\/dashboard$/);
+  const dashboardOrdersEndpoint = 'http://127.0.0.1:3101/api/admin/dashboard/recent-orders';
+  let dashboardReads = 0, dashboardUnavailable = true;
+  const dashboardFault = route => { dashboardReads++; return dashboardUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '获取订单失败' }) }) : route.continue(); };
+  expectedReadFailure = { endpoint: dashboardOrdersEndpoint, prefix: '获取数据失败:' };
+  await admin.route(`${dashboardOrdersEndpoint}*`, dashboardFault);
+  await admin.goto('http://127.0.0.1:3100/admin/dashboard');
+  const recentOrdersRegion = admin.getByRole('heading', { name: '最近订单', exact: true }).locator('..').locator('..');
+  await recentOrdersRegion.getByRole('alert').getByText('获取订单失败', { exact: true }).waitFor({ state: 'visible' });
+  const beforeDashboardRetry = dashboardReads; dashboardUnavailable = false;
+  await recentOrdersRegion.getByRole('button', { name: '重新加载', exact: true }).click();
+  await recentOrdersRegion.getByRole('table').waitFor({ state: 'visible' });
+  assert.equal(dashboardReads, beforeDashboardRetry + 1);
+  await admin.unroute(`${dashboardOrdersEndpoint}*`, dashboardFault); expectedReadFailure = undefined;
+  console.log('PASS browser dashboard region retry restores real orders');
   const realOrderNo = (await (await context.request.get(detailEndpoint)).json()).order.order_no;
   for (const [kind, label, keyword, parameter] of [
     ['products', '搜索商品', 'Browser', 'keyword'], ['users', '搜索用户', 'browser', 'keyword'], ['orders', '订单号', realOrderNo.slice(0, 6), 'orderNo'],
