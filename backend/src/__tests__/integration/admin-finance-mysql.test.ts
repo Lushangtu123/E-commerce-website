@@ -35,7 +35,7 @@ integration('真实 MySQL 管理员收入统计', () => {
     // Legacy baseline needs status for user-management SQL; production migration owns this column.
     const [columns] = await db.query<any[]>("SHOW COLUMNS FROM users LIKE 'status'");
     if (!columns.length) await db.query('ALTER TABLE users ADD COLUMN status TINYINT NOT NULL DEFAULT 1');
-    await db.query('CREATE TABLE shipping_addresses (user_id BIGINT, is_default TINYINT, created_at DATETIME)');
+    await db.query('CREATE TABLE shipping_addresses (address_id BIGINT PRIMARY KEY AUTO_INCREMENT, user_id BIGINT, is_default TINYINT, created_at DATETIME)');
     await db.query("INSERT INTO users(user_id,username,email,password_hash) VALUES(1,'fixture','fixture@example.test','not-a-password')");
     await db.query("INSERT INTO products(title,price,stock,status) VALUES('fixture',10,1,1)");
   });

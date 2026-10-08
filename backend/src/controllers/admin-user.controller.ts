@@ -36,7 +36,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
         (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3)) as total_spent
        FROM users u
        WHERE ${whereClause}
-       ORDER BY u.created_at DESC
+       ORDER BY u.created_at DESC, u.user_id DESC
        LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
@@ -103,14 +103,14 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
         created_at
        FROM orders
        WHERE user_id = ?
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, order_id DESC
        LIMIT 10`,
       [userId]
     );
 
     // 获取收货地址
     const [addresses] = await pool.query(
-      `SELECT * FROM shipping_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC`,
+      `SELECT * FROM shipping_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC, address_id DESC`,
       [userId]
     );
 
@@ -235,7 +235,7 @@ export const getUserOrders = async (req: Request, res: Response) => {
         (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
        FROM orders o
        WHERE o.user_id = ?
-       ORDER BY o.created_at DESC
+       ORDER BY o.created_at DESC, o.order_id DESC
        LIMIT ? OFFSET ?`,
       [userId, limit, offset]
     );

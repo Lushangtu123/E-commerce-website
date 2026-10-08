@@ -42,7 +42,7 @@ export const getAdminProducts = async (req: Request, res: Response) => {
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.category_id
        WHERE ${whereClause}
-       ORDER BY p.created_at DESC
+       ORDER BY p.created_at DESC, p.product_id DESC
        LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
