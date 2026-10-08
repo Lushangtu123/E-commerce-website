@@ -36,12 +36,14 @@ const expectedCheckoutErrors = [/^Failed to load resource: net::ERR_FAILED$/, /^
 let expectedOrderDetailFailure;
 let expectedShoppingFailure;
 let expectedReadFailure;
+let expectedFavoriteWriteEndpoint;
 function watchConsole(page, label) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
     const text = message.text();
     if (expectedLoginFailure && expectedLoginErrors.some(pattern => pattern.test(text))) return;
     if (expectedCheckoutFailure && message.location().url === checkoutEndpoint && expectedCheckoutErrors.some(pattern => pattern.test(text))) return;
+    if (expectedFavoriteWriteEndpoint && message.location().url === expectedFavoriteWriteEndpoint && /^Failed to load resource: net::ERR_FAILED$/.test(text)) return;
     if (expectedOrderDetailFailure &&
         (message.location().url === expectedOrderDetailFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载订单失败:/.test(text))) return;
     if (expectedShoppingFailure &&
@@ -258,6 +260,52 @@ async function localPlatformScripts(context) {
   await page.getByRole('button', { name: '收藏', exact: true }).waitFor({ state: 'visible' });
   assert.equal((await (await context.request.get(favoriteCheckEndpoint)).json()).is_favorited, false);
   console.log('PASS browser favorite reads block premature mutation and recover without removing an existing favorite');
+  for (const locale of ['zh-CN', 'en']) {
+    await page.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).selectOption(locale);
+    for (const selected of [true, false]) {
+      const endpoint = `http://127.0.0.1:3101/api/favorites${selected ? '' : '/2'}`;
+      const method = selected ? 'POST' : 'DELETE';
+      let writes = 0;
+      const loseCommittedFavoriteResponse = async route => {
+        if (route.request().method() !== method) return route.continue();
+        writes++;
+        const response = await route.fetch(); assert.equal(response.status(), 200);
+        return route.abort('failed');
+      };
+      await page.route(endpoint, loseCommittedFavoriteResponse); expectedFavoriteWriteEndpoint = endpoint;
+      await page.getByRole('button', { name: locale === 'en' ? (selected ? 'Add to favorites' : 'Remove from favorites') : (selected ? '收藏' : '取消收藏'), exact: true }).click();
+      const recovered = page.getByRole('button', { name: locale === 'en' ? (selected ? 'Remove from favorites' : 'Add to favorites') : (selected ? '取消收藏' : '收藏'), exact: true });
+      await recovered.click({ trial: true });
+      assert.equal((await (await context.request.get(favoriteCheckEndpoint)).json()).is_favorited, selected);
+      assert.equal(writes, 1, 'response loss does not repeat a committed favorite write');
+      await page.unroute(endpoint, loseCommittedFavoriteResponse); expectedFavoriteWriteEndpoint = undefined;
+    }
+  }
+  console.log('PASS browser explicit favorite add/remove reconcile lost committed responses in both languages');
+  let recoveryReadUnavailable = true, recoveredWrites = 0;
+  const lostFavoriteAdd = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    recoveredWrites++; const response = await route.fetch(); assert.equal(response.status(), 200); return route.abort('failed');
+  };
+  const recoveryReadFault = route => recoveryReadUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: '检查收藏状态失败' }) }) : route.continue();
+  const favoriteAddEndpoint = 'http://127.0.0.1:3101/api/favorites';
+  expectedFavoriteWriteEndpoint = favoriteAddEndpoint; expectedReadFailure = { endpoint: favoriteCheckEndpoint, prefix: '检查收藏状态失败:' };
+  await page.route(favoriteAddEndpoint, lostFavoriteAdd); await page.route(favoriteCheckEndpoint, recoveryReadFault);
+  await page.getByRole('button', { name: 'Add to favorites', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Unable to load favorite status. Please try again.' }).waitFor({ state: 'visible' });
+  assert.equal(await page.getByRole('button', { name: 'Add to favorites', exact: true }).isDisabled(), true);
+  recoveryReadUnavailable = false;
+  await page.getByRole('button', { name: 'Retry favorite status', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove from favorites', exact: true }).click({ trial: true });
+  assert.equal(recoveredWrites, 1);
+  assert.equal((await (await context.request.get(favoriteCheckEndpoint)).json()).is_favorited, true);
+  await page.unroute(favoriteAddEndpoint, lostFavoriteAdd); await page.unroute(favoriteCheckEndpoint, recoveryReadFault);
+  expectedFavoriteWriteEndpoint = undefined; expectedReadFailure = undefined;
+  await page.getByRole('button', { name: 'Remove from favorites', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to favorites', exact: true }).click({ trial: true });
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser favorite reconciliation outage provides read-only retry and preserves the committed intent');
   await page.goto('http://127.0.0.1:3100/history');
   for (const locale of ['zh-CN', 'en']) {
     await page.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).selectOption(locale);

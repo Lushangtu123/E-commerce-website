@@ -21,7 +21,9 @@ beforeEach(() => {
   vi.spyOn(reviewApi, 'listByProduct').mockResolvedValue({ reviews: [], total: 0, totalPages: 0 });
   vi.spyOn(browseApi, 'record').mockResolvedValue({} as never);
   vi.spyOn(favoriteApi, 'check').mockResolvedValue({ is_favorited: true });
-  vi.spyOn(favoriteApi, 'toggle').mockResolvedValue({ is_favorited: false, message: '取消收藏成功' });
+  vi.spyOn(favoriteApi, 'add').mockResolvedValue({ message: '收藏成功' });
+  vi.spyOn(favoriteApi, 'remove').mockResolvedValue({ message: '取消收藏成功' });
+  vi.spyOn(favoriteApi, 'toggle');
 });
 describe('favorite state recovery', () => {
   it('blocks both the rendered action and a captured handler until the state is known', async () => {
@@ -32,6 +34,7 @@ describe('favorite state recovery', () => {
     expect(button).toBeDisabled();
     await captureHandler(button)();
     expect(favoriteApi.toggle).not.toHaveBeenCalled();
+    expect(favoriteApi.add).not.toHaveBeenCalled(); expect(favoriteApi.remove).not.toHaveBeenCalled();
     await act(async () => pending.resolve({ is_favorited: true }));
     expect(screen.getByRole('button', { name: '取消收藏' })).toBeEnabled();
   });
@@ -44,6 +47,7 @@ describe('favorite state recovery', () => {
     const add = screen.getByRole('button', { name: locale === 'en' ? 'Add to favorites' : '收藏' });
     expect(add).toBeDisabled(); await captureHandler(add)();
     expect(favoriteApi.toggle).not.toHaveBeenCalled();
+    expect(favoriteApi.add).not.toHaveBeenCalled(); expect(favoriteApi.remove).not.toHaveBeenCalled();
     const retry = screen.getByRole('button', { name: locale === 'en' ? 'Retry favorite status' : '重新加载收藏状态' });
     clickTogether(retry, retry); await settle();
     expect(favoriteApi.check).toHaveBeenCalledTimes(2);
@@ -56,11 +60,11 @@ describe('favorite state recovery', () => {
   });
   it('an unselected product becomes collectible after a successful retry', async () => {
     vi.mocked(favoriteApi.check).mockRejectedValueOnce(new Error('503')).mockResolvedValueOnce({ is_favorited: false });
-    vi.mocked(favoriteApi.toggle).mockResolvedValueOnce({ is_favorited: true, message: '收藏成功' });
     render(<ProductDetail initialProduct={product} />); await settle();
     fireEvent.click(screen.getByRole('button', { name: '重新加载收藏状态' })); await settle();
     fireEvent.click(screen.getByRole('button', { name: '收藏' })); await settle();
-    expect(favoriteApi.toggle).toHaveBeenCalledExactlyOnceWith(1);
+    expect(favoriteApi.add).toHaveBeenCalledExactlyOnceWith(1);
+    expect(favoriteApi.toggle).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '取消收藏' })).toBeEnabled();
   });
   it.each(['success', 'failure'] as const)('late old-context %s cannot overwrite the new product state', async outcome => {
@@ -76,12 +80,13 @@ describe('favorite state recovery', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(favoriteApi.check).toHaveBeenLastCalledWith(2);
   });
-  it('the previous account action cannot toggle for a changed session', async () => {
+  it('the previous account action cannot mutate for a changed session', async () => {
     render(<ProductDetail initialProduct={product} />); await settle();
     const oldAction = captureHandler(screen.getByRole('button', { name: '取消收藏' }));
     act(() => useAuthStore.getState().login({ user_id: 2, username: 'Second', email: 'second@example.test' }, 'second-session'));
     await oldAction(); await settle();
     expect(favoriteApi.toggle).not.toHaveBeenCalled();
+    expect(favoriteApi.add).not.toHaveBeenCalled(); expect(favoriteApi.remove).not.toHaveBeenCalled();
     expect(favoriteApi.check).toHaveBeenCalledTimes(2);
   });
 });

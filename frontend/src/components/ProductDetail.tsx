@@ -295,13 +295,24 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     const operation = { context };
     favoriteRequest.current = operation;
     setFavoriting(true);
+    const selected = !isFavorited;
     try {
-      const data = await favoriteApi.toggle(productId);
+      const data = await (selected ? favoriteApi.add(productId) : favoriteApi.remove(productId));
       if (!isCurrentContext()) return;
-      setFavoriteState({ context, revision: favoriteRetry, selected: data.is_favorited, error: false });
+      setFavoriteState({ context, revision: favoriteRetry, selected, error: false });
       toast.success(translate(data.message));
     } catch (error) {
-      if (isCurrentContext()) toast.error(translate(requestFailure(error).response?.data?.message || "操作失败"));
+      if (!isCurrentContext()) return;
+      const failure = requestFailure(error), status = failure.response?.status;
+      if (!selected && status === 404 && failure.response?.data?.message === '收藏记录不存在') {
+        setFavoriteState({ context, revision: favoriteRetry, selected: false, error: false });
+        toast.success(translate('取消收藏成功'));
+      } else if (status === undefined || status >= 500 || status === 408) {
+        // The write may have committed. Reconcile through GET before permitting another intent.
+        favoriteReadRequest.current = { context };
+        setFavoriteRetry(previous => previous + 1);
+        toast.error(translate('操作结果尚未确认，正在重新加载收藏状态'));
+      } else toast.error(translate(failure.response?.data?.message || '操作失败'));
     } finally {
       if (isCurrentContext() && favoriteRequest.current === operation) {
         favoriteRequest.current = null;
