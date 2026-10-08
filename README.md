@@ -372,7 +372,7 @@ Favourites and browsing history default to `page=1&limit=20`, with `limit` at mo
 - `POST /api/orders/:id/pay` - Simulated payment that charges nothing; returns 503 when disabled
 - `POST /api/orders/:id/cancel` - Cancel an order
 
-The account centre shows statistics from the server and can retry failed loads; its "Pending payment" entry opens the order list filtered to unpaid orders. The usable-coupon count excludes coupons that are used, expired, not yet valid, disabled or have invalid rules; spending thresholds are checked against the specific order at checkout. The order list supports all five statuses and paging in both directions, sorted by creation time and order ID, newest first; if paying or cancelling leaves the current filtered page empty, it moves back to a valid page.
+The account centre shows statistics from the server and can retry failed loads; its "Pending payment" entry opens the order list filtered to unpaid orders. The usable-coupon count excludes coupons that are used, expired, not yet valid, disabled or have invalid rules; spending thresholds are checked against the specific order at checkout. The order list keeps its status filter in the URL for reload and Back/Forward; returning through the header shows all orders, and changing status resets pagination. It supports all five statuses and paging in both directions, sorted by creation time and order ID, newest first; if paying or cancelling leaves the current filtered page empty, it moves back to a valid page.
 - `POST /api/orders/:id/confirm` - Confirm delivery
 - `GET /api/orders/:id/after-sales`, `POST /api/orders/:id/after-sales` - View or submit the user's after-sales request
 - `POST /api/orders/:id/after-sales/withdraw` - Withdraw a pending request

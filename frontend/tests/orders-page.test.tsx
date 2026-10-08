@@ -5,11 +5,22 @@ import { orderApi, type Order } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { CommitLog, apiError, captureHandler, clickTogether, deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const notifications = vi.hoisted(() => [] as string[]);
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', async () => {
+  const { useSyncExternalStore } = await import('react');
+  return { useRouter: () => router, useSearchParams: () => {
+    // Next integrates native history writes with useSearchParams; simulate that subscription here.
+    const search = useSyncExternalStore(listener => {
+      window.addEventListener('popstate', listener);
+      return () => window.removeEventListener('popstate', listener);
+    }, () => window.location.search, () => '');
+    return new URLSearchParams(search);
+  } };
+});
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
   const record = (message: string) => { notifications.push(message); };
@@ -81,6 +92,13 @@ describe('orders page', () => {
   beforeEach(() => {
     notifications.length = 0;
     mutations = [];
+    for (const method of ['pushState', 'replaceState'] as const) {
+      const native = window.history[method].bind(window.history);
+      vi.spyOn(window.history, method).mockImplementation((...args) => {
+        native(...args);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+    }
   });
 
   it('pages thirteen orders ten at a time and resets to page one when filtering cancellations', async () => {
@@ -106,6 +124,52 @@ describe('orders page', () => {
   it.each(['0', '1', '2', '3', '4', '5', '-1', '00', 'NaN', ''])('starts from a legal profile status link once and ignores malformed ones (status=%s)', async (value) => {
     await setup({ search: `?status=${value}` });
     expect(requests()).toEqual([{ page: 1, limit: 10, ...(/^[0-4]$/.test(value) && { status: Number(value) }) }]);
+  });
+
+  it.each(['zh-CN', 'en'] as const)('keeps status buttons, URL and reload consistent in %s', async locale => {
+    useLocaleStore.getState().setLocale(locale);
+    const { view } = await setup({ search: '?status=0&source=profile' });
+    await click(button(locale === 'en' ? 'Cancelled' : '已取消'));
+    expect(new URLSearchParams(window.location.search).get('status')).toBe('4');
+    expect(new URLSearchParams(window.location.search).get('source')).toBe('profile');
+    expect(requests().at(-1)).toEqual({ page: 1, limit: 10, status: 4 });
+    view.unmount();
+    await setup({ search: window.location.search });
+    expect(requests().at(-1)).toEqual({ page: 1, limit: 10, status: 4 });
+    await click(button(locale === 'en' ? 'All' : '全部'));
+    expect(new URLSearchParams(window.location.search).has('status')).toBe(false);
+    expect(requests().at(-1)).toEqual({ page: 1, limit: 10 });
+  });
+
+  it('follows Header and history URL changes without remounting and resets pagination', async () => {
+    await setup({ search: '?status=4', list: async params => page([order(params.page, params.status ?? 0)], 13, 2) });
+    await click(button('下一页'));
+    expect(requests().at(-1)).toEqual({ page: 2, limit: 10, status: 4 });
+    for (const [url, status] of [['/orders', undefined], ['/orders?status=0', 0], ['/orders?status=4', 4]] as const) {
+      act(() => window.history.replaceState(null, '', url));
+      await settle();
+      expect(requests().at(-1)).toEqual({ page: 1, limit: 10, ...(status !== undefined && { status }) });
+      expect(button(status === undefined ? '全部' : status === 0 ? '待支付' : '已取消')).toHaveClass('bg-primary-600');
+    }
+  });
+
+  it.each(['?status=0&status=4', '?status=3&status=3', '?status=1%0A', '?status=1e0'])('ambiguous or noncanonical status links default to all: %s', async search => {
+    await setup({ search });
+    expect(requests()).toEqual([{ page: 1, limit: 10 }]);
+    expect(button('全部')).toHaveClass('bg-primary-600');
+  });
+
+  it('clears a previous customer filter from the URL and blocks an old handler immediately on navigation', async () => {
+    await setup({ search: '?status=0&source=profile' });
+    const stale = captureHandler(screen.getAllByRole('button', { name: '取消订单' })[0]);
+    act(() => window.history.replaceState(null, '', '/orders?status=4&source=profile'));
+    await stale();
+    expect(mutations).toEqual([]);
+    act(() => useAuthStore.getState().login(secondUser, 'second-session'));
+    await settle();
+    expect(window.location.search).toBe('?source=profile');
+    expect(requests().at(-1)).toEqual({ page: 1, limit: 10 });
+    expect(button('全部')).toHaveClass('bg-primary-600');
   });
 
   it.each(['success', 'failure'] as const)('hides old rows immediately on filter and page changes and ignores a late quick-filter %s', async (outcome) => {
