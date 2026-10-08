@@ -449,7 +449,7 @@ async function visibleText(page, text) {
   expectedReadFailure = { endpoint: adminCouponsEndpoint, prefix: '获取优惠券列表失败:' };
   await admin.route(`${adminCouponsEndpoint}*`, adminCouponFault);
   await admin.goto('http://127.0.0.1:3100/admin/coupons');
-  await admin.getByRole('alert').waitFor({ state: 'visible' });
+  await admin.getByRole('alert').getByText('获取优惠券列表失败', { exact: true }).waitFor({ state: 'visible' });
   assert.equal(await admin.getByText('暂无优惠券', { exact: true }).count(), 0);
   await admin.getByRole('button', { name: '重新加载', exact: true }).click();
   await admin.getByRole('table').waitFor({ state: 'visible' });
