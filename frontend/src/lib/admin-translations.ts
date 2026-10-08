@@ -1,4 +1,8 @@
 export const adminTranslations: Record<string, string> = {
+  '正在加载分类...': 'Loading categories...',
+  '获取分类失败，请重新加载': 'Categories could not be loaded. Please reload.',
+  '重新加载分类': 'Reload categories',
+  '当前分类（ID：{id}）': 'Current category (ID: {id})',
   '仪表盘': 'Dashboard',
   '商品管理': 'Products',
   '订单管理': 'Orders',

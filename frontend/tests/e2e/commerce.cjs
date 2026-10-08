@@ -502,6 +502,40 @@ async function localPlatformScripts(context) {
     admin.off('request', track);
   }
   console.log('PASS browser all three admin keyword drafts submit one list request on Enter');
+  const categoriesEndpoint = 'http://127.0.0.1:3101/api/products/categories';
+  let categoryAttempts = 0, releaseCategoryRetry;
+  const categoryRetryGate = new Promise(resolve => { releaseCategoryRetry = resolve; });
+  const categoryFault = async route => {
+    categoryAttempts++;
+    if (categoryAttempts === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '获取分类列表失败' }) });
+    await categoryRetryGate;
+    return route.continue();
+  };
+  expectedReadFailure = { endpoint: categoriesEndpoint, prefix: '获取分类失败:' };
+  await admin.route(categoriesEndpoint, categoryFault);
+  await admin.goto('http://127.0.0.1:3100/admin/products');
+  await admin.getByRole('table').waitFor({ state: 'visible' });
+  await admin.getByRole('button', { name: '添加商品', exact: true }).click();
+  await admin.getByRole('alert').getByText('获取分类失败，请重新加载', { exact: true }).waitFor({ state: 'visible' });
+  await admin.locator('#newProduct-title').fill('Category recovery draft');
+  await admin.locator('#newProduct-price').fill('19.90');
+  assert.equal(await admin.locator('#newProduct-category-id').isDisabled(), true);
+  await admin.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await admin.getByRole('alert').getByText('Categories could not be loaded. Please reload.', { exact: true }).waitFor({ state: 'visible' });
+  await admin.getByRole('button', { name: 'Reload categories', exact: true }).click();
+  await admin.getByRole('status').getByText('Loading categories...', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await admin.getByRole('button', { name: 'Add product', exact: true }).last().isDisabled(), true);
+  assert.equal(await admin.locator('#newProduct-title').inputValue(), 'Category recovery draft');
+  releaseCategoryRetry();
+  await admin.locator('#newProduct-category-id option[value="1"]').waitFor({ state: 'attached' });
+  assert.equal(await admin.locator('#newProduct-category-id').isEnabled(), true);
+  assert.equal(await admin.locator('#newProduct-title').inputValue(), 'Category recovery draft');
+  assert.equal(await admin.locator('#newProduct-price').inputValue(), '19.90');
+  assert.equal(categoryAttempts, 2);
+  await admin.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await admin.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  await admin.unroute(categoriesEndpoint, categoryFault); expectedReadFailure = undefined;
+  console.log('PASS browser category outage, bilingual retry and loading preserve the product draft');
   const adminCouponsEndpoint = 'http://127.0.0.1:3101/api/admin/coupons';
   let adminCouponAttempts = 0;
   const adminCouponFault = async route => {

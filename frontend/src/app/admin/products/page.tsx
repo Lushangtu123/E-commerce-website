@@ -51,6 +51,8 @@ export default function AdminProductsPage() {
   });
   const categoriesQuery = useAdminQuery({ name: 'categories', params: [], load: () => api.get<unknown, Category[]>('/products/categories') });
   const categories = categoriesQuery.data ?? [];
+  const categoriesReady = categoriesQuery.data !== undefined && !categoriesQuery.error;
+  const categoriesLoading = !categoriesReady && !categoriesQuery.error;
   const lastPage = Math.max(1, Number(query.data?.pagination?.totalPages) || Math.ceil((Number(query.data?.pagination?.total) || 0) / 20));
   const beyondLastPage = query.data !== undefined && page > lastPage;
   const shown = beyondLastPage ? undefined : query.data;
@@ -65,6 +67,9 @@ export default function AdminProductsPage() {
   const isCurrentScope = () => query.isCurrentSession() && currentScope.current === scopeKey;
   const isDisplayedScope = () => isCurrentScope() && shown !== undefined && displayed.current === shown;
   const reload = () => { if (isCurrentScope()) void query.refetch(); };
+  const reloadCategories = () => {
+    if (formScope === scopeKey && isCurrentScope() && categoriesQuery.isCurrentSession()) void categoriesQuery.refetch();
+  };
 
   const selectableProducts = products.filter(product => product.status === 0 || product.status === 1);
   const selectedIds = shown && selection?.key === scopeKey ? selection.ids.filter(id => selectableProducts.some(product => product.product_id === id)) : [];
@@ -194,7 +199,7 @@ export default function AdminProductsPage() {
   };
 
   const handleAddProduct = () => {
-    if (formScope !== scopeKey || !isDisplayedScope() || mutation.current) return;
+    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || mutation.current) return;
     if (!isProductFormComplete(newProduct)) {
       toast.error(translate('请填写商品标题、价格和分类'));
       return;
@@ -230,7 +235,7 @@ export default function AdminProductsPage() {
   };
 
   const handleEditProduct = () => {
-    if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || mutation.current ||
+    if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || !categoriesReady || mutation.current ||
       !selectableProducts.some(product => product.product_id === editProduct.product_id)) return;
     if (!isProductFormComplete(editProduct)) {
       toast.error(translate('请填写商品标题、价格和分类'));
@@ -481,12 +486,14 @@ export default function AdminProductsPage() {
         {formScope === scopeKey && showAddModal && (
           <AdminProductForm idPrefix="newProduct" heading={t('添加商品')} submitLabel={t('添加商品')}
             values={newProduct} categories={categories} busy={busy} onChange={updateNewProduct}
+            categoriesLoading={categoriesLoading} categoriesFailed={!!categoriesQuery.error} onRetryCategories={reloadCategories}
             onClose={() => setShowAddModal(false)} onSubmit={handleAddProduct} />
         )}
 
         {formScope === scopeKey && showEditModal && editProduct && (
           <AdminProductForm idPrefix="editProduct" heading={t('编辑商品')} submitLabel={t('保存修改')}
             values={editProduct} categories={categories} busy={busy}
+            categoriesLoading={categoriesLoading} categoriesFailed={!!categoriesQuery.error} onRetryCategories={reloadCategories}
             onChange={values => updateEditProduct({ ...values, product_id: editProduct.product_id, previous: editProduct.previous })}
             onClose={() => { setShowEditModal(false); setEditProduct(null); }} onSubmit={handleEditProduct} />
         )}

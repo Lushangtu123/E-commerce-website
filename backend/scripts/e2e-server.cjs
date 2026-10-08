@@ -61,6 +61,7 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-product-i18n', 'migrateProductI18n'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
+  await pool.query("INSERT INTO categories(category_id,name) VALUES(1,'浏览器测试分类')");
   await pool.query(`INSERT INTO products(product_id,title,title_en,description,description_en,specs,specs_en,category_id,price,stock,status)
     VALUES(1,'浏览器交易测试商品','Browser checkout product','浏览器中文描述','Browser English description',?,?,1,10.10,20,1)`,
     [JSON.stringify({ 材质: '棉' }), JSON.stringify({ 材质: { name: 'Material', value: 'Cotton' } })]);
