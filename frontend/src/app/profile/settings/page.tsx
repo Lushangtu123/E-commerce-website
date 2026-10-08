@@ -36,9 +36,12 @@ export default function ProfileSettingsPage() {
   const mounted = useRef(true);
   const revision = useRef(0);
   const mutation = useRef<object | null>(null);
+  const recovery = useRef<{ key: string; payload: Draft; draft: Draft } | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   const passwordChanged = useRef(false);
   const profile = result?.key === sessionKey ? result.profile : undefined;
   const busy = saving === sessionKey;
+  const blocked = unconfirmed === sessionKey;
   const dirty = !!profile && !!draft && !equal(draft, valuesOf(profile));
   const isCurrent = () => {
     const state = useAuthStore.getState();
@@ -56,6 +59,30 @@ export default function ProfileSettingsPage() {
     replaceDraft(valuesOf(next));
   };
 
+  const reconcileProfile = async (reconcileOperation?: object) => {
+    const attempt = recovery.current;
+    if (!isCurrent() || attempt?.key !== sessionKey || (mutation.current && mutation.current !== reconcileOperation)) return;
+    const operation = reconcileOperation ?? {};
+    mutation.current = operation; setSaving(sessionKey);
+    const request = ++revision.current;
+    const active = () => isCurrent() && request === revision.current && recovery.current === attempt && mutation.current === operation;
+    try {
+      const data = await userApi.getProfile();
+      if (!active()) return;
+      if (!validProfile(data.user, user?.user_id) || !useAuthStore.getState().updateUser(data.user, sessionId!)) throw new Error('invalid profile sync');
+      const saved = equal(valuesOf(data.user), attempt.payload);
+      const next = { key: sessionKey, profile: data.user };
+      loaded.current = next; setResult(next);
+      replaceDraft(saved ? valuesOf(data.user) : attempt.draft);
+      recovery.current = null; setUnconfirmed(null);
+      setNotice({ key: sessionKey, ...(saved ? { success: '资料已保存' } : { error: '当前资料与您的修改不同，已保留草稿，请检查后重试' }) });
+    } catch {
+      if (active()) setNotice({ key: sessionKey, error: '保存结果尚未确认，请重新加载资料后再操作', reload: true });
+    } finally {
+      if (isCurrent() && mutation.current === operation) { mutation.current = null; setSaving(null); }
+    }
+  };
+
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; revision.current += 1; };
@@ -63,6 +90,7 @@ export default function ProfileSettingsPage() {
 
   const loadProfile = async () => {
     if (!isCurrent() || mutation.current) return;
+    if (recovery.current?.key === sessionKey) { await reconcileProfile(); return; }
     const request = ++revision.current;
     setResult(null); loaded.current = null; replaceDraft(null); setNotice(null);
     try {
@@ -81,7 +109,7 @@ export default function ProfileSettingsPage() {
   };
 
   useEffect(() => {
-    setResult(null); loaded.current = null; replaceDraft(null); setNotice(null); setSaving(null); mutation.current = null;
+    setResult(null); loaded.current = null; replaceDraft(null); setNotice(null); setSaving(null); mutation.current = null; recovery.current = null; setUnconfirmed(null);
     if (!isHydrated) return;
     if (!isAuthenticated) { router.push(passwordChanged.current ? '/login?passwordChanged=1' : '/login'); return; }
     passwordChanged.current = false;
@@ -90,7 +118,7 @@ export default function ProfileSettingsPage() {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
 
   const handleChange = (name: keyof Draft, value: string) => {
-    if (!isCurrent() || mutation.current || !draftRef.current) return;
+    if (!isCurrent() || mutation.current || recovery.current?.key === sessionKey || !draftRef.current) return;
     replaceDraft({ ...draftRef.current, [name]: value });
     setNotice(null);
   };
@@ -99,7 +127,7 @@ export default function ProfileSettingsPage() {
     event.preventDefault();
     const current = draftRef.current;
     const previous = loaded.current;
-    if (!isCurrent() || mutation.current || !current || previous?.key !== sessionKey || !previous.profile || equal(current, valuesOf(previous.profile))) return;
+    if (!isCurrent() || mutation.current || recovery.current?.key === sessionKey || !current || previous?.key !== sessionKey || !previous.profile || equal(current, valuesOf(previous.profile))) return;
     const payload: ProfileInput = { username: current.username.trim(), phone: current.phone.trim() || null, avatar_url: current.avatar_url.trim() || null };
     let error = '';
     if (!payload.username || payload.username.length > 50) error = '用户名必须为1至50个字符';
@@ -115,19 +143,30 @@ export default function ProfileSettingsPage() {
     const generation = revision.current;
     mutation.current = operation; setSaving(sessionKey); setNotice(null);
     const active = () => isCurrent() && generation === revision.current && mutation.current === operation;
+    const markUnconfirmed = () => {
+      recovery.current = { key: sessionKey, payload: { username: payload.username, phone: payload.phone ?? '', avatar_url: payload.avatar_url ?? '' }, draft: current };
+      setUnconfirmed(sessionKey);
+    };
     try {
       const data = await userApi.updateProfile(payload);
       if (!active()) return;
       if (!validProfile(data.user, user?.user_id)) {
+        markUnconfirmed();
         setNotice({ key: sessionKey, error: '用户资料响应无效，请重新加载', reload: true }); return;
       }
       if (!useAuthStore.getState().updateUser(data.user, sessionId!)) {
+        markUnconfirmed();
         setNotice({ key: sessionKey, error: '资料已保存，但本地同步失败，请重新加载', reload: true }); return;
       }
       accept(data.user);
       setNotice({ key: sessionKey, success: '资料已保存' });
     } catch (error) {
-      if (active()) setNotice({ key: sessionKey, error: requestFailure(error).response?.data?.error || '保存个人资料失败，请重试' });
+      if (active()) {
+        const failure = requestFailure(error), status = failure.response?.status;
+        if (!status || status === 408 || status === 429 || status >= 500) {
+          markUnconfirmed(); await reconcileProfile(operation);
+        } else setNotice({ key: sessionKey, error: failure.response?.data?.error || '保存个人资料失败，请重试' });
+      }
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
@@ -150,26 +189,26 @@ export default function ProfileSettingsPage() {
       ) : profile && draft && (
         <form onSubmit={handleSubmit} className="card p-6 sm:p-8 space-y-6">
           <label className="block" htmlFor="profile-username"><span className="block mb-2 font-medium">{t('用户名')}</span>
-            <input id="profile-username" name="username" className="input" value={draft.username} maxLength={50} required autoComplete="nickname" disabled={busy} onChange={event => handleChange('username', event.target.value)} />
+            <input id="profile-username" name="username" className="input" value={draft.username} maxLength={50} required autoComplete="nickname" disabled={busy || blocked} onChange={event => handleChange('username', event.target.value)} />
           </label>
           <label className="block" htmlFor="profile-email"><span className="block mb-2 font-medium">{t('邮箱')}</span>
             <input id="profile-email" name="email" className="input bg-gray-50 text-gray-600" value={profile.email} readOnly aria-describedby="profile-email-hint" />
             <span id="profile-email-hint" className="block mt-2 text-sm text-gray-500">{t('邮箱用于登录，在此页面不可修改')}</span>
           </label>
           <label className="block" htmlFor="profile-phone"><span className="block mb-2 font-medium">{t('联系电话')}</span>
-            <input id="profile-phone" name="phone" className="input" value={draft.phone} maxLength={20} type="tel" autoComplete="tel" disabled={busy} onChange={event => handleChange('phone', event.target.value)} />
+            <input id="profile-phone" name="phone" className="input" value={draft.phone} maxLength={20} type="tel" autoComplete="tel" disabled={busy || blocked} onChange={event => handleChange('phone', event.target.value)} />
           </label>
           <label className="block" htmlFor="profile-avatar"><span className="block mb-2 font-medium">{t('头像地址')}</span>
-            <input id="profile-avatar" name="avatar_url" className="input" value={draft.avatar_url} maxLength={255} type="url" placeholder="https://" disabled={busy} aria-describedby="profile-avatar-hint" onChange={event => handleChange('avatar_url', event.target.value)} />
+            <input id="profile-avatar" name="avatar_url" className="input" value={draft.avatar_url} maxLength={255} type="url" placeholder="https://" disabled={busy || blocked} aria-describedby="profile-avatar-hint" onChange={event => handleChange('avatar_url', event.target.value)} />
             <span id="profile-avatar-hint" className="block mt-2 text-sm text-gray-500">{t('使用HTTP(S)图片地址；手机号和头像留空即可清除')}</span>
           </label>
           {notice?.key === sessionKey && notice.error && <div role="alert" className="text-red-600 text-sm"><p>{t(notice.error)}</p>{notice.reload && <button type="button" disabled={busy} onClick={loadProfile} className="underline mt-2">{t('重新加载资料')}</button>}</div>}
           {notice?.key === sessionKey && notice.success && <div role="status" className="text-green-700 text-sm">{t(notice.success)}</div>}
           <div className="flex flex-wrap gap-3 border-t pt-6">
-            <button type="submit" disabled={busy || !dirty} className="btn btn-primary disabled:opacity-50">{t(busy ? '保存中...' : '保存修改')}</button>
-            <button type="button" disabled={busy || !dirty} className="btn btn-outline disabled:opacity-50" onClick={() => {
+            <button type="submit" disabled={busy || blocked || !dirty} className="btn btn-primary disabled:opacity-50">{t(busy ? '保存中...' : '保存修改')}</button>
+            <button type="button" disabled={busy || blocked || !dirty} className="btn btn-outline disabled:opacity-50" onClick={() => {
               const current = loaded.current;
-              if (!isCurrent() || mutation.current || current?.key !== sessionKey || !current.profile) return;
+              if (!isCurrent() || mutation.current || recovery.current?.key === sessionKey || current?.key !== sessionKey || !current.profile) return;
               replaceDraft(valuesOf(current.profile)); setNotice(null);
             }}>{t('撤销修改')}</button>
           </div>

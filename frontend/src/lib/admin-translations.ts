@@ -150,7 +150,6 @@ export const adminTranslations: Record<string, string> = {
   '请输入品牌': 'Enter brand',
   '预览': 'Preview',
   '编辑商品': 'Edit product',
-  '保存修改': 'Save changes',
   '商品已上架': 'Product activated',
   '商品已下架': 'Product deactivated',
   '请先选择商品': 'Select a product first',
