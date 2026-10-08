@@ -6,6 +6,7 @@ import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
 import logger from '../utils/logger';
 import { getPaymentSettings } from '../utils/payment-settings';
+import { orderPathId } from '../utils/order-id';
 
 export class OrderController {
   static async preview(req: AuthRequest, res: Response) {
@@ -53,7 +54,8 @@ export class OrderController {
   // 获取订单详情
   static async getDetail(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id as string);
+      const orderId = orderPathId(req.params.id);
+      if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
       
       const order = await OrderModel.findById(orderId);
       
@@ -105,7 +107,9 @@ export class OrderController {
   // 取消订单
   static async cancel(req: AuthRequest, res: Response) {
     try {
-      const result = await transitionOrder(Number(req.params.id), OrderStatus.CANCELLED, { userId: req.userId! });
+      const orderId = orderPathId(req.params.id);
+      if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
+      const result = await transitionOrder(orderId, OrderStatus.CANCELLED, { userId: req.userId! });
       await invalidateOrderProductCache(result.productIds);
 
       res.json({ message: '订单已取消' });
@@ -119,10 +123,12 @@ export class OrderController {
   // 支付订单（模拟）
   static async pay(req: AuthRequest, res: Response) {
     try {
+      const orderId = orderPathId(req.params.id);
+      if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
       if (!getPaymentSettings().canPay) {
         return res.status(503).json({ error: '支付服务尚未配置，暂不能付款' });
       }
-      const result = await transitionOrder(Number(req.params.id), OrderStatus.PAID, { userId: req.userId! });
+      const result = await transitionOrder(orderId, OrderStatus.PAID, { userId: req.userId! });
       await invalidateOrderProductCache(result.productIds);
 
       res.json({ message: '模拟支付完成，未实际扣款', payment_mode: 'demo' });
@@ -136,7 +142,9 @@ export class OrderController {
   // 确认收货
   static async confirm(req: AuthRequest, res: Response) {
     try {
-      await transitionOrder(Number(req.params.id), OrderStatus.COMPLETED, { userId: req.userId! });
+      const orderId = orderPathId(req.params.id);
+      if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
+      await transitionOrder(orderId, OrderStatus.COMPLETED, { userId: req.userId! });
 
       res.json({ message: '确认收货成功' });
     } catch (error) {
@@ -149,7 +157,8 @@ export class OrderController {
   // 获取订单剩余支付时间
   static async getRemainingTime(req: AuthRequest, res: Response) {
     try {
-      const orderId = parseInt(req.params.id as string);
+      const orderId = orderPathId(req.params.id);
+      if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
       
       const order = await OrderModel.findById(orderId);
       

@@ -127,18 +127,21 @@ router.get('/', OrderController.list);
  *   get:
  *     tags: [订单]
  *     summary: 获取订单详情
+ *     description: 路径编号必须是规范正十进制整数，不允许前导零、科学计数或超出安全整数范围
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - name: id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 订单详情（含订单项）
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Order' }
+ *       400:
+ *         description: 订单ID无效
  *       404:
  *         description: 订单不存在
  *         content:
@@ -158,12 +161,12 @@ router.get('/:id', OrderController.getDetail);
  *       - name: id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 取消成功
  *       400:
- *         description: 订单状态不允许取消
+ *         description: 订单ID无效或订单状态不允许取消
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -181,12 +184,12 @@ router.post('/:id/cancel', OrderController.cancel);
  *       - name: id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 支付成功
  *       400:
- *         description: 订单已超时取消 / 状态不允许支付
+ *         description: 订单ID无效 / 订单已超时取消 / 状态不允许支付
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -204,10 +207,12 @@ router.post('/:id/pay', OrderController.pay);
  *       - name: id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
  *         description: 确认成功
+ *       400:
+ *         description: 订单ID无效或状态不允许收货
  */
 router.post('/:id/confirm', OrderController.confirm);
 
@@ -217,16 +222,18 @@ router.post('/:id/confirm', OrderController.confirm);
  *   get:
  *     tags: [订单]
  *     summary: 获取订单剩余支付时间
- *     description: 返回待支付订单距离 30 分钟超时还剩多少秒
+ *     description: 返回待支付订单距离 30 分钟超时剩余的分钟数
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - name: id
  *         in: path
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
  *     responses:
  *       200:
- *         description: 剩余秒数
+ *         description: 剩余分钟数
+ *       400:
+ *         description: 订单ID无效
  */
 router.get('/:id/remaining-time', OrderController.getRemainingTime);
 

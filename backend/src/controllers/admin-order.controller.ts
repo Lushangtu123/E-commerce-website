@@ -4,6 +4,7 @@ import { OrderStatus } from '../models/order.model';
 import { transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
 import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
+import { orderPathId } from '../utils/order-id';
 
 // 获取订单列表（管理员）
 export const getAdminOrders = async (req: Request, res: Response) => {
@@ -78,8 +79,9 @@ export const getAdminOrders = async (req: Request, res: Response) => {
 // 获取订单详情（管理员）
 export const getAdminOrderDetail = async (req: Request, res: Response) => {
   try {
+    const orderId = orderPathId(req.params.orderId);
+    if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
     const pool = getPool();
-    const { orderId } = req.params;
 
     // 获取订单基本信息
     const [orders] = await pool.query(
@@ -134,14 +136,15 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
 // 更新订单状态
 export const updateOrderStatus = async (req: Request, res: Response) => {
   try {
-    const { orderId } = req.params;
+    const orderId = orderPathId(req.params.orderId);
+    if (orderId === undefined) return res.status(400).json({ error: '订单ID无效' });
     const { status, shipping_company, tracking_number } = req.body;
 
     if (status === undefined) {
       return res.status(400).json({ error: '状态不能为空' });
     }
 
-    const result = await transitionOrder(Number(orderId), status as OrderStatus, {
+    const result = await transitionOrder(orderId, status as OrderStatus, {
       shipment: status === OrderStatus.SHIPPED ? { shipping_company, tracking_number } : undefined,
     });
     await invalidateOrderProductCache(result.productIds);
@@ -152,7 +155,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       (req as any).admin.adminId,
       'UPDATE_ORDER_STATUS',
       'order',
-      orderId as string,
+      String(orderId),
       `更新订单状态: ${result.orderNo} -> ${statusText}`,
       req.ip,
       req.get('user-agent')

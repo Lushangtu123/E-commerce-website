@@ -1,5 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OrderDetailPage from '@/app/orders/[id]/page';
 import OrderReviews from '@/components/OrderReviews';
 import { orderApi, orderTimeoutApi, type Order, type OrderItem } from '@/lib/api';
@@ -8,7 +8,7 @@ import { useLocaleStore } from '@/store/useLocaleStore';
 import { clickTogether, deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
-const params = vi.hoisted(() => ({ id: '1' }));
+const params = vi.hoisted(() => ({ id: '1' as string | string[] | undefined }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => params }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
@@ -37,6 +37,30 @@ async function setupDetail(order: Partial<Order> & Record<string, unknown>, item
 const amountRow = (label: string) => screen.queryByText(label, { selector: 'span' })?.parentElement?.textContent;
 
 describe('order detail', () => {
+  beforeEach(() => { params.id = '1'; });
+
+  it.each(['0', '-1', '01', '+1', '1abc', '1.5', '1e3', '0x10', ' 1', '1 ', '9007199254740992', undefined, ['1']])
+  ('rejects malformed route ID %j before requesting an order', async id => {
+    params.id = id;
+    useAuthStore.getState().login(customer, 'A');
+    vi.mocked(orderApi.getDetail).mockResolvedValue({ order: baseOrder, items: [] });
+    const toast = (await import('react-hot-toast')).default;
+    const notify = vi.spyOn(toast, 'error');
+    render(<OrderDetailPage />);
+    await settle();
+    expect(orderApi.getDetail).not.toHaveBeenCalled();
+    expect(orderTimeoutApi.getRemainingTime).not.toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith('/orders');
+    expect(notify).toHaveBeenCalledWith('订单ID无效');
+  });
+
+  it.each(['2147483648', '9007199254740991'])('supports a safe BIGINT route ID %s', async id => {
+    params.id = id;
+    await setupDetail({ order_id: Number(id) });
+    expect(orderApi.getDetail).toHaveBeenCalledWith(Number(id));
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
   it('does not loop detail reloads while a zero countdown waits for automatic cancellation', async () => {
     vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 } as never);
     await setupDetail({ status: 0 });
