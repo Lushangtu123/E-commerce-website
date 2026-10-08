@@ -1,5 +1,5 @@
 jest.mock('../../database/redis', () => ({ getRedisClient: jest.fn() }));
-jest.mock('../../models/product.model', () => ({ ProductModel: { getHotProducts: jest.fn(), findById: jest.fn(), getReviewStatistics: jest.fn() } }));
+jest.mock('../../models/product.model', () => ({ ProductModel: { getHotProducts: jest.fn(), findById: jest.fn(), getReviewStatistics: jest.fn(), findEnabledByIds: jest.fn() } }));
 jest.mock('../../models/sku.model', () => ({ SKUModel: { findByProductId: jest.fn() } }));
 jest.mock('../../models/review.model', () => ({ ReviewModel: { create: jest.fn() } }));
 jest.mock('../../services/product-search.service', () => ({ syncProductsToSearchIndex: jest.fn() }));
@@ -22,14 +22,15 @@ beforeEach(() => {
   redis = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK'), del: jest.fn().mockResolvedValue(1) };
   (getRedisClient as jest.Mock).mockReturnValue(redis);
   (ProductModel.getHotProducts as jest.Mock).mockResolvedValue([product, { ...product, product_id: 2 }]);
-  (ProductModel as any).getReviewStatistics.mockResolvedValue([product, { ...product, product_id: 2 }]);
+  (ProductModel as any).findEnabledByIds.mockResolvedValue([product, { ...product, product_id: 2 }]);
   (ReviewModel.create as jest.Mock).mockResolvedValue(7);
   (ProductModel.findById as jest.Mock).mockResolvedValue({ ...product, status: 1 });
   (SKUModel.findByProductId as jest.Mock).mockResolvedValue([]);
 });
 
-test('hot cache accepts MySQL SUM stock strings without loading the catalog again', async () => {
+test('hot ranking hydrates MySQL SUM stock strings without reloading the full catalog', async () => {
   redis.get.mockResolvedValue(JSON.stringify([{ ...product, stock: '2' }]));
+  (ProductModel as any).findEnabledByIds.mockResolvedValue([{ ...product, stock: '2' }]);
   const res = response();
   await ProductController.getHotProducts({ query: {} } as any, res as any);
   expect(res.body).toMatchObject({ products: [{ product_id: 1, stock: '2' }], fromCache: true });
@@ -50,7 +51,7 @@ test('hot cache ratings remain current even when an older cache fill finishes af
   expect(redis.setex).toHaveBeenCalledTimes(1);
   const created = response();
   await ReviewController.create({ userId: 1, body: { product_id: 1, order_id: 1, rating: 5 } } as any, created as any);
-  (ProductModel as any).getReviewStatistics.mockResolvedValue([{ product_id: 1, rating: 5, review_count: 1 }]);
+  (ProductModel as any).findEnabledByIds.mockResolvedValue([{ product_id: 1, rating: 5, review_count: 1 }]);
   finishFill(); await first;
   const current = response();
   await ProductController.getHotProducts({ query: {} } as any, current as any);
@@ -88,13 +89,15 @@ test.each([{ title_en: 123 }, { description: {} }, { specs_en: { Color: { name: 
   expect(detail.body.product.title).toBe('Fixture');
 });
 
-test('a valid cached SKU with bilingual specs remains a cache hit', async () => {
+test('a cached bilingual SKU is refreshed from the current enabled variants', async () => {
   const sku = { sku_id: 11, product_id: 1, sku_code: 'RED', status: 1, price: '10.00', stock: 2,
     specs: { 颜色: '红色' }, specs_en: { 颜色: { name: 'Color', value: 'Red' } } };
   redis.get.mockResolvedValue(JSON.stringify({ ...product, has_sku: true, skus: [sku] }));
+  (SKUModel.findByProductId as jest.Mock).mockResolvedValue([sku]);
   const res = response(); await ProductController.getDetail({ params: { id: '1' } } as any, res as any);
-  expect(res.body).toMatchObject({ product: { skus: [sku] }, fromCache: true });
-  expect(SKUModel.findByProductId).not.toHaveBeenCalled();
+  expect(res.body.product.skus).toEqual([sku]);
+  expect(res.body.fromCache).toBeUndefined();
+  expect(SKUModel.findByProductId).toHaveBeenCalledWith(1, true);
 });
 
 test('current database review statistics override a still-valid older detail cache', async () => {
@@ -102,8 +105,8 @@ test('current database review statistics override a still-valid older detail cac
   const res = response();
   await ProductController.getDetail({ params: { id: '1' } } as any, res as any);
   expect(res.body.product).toMatchObject({ rating: 4, review_count: 2 });
-  expect(res.body.fromCache).toBe(true);
-  expect(SKUModel.findByProductId).not.toHaveBeenCalled();
+  expect(res.body.fromCache).toBeUndefined();
+  expect(SKUModel.findByProductId).toHaveBeenCalledWith(1, true);
 });
 
 test.each(['client', 'read', 'write', 'json', 'object', 'invalid row'])('hot products survive %s cache failure with bounded database results', async mode => {
@@ -120,7 +123,7 @@ test.each(['client', 'read', 'write', 'json', 'object', 'invalid row'])('hot pro
   expect(ProductModel.getHotProducts).toHaveBeenCalledWith(100);
 });
 
-test('a healthy cache avoids MySQL and is sliced to the requested limit', async () => {
+test('a healthy ranking cache avoids the full catalog query and is sliced after hydration', async () => {
   redis.get.mockResolvedValue(JSON.stringify([product, { ...product, product_id: 2 }]));
   const res = response();
   await ProductController.getHotProducts({ query: { limit: '1' } } as any, res as any);
