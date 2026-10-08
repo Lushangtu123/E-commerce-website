@@ -173,7 +173,7 @@ export class ProductModel {
     const values = [...keys.map(key => ['images', 'specs', 'specs_en'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), productId];
     
     const result = await query<ResultSetHeader>(
-      `UPDATE products SET ${fields} WHERE product_id = ?`,
+      `UPDATE products SET ${fields} WHERE product_id = ? AND status IN (0, 1)`,
       values
     );
     return result.affectedRows > 0;

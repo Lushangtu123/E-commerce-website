@@ -66,8 +66,9 @@ export default function AdminProductsPage() {
   const isDisplayedScope = () => isCurrentScope() && shown !== undefined && displayed.current === shown;
   const reload = () => { if (isCurrentScope()) void query.refetch(); };
 
-  const selectedIds = shown && selection?.key === scopeKey ? selection.ids.filter(id => products.some(product => product.product_id === id)) : [];
-  const allSelected = products.length > 0 && products.every(product => selectedIds.includes(product.product_id));
+  const selectableProducts = products.filter(product => product.status === 0 || product.status === 1);
+  const selectedIds = shown && selection?.key === scopeKey ? selection.ids.filter(id => selectableProducts.some(product => product.product_id === id)) : [];
+  const allSelected = selectableProducts.length > 0 && selectableProducts.every(product => selectedIds.includes(product.product_id));
   const setSelectedIds = (next: number[] | ((ids: number[]) => number[])) => {
     if (!isCurrentScope()) return;
     setSelection(previous => ({ key: scopeKey, ids: typeof next === 'function' ? next(previous?.key === scopeKey ? previous.ids : []) : next }));
@@ -153,7 +154,7 @@ export default function AdminProductsPage() {
   };
 
   const handleStatusChange = (productId: number, newStatus: number) => {
-    if (!products.some(row => row.product_id === productId)) return;
+    if (!selectableProducts.some(row => row.product_id === productId)) return;
     return runMutation(() => api.put(`/admin/products/${productId}/status`, { status: newStatus }),
       newStatus === 1 ? '商品已上架' : '商品已下架', '更新状态失败');
   };
@@ -168,7 +169,7 @@ export default function AdminProductsPage() {
   };
 
   const toggleSelect = (productId: number) => {
-    if (mutation.current || !isDisplayedScope() || !products.some(product => product.product_id === productId)) return;
+    if (mutation.current || !isDisplayedScope() || !selectableProducts.some(product => product.product_id === productId)) return;
     setSelectedIds(prev => 
       prev.includes(productId)
         ? prev.filter(id => id !== productId)
@@ -181,7 +182,7 @@ export default function AdminProductsPage() {
     if (allSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(products.map(p => p.product_id));
+      setSelectedIds(selectableProducts.map(p => p.product_id));
     }
   };
 
@@ -208,7 +209,7 @@ export default function AdminProductsPage() {
   };
 
   const openEditModal = (product: AdminProductRow) => {
-    if (!isDisplayedScope() || mutation.current || !products.some(row => row.product_id === product.product_id)) return;
+    if (!isDisplayedScope() || mutation.current || !selectableProducts.some(row => row.product_id === product.product_id)) return;
     setFormScope(scopeKey);
     const values: ProductFormValues = {
       title: product.title,
@@ -230,7 +231,7 @@ export default function AdminProductsPage() {
 
   const handleEditProduct = () => {
     if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || mutation.current ||
-      !products.some(product => product.product_id === editProduct.product_id)) return;
+      !selectableProducts.some(product => product.product_id === editProduct.product_id)) return;
     if (!isProductFormComplete(editProduct)) {
       toast.error(t('请填写商品标题、价格和分类'));
       return;
@@ -246,6 +247,7 @@ export default function AdminProductsPage() {
   };
 
   const getStatusBadge = (status: number) => {
+    if (status === -1) return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{t('已删除')}</span>;
     if (status === 1) {
       return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{t("已上架")}</span>;
     }
@@ -295,6 +297,7 @@ export default function AdminProductsPage() {
               <option value="">{t("全部状态")}</option>
               <option value="1">{t("已上架")}</option>
               <option value="0">{t("已下架")}</option>
+              <option value="-1">{t("已删除")}</option>
             </select>
             <button
               type="submit"
@@ -368,7 +371,7 @@ export default function AdminProductsPage() {
                         aria-label={t("全选")}
                         checked={allSelected}
                         onChange={toggleSelectAll}
-                        disabled={busy}
+                        disabled={busy || selectableProducts.length === 0}
                         className="rounded-sm border-gray-300"
                       />
                     </th>
@@ -389,7 +392,7 @@ export default function AdminProductsPage() {
                           aria-label={t("选择 {title}", { title: localizedText(product.title, product.title_en, locale) })}
                           checked={selectedIds.includes(product.product_id)}
                           onChange={() => toggleSelect(product.product_id)}
-                          disabled={busy}
+                          disabled={busy || product.status === -1}
                           className="rounded-sm border-gray-300"
                         />
                       </td>
@@ -415,7 +418,7 @@ export default function AdminProductsPage() {
                         {getStatusBadge(product.status)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                        {product.status === 1 ? (
+                        {product.status !== -1 && <>{product.status === 1 ? (
                           <button
                             onClick={() => handleStatusChange(product.product_id, 0)}
                             disabled={busy}
@@ -439,7 +442,7 @@ export default function AdminProductsPage() {
                         >
                           {t("编辑")}
                         </button>
-                        <Link href={`/admin/products/${product.product_id}/skus`} className="text-primary-600 hover:text-primary-800" onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}>{t('管理规格')}</Link>
+                        <Link href={`/admin/products/${product.product_id}/skus`} className="text-primary-600 hover:text-primary-800" onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}>{t('管理规格')}</Link></>}
                       </td>
                     </tr>
                   ))}

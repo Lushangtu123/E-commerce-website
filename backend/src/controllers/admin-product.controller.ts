@@ -18,7 +18,7 @@ export const getAdminProducts = async (req: Request, res: Response) => {
     const pool = getPool();
     const offset = (page - 1) * limit;
 
-    let whereClause = '1=1';
+    let whereClause = status === undefined ? 'p.status IN (0, 1)' : '1=1';
     const params: any[] = [];
 
     if (keyword) {
@@ -84,7 +84,7 @@ export const updateProductStatus = async (req: Request, res: Response) => {
 
     // 获取商品信息
     const [products] = await pool.query(
-      'SELECT product_id, title FROM products WHERE product_id = ?',
+      'SELECT product_id, title FROM products WHERE product_id = ? AND status IN (0, 1)',
       [productId]
     );
 
@@ -95,10 +95,11 @@ export const updateProductStatus = async (req: Request, res: Response) => {
     const product = products[0] as any;
 
     // 更新状态
-    await pool.query(
-      'UPDATE products SET status = ?, updated_at = NOW() WHERE product_id = ?',
+    const [updated] = await pool.query<import('mysql2').ResultSetHeader>(
+      'UPDATE products SET status = ?, updated_at = NOW() WHERE product_id = ? AND status IN (0, 1)',
       [status, productId]
     );
+    if (!updated.affectedRows) return res.status(404).json({ error: '商品不存在' });
 
     // 记录操作日志
     await afterProductWrite(req, [Number(productId)], 'UPDATE_PRODUCT_STATUS', 'product', String(productId), `${status === 1 ? '上架' : '下架'}商品: ${product.title}`);
@@ -124,17 +125,32 @@ export const batchUpdateProductStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: '无效的状态值' });
     }
 
-    const placeholders = productIds.map(() => '?').join(',');
-    
-    await pool.query(
-      `UPDATE products SET status = ?, updated_at = NOW() WHERE product_id IN (${placeholders})`,
-      [status, ...productIds]
-    );
+    const ids = [...new Set<number>(productIds)].sort((left, right) => left - right);
+    const placeholders = ids.map(() => '?').join(',');
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [products] = await connection.query<import('mysql2').RowDataPacket[]>(
+        `SELECT product_id, status FROM products WHERE product_id IN (${placeholders}) ORDER BY product_id FOR UPDATE`, ids
+      );
+      if (products.length !== ids.length || products.some(product => product.status !== 0 && product.status !== 1)) {
+        await connection.rollback();
+        return res.status(404).json({ error: '商品不存在或已删除，请重新加载列表' });
+      }
+      await connection.query(
+        `UPDATE products SET status = ?, updated_at = NOW() WHERE product_id IN (${placeholders}) AND status IN (0, 1)`,
+        [status, ...ids]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally { connection.release(); }
 
     // 记录操作日志
-    await afterProductWrite(req, productIds, 'BATCH_UPDATE_PRODUCT_STATUS', 'product', productIds.join(','), `批量${status === 1 ? '上架' : '下架'}商品: ${productIds.length}个`);
+    await afterProductWrite(req, ids, 'BATCH_UPDATE_PRODUCT_STATUS', 'product', ids.join(','), `批量${status === 1 ? '上架' : '下架'}商品: ${ids.length}个`);
 
-    res.json({ message: '批量更新成功', count: productIds.length });
+    res.json({ message: '批量更新成功', count: ids.length });
   } catch (error) {
     logger.error({ err: error }, '批量更新商品状态失败');
     res.status(500).json({ error: '批量更新失败' });
@@ -172,7 +188,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     // 检查商品是否存在
     const [products] = await pool.query(
-      'SELECT product_id FROM products WHERE product_id = ?',
+      'SELECT product_id FROM products WHERE product_id = ? AND status IN (0, 1)',
       [productId]
     );
 
@@ -180,7 +196,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       return res.status(404).json({ error: '商品不存在' });
     }
 
-    await ProductModel.update(productId, fields);
+    if (!await ProductModel.update(productId, fields)) return res.status(404).json({ error: '商品不存在' });
 
     // 记录操作日志
     await afterProductWrite(req, [productId], 'UPDATE_PRODUCT', 'product', String(productId), `更新商品: ${fields.title || ''}`);

@@ -170,6 +170,8 @@ test('商品后台更新、上下架、批量与删除都清详情和热榜缓�
     [deleteProduct, {}, { productId: '1' }, ['product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4']],
   ] as const) {
     redis.del.mockClear();
+    connection.query = jest.fn(async (sql: string) => sql.includes('SELECT')
+      ? [[product, { ...product, product_id: 2 }], []] : [{ affectedRows: 2 }, []]);
     db.query.mockImplementation(async (sql: string) => {
       if (sql.includes('SELECT')) return [[product], []];
       if (sql.includes('admin_logs')) throw new Error('audit down');
