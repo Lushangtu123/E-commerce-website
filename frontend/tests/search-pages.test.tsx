@@ -99,7 +99,7 @@ describe('header search history', () => {
     await openHistory();
     const click = userEvent.setup();
 
-    await click.click(screen.getByText('My search').parentElement!.querySelector('button')!);
+    await click.click(screen.getByRole('button', { name: locale === 'en' ? 'Delete search history: My search' : '删除搜索历史：My search' }));
     await settle();
 
     expect(searchApi.deleteKeyword).toHaveBeenCalledExactlyOnceWith('My search');
@@ -125,7 +125,7 @@ describe('header search history', () => {
     fireEvent.change(input, { target: { value: 'Other search' } });
     await openHistory();
 
-    await userEvent.setup().click(screen.getByRole('button', { name: '删除' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: '删除搜索历史：My search' }));
     await settle();
 
     expect(searchApi.deleteKeyword).toHaveBeenCalledExactlyOnceWith('My search');

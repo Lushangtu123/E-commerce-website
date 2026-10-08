@@ -180,14 +180,17 @@ export default function Header() {
                           <div
                             key={index}
                             className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-sm cursor-pointer group"
-                            onClick={() => handleHistoryClick(item.keyword, true)}
                           >
-                            <span className="text-sm text-gray-700">{item.keyword}</span>
+                            <button type="button" onClick={() => handleHistoryClick(item.keyword, true)}
+                              className="flex-1 text-left text-sm text-gray-700 focus-visible:outline-2 focus-visible:outline-primary-500">
+                              <span>{item.keyword}</span>
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => handleDeleteHistory(item.keyword, e)}
-                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded-sm"
+                              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 hover:bg-gray-200 rounded-sm"
                               title={t("删除")}
+                              aria-label={t('删除搜索历史：{keyword}', { keyword: item.keyword })}
                             >
                               <FiX size={14} className="text-gray-400" />
                             </button>
@@ -205,9 +208,9 @@ export default function Header() {
                         {t("热门搜索")}</h4>
                       <div className="space-y-1">
                         {hotKeywords.slice(0, 5).map((item, index) => (
-                          <div
+                          <button type="button"
                             key={index}
-                            className="flex items-center px-3 py-2 hover:bg-gray-50 rounded-sm cursor-pointer"
+                            className="flex w-full items-center px-3 py-2 hover:bg-gray-50 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-primary-500"
                             onClick={() => handleHistoryClick(item.keyword)}
                           >
                             <span className={`text-xs font-bold mr-2 ${
@@ -220,7 +223,7 @@ export default function Header() {
                             </span>
                             <span className="text-sm text-gray-700">{item.keyword}</span>
                             <span className="ml-auto text-xs text-gray-500">{t('{count}次', { count: item.search_count })}</span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>

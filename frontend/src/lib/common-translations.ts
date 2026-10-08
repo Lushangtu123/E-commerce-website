@@ -329,4 +329,5 @@ export const commonTranslations: Record<string, string> = {
   '优惠券状态': 'Coupon status',
   '优惠券分页': 'Coupon pagination',
   '关闭': 'Close',
+  '删除搜索历史：{keyword}': 'Delete search history: {keyword}',
 };

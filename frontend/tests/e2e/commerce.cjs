@@ -190,7 +190,9 @@ async function localPlatformScripts(context) {
   };
   page.on('request', watchSearch);
   const deletedSearch = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().startsWith('http://127.0.0.1:3101/api/search/history/'));
-  await historyEntry.locator('..').getByRole('button', { name: '删除', exact: true }).click();
+  const deleteHistory = searchForm.getByRole('button', { name: `删除搜索历史：${searchKeyword}`, exact: true });
+  await deleteHistory.focus();
+  await deleteHistory.press('Enter');
   assert.equal((await deletedSearch).status(), 200);
   await historyEntry.waitFor({ state: 'hidden' });
   const history = await context.request.get('http://127.0.0.1:3101/api/search/history');
