@@ -22,6 +22,7 @@ export interface PricedItem extends PurchaseItem { product: Product; sku?: SKU; 
 export function normalizePurchaseItems(items: unknown): PurchaseItem[] {
   if (!Array.isArray(items) || !items.length) throw new PurchaseError('订单商品不能为空');
   const merged = new Map<string, PurchaseItem>();
+  const productQuantities = new Map<number, number>();
   for (const item of items) {
     if (!item || !Number.isSafeInteger(item.product_id) || item.product_id <= 0 || item.product_id > MAX_QUANTITY ||
         !Number.isSafeInteger(item.quantity) || item.quantity <= 0 || item.quantity > MAX_QUANTITY) {
@@ -34,6 +35,9 @@ export function normalizePurchaseItems(items: unknown): PurchaseItem[] {
     const key = `${item.product_id}:${skuId ?? 0}`;
     const quantity = (merged.get(key)?.quantity || 0) + item.quantity;
     if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) throw new PurchaseError('商品数量超出范围');
+    const productQuantity = (productQuantities.get(item.product_id) || 0) + item.quantity;
+    if (!Number.isSafeInteger(productQuantity) || productQuantity > MAX_QUANTITY) throw new PurchaseError('商品数量超出范围');
+    productQuantities.set(item.product_id, productQuantity);
     merged.set(key, { product_id: item.product_id, ...(skuId === undefined ? {} : { sku_id: skuId }), quantity });
   }
   return [...merged.values()].sort((a, b) => a.product_id - b.product_id || (a.sku_id ?? 0) - (b.sku_id ?? 0));
