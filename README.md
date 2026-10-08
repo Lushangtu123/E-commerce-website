@@ -24,7 +24,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 - **Chinese and English interface** - The storefront and admin panel switch between Chinese and English from the language menu. The choice survives refreshes, navigation and signing in again. Dates follow the selected language; product, user and address content stays in its original language, and amounts remain in RMB.
 - Registration, sign-in and profile management
-- Password change that revokes old sessions; one-time email password reset (requires Resend)
+- Password change that revokes old sessions; one-time email password reset through configured Gmail SMTP or Resend
 - **Account centre** - One place for profile, orders and coupons
 - Product browsing, search and filtering
 - **Favourites** - Add and remove favourites and manage the favourites list
@@ -303,6 +303,8 @@ E-commerce-website/
 - `POST /api/users/password/forgot` - Request a reset email; safely disabled when the email service is not configured
 - `POST /api/users/password/reset` - Reset the password with a one-time token valid for 30 minutes
 - `POST /api/users/logout` - Sign out (clears the session cookie)
+
+Password-reset mail supports two backend providers. Gmail uses `EMAIL_PROVIDER=gmail`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `APP_URL`; Resend uses `RESEND_API_KEY`, `EMAIL_FROM` and `APP_URL` (the default when `EMAIL_PROVIDER` is unset). Gmail needs an app password for the store's sending account only; registered recipients use their account email and do not need a Gmail account or app password. Store credentials only in backend environment settings, never in client variables or Git. Missing or invalid provider configuration disables recovery. See the [mail configuration and verification guide](./docs/VERCEL_UPSTASH.md).
 
 Registration accepts only a username, email and password. The username is 1–50 characters after trimming surrounding whitespace, the email must be a valid address of at most 100 characters, and the password must be at least 6 characters and at most 72 UTF-8 bytes, with whitespace preserved. Successful registration returns `201`; a username or email conflict, including one caused by concurrent registration, returns `409`. Sign-in keeps accepting the password lengths of existing accounts.
 
@@ -663,7 +665,7 @@ MIT License
 ### Recommended Additions for Production
 - HTTPS certificates
 - A real payment provider
-- SMS and order-notification email (password-reset email via Resend already exists)
+- SMS and order-notification email (password-reset email through Gmail SMTP or Resend already exists)
 - Object storage
 - CDN configuration
 - Monitoring and alerting
