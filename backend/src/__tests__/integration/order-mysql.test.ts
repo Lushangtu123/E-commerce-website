@@ -57,7 +57,7 @@ integration('真实 MySQL 订单事务及并发', () => {
     (query as jest.Mock).mockImplementation(async (sql: string, values?: any[]) => (await db.query(sql, values))[0]);
     // Use the project's actual base schema, so stale SQL column names fail here.
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
-    const tables = new Set(['users', 'products', 'product_skus', 'orders', 'order_items', 'cart', 'favorites', 'browse_history', 'shipping_addresses']);
+    const tables = new Set(['users', 'products', 'product_skus', 'reviews', 'orders', 'order_items', 'cart', 'favorites', 'browse_history', 'shipping_addresses']);
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
       if (tables.has(match[2])) await db.query(match[1]);
     }

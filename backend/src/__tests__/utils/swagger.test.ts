@@ -6,6 +6,12 @@
  */
 import { swaggerSpec } from '../../utils/swagger';
 
+test('public product contract describes actual review scores and the unrated sentinel', () => {
+  const product = (swaggerSpec as any).components.schemas.Product.properties;
+  expect(product.rating).toMatchObject({ minimum: 0, maximum: 5 });
+  expect(product.review_count).toMatchObject({ type: 'integer', minimum: 0 });
+});
+
 jest.mock('../../controllers/admin-product.controller', () => ({
   getAdminProducts: jest.fn(),
   updateProductStatus: jest.fn(),

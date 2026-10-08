@@ -29,7 +29,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const { addItem } = useCartStore();
   
   const [loadedProduct, setLoadedProduct] = useState<Product | null>(null);
-  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [reviewView, setReviewView] = useState<{ context: string; page: number; revision: number } | null>(null);
+  const [reviewState, setReviewState] = useState<{ context: string; page: number; reviews: ProductReview[]; total: number; totalPages: number; loading: boolean; error: boolean } | null>(null);
+  const reviewRequest = useRef<{ context: string; selection: string } | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,13 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const addingRequest = useRef<string | null>(null);
   const productId = parseInt(params.id as string);
   const context = JSON.stringify([productId, sessionId, user?.user_id, isAuthenticated]);
+  const reviewPage = reviewView?.context === context ? reviewView.page : 1;
+  const reviewRevision = reviewView?.context === context ? reviewView.revision : 0;
+  const reviewSelection = JSON.stringify([context, reviewPage, reviewRevision]);
+  const currentReviewSelection = useRef(reviewSelection);
+  currentReviewSelection.current = reviewSelection;
+  const visibleReviews = reviewState?.context === context && reviewState.page === reviewPage
+    ? reviewState : { reviews: [], total: 0, totalPages: 0, loading: true, error: false };
   const currentContext = useRef(context);
   currentContext.current = context;
   const isCurrentContext = useCallback(() => {
@@ -65,15 +74,11 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     if (!isHydrated || !productId) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentContext();
-    setReviews([]);
     setRelatedProducts([]);
     setAdding(false);
     addingRequest.current = null;
     setIsFavorited(false);
     setFavoriting(false);
-    reviewApi.listByProduct(productId, { limit: 5 }).then((data) => {
-      if (isCurrentRequest()) setReviews(data.reviews || []);
-    }).catch((error) => { if (isCurrentRequest()) logger.error('加载评论失败:', error); });
     setLoadingRecommendations(true);
     recommendationApi.getRelated(productId, 4).then((data) => {
       if (isCurrentRequest()) setRelatedProducts(data.related_products || []);
@@ -87,6 +92,44 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     }
     return () => { active = false; };
   }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, isCurrentContext]);
+
+  useEffect(() => {
+    if (!isHydrated || !productId) return;
+    let active = true;
+    const request = { context, selection: reviewSelection };
+    reviewRequest.current = request;
+    const isCurrentRequest = () => active && isCurrentContext() &&
+      currentReviewSelection.current === reviewSelection && reviewRequest.current === request;
+    setReviewState(previous => ({ context, page: reviewPage, reviews: [],
+      total: previous?.context === context ? previous.total : 0,
+      totalPages: previous?.context === context ? previous.totalPages : 0, loading: true, error: false }));
+    reviewApi.listByProduct(productId, { page: reviewPage, limit: 5 }).then(data => {
+      if (!isCurrentRequest()) return;
+      const totalPages = Math.ceil(data.total / 5);
+      if (reviewPage > Math.max(1, totalPages)) {
+        setReviewView({ context, page: Math.max(1, totalPages), revision: reviewRevision });
+        return;
+      }
+      setReviewState({ context, page: reviewPage, reviews: data.reviews || [], total: data.total,
+        totalPages, loading: false, error: false });
+    }).catch(error => {
+      if (!isCurrentRequest()) return;
+      logger.error('加载评论失败:', error);
+      setReviewState(previous => previous?.context === context && previous.page === reviewPage
+        ? { ...previous, loading: false, error: true } : previous);
+    }).finally(() => { if (reviewRequest.current === request) reviewRequest.current = null; });
+    return () => {
+      active = false;
+      if (reviewRequest.current === request) reviewRequest.current = null;
+    };
+  }, [isHydrated, productId, context, reviewPage, reviewRevision, reviewSelection, isCurrentContext]);
+
+  const changeReviewPage = (page: number, retry = false) => {
+    if (!isCurrentContext() || currentReviewSelection.current !== reviewSelection || reviewRequest.current?.context === context || visibleReviews.loading) return;
+    if (!retry && (page < 1 || page > visibleReviews.totalPages || page === reviewPage)) return;
+    reviewRequest.current = { context, selection: reviewSelection };
+    setReviewView({ context, page, revision: reviewRevision + (retry ? 1 : 0) });
+  };
 
   // Retrying inventory must not repeat browse recording or the other context side effects above.
   useEffect(() => {
@@ -252,8 +295,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
               
               <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                 <div className="flex items-center">
-                  <FaStar className="mr-1 h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
-                  <span>{t('{rating} 分', { rating: product.rating })}</span>
+                  {product.review_count !== 0 && Number(product.rating) > 0 && <FaStar className="mr-1 h-3.5 w-3.5 text-amber-400" aria-hidden="true" />}
+                  <span>{product.review_count === 0 || Number(product.rating) <= 0 ? t('暂无评价') : t('{rating} 分', { rating: Number(product.rating) })}</span>
+                  {!!product.review_count && <span className="ml-2">{t('共 {count} 条评价', { count: product.review_count })}</span>}
                 </div>
                 <div>{t('已售 {count} 件', { count: product.sales_count })}</div>
                 <div>{t('库存 {count} 件', { count: hasSku && !selectedSku ? product.stock : stock })}</div>
@@ -381,7 +425,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
           </div>
         </div>
 
-        <ProductReviewList reviews={reviews} />
+        <ProductReviewList reviews={visibleReviews.reviews} loading={visibleReviews.loading} error={visibleReviews.error}
+          page={reviewPage} total={visibleReviews.total} totalPages={visibleReviews.totalPages}
+          onRetry={() => changeReviewPage(reviewPage, true)} onPageChange={changeReviewPage} />
 
         <RelatedProducts products={relatedProducts} loading={loadingRecommendations} />
       </div>

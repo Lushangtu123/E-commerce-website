@@ -2,16 +2,14 @@ import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
+import { AdminQueryError, adminEmptyQuerySchema, adminUserOrdersQuerySchema, adminUserPathId, adminUsersQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
 // 获取用户列表（管理员）
 export const getAdminUsers = async (req: Request, res: Response) => {
   try {
+    const {page, limit, keyword, status} = parseAdminQuery(req.query, adminUsersQuerySchema);
     const pool = getPool();
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
-    
-    const { keyword, status } = req.query;
 
     let whereClause = '1=1';
     const params: any[] = [];
@@ -60,6 +58,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取用户列表失败');
     res.status(500).json({ error: '获取用户列表失败' });
   }
@@ -68,8 +67,10 @@ export const getAdminUsers = async (req: Request, res: Response) => {
 // 获取用户详情（管理员）
 export const getAdminUserDetail = async (req: Request, res: Response) => {
   try {
+    const userId = adminUserPathId(req.params.userId);
+    if (!userId) return res.status(400).json({error: '用户ID无效'});
+    parseAdminQuery(req.query, adminEmptyQuerySchema);
     const pool = getPool();
-    const { userId } = req.params;
 
     // 获取用户基本信息
     const [users] = await pool.query(
@@ -119,6 +120,7 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
       addresses
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取用户详情失败');
     res.status(500).json({ error: '获取用户详情失败' });
   }
@@ -177,6 +179,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 // 获取用户统计
 export const getUserStatistics = async (req: Request, res: Response) => {
   try {
+    parseAdminQuery(req.query, adminEmptyQuerySchema);
     const pool = getPool();
     // 用户总数和状态分布
     const [userStats] = await pool.query(
@@ -211,6 +214,7 @@ export const getUserStatistics = async (req: Request, res: Response) => {
       weekly_trend: weeklyTrend
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取用户统计失败');
     res.status(500).json({ error: '获取统计失败' });
   }
@@ -219,10 +223,10 @@ export const getUserStatistics = async (req: Request, res: Response) => {
 // 获取用户的订单列表
 export const getUserOrders = async (req: Request, res: Response) => {
   try {
+    const userId = adminUserPathId(req.params.userId);
+    if (!userId) return res.status(400).json({error: '用户ID无效'});
+    const {page, limit} = parseAdminQuery(req.query, adminUserOrdersQuerySchema);
     const pool = getPool();
-    const { userId } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
     const offset = (page - 1) * limit;
 
     const [orders] = await pool.query(
@@ -253,6 +257,7 @@ export const getUserOrders = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取用户订单失败');
     res.status(500).json({ error: '获取订单失败' });
   }

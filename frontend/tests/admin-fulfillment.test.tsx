@@ -78,7 +78,7 @@ function changeAdmin() {
   act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_session' })); });
 }
 
-const form = (root: ParentNode = document) => root.querySelector('form');
+const form = (root: ParentNode = document) => root.querySelector<HTMLFormElement>('form:not([role="search"])');
 const field = (name: string) => document.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
 
 async function click(label: string) {

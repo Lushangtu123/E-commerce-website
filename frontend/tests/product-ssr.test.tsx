@@ -23,7 +23,7 @@ vi.mock('@/components/ProductCard', () => ({ default: () => null }));
 vi.mock('@/lib/api', () => ({
   productApi: { getDetail: vi.fn() },
   cartApi: { add: vi.fn(async () => ({})) },
-  reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [] })) },
+  reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [], total: 0, totalPages: 0 })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
   favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), toggle: vi.fn(async () => ({ is_favorited: true })) },
   browseApi: { record: vi.fn(async () => ({})) },
@@ -53,7 +53,7 @@ describe('server-rendered product page', () => {
     expect(container.textContent).toContain('Server shirt');
     expect(container.textContent).toContain('¥19.90');
     expect(container.textContent).toContain('Soft cotton');
-    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.querySelector('.grid[aria-busy="true"]'), 'the product itself must be readable while reviews load').toBeNull();
     expect(addButton(container)).toBeDisabled();
     expect(within(container).getByRole('button', { name: '收藏' })).toBeDisabled();
   });

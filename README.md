@@ -231,6 +231,10 @@ npm run migrate:dev
 
 For an existing database, run `npm run migrate-review:dev` in `backend` to upgrade only the review constraints; in production run `npm run build` first, then `npm run migrate-review`. The migration can be run repeatedly. It adds a unique constraint on `(order_id, product_id)` and limits ratings to 1–5. Back up the database first: if it finds duplicate historical reviews, invalid ratings or a conflicting constraint with the same name, it stops with an error and keeps the records so they can be checked and fixed by hand before retrying. The full base migration includes this step.
 
+Storefront ratings use the average of published purchase reviews, with `review_count` in product responses. Products without reviews display “No reviews yet”; legacy seeded scores are ignored. Reviews on a product page have five entries per page and can be retried independently of inventory. Saving a review invalidates product caches and refreshes the optional search index; an ancillary cache/index failure does not undo a saved review. Hot-product cache hits refresh review statistics in one bounded database query, so a late cache fill cannot restore an older rating.
+
+The homepage loads popular products, new arrivals and recommendations independently, with a retry for each failed region. Password recovery distinguishes a failed email capability check (retryable) from an unconfigured email service. Redis read, invalid-payload and write failures on the hot-products endpoint fall back to successful database results.
+
 4. **Start the development server**
 ```bash
 npm run dev

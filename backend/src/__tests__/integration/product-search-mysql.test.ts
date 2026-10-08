@@ -32,7 +32,7 @@ integration('真实 MySQL 商品搜索回退与索引同步', () => {
     (query as jest.Mock).mockImplementation(async (sql: string, values?: any[]) => (await db.query(sql, values))[0]);
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
-      if (match[2] === 'products' || match[2] === 'product_skus') await db.query(match[1]);
+      if (['products', 'product_skus', 'reviews'].includes(match[2])) await db.query(match[1]);
     }
     await db.query(`INSERT INTO products (product_id,title,brand,price,stock,sales_count,status) VALUES
       (1,'蓝牙耳机','Acme',99.00,5,10,1),

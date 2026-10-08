@@ -26,7 +26,7 @@ beforeEach(() => {
     if (sql.startsWith('INSERT')) return { insertId: available ? 50 : 0, affectedRows: available ? 1 : 0 };
     if (sql.startsWith('DELETE')) return { affectedRows: 1 };
     if (sql.startsWith('SELECT 1 FROM favorites')) return favorited ? [{ 1: 1 }] : [];
-    if (sql.includes('COUNT(')) return [{ total: 3, count: 3 }];
+    if (/^SELECT COUNT\(/.test(sql)) return [{ total: 3, count: 3 }];
     return [{ favorite_id: 1, id: 1, user_id: 7, product_id: 1, existing_product_id: orphan ? null : 1, title: orphan ? null : '商品', price: orphan ? null : '3.00', stock: orphan ? null : 3, status: orphan ? null : 1, has_sku: orphan ? null : 0 }];
   });
 });

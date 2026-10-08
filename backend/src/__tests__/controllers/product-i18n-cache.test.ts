@@ -14,7 +14,7 @@ import { invalidateOrderProductCache } from '../../services/order.service';
 
 let cache: Map<string, string>;
 let redis: any;
-const product = { product_id: 1, title: '衬衫', title_en: 'Shirt', price: 10, stock: 3, status: 1 };
+const product = { product_id: 1, title: '衬衫', title_en: 'Shirt', price: 10, stock: 3, status: 1, rating: 4, review_count: 1 };
 const req: any = { params: { id: '1' }, query: {}, admin: { adminId: 1 }, get: () => 'test' };
 const response = () => ({ body: undefined as any, json(value: any) { this.body = value; return this; }, status() { return this; } });
 
@@ -36,7 +36,7 @@ test('商品详情跳过旧缓存并缓存包含英文字段的新版本', async
   const res = response();
   await ProductController.getDetail(req, res as any);
   expect(res.body.product.title_en).toBe('Shirt');
-  expect(redis.setex).toHaveBeenCalledWith('product:v2:1', 300, expect.any(String));
+  expect(redis.setex).toHaveBeenCalledWith('product:v3:1', 300, expect.any(String));
   const hit = response();
   await ProductController.getDetail(req, hit as any);
   expect(hit.body.fromCache).toBe(true);
@@ -44,15 +44,15 @@ test('商品详情跳过旧缓存并缓存包含英文字段的新版本', async
 });
 
 test('热榜跳过两个旧版本并使用英文字段缓存', async () => {
-  for (const key of ['products:hot', 'products:hot:v2']) cache.set(key, JSON.stringify([{ title: '旧商品' }]));
+  for (const key of ['products:hot', 'products:hot:v2', 'products:hot:v3']) cache.set(key, JSON.stringify([{ title: '旧商品' }]));
   const res = response();
   await ProductController.getHotProducts(req, res as any);
   expect(res.body.products[0].title_en).toBe('Shirt');
-  expect(redis.setex).toHaveBeenCalledWith('products:hot:v3', 600, expect.any(String));
+  expect(redis.setex).toHaveBeenCalledWith('products:hot:v4', 600, expect.any(String));
 });
 
 test('后台和结算写入清除新旧详情及热榜版本', async () => {
-  const keys = ['product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3'];
+  const keys = ['product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4'];
   for (const write of [
     () => afterProductWrite(req, [1], 'UPDATE_PRODUCT', 'product', '1', 'test'),
     () => invalidateOrderProductCache([1]),

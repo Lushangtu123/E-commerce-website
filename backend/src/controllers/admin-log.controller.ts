@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import logger from '../utils/logger';
+import { AdminQueryError, adminLogsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
 // 记录管理员操作日志（辅助函数）
 export async function logAdminAction(
@@ -27,12 +28,9 @@ export async function logAdminAction(
 // 获取操作日志
 export const getAdminLogs = async (req: Request, res: Response) => {
   try {
+    const {page, limit, action, adminId, startDate, endDate} = parseAdminQuery(req.query, adminLogsQuerySchema);
     const pool = getPool();
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
-
-    const { action, adminId, startDate, endDate } = req.query;
 
     let whereClause = '1=1';
     const params: any[] = [];
@@ -84,6 +82,7 @@ export const getAdminLogs = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取操作日志失败');
     res.status(500).json({ error: '获取日志失败' });
   }

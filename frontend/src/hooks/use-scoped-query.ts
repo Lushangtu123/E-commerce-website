@@ -48,7 +48,7 @@ export function useScopedQuery<T>({ scope, params, load, enabled, sessionIsCurre
     error: live && query.isError && !query.isFetching && !(query.error instanceof StaleSessionError) ? query.error : undefined,
     isCurrentSession,
     // A refetch for a session that is no longer current fails its first check without a request.
-    refetch: async () => { await query.refetch(); },
+    refetch: async () => { await query.refetch({ cancelRefetch: false }); },
     /** Reloads whatever this session's pages of the data are displayed now. */
     invalidate: () => queryClient.invalidateQueries({ queryKey: scope }),
   };

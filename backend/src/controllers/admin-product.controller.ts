@@ -4,6 +4,7 @@ import logger from '../utils/logger';
 import { ProductModel } from '../models/product.model';
 import { productCreateSchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 import { afterProductWrite } from './admin-product-write';
+import { AdminQueryError, adminProductsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
 function normalizedProductBody(body: any) {
   const { image_url, ...fields } = body;
@@ -13,12 +14,9 @@ function normalizedProductBody(body: any) {
 // 获取商品列表（管理员）
 export const getAdminProducts = async (req: Request, res: Response) => {
   try {
+    const {page, limit, keyword, categoryId, status} = parseAdminQuery(req.query, adminProductsQuerySchema);
     const pool = getPool();
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
-    
-    const { keyword, categoryId, status } = req.query;
 
     let whereClause = '1=1';
     const params: any[] = [];
@@ -66,6 +64,7 @@ export const getAdminProducts = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取商品列表失败');
     res.status(500).json({ error: '获取商品列表失败' });
   }
