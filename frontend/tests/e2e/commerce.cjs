@@ -328,11 +328,16 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
   assert.equal(cartAttempts, 2);
+  await page.getByRole('button', { name: '+', exact: true }).click();
+  await visibleText(page, '2 items');
   await page.unroute(cartEndpoint, failCartOnce);
   expectedShoppingFailure = undefined;
   console.log('PASS browser cart 503 displays an error and explicit retry restores real items');
   await page.getByRole('checkbox', { name: 'Select Browser checkout product', exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  await visibleText(page, '2 件');
+  await page.getByRole('button', { name: '-', exact: true }).click();
+  await visibleText(page, '1 件');
   console.log('PASS browser bilingual cart content');
   const checkoutRequests = [];
   let committedOrderId;
