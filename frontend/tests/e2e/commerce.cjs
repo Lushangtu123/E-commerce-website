@@ -102,6 +102,8 @@ async function localPlatformScripts(context) {
   const ordinaryCard = page.locator('a[href="/products/1"]').filter({ has: page.getByRole('heading', { name: '浏览器交易测试商品', exact: true }) }).first();
   const cardAdd = ordinaryCard.getByRole('button', { name: '加入', exact: true });
   await cardAdd.waitFor({ state: 'visible' });
+  // The card is present in SSR HTML before the persisted customer's session has hydrated.
+  await page.getByRole('button', { name: '退出登录', exact: true }).waitFor({ state: 'visible' });
   let releaseCardRead, cardReadReady, cardReads = 0, cardWrites = 0;
   const cardReadGate = new Promise(resolve => { releaseCardRead = resolve; });
   const cardReadStarted = new Promise(resolve => { cardReadReady = resolve; });
