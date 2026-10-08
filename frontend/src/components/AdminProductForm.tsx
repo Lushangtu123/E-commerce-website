@@ -87,6 +87,9 @@ interface Props {
   submitLabel: string;
   values: ProductFormValues;
   categories: Category[];
+  categoriesLoading: boolean;
+  categoriesFailed: boolean;
+  onRetryCategories: () => void;
   busy: boolean;
   onChange: (values: ProductFormValues) => void;
   onClose: () => void;
@@ -97,7 +100,7 @@ const inputClass = 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:rin
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
 
 /** The modal used to add a product and to edit one. */
-export default function AdminProductForm({ idPrefix, heading, submitLabel, values, categories, busy, onChange, onClose, onSubmit }: Props) {
+export default function AdminProductForm({ idPrefix, heading, submitLabel, values, categories, categoriesLoading, categoriesFailed, onRetryCategories, busy, onChange, onClose, onSubmit }: Props) {
   const { t } = useI18n();
   const id = (field: string) => `${idPrefix}-${field}`;
   const set = <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => onChange({ ...values, [field]: value });
@@ -105,6 +108,8 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
     ...values.specs_en, [key]: { ...(values.specs_en && Object.hasOwn(values.specs_en, key) ? values.specs_en[key] : {}), [field]: value },
   });
   const required = <span className="text-red-500">*</span>;
+  const categoriesUnavailable = categoriesLoading || categoriesFailed;
+  const missingSelectedCategory = values.category_id !== '' && !categories.some(category => String(category.category_id) === values.category_id);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -178,12 +183,21 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor={id('category-id')} className={labelClass}>{t('分类')} {required}</label>
-                <select id={id('category-id')} value={values.category_id} onChange={e => set('category_id', e.target.value)} className={inputClass}>
+                <select id={id('category-id')} value={values.category_id} disabled={busy || categoriesUnavailable}
+                  onChange={e => { if (!busy && !categoriesUnavailable) set('category_id', e.target.value); }} className={inputClass}>
                   <option value="">{t('请选择分类')}</option>
+                  {missingSelectedCategory && <option value={values.category_id}>{t('当前分类（ID：{id}）', { id: values.category_id })}</option>}
                   {categories.map(category => (
                     <option key={category.category_id} value={category.category_id}>{category.name}</option>
                   ))}
                 </select>
+                {categoriesLoading && <p role="status" className="mt-2 text-sm text-gray-600">{t('正在加载分类...')}</p>}
+                {categoriesFailed && <div role="alert" className="mt-2 text-sm text-red-700">
+                  <p>{t('获取分类失败，请重新加载')}</p>
+                  <button type="button" onClick={onRetryCategories} disabled={busy} className="mt-2 underline disabled:opacity-50">
+                    {t('重新加载分类')}
+                  </button>
+                </div>}
               </div>
               <div>
                 <label htmlFor={id('brand')} className={labelClass}>{t('品牌')}</label>
@@ -213,7 +227,7 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
             <button onClick={onClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
               {t('取消')}
             </button>
-            <button onClick={onSubmit} disabled={busy} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+            <button onClick={onSubmit} disabled={busy || categoriesUnavailable} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
               {submitLabel}
             </button>
           </div>

@@ -560,6 +560,96 @@ describe('admin product selection and creation', () => {
     expect(vi.mocked(logger.error).mock.calls.map(([message]) => message)).toEqual(['获取分类失败:']);
   });
 
+  it('recovers failed categories without losing the create draft or duplicating retries', async () => {
+    const replacement = deferred();
+    let categoryCalls = 0;
+    await setup('products', { categories: async () => {
+      if (++categoryCalls === 1) throw apiError('分类不可用');
+      return replacement.promise;
+    } });
+    await click(button('添加商品'));
+    expect(screen.getByRole('alert')).toHaveTextContent('获取分类失败，请重新加载');
+    expect(field(/^分类/)).toBeDisabled();
+    expect(createButton()).toBeDisabled();
+    await type(field(/^商品标题/), 'Draft lamp');
+    await type(field(/^价格/), '19.90');
+    const retry = button('重新加载分类');
+    const retryHandler = captureHandler(retry);
+    act(() => { retry.click(); retry.click(); });
+    await settle();
+    await retryHandler();
+    await settle();
+    expect(categoryCalls).toBe(2);
+    expect(screen.getByRole('status')).toHaveTextContent('正在加载分类...');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(createButton()).toBeDisabled();
+    expect(field(/^商品标题/)).toHaveValue('Draft lamp');
+    expect(field(/^价格/)).toHaveValue(19.9);
+
+    await act(async () => replacement.resolve([{ category_id: 1, name: 'Lighting' }]));
+    await settle();
+    expect(field(/^分类/)).toBeEnabled();
+    expect(createButton()).toBeEnabled();
+    expect(field(/^商品标题/)).toHaveValue('Draft lamp');
+    await type(field(/^分类/), '1');
+    await click(createButton());
+    expect(mutations).toEqual([expect.objectContaining({ body: expect.objectContaining({ title: 'Draft lamp', price: 19.9, category_id: 1 }) })]);
+  });
+
+  it('shows categories loading while letting an administrator prepare a draft', async () => {
+    const categories = deferred();
+    await setup('products', { categories: () => categories.promise });
+    expect(screen.getAllByText(/^Row \d+$/)).toHaveLength(20);
+    await click(button('添加商品'));
+    expect(screen.getByRole('status')).toHaveTextContent('正在加载分类...');
+    expect(field(/^分类/)).toBeDisabled();
+    expect(createButton()).toBeDisabled();
+    await type(field(/^商品标题/), 'Prepared while loading');
+    await act(async () => categories.resolve([{ category_id: 1, name: 'Category' }]));
+    await settle();
+    expect(field(/^商品标题/)).toHaveValue('Prepared while loading');
+    expect(field(/^分类/)).toBeEnabled();
+  });
+
+  it('keeps the existing edit category visible while its choices are unavailable', async () => {
+    await setup('products', { categories: async () => { throw apiError('分类不可用'); } });
+    await click(button('编辑'));
+    expect(field(/^分类/)).toHaveValue('1');
+    expect(screen.getByRole('option', { name: '当前分类（ID：1）' })).toHaveValue('1');
+    expect(field(/^分类/)).toBeDisabled();
+    expect(button('保存修改')).toBeDisabled();
+    expect(field(/^商品标题/)).toHaveValue('Row 1');
+  });
+
+  it('discards old category retries and their responses when the administrator changes', async () => {
+    const oldRetry = deferred();
+    let categoryCalls = 0;
+    await setup('products', { categories: async () => {
+      categoryCalls += 1;
+      if (categoryCalls === 1) throw apiError('分类不可用');
+      if (categoryCalls === 2) return oldRetry.promise;
+      return [{ category_id: 2, name: 'New administrator category' }];
+    } });
+    await click(button('添加商品'));
+    await type(field(/^商品标题/), 'Private draft');
+    const oldHandler = captureHandler(button('重新加载分类'));
+    void oldHandler();
+    await settle();
+    changeSession();
+    await settle();
+    expect(screen.queryByPlaceholderText('请输入商品标题')).not.toBeInTheDocument();
+    await click(button('添加商品'));
+    expect(field(/^商品标题/)).toHaveValue('');
+    expect(screen.getByRole('option', { name: 'New administrator category' })).toBeInTheDocument();
+    await oldHandler();
+    await act(async () => oldRetry.resolve([{ category_id: 1, name: 'Old administrator category' }]));
+    await settle();
+    expect(categoryCalls).toBe(3);
+    expect(screen.queryByRole('option', { name: 'Old administrator category' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'New administrator category' })).toBeInTheDocument();
+    expect(mutations).toEqual([]);
+  });
+
   it('keeps selection and forms still while a change is pending', async () => {
     const write = deferred();
     await setup('products', { mutate: () => write.promise });
