@@ -935,6 +935,23 @@ async function localPlatformScripts(context) {
   await page.unroute(capabilityEndpoint, capabilityFault); expectedReadFailure = undefined;
   console.log('PASS browser password capability retry preserves email and distinguishes the real disabled service');
   await page.goto('http://127.0.0.1:3100/profile/settings');
+  const profileEndpoint = 'http://127.0.0.1:3101/api/users/profile';
+  const updatedUsername = `${customerUsername}updated`;
+  let profileWrites = 0;
+  const lostProfile = async route => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    profileWrites++; const response = await route.fetch(); assert.equal(response.status(), 200); return route.abort('failed');
+  };
+  expectedRecoveryWrite = { endpoint: profileEndpoint }; await page.route(profileEndpoint, lostProfile);
+  await page.getByRole('textbox', { name: '用户名', exact: true }).fill(updatedUsername);
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  await visibleText(page, '资料已保存');
+  assert.equal(profileWrites, 1); assert.equal(await page.getByRole('button', { name: '撤销修改', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('textbox', { name: '用户名', exact: true }).inputValue(), updatedUsername);
+  await page.unroute(profileEndpoint, lostProfile); expectedRecoveryWrite = undefined;
+  await page.reload();
+  assert.equal(await page.getByRole('textbox', { name: '用户名', exact: true }).inputValue(), updatedUsername);
+  console.log('PASS browser lost profile save response synchronizes canonical username and survives reload');
   await page.getByLabel('当前密码', { exact: true }).fill('BrowserCustomer123!');
   await page.getByLabel('新密码', { exact: true }).fill('BrowserUpdated456!');
   await page.getByLabel('确认新密码', { exact: true }).fill('BrowserUpdated456!');
