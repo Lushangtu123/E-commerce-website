@@ -59,6 +59,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 已有数据库升级时，编译后依次运行 `backend/dist/database/migrate-account-security.js` 和 `backend/dist/database/migrate-fulfillment.js`。两者只添加缺失字段和新表，重复运行安全，不重建账户或订单。账户安全迁移保留历史密码，将历史会话版本设为 0；改密后旧会话立即失效。物流迁移添加快递公司、运单号和售后审核记录。
 
+售后进度上线前，核对 Preview / Production 是否共用目标库，先备份 `after_sales_requests` 的结构和数据，编译后在 `backend` 运行 `npm run schema:after-sales`。若返回 `migration_required`，经授权运行 `npm run migrate:after-sales`，然后复查必须是 `ready`。迁移仅添加 `return_company`、`return_tracking_number`、`return_submitted_at`、`refund_amount`、`refund_reference`、`completion_note`、`completed_by`、`completed_at` 八个可空字段，保留原四种审核状态和历史记录，重复运行安全。旧的已审核申请继续等待人工处理；退货须提交一次运单后才可结案。退款申请可直接记录人工处理结果，非零退款必须有凭证且不能超过订单实付金额，演示订单只允许零金额。结案记录与管理员审计在同一事务，订单状态、库存、资金均不由结案接口变更。回滚旧代码保留新增列；构建、API 请求不自动执行迁移。
+
 结算重试保护需要 `orders.checkout_key`、`orders.checkout_fingerprint` 和 `(user_id, checkout_key)` 唯一索引。发布此功能前，核对目标库并备份，在 `backend` 目录运行 `npm run build`、`npm run schema:checkout`；若提示 `migration_required`，执行 `npm run migrate:checkout`，再检查，必须返回 `ready`。迁移只增加可空列和索引，既有订单保持不变，可重复执行；回滚旧代码时保留这些列。迁移不在构建或请求中自动执行。完整基础迁移也包含此升级。
 
 `POST /api/orders` 必须携带 UUID 格式的 `checkout_key`。新结算生成新请求号，同一次结算重试保留原请求号、商品、地址、备注和优惠券；同号修改内容返回 409。浏览器在提交前把待确认结算保存到当前标签页的会话存储；保存失败时不发请求，网络错误、HTTP 408 超时、429 限流或 5xx 后显示“重试确认订单”，重新打开购物车也可恢复。超时或限流不能确认此前下单失败，因此继续保留原请求号；明确的业务拒绝仍允许重新结算。重试返回原订单和原金额，不再次扣库存、使用优惠券或移除新加入购物车的同种商品；已取消订单仍返回原订单。
@@ -87,7 +89,7 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 ## 当前能力范围
 
-Vercel 方案不需要 RabbitMQ 或 Elasticsearch：商品搜索（含 `/api/search/es`）和推荐在未配置 `ELASTICSEARCH_URL` 时使用 MySQL，订单超时由下文的 QStash 定时任务取消。演示支付会明确显示未实际扣款，并记录 payment_method=demo，尚未对接实际收款渠道。发货必须填写快递公司和运单号；售后仅支持申请、撤回、管理员批准或拒绝，批准不会自动退款、恢复库存或改变订单状态。每个订单最多创建一次售后申请。Vercel 文件系统不能作为持久上传存储。
+Vercel 方案不需要 RabbitMQ 或 Elasticsearch：商品搜索（含 `/api/search/es`）和推荐在未配置 `ELASTICSEARCH_URL` 时使用 MySQL，订单超时由下文的 QStash 定时任务取消。演示支付会明确显示未实际扣款，并记录 payment_method=demo，尚未对接实际收款渠道。发货必须填写快递公司和运单号；售后支持申请、撤回、管理员批准或拒绝、退货运单、人工退款记录及结案；审核和结案不会自动执行资金退款、恢复库存或改变订单状态。每个订单最多创建一次售后申请。Vercel 文件系统不能作为持久上传存储。
 
 邮件服务未配置时，找回密码页面禁用发送，接口返回 503；已登录用户仍可验证当前密码并修改密码。配置邮件服务后，重置链接使用一次性凭据，30 分钟有效，重置后撤销所有旧会话。邮件发送和真实支付需要运营方准备外部服务，本仓库不会自动注册付费服务。
 

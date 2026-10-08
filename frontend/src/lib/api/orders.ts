@@ -99,6 +99,9 @@ export interface AfterSalesRequest {
   request_id: number; order_id: number; order_no?: string; username?: string;
   type: 'refund' | 'return'; reason: string; status: 'requested' | 'approved' | 'rejected' | 'withdrawn';
   review_note?: string | null; created_at?: string; reviewed_at?: string | null;
+  total_amount?: Money; payment_method?: string | null;
+  return_company?: string | null; return_tracking_number?: string | null; return_submitted_at?: string | null;
+  refund_amount?: Money | null; refund_reference?: string | null; completion_note?: string | null; completed_at?: string | null;
 }
 export const afterSalesApi = {
   get: (orderId: number) => api.get<unknown, { after_sales: AfterSalesRequest | null }>(`/orders/${orderId}/after-sales`),
@@ -106,6 +109,8 @@ export const afterSalesApi = {
   withdraw: (orderId: number) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/withdraw`),
   list: (params: { page: number; limit: number; status?: string }) => api.get<unknown, { requests: AfterSalesRequest[]; pagination: { total: number; totalPages: number } }>('/admin/after-sales', { params }),
   review: (id: number, data: { status: 'approved' | 'rejected'; note: string }) => api.post(`/admin/after-sales/${id}/review`, data),
+  tracking: (orderId: number, data: { company: string; tracking_number: string }) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/return-tracking`, data),
+  complete: (id: number, data: { refund_amount: string; refund_reference?: string; note: string }) => api.post(`/admin/after-sales/${id}/complete`, data),
 };
 
 // 订单超时相关API

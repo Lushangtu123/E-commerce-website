@@ -95,7 +95,7 @@ describe('customer after-sales', () => {
   });
 
   it.each(['approved', 'rejected', 'withdrawn'] as const)('shows the review note of a %s request without offering another application or withdrawal', async (status) => {
-    await setup({ get: async () => ({ after_sales: { ...request(status), review_note: 'Please contact support' } }) });
+    await setup({ get: async () => ({ after_sales: { ...request(status), type: 'refund', review_note: 'Please contact support' } }) });
 
     expect(screen.getByText(/Please contact support/)).toBeInTheDocument();
     expect(form()).toBeNull();

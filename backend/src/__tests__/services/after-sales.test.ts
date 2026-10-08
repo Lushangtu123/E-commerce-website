@@ -98,3 +98,21 @@ test('admin pagination rejects huge/negative/non-integer and unknown queries', a
     await expect(service().listAfterSales(input)).rejects.toMatchObject({ statusCode: 400 });
   }
 });
+test.each([
+  undefined, null, [], {}, { company: ' ', tracking_number: '123' },
+  { company: 'x'.repeat(61), tracking_number: '123' }, { company: 'carrier', tracking_number: 'x'.repeat(101) },
+  { company: 'carrier', tracking_number: 'x\n123' }, { company: 'carrier', tracking_number: '123', user_id: 8 },
+])('invalid tracking %p fails before database work', async body => {
+  await expect(service().submitReturnTracking(7, 10, body)).rejects.toMatchObject({ statusCode: 400 });
+  expect(pool.getConnection).not.toHaveBeenCalled();
+});
+test.each([
+  undefined, null, [], {}, { refund_amount: 0, note: 'test' }, { refund_amount: '0.00', note: ' ' },
+  { refund_amount: '1.00', note: 'test' }, { refund_amount: '1.00', refund_reference: ' ', note: 'test' },
+  { refund_amount: '1.00', refund_reference: 'x'.repeat(101), note: 'test' },
+  { refund_amount: '0.00', note: 'x'.repeat(501) }, { refund_amount: '0.00', note: 'x\u0000' },
+  { refund_amount: '0.00', note: 'test', completed_by: 999 }, { refund_amount: '99999999999999', note: 'test', refund_reference: 'test' },
+])('invalid completion %p fails before database work', async body => {
+  await expect(service().completeAfterSales(2, 5, body)).rejects.toMatchObject({ statusCode: 400 });
+  expect(pool.getConnection).not.toHaveBeenCalled();
+});

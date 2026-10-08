@@ -8,6 +8,7 @@ import { migrateReviewTables } from './migrate-review';
 import { migrateAccountSecurity } from './migrate-account-security';
 import { migrateOrderCheckout } from './migrate-order-checkout';
 import { migrateFulfillment } from './migrate-fulfillment';
+import { migrateAfterSalesProgress } from './migrate-after-sales-progress';
 import { migrateProductI18n } from './migrate-product-i18n';
 
 const migrations = [
@@ -231,6 +232,7 @@ async function runMigrations() {
     await migrateReviewTables(pool);
     await migrateAccountSecurity(pool);
     await migrateFulfillment(pool);
+    await migrateAfterSalesProgress(pool);
     await migrateOrderCheckout(pool);
     await migrateProductI18n(pool);
 

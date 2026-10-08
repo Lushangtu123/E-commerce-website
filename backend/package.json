@@ -11,6 +11,8 @@
     "migrate": "node dist/database/migrate.js",
     "migrate:checkout": "node dist/database/migrate-order-checkout.js",
     "schema:checkout": "node dist/database/check-checkout-schema.js",
+    "migrate:after-sales": "node dist/database/migrate-after-sales-progress.js",
+    "schema:after-sales": "node dist/database/migrate-after-sales-progress.js --check",
     "migrate:account-security": "node dist/database/migrate-account-security.js",
     "schema:check": "node dist/database/check-account-schema.js",
     "migrate:dev": "ts-node src/database/migrate.ts",

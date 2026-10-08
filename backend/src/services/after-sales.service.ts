@@ -3,6 +3,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { getPool } from '../database/mysql';
 import { OrderStatus } from '../models/order.model';
+import { couponMoneyToCents } from '../utils/coupon-discount';
 
 export class AfterSalesError extends Error {
   constructor(message: string, public readonly statusCode = 400) { super(message); }
@@ -21,10 +22,24 @@ export interface AfterSalesRequest extends RowDataPacket {
   updated_at: Date;
   reviewed_at: Date | null;
   withdrawn_at: Date | null;
+  return_company: string | null;
+  return_tracking_number: string | null;
+  return_submitted_at: Date | null;
+  refund_amount: string | null;
+  refund_reference: string | null;
+  completion_note: string | null;
+  completed_by: number | null;
+  completed_at: Date | null;
 }
 const text = Joi.string().trim().min(1).max(500).pattern(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]*$/).required();
 const requestSchema = Joi.object({ type: Joi.string().valid('refund', 'return').required(), reason: text }).unknown(false).required();
 const reviewSchema = Joi.object({ status: Joi.string().valid('approved', 'rejected').required(), note: text }).unknown(false).required();
+const parcelText = (max: number) => Joi.string().trim().min(1).max(max).pattern(/^[^\u0000-\u001f\u007f-\u009f]*$/);
+const trackingSchema = Joi.object({ company: parcelText(60).required(), tracking_number: parcelText(100).required() }).unknown(false).required();
+const completionSchema = Joi.object({
+  refund_amount: Joi.string().pattern(/^\d+(?:\.\d{1,2})?$/).required(),
+  refund_reference: parcelText(100), note: text,
+}).unknown(false).required();
 const positiveInteger = (max: number) => Joi.string().pattern(/^[1-9]\d*$/).custom((value: string, helpers) => {
   const number = Number(value);
   return Number.isSafeInteger(number) && number <= max ? number : helpers.error('any.invalid');
@@ -155,4 +170,61 @@ export async function listAfterSales(input: unknown) {
   );
   const total = Number(counts[0].total);
   return { requests, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+}
+
+export async function submitReturnTracking(userId: number, orderId: number, input: unknown): Promise<AfterSalesRequest> {
+  validateIds(userId, orderId);
+  const { error, value } = trackingSchema.validate(input);
+  if (error) throw new AfterSalesError('退货快递公司或运单号无效');
+  return inTransaction(async connection => {
+    await ownedOrder(connection, userId, orderId, true);
+    const request = await requestForOrder(connection, orderId, true);
+    if (!request) throw new AfterSalesError('售后申请不存在', 404);
+    if (request.status !== 'approved' || request.type !== 'return' || request.completed_at || request.return_submitted_at) {
+      throw new AfterSalesError('仅审核通过且未寄回、未结案的退货申请可提交运单', 409);
+    }
+    await connection.execute(
+      'UPDATE after_sales_requests SET return_company=?, return_tracking_number=?, return_submitted_at=NOW() WHERE request_id=?',
+      [value.company, value.tracking_number, request.request_id]
+    );
+    return (await requestForOrder(connection, orderId, false))!;
+  });
+}
+
+export async function completeAfterSales(
+  adminId: number, requestId: number, input: unknown, context: { ip?: string; userAgent?: string } = {}
+): Promise<AfterSalesRequest> {
+  validateIds(adminId, requestId);
+  const { error, value } = completionSchema.validate(input);
+  if (error) throw new AfterSalesError('退款金额、凭证或结案说明无效');
+  let cents: number;
+  try { cents = couponMoneyToCents(value.refund_amount); }
+  catch { throw new AfterSalesError('退款金额、凭证或结案说明无效'); }
+  if (cents > 0 && !value.refund_reference) throw new AfterSalesError('实际退款必须填写退款凭证');
+  return inTransaction(async connection => {
+    const [found] = await connection.execute<RowDataPacket[]>('SELECT order_id FROM after_sales_requests WHERE request_id=?', [requestId]);
+    if (!found[0]) throw new AfterSalesError('售后申请不存在', 404);
+    const orderId = found[0].order_id;
+    const [orders] = await connection.execute<RowDataPacket[]>(
+      'SELECT order_id, total_amount, payment_method FROM orders WHERE order_id=? FOR UPDATE', [orderId]
+    );
+    if (!orders[0]) throw new AfterSalesError('订单不存在', 404);
+    const request = await requestForOrder(connection, orderId, true);
+    if (!request || request.request_id !== requestId) throw new AfterSalesError('售后申请不存在', 404);
+    if (request.status !== 'approved' || request.completed_at) throw new AfterSalesError('仅审核通过且未结案的售后申请可结案', 409);
+    if (request.type === 'return' && !request.return_submitted_at) throw new AfterSalesError('退货申请需先提交退货运单再结案', 409);
+    if (cents > couponMoneyToCents(orders[0].total_amount)) throw new AfterSalesError('退款金额不能超过订单实付金额');
+    if (orders[0].payment_method === 'demo' && cents !== 0) throw new AfterSalesError('演示订单未实际扣款，退款金额必须为零');
+    // This is a record of an externally completed process; never call a payment provider or restock.
+    await connection.execute(
+      `UPDATE after_sales_requests SET refund_amount=?, refund_reference=?, completion_note=?, completed_by=?, completed_at=NOW()
+       WHERE request_id=?`, [(cents / 100).toFixed(2), value.refund_reference ?? null, value.note, adminId, requestId]
+    );
+    await connection.execute(
+      `INSERT INTO admin_logs (admin_id, action, resource_type, resource_id, description, ip_address, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [adminId, 'COMPLETE_AFTER_SALES', 'after_sales', String(requestId), '记录人工处理并结案', context.ip ?? null, context.userAgent?.slice(0, 255) ?? null]
+    );
+    return (await requestForOrder(connection, orderId, false))!;
+  });
 }
