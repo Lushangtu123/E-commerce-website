@@ -354,7 +354,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
           {/* 商品信息 */}
           <div className="space-y-6">
             <div>
-              <h1 className="mb-3 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
+              <h1 data-product-title-id={product.product_id} data-product-title={product.title}
+                data-product-title-en={product.title_en || undefined}
+                className="mb-3 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
                 {title}
               </h1>
               

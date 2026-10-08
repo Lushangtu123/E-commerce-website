@@ -1,6 +1,7 @@
 'use client';
 
-import { translateTitle, useI18n } from '@/lib/i18n';
+import { translate, translateTitle, useI18n } from '@/lib/i18n';
+import { localizedText } from '@/lib/product-content';
 import Header from '@/components/Header';
 import SiteFooter from '@/components/SiteFooter';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -37,15 +38,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sync = () => {
       if (sourceTitle.current === null || document.title !== writtenTitle.current) sourceTitle.current = document.title;
-      const next = locale === 'en' ? translateTitle(sourceTitle.current, locale) : sourceTitle.current;
+      const heading = document.querySelector<HTMLElement>('h1[data-product-title-id]');
+      const productTitle = heading && pathname === `/products/${heading.dataset.productTitleId}`
+        ? localizedText(heading.dataset.productTitle || '', heading.dataset.productTitleEn, locale) : '';
+      const next = productTitle ? `${productTitle} | ${translate('电商平台', {}, locale)}`
+        : locale === 'en' ? translateTitle(sourceTitle.current, locale) : sourceTitle.current;
       writtenTitle.current = next;
       if (document.title !== next) document.title = next;
     };
     sync();
     const observer = new MutationObserver(sync);
     observer.observe(document.head, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.querySelector('main') ?? document.body, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ['data-product-title-id', 'data-product-title', 'data-product-title-en'],
+    });
     return () => observer.disconnect();
-  }, [locale]);
+  }, [locale, pathname]);
 
   useEffect(() => {
     hydrateLocale();
