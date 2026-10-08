@@ -22,7 +22,7 @@ const router = express.Router();
  *     parameters:
  *       - name: keyword
  *         in: query
- *         schema: { type: string, maxLength: 200 }
+ *         schema: { type: string, maxLength: 100 }
  *       - name: category_id
  *         in: query
  *         schema: { type: integer }
@@ -65,14 +65,16 @@ router.get('/es', optionalAuth, elasticsearchSearch);
  *     parameters:
  *       - name: days
  *         in: query
- *         schema: { type: integer, default: 7 }
+ *         schema: { type: integer, minimum: 1, maximum: 365, default: 7 }
  *         description: 统计最近 N 天
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 10 }
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
  *     responses:
  *       200:
  *         description: 热搜关键词列表
+ *       400:
+ *         description: 搜索参数无效
  */
 router.get('/hot', getHotKeywords);
 
@@ -82,18 +84,19 @@ router.get('/hot', getHotKeywords);
  *   get:
  *     tags: [搜索]
  *     summary: 获取搜索建议
- *     description: 公开接口，输入前缀返回补全建议
+ *     description: 公开接口，输入前缀返回补全建议；空前缀返回空列表
  *     parameters:
  *       - name: keyword
  *         in: query
- *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, maxLength: 100 }
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 5 }
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 5 }
  *     responses:
  *       200:
  *         description: 建议关键词列表
+ *       400:
+ *         description: 搜索参数无效
  */
 router.get('/suggestions', getSearchSuggestions);
 
@@ -115,11 +118,13 @@ router.use(authMiddleware);
  *             type: object
  *             required: [keyword]
  *             properties:
- *               keyword: { type: string }
- *               result_count: { type: integer, description: 搜索结果数 }
+ *               keyword: { type: string, minLength: 1, maxLength: 100 }
+ *               result_count: { type: integer, minimum: 0, maximum: 2147483647, default: 0, description: 搜索结果数 }
  *     responses:
  *       200:
  *         description: 记录成功
+ *       400:
+ *         description: 搜索参数无效
  */
 router.post('/record', recordSearch);
 
@@ -133,10 +138,12 @@ router.post('/record', recordSearch);
  *     parameters:
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 10 }
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
  *     responses:
  *       200:
  *         description: 搜索历史列表
+ *       400:
+ *         description: 搜索参数无效
  */
 router.get('/history', getUserSearchHistory);
 
@@ -164,10 +171,12 @@ router.delete('/history', clearSearchHistory);
  *       - name: keyword
  *         in: path
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, minLength: 1, maxLength: 100 }
  *     responses:
  *       200:
  *         description: 删除成功
+ *       400:
+ *         description: 搜索参数无效
  */
 router.delete('/history/:keyword', deleteSearchKeyword);
 

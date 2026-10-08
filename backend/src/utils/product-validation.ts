@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { searchKeyword } from './search-validation';
 
 export const PRODUCT_SORTS: Record<string, string> = Object.freeze({
   'created_at DESC': 'created_at DESC',
@@ -16,7 +17,7 @@ const integer = Joi.number().integer().min(1).max(2147483647);
 const money = Joi.number().min(0).max(99999999.99).precision(2);
 export const productQuerySchema = Joi.object({
   category_id: integer,
-  keyword: Joi.string().max(200).allow(''),
+  keyword: searchKeyword.allow(''),
   brand: Joi.string().max(100),
   min_price: money,
   max_price: money.min(Joi.ref('min_price', { adjust: value => value ?? 0 })),
