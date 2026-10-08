@@ -141,7 +141,7 @@ describe('admin product bilingual content', () => {
       fireEvent.change(document.getElementById(`newProduct-${field}`)!, { target: { value } }); await settle();
     }
     fireEvent.click(screen.getAllByRole('button', { name: 'Add product' }).at(-1)!); await settle();
-    expect(writes[0]).toMatchObject({ url: '/admin/products', body: { title: '新中文', description: '新描述', title_en: 'New product', description_en: 'New description' } });
+    expect(writes[0]).toMatchObject({ url: '/admin/products', body: { title: '新中文', description: '新描述', title_en: 'New product', description_en: 'New description', stock: 0 } });
   });
 
   it('rejects overlong English names with an English error before sending a write', async () => {
@@ -176,5 +176,59 @@ describe('admin product bilingual content', () => {
     const payload = toProductPayload({ ...EMPTY_PRODUCT_FORM, title: '商品', price: '1', category_id: '1', specs, title_en: 'Title' });
     expect(payload).not.toHaveProperty('specs');
     expect(payload).toMatchObject({ title: '商品', title_en: 'Title' });
+  });
+});
+
+describe('admin product inventory input', () => {
+  const invalidStocks = ['1.9', '1e3', '-1', '2147483648', '1stock'];
+  const stockError = 'Stock must be an integer between 0 and 2147483647.';
+
+  async function openCreate() {
+    fireEvent.click(screen.getByRole('button', { name: 'Add product' })); await settle();
+    for (const [field, value] of Object.entries({ title: '新商品', price: '2', 'category-id': '1' })) {
+      fireEvent.change(document.getElementById(`newProduct-${field}`)!, { target: { value } }); await settle();
+    }
+  }
+  async function create() {
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add product' }).at(-1)!); await settle();
+  }
+  async function changeCreateStock(stock: string) {
+    fireEvent.change(document.getElementById('newProduct-stock')!, { target: { value: stock } }); await settle();
+  }
+
+  it.each(invalidStocks)('rejects create stock %s entered through the input before sending a write', async stock => {
+    const { writes } = await setup();
+    await openCreate(); await changeCreateStock(stock); await create();
+    expect(writes).toHaveLength(0);
+    expect(notifications.error).toHaveBeenLastCalledWith(stockError);
+    expect(document.getElementById('newProduct-stock')).toBeInTheDocument();
+  });
+
+  it.each([...invalidStocks, ''])('rejects edit stock %s entered through the input before sending a write', async stock => {
+    const { writes } = await setup();
+    await edit(); await change('stock', stock); await change('title-en', 'New translation'); await save();
+    expect(writes).toHaveLength(0);
+    expect(notifications.error).toHaveBeenLastCalledWith(stockError);
+    expect(input('stock')).toBeInTheDocument();
+  });
+
+  it.each([['0', 0], ['2147483647', 2147483647]] as const)('creates stock %s without changing its value', async (stock, expected) => {
+    const { writes } = await setup();
+    await openCreate(); await changeCreateStock(stock); await create();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ url: '/admin/products', body: { stock: expected } });
+    expect(notifications.error).not.toHaveBeenCalled();
+  });
+
+  it.each([['0', 0], ['2147483647', 2147483647]] as const)('saves edit stock %s without changing its value', async (stock, expected) => {
+    const { writes } = await setup();
+    await edit(); await change('stock', stock); await save();
+    expect(writes).toEqual([{ url: '/admin/products/1', body: { stock: expected } }]);
+    expect(notifications.error).not.toHaveBeenCalled();
+  });
+
+  it.each(['+1', ' 1 ', '1\n', 'NaN', 'Infinity'])('rejects the whole stock string %j without coercion', stock => {
+    expect(() => toProductPayload({ ...EMPTY_PRODUCT_FORM, title: '商品', price: '1', category_id: '1', stock }))
+      .toThrow('库存须为0至2147483647的整数');
   });
 });
