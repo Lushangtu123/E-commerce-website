@@ -3,6 +3,18 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '退货快递公司或运单号无效': 'The return carrier or tracking number is invalid.',
+  '仅审核通过且未寄回、未结案的退货申请可提交运单': 'Only approved return requests without tracking or closure can submit tracking.',
+  '退款金额、凭证或结案说明无效': 'The refund amount, reference or closure note is invalid.',
+  '实际退款必须填写退款凭证': 'A refund reference is required for a nonzero refund.',
+  '仅审核通过且未结案的售后申请可结案': 'Only approved after-sales requests that remain open can be closed.',
+  '退货申请需先提交退货运单再结案': 'Return tracking must be submitted before closing a return request.',
+  '退款金额不能超过订单实付金额': 'The refund cannot exceed the amount paid for the order.',
+  '演示订单未实际扣款，退款金额必须为零': 'Demo orders have no real payment; the refund amount must be zero.',
+  '退货运单已保存': 'Return tracking saved.',
+  '保存退货运单失败': 'Unable to save return tracking.',
+  '人工处理记录已保存并结案，系统未执行资金退款': 'Manual processing recorded and closed. The system did not transfer a refund.',
+  '保存售后结案失败': 'Unable to save the after-sales closure.',
   '商品不存在或已删除，请重新加载列表': 'A product is missing or deleted. Reload the list.',
   '后台查询参数无效': 'Invalid admin query parameters',
   '加载订单详情失败，请重试': 'Could not load order details. Please try again',

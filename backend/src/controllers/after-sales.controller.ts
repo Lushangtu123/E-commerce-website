@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { AfterSalesError, validAfterSalesId, getAfterSales, createAfterSales, withdrawAfterSales, reviewAfterSales, listAfterSales } from '../services/after-sales.service';
+import { AfterSalesError, validAfterSalesId, getAfterSales, createAfterSales, withdrawAfterSales, reviewAfterSales, listAfterSales, submitReturnTracking, completeAfterSales } from '../services/after-sales.service';
 import logger from '../utils/logger';
 
 function pathId(value: unknown): number {
@@ -45,4 +45,17 @@ export const reviewAdminAfterSales = async (req: Request, res: Response) => {
     const after_sales = await reviewAfterSales(req.admin.adminId, pathId(req.params.id), req.body, { ip: req.ip, userAgent: req.get('user-agent') });
     return res.json({ message: '审核已完成，尚未执行退款或库存回补', after_sales });
   } catch (error) { return fail(res, error, '审核售后申请失败'); }
+};
+export const submitCustomerReturnTracking = async (req: AuthRequest, res: Response) => {
+  try {
+    const after_sales = await submitReturnTracking(userId(req), pathId(req.params.id), req.body);
+    return res.json({ message: '退货运单已保存', after_sales });
+  } catch (error) { return fail(res, error, '保存退货运单失败'); }
+};
+export const completeAdminAfterSales = async (req: Request, res: Response) => {
+  try {
+    if (!validAfterSalesId(req.admin?.adminId)) throw new AfterSalesError('未认证', 401);
+    const after_sales = await completeAfterSales(req.admin.adminId, pathId(req.params.id), req.body, { ip: req.ip, userAgent: req.get('user-agent') });
+    return res.json({ message: '人工处理记录已保存并结案，系统未执行资金退款', after_sales });
+  } catch (error) { return fail(res, error, '保存售后结案失败'); }
 };

@@ -60,7 +60,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Cart and product loading failures provide an explicit retry; purchasing waits for fresh inventory. Catalog pagination returns to a valid page when listings shrink.
 - Payment rejects orders once their 30-minute deadline passes, using database time after taking the order lock. Timeout batches report failures for retry and keep scan progress in Redis across instances.
 - Registration, password change and reset share a minimum 12-character, maximum 72-byte UTF-8 policy; existing short passwords remain usable for sign-in
-- Carrier and tracking number, after-sales requests, withdrawal and admin review (approval does not refund automatically)
+- Carrier and tracking number, after-sales requests, withdrawal, admin review, return parcels and manual refund/closure records (no automatic payment refund or restocking)
 - Product management separates active/off-sale products from deleted history. Deleted products cannot be selected, edited or republished; a batch containing a deleted or missing product is rejected as a whole.
 - Order details
 - **Coupons at checkout** - Choose a coupon when placing an order
@@ -388,7 +388,11 @@ The account centre shows statistics from the server and can retry failed loads; 
 - `POST /api/orders/:id/confirm` - Confirm delivery
 - `GET /api/orders/:id/after-sales`, `POST /api/orders/:id/after-sales` - View or submit the user's after-sales request
 - `POST /api/orders/:id/after-sales/withdraw` - Withdraw a pending request
+- `POST /api/orders/:id/after-sales/return-tracking` - Submit one return parcel for an approved, open return request owned by the customer
+- `POST /api/admin/after-sales/:id/complete` - Record manual processing and close an approved request, with `order:edit`; nonzero refunds require a reference and cannot exceed the amount paid, demo payments allow zero only, returns require a parcel first
 - `GET /api/admin/after-sales`, `POST /api/admin/after-sales/:id/review` - Admin list and review; at most one request per order, and approval does not refund or restore stock automatically
+
+After-sales progress requires eight nullable columns. Before deploying, back up `after_sales_requests`, build the backend, then check using the target database configuration with `npm run schema:after-sales` in `backend`. If it reports `migration_required`, run `npm run migrate:after-sales` after approval and check again for `ready`. The migration is repeatable and preserves legacy request status, orders, stock and payments; keep the new columns when rolling code back. Builds and API requests never run it automatically.
 
 ### Review APIs
 - `POST /api/reviews` - Create a review

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth';
-import { getCustomerAfterSales, createCustomerAfterSales, withdrawCustomerAfterSales } from '../controllers/after-sales.controller';
+import { getCustomerAfterSales, createCustomerAfterSales, withdrawCustomerAfterSales, submitCustomerReturnTracking } from '../controllers/after-sales.controller';
 const router = Router();
 /**
  * @openapi
@@ -55,4 +55,31 @@ router.post('/:id/after-sales', authMiddleware, createCustomerAfterSales);
  *       409: { description: 申请已经审核或撤回 }
  */
 router.post('/:id/after-sales/withdraw', authMiddleware, withdrawCustomerAfterSales);
+/**
+ * @openapi
+ * /api/orders/{id}/after-sales/return-tracking:
+ *   post:
+ *     tags: [订单售后]
+ *     summary: 当前用户为审核通过的退货申请提交一次退货运单
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties: false
+ *             required: [company, tracking_number]
+ *             properties:
+ *               company: { type: string, minLength: 1, maxLength: 60 }
+ *               tracking_number: { type: string, minLength: 1, maxLength: 100 }
+ *     responses:
+ *       200: { description: 运单已保存，返回 after_sales }
+ *       400: { description: 参数无效 }
+ *       404: { description: 当前用户订单或申请不存在 }
+ *       409: { description: 非审核通过的退货申请、已寄回或已结案 }
+ */
+router.post('/:id/after-sales/return-tracking', authMiddleware, submitCustomerReturnTracking);
 export default router;

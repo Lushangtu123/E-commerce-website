@@ -3,6 +3,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 jest.mock('../../services/after-sales.service', () => ({
   getAfterSales: jest.fn(), createAfterSales: jest.fn(), withdrawAfterSales: jest.fn(), reviewAfterSales: jest.fn(), listAfterSales: jest.fn(),
+  submitReturnTracking: jest.fn(), completeAfterSales: jest.fn(),
   validAfterSalesId: (id: unknown) => Number.isSafeInteger(id) && Number(id) > 0,
   AfterSalesError: class extends Error { constructor(message: string, public statusCode = 400) { super(message); } },
 }));
@@ -32,6 +33,29 @@ beforeEach(() => {
   (service.withdrawAfterSales as jest.Mock).mockResolvedValue({ request_id: 9, status: 'withdrawn' });
   (service.listAfterSales as jest.Mock).mockResolvedValue({ requests: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
   (service.reviewAfterSales as jest.Mock).mockResolvedValue({ request_id: 9, status: 'approved' });
+  (service.submitReturnTracking as jest.Mock).mockResolvedValue({ request_id: 9, status: 'approved' });
+  (service.completeAfterSales as jest.Mock).mockResolvedValue({ request_id: 9, status: 'approved' });
+});
+
+test('return tracking requires customer authentication and forwards the authenticated owner', async () => {
+  const body = { company: 'carrier', tracking_number: 'return123' };
+  await request(app()).post('/api/orders/10/after-sales/return-tracking').send(body).expect(401);
+  await request(app()).post('/api/orders/10/after-sales/return-tracking').set(admin()).send(body).expect(401);
+  await request(app()).post('/api/orders/10/after-sales/return-tracking').set(customer()).send(body).expect(200);
+  expect(service.submitReturnTracking).toHaveBeenCalledTimes(1);
+  expect(service.submitReturnTracking).toHaveBeenCalledWith(7, 10, body);
+});
+test('manual completion requires order edit permission and passes audit context without claiming a payment', async () => {
+  const body = { refund_amount: '0.00', note: 'demo' };
+  await request(app()).post('/api/admin/after-sales/9/complete').send(body).expect(401);
+  allowed = false;
+  await request(app()).post('/api/admin/after-sales/9/complete').set(admin()).send(body).expect(403);
+  expect(service.completeAfterSales).not.toHaveBeenCalled();
+  allowed = true;
+  const response = await request(app()).post('/api/admin/after-sales/9/complete').set(admin()).set('User-Agent', 'test-agent').send(body).expect(200);
+  expect(service.completeAfterSales).toHaveBeenCalledWith(2, 9, body, expect.objectContaining({ userAgent: 'test-agent' }));
+  expect(response.body.message).toContain('记录');
+  expect(response.body.message).not.toContain('退款成功');
 });
 
 test('customer after-sales routes require user JWT, including reads', async () => {

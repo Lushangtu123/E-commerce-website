@@ -57,6 +57,7 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-coupon', 'migrateCouponTables'], ['migrate-sku', 'migrateSkuTables'],
     ['migrate-address', 'migrateAddressTables'], ['migrate-review', 'migrateReviewTables'],
     ['migrate-account-security', 'migrateAccountSecurity'], ['migrate-fulfillment', 'migrateFulfillment'],
+    ['migrate-after-sales-progress', 'migrateAfterSalesProgress'],
     ['migrate-product-i18n', 'migrateProductI18n'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
