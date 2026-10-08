@@ -80,7 +80,8 @@ export async function createAfterSales(userId: number, orderId: number, input: u
     if (![OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.COMPLETED].includes(order.status)) {
       throw new AfterSalesError('当前订单状态不允许申请售后');
     }
-    if (await requestForOrder(connection, orderId, true)) throw new AfterSalesError('该订单已提交过售后申请', 409);
+    // First consistent read after the order mutex: avoid gap locks on missing requests.
+    if (await requestForOrder(connection, orderId, false)) throw new AfterSalesError('该订单已提交过售后申请', 409);
     await connection.execute(
       `INSERT INTO after_sales_requests (order_id, user_id, type, reason, status) VALUES (?, ?, ?, ?, 'requested')`,
       [orderId, userId, value.type, value.reason]
