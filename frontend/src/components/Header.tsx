@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi, type HotKeyword, type SearchKeyword } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import toast from 'react-hot-toast';
 
 export default function Header() {
   const { t } = useI18n();
@@ -86,13 +87,18 @@ export default function Header() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchKeyword.trim()) {
+    const keyword = searchKeyword.trim();
+    if (keyword.length > 100) {
+      toast.error(t('搜索关键词最多100个字符'));
+      return;
+    }
+    if (keyword) {
       setShowDropdown(false);
-      router.push(`/products?keyword=${encodeURIComponent(searchKeyword.trim())}`);
+      router.push(`/products?keyword=${encodeURIComponent(keyword)}`);
       // 记录搜索历史
       if (isCurrentSession()) {
         try {
-          await searchApi.record(searchKeyword.trim());
+          await searchApi.record(keyword);
           if (isCurrentSession()) fetchSearchHistory();
         } catch (error) {
           logger.error('记录搜索历史失败:', error);
@@ -142,6 +148,7 @@ export default function Header() {
             <div className="relative" ref={searchRef}>
               <input
                 type="text"
+                maxLength={100}
                 placeholder={t("搜索商品...")}
                 aria-label={t("搜索商品")}
                 value={searchKeyword}

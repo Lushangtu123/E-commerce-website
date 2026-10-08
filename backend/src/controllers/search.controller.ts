@@ -4,22 +4,15 @@ import { AuthRequest } from '../middleware/auth';
 import Joi from 'joi';
 import { searchProducts } from '../services/product-search.service';
 import logger from '../utils/logger';
+import { hotSearchSchema, searchHistorySchema, searchKeyword, searchRecordSchema, searchSuggestionsSchema } from '../utils/search-validation';
 
 // 记录搜索历史
 export const recordSearch = async (req: AuthRequest, res: Response) => {
+  const { error, value } = searchRecordSchema.validate(req.body);
+  if (error) return res.status(400).json({ message: '搜索参数无效' });
   try {
     const userId = req.user?.userId;
-    const { keyword, result_count } = req.body;
-
-    if (!keyword) {
-      return res.status(400).json({ message: '搜索关键词不能为空' });
-    }
-
-    const id = await SearchHistoryModel.add(
-      keyword.trim(),
-      userId,
-      result_count || 0
-    );
+    const id = await SearchHistoryModel.add(value.keyword, userId, value.result_count);
 
     res.json({ message: '记录成功', id });
   } catch (error) {
@@ -30,11 +23,11 @@ export const recordSearch = async (req: AuthRequest, res: Response) => {
 
 // 获取用户搜索历史
 export const getUserSearchHistory = async (req: AuthRequest, res: Response) => {
+  const { error, value } = searchHistorySchema.validate(req.query);
+  if (error) return res.status(400).json({ message: '搜索参数无效' });
   try {
     const userId = req.user?.userId;
-    const limit = parseInt(req.query.limit as string) || 10;
-
-    const history = await SearchHistoryModel.getUserHistory(userId, limit);
+    const history = await SearchHistoryModel.getUserHistory(userId, value.limit);
 
     res.json({ history });
   } catch (error) {
@@ -45,11 +38,10 @@ export const getUserSearchHistory = async (req: AuthRequest, res: Response) => {
 
 // 获取热搜关键词
 export const getHotKeywords = async (req: AuthRequest, res: Response) => {
+  const { error, value } = hotSearchSchema.validate(req.query);
+  if (error) return res.status(400).json({ message: '搜索参数无效' });
   try {
-    const days = parseInt(req.query.days as string) || 7;
-    const limit = parseInt(req.query.limit as string) || 10;
-
-    const keywords = await SearchHistoryModel.getHotKeywords(days, limit);
+    const keywords = await SearchHistoryModel.getHotKeywords(value.days, value.limit);
 
     res.json({ keywords });
   } catch (error) {
@@ -77,11 +69,11 @@ export const clearSearchHistory = async (req: AuthRequest, res: Response) => {
 
 // 删除单条搜索记录
 export const deleteSearchKeyword = async (req: AuthRequest, res: Response) => {
+  const { error, value: keyword } = searchKeyword.min(1).required().validate(req.params.keyword);
+  if (error) return res.status(400).json({ message: '搜索参数无效' });
   try {
     const userId = req.user?.userId;
-    const { keyword } = req.params;
-
-    const success = await SearchHistoryModel.deleteKeyword(userId, keyword as string);
+    const success = await SearchHistoryModel.deleteKeyword(userId, keyword);
 
     if (!success) {
       return res.status(404).json({ message: '搜索记录不存在' });
@@ -96,18 +88,13 @@ export const deleteSearchKeyword = async (req: AuthRequest, res: Response) => {
 
 // 获取搜索建议
 export const getSearchSuggestions = async (req: AuthRequest, res: Response) => {
+  const { error, value } = searchSuggestionsSchema.validate(req.query);
+  if (error) return res.status(400).json({ message: '搜索参数无效' });
   try {
-    const { keyword } = req.query;
-    const limit = parseInt(req.query.limit as string) || 5;
-
-    if (!keyword || keyword.toString().trim().length === 0) {
+    if (!value.keyword) {
       return res.json({ suggestions: [] });
     }
-
-    const suggestions = await SearchHistoryModel.getSuggestions(
-      keyword.toString().trim(),
-      limit
-    );
+    const suggestions = await SearchHistoryModel.getSuggestions(value.keyword, value.limit);
 
     res.json({ suggestions });
   } catch (error) {
@@ -119,7 +106,7 @@ export const getSearchSuggestions = async (req: AuthRequest, res: Response) => {
 // Elasticsearch 只能分页到前 10000 条结果
 const MAX_RESULT_WINDOW = 10000;
 const productSearchSchema = Joi.object({
-  keyword: Joi.string().trim().max(200).allow('').default(''),
+  keyword: searchKeyword.allow('').default(''),
   category_id: Joi.number().integer().min(1).max(2147483647),
   min_price: Joi.number().min(0).max(99999999.99),
   max_price: Joi.number().max(99999999.99).min(Joi.ref('min_price', { adjust: value => value ?? 0 })),

@@ -505,7 +505,7 @@ Frontend tests use Vitest, React Testing Library and happy-dom. They live in `te
 
 The full browser checkout regression runs against a real local MySQL test database and covers registration, addresses, simulated payment, shipping, delivery, after-sales review and password change. See the [Vercel / Upstash deployment guide](./docs/VERCEL_UPSTASH.md) for how to run it and for the new database migrations.
 
-Search history loads after the sign-in state is restored and is cleared when switching accounts; late responses cannot write into another account. Changing the keyword or sort order in product search returns to the first page, and failed loads can be retried.
+Search keywords are trimmed and limited to 100 characters across product search, history and suggestions. History, hot-search and suggestion limits are 1–100; hot-search periods are 1–365 days. Invalid types, ranges and unknown fields return 400 before querying. Search history loads after the sign-in state is restored and is cleared when switching accounts; late responses cannot write into another account. Changing the keyword or sort order in product search returns to the first page, and failed loads can be retried.
 
 The admin product, user and log lists all handle expired sign-ins through the API client, and late responses cannot overwrite the current identity or query. Bulk product selection applies only to the current page and is cleared after paging or filtering; product and user write actions block duplicate submissions until the request completes.
 
