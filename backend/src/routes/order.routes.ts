@@ -139,7 +139,7 @@ router.get('/', OrderController.list);
  *         description: 订单详情（含订单项）
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/Order' }
+ *             schema: { $ref: '#/components/schemas/OrderDetail' }
  *       400:
  *         description: 订单ID无效
  *       404:

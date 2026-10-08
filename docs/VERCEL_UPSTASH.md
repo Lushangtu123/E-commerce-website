@@ -51,6 +51,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 初始化命令应从后端目录运行，或在进程中直接注入配置；不要提交 `.env`、云端连接地址中的密码、CA 私钥或管理员密码。`seed` 会清空开发数据，已禁止在 `NODE_ENV=production` 下执行。示例商品不是实际商品，正式运营前需由管理员替换。
 
+商品双语功能要求发布前先升级目标库。核对 Preview / Production 是否共用同一数据库，并备份 `products`、`product_skus`、`order_items` 的结构和数据；在 `backend` 中运行 `npm run build`，再运行 `npm run migrate:product-i18n`。迁移仅为商品增加 `title_en`、`description_en`、`specs_en`，为 SKU 增加 `specs_en`，为订单明细增加 `product_name_en`、`sku_specs_en`，全部为可空列，重复执行安全。旧中文字段、库存、价格和历史订单不变；回滚代码时保留新增列。迁移不在构建或请求中自动运行，推送会触发 Preview 时也须先完成升级。Elasticsearch 已有索引需要在更新商品英文内容后运行 `sync-es` 全量同步；未配置 Elasticsearch 的部署直接使用 MySQL 英文搜索。共享 Redis 的商品详情与热榜使用新版本缓存键，禁止清空共用 Redis。
+
 已有数据库升级时，编译后依次运行 `backend/dist/database/migrate-account-security.js` 和 `backend/dist/database/migrate-fulfillment.js`。两者只添加缺失字段和新表，重复运行安全，不重建账户或订单。账户安全迁移保留历史密码，将历史会话版本设为 0；改密后旧会话立即失效。物流迁移添加快递公司、运单号和售后审核记录。
 
 结算重试保护需要 `orders.checkout_key`、`orders.checkout_fingerprint` 和 `(user_id, checkout_key)` 唯一索引。发布此功能前，核对目标库并备份，在 `backend` 目录运行 `npm run build`、`npm run schema:checkout`；若提示 `migration_required`，执行 `npm run migrate:checkout`，再检查，必须返回 `ready`。迁移只增加可空列和索引，既有订单保持不变，可重复执行；回滚旧代码时保留这些列。迁移不在构建或请求中自动执行。完整基础迁移也包含此升级。

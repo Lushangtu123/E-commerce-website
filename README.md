@@ -61,6 +61,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 ### Admin Panel
 - **Dashboard** - Live sales and order statistics
 - **Product management** - Create, edit, bulk list/delist, SKU management
+- **Bilingual product content** - Optional English names, descriptions and specification labels, with Chinese fallback for each missing translation. Cart, saved products and new order snapshots follow the selected language.
 - **Order management** - Order list, status updates, shipping
 - **User management** - User list and spending statistics
 - **Coupon management** - Create coupons and manage their status
@@ -387,7 +388,12 @@ Users can review only products bought in their own completed orders, once per pr
 
 The details page of a completed order includes "Order reviews": all SKUs of the same product share one review, with a 1–5 rating and optional text. On entry it loads every review page for the order and shows existing reviews; duplicate submissions are blocked while saving, a failed save keeps the draft, and a concurrent duplicate reloads the server's record. The interface and system messages are available in Chinese and English, and earlier requests are ignored after switching account, session or order. Image URLs can still be submitted through the API; the current interface offers rating and text.
 
+### Product content languages
+
+Product content is stored separately from interface translations: `title_en`, `description_en` and `specs_en` are optional, and `null` clears them. A specification translation is keyed by the original attribute name, for example `{"颜色":{"name":"Color","value":"Red"},"尺寸":{"name":"Size"}}`. Numeric, boolean and structured attribute values retain their original types; only textual values use the English `value`. Admin product and SKU editors expose the optional English fields and submit only changed fields. English search matches both English and Chinese names/descriptions. New order items store `product_name_en` and `sku_specs_en` at checkout; editing a product later does not change an order's displayed content, and older orders retain their original Chinese snapshots. Existing databases must run the additive `migrate:product-i18n` migration before deploying this code; see [Vercel deployment notes](docs/VERCEL_UPSTASH.md).
+
 ### Coupon APIs
+
 **Customer:**
 - `GET /api/coupons/available` - Coupons available to claim
 - `POST /api/coupons/receive` - Claim a coupon

@@ -59,7 +59,7 @@ integration('真实 MySQL 商品售价与原价来自同一规格', () => {
     }
   });
   afterAll(async () => {
-    if (redis) { await redis.del('product:1', 'products:hot', 'products:hot:v2'); await redis.quit(); }
+    if (redis) { await redis.del('product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3'); await redis.quit(); }
     if (db) await db.end();
     if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } }
   });
@@ -95,17 +95,18 @@ integration('真实 MySQL 商品售价与原价来自同一规格', () => {
     expect(prices(await getRelatedProducts(6, 20))).toEqual(available.filter(p => p[0] !== 6));
   });
 
-  (process.env.REDIS_TEST_URL ? test : test.skip)('旧热门缓存被跳过，缓存命中保留新价格，商品和订单写入清理两个版本', async () => {
+  (process.env.REDIS_TEST_URL ? test : test.skip)('旧热门缓存被跳过，缓存命中保留新价格，商品和订单写入清理所有版本', async () => {
     const hot = async () => {
       const res: any = { json(value: any) { this.body = value; return this; }, status() { return this; } };
       await ProductController.getHotProducts({ query: {} } as any, res);
       return res.body;
     };
     await redis!.setex('products:hot', 600, JSON.stringify([{ product_id: 1, price: 99, original_price: 250 }]));
-    await redis!.del('products:hot:v2');
+    await redis!.setex('products:hot:v2', 600, JSON.stringify([{ product_id: 1, price: 99, original_price: 250 }]));
+    await redis!.del('products:hot:v3');
     expect(prices((await hot()).products)).toEqual(expected);
     expect((await hot()).fromCache).toBe(true);
-    expect(await redis!.ttl('products:hot:v2')).toBeGreaterThan(0);
+    expect(await redis!.ttl('products:hot:v3')).toBeGreaterThan(0);
     const req = { admin: { adminId: 1 }, get: () => 'fixture', ip: '127.0.0.1' } as any;
     const writers = [
       () => afterProductWrite(req, [1], 'UPDATE', 'product', '1', 'fixture'),
@@ -113,9 +114,9 @@ integration('真实 MySQL 商品售价与原价来自同一规格', () => {
       () => ProductController.update({ params: { id: '1' }, body: { price: 200 } } as any, { status() { return this; }, json() {} } as any),
     ];
     for (const write of writers) {
-      for (const key of ['product:1', 'products:hot', 'products:hot:v2']) await redis!.set(key, 'stale');
+      for (const key of ['product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3']) await redis!.set(key, 'stale');
       await write();
-      expect(await redis!.mget('product:1', 'products:hot', 'products:hot:v2')).toEqual([null, null, null]);
+      expect(await redis!.mget('product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3')).toEqual([null, null, null, null, null]);
     }
   });
 });

@@ -27,7 +27,9 @@ function productDocument(product: any) {
   return {
     product_id: product.product_id,
     title: product.title,
+    title_en: product.title_en,
     description: product.description,
+    description_en: product.description_en,
     price: product.price,
     original_price: product.original_price,
     stock: product.stock,
@@ -43,6 +45,10 @@ function productDocument(product: any) {
 
 // 索引名称
 export const PRODUCT_INDEX = 'products';
+const englishContentMapping = {
+  title_en: { type: 'text', analyzer: 'standard' },
+  description_en: { type: 'text', analyzer: 'standard' },
+} as const;
 
 /**
  * 初始化产品索引
@@ -69,6 +75,7 @@ export async function initProductIndex() {
         },
         mappings: {
           properties: {
+            ...englishContentMapping,
             product_id: { type: 'integer' },
             title: {
               type: 'text',
@@ -102,6 +109,7 @@ export async function initProductIndex() {
       });
       logger.info(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 创建成功`);
     } else {
+      await requireESClient().indices.putMapping({ index: PRODUCT_INDEX, properties: englishContentMapping });
       logger.info(`✅ Elasticsearch 索引 ${PRODUCT_INDEX} 已存在`);
     }
   } catch (error) {
@@ -195,7 +203,7 @@ export async function searchProductIds(params: ESSearchParams): Promise<{ ids: n
   // with `or`, 耳机 would also match 机械键盘 through the shared 机.
   // cross_fields lets terms span fields (brand + title); best_fields keeps typo tolerance
   // within one field, which cross_fields does not support.
-  const fields = ['title^3', 'description', 'brand^2'];
+  const fields = ['title^3', 'title_en^3', 'description', 'description_en', 'brand^2'];
   const must: any[] = keyword ? [{
     bool: {
       should: [
@@ -232,5 +240,4 @@ export async function checkESConnection() {
     return false;
   }
 }
-
 

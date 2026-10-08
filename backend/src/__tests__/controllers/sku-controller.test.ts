@@ -60,7 +60,7 @@ test('创建允许零价格库存，忽略缓存和审计外部故障且只返�
   expect(res.body.sku_id).toBe(12);
   expect(res.json).toHaveBeenCalledTimes(1);
   expect(connection.commit).toHaveBeenCalledTimes(1);
-  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot', 'products:hot:v2');
+  expect(redis.del).toHaveBeenCalledWith('product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3');
 });
 
 test.each([
@@ -93,7 +93,7 @@ test('批量创建拒绝嵌入商品ID；正常写入路径商品并失效缓存
   expect((await call(batchCreateSKUs, { skus: [valid] })).statusCode).toBe(201);
   const insert = connection.execute.mock.calls.find(([sql]: [string]) => sql.startsWith('INSERT'));
   expect(insert[1][0]).toBe(1);
-  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot', 'products:hot:v2');
+  expect(redis.del).toHaveBeenCalledWith('product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3');
 });
 
 test('管理列表包含停用规格以便重新启用', async () => {
@@ -116,7 +116,7 @@ test('更新和删除检查可选路径商品归属；全局删除软删并失�
   expect((await call(deleteSKU, {}, { skuId: '11', productId: '2' })).statusCode).toBe(404);
   expect((await call(deleteSKU, {}, { skuId: '11' })).statusCode).toBe(200);
   expect(connection.execute.mock.calls.some(([sql]: [string]) => sql.startsWith('DELETE'))).toBe(false);
-  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot', 'products:hot:v2');
+  expect(redis.del).toHaveBeenCalledWith('product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3');
 });
 
 test('更新支持SKU编码并拒绝未知字段', async () => {
@@ -126,7 +126,7 @@ test('更新支持SKU编码并拒绝未知字段', async () => {
 
 test('SKU list exposes explicit parent identity for its management screen', async () => {
   const res = await call(getProductSKUs);
-  expect(res.body.product).toEqual({ product_id: 1, title: '商品', status: 1 });
+  expect(res.body.product).toEqual({ product_id: 1, title: '商品', title_en: null, status: 1 });
 });
 
 test('详情只显示启用规格，使用启用规格价格和库存汇总', async () => {
@@ -164,10 +164,10 @@ test('批量请求重复SKU编码返回409且无写入', async () => {
 
 test('商品后台更新、上下架、批量与删除都清详情和热榜缓存，审计失败不改成功结果', async () => {
   for (const [handler, body, params, cacheKeys] of [
-    [updateProduct, { title: '新标题' }, { productId: '1' }, ['product:1', 'products:hot', 'products:hot:v2']],
-    [updateProductStatus, { status: 0 }, { productId: '1' }, ['product:1', 'products:hot', 'products:hot:v2']],
-    [batchUpdateProductStatus, { productIds: [1,2], status: 0 }, {}, ['product:1', 'product:2', 'products:hot', 'products:hot:v2']],
-    [deleteProduct, {}, { productId: '1' }, ['product:1', 'products:hot', 'products:hot:v2']],
+    [updateProduct, { title: '新标题' }, { productId: '1' }, ['product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3']],
+    [updateProductStatus, { status: 0 }, { productId: '1' }, ['product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3']],
+    [batchUpdateProductStatus, { productIds: [1,2], status: 0 }, {}, ['product:1', 'product:v2:1', 'product:2', 'product:v2:2', 'products:hot', 'products:hot:v2', 'products:hot:v3']],
+    [deleteProduct, {}, { productId: '1' }, ['product:1', 'product:v2:1', 'products:hot', 'products:hot:v2', 'products:hot:v3']],
   ] as const) {
     redis.del.mockClear();
     db.query.mockImplementation(async (sql: string) => {

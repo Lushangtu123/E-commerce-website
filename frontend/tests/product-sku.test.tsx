@@ -67,6 +67,26 @@ describe('product SKU purchase', () => {
     notifications.length = 0;
   });
 
+  it('switches product and variant content while preserving the selected SKU and bilingual cart data', async () => {
+    const detail: Product = { ...base, title: '棉质衬衫', title_en: 'Cotton shirt', description: '柔软舒适', description_en: 'Soft and comfortable',
+      specs: { 材质: '棉' }, specs_en: { 材质: { name: 'Material', value: 'Cotton' } }, has_sku: true,
+      skus: [{ ...product.skus![0], specs: { 颜色: '红色', 尺寸: 42 }, specs_en: { 颜色: { name: 'Color', value: 'Red' }, 尺寸: { name: 'Size' } } }] };
+    await setup({ detail: async () => ({ product: detail }) });
+    await chooseSku('101');
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByRole('heading', { name: 'Cotton shirt' })).toBeVisible();
+    expect(screen.getByText('Soft and comfortable')).toBeVisible();
+    expect(screen.getByRole('option', { name: /Color: Red \/ Size: 42/ })).toHaveValue('101');
+    expect(screen.getByLabelText('Product options')).toHaveValue('101');
+    expect(screen.getByText('Cotton', { exact: true })).toBeVisible();
+    await click('Add to cart');
+    expect(additions()).toEqual([{ product_id: 1, sku_id: 101, quantity: 1 }]);
+    expect(useCartStore.getState().items[0]).toMatchObject({ title: '棉质衬衫', title_en: 'Cotton shirt', sku_specs: { 颜色: '红色', 尺寸: 42 }, sku_specs_en: detail.skus![0].specs_en });
+    act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
+    expect(screen.getByRole('heading', { name: '棉质衬衫' })).toBeVisible();
+    expect(screen.getByLabelText('商品规格')).toHaveValue('101');
+  });
+
   it.each([
     { price: '99.00', original_price: '100.00', discounted: true },
     { price: '100.00', original_price: '99.00', discounted: false },

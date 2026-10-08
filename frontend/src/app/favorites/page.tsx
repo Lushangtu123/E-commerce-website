@@ -1,6 +1,7 @@
 'use client';
 
 import { useI18n } from '@/lib/i18n';
+import { localizedText } from '@/lib/product-content';
 
 import { useRouter } from 'next/navigation';
 import { favoriteApi } from '@/lib/api';
@@ -15,6 +16,7 @@ interface FavoriteProduct {
   favorite_id: number;
   product_id: number;
   title: string | null;
+  title_en?: string | null;
   price: number | string | null;
   original_price?: number | string | null;
   main_image?: string | null;
@@ -25,7 +27,7 @@ interface FavoriteProduct {
 }
 
 export default function FavoritesPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const router = useRouter();
   const { user, isHydrated, rows: favorites, loading, page, total, totalPages, limit,
     error: loadError, reload: fetchFavorites, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation } =
@@ -104,7 +106,7 @@ export default function FavoritesPage() {
                   >
                     <ProductImage
                       src={item.main_image}
-                      alt={(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
+                      alt={(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : localizedText(item.title, item.title_en, locale))}
                       className="h-64 w-full"
                       imageClassName="transition duration-300 group-hover:scale-105"
                     />
@@ -125,7 +127,7 @@ export default function FavoritesPage() {
                       className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-primary-600"
                       onClick={() => handleProductClick(item.product_id)}
                     >
-                      {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : item.title)}
+                      {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : localizedText(item.title, item.title_en, locale))}
                     </h2>
 
                     <div className="flex items-baseline gap-2 mb-4">

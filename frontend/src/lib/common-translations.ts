@@ -287,4 +287,5 @@ export const commonTranslations: Record<string, string> = {
   '收到商品后，请在订单详情页点击“确认收货”。': 'After receiving your items, click “Confirm receipt” on the order details page.',
   '搜索商品': 'Search products',
   '确定': 'OK',
+  '商品参数': 'Product specifications',
 };

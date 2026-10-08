@@ -10,7 +10,7 @@ import { CouponModel } from '../models/coupon.model';
 import { normalizeAddress } from '../models/address.model';
 import { getPaymentSettings } from '../utils/payment-settings';
 import { syncProductsToSearchIndex } from './product-search.service';
-import { PRODUCT_HOT_CACHE_KEYS } from '../utils/product-cache-keys';
+import { PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
@@ -183,10 +183,11 @@ export async function createOrder(
       );
       if (deduction.affectedRows !== 1) throw new OrderError(`商品 ${item.product.title} 库存不足`);
       await connection.execute(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_image, sku_id, sku_code, sku_specs, quantity, price)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [orderId, item.product_id, item.product.title, item.sku?.image || item.product.main_image || null,
-          item.sku?.sku_id ?? null, item.sku?.sku_code ?? null, item.sku ? JSON.stringify(item.sku.specs) : null, item.quantity, item.price]
+        `INSERT INTO order_items (order_id, product_id, product_name, product_name_en, product_image, sku_id, sku_code, sku_specs, sku_specs_en, quantity, price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, item.product_id, item.product.title, item.product.title_en ?? null, item.sku?.image || item.product.main_image || null,
+          item.sku?.sku_id ?? null, item.sku?.sku_code ?? null, item.sku ? JSON.stringify(item.sku.specs) : null,
+          item.sku?.specs_en == null ? null : JSON.stringify(item.sku.specs_en), item.quantity, item.price]
       );
     }
     const productIds = [...new Set(normalizedItems.map(item => item.product_id))];
@@ -355,7 +356,7 @@ export async function transitionOrder(
 export async function invalidateOrderProductCache(productIds: number[]): Promise<void> {
   if (productIds.length === 0) return;
   try {
-    await getRedisClient().del(...productIds.map(id => `product:${id}`), ...PRODUCT_HOT_CACHE_KEYS);
+    await getRedisClient().del(...productIds.flatMap(productDetailCacheKeys), ...PRODUCT_HOT_CACHE_KEYS);
   } catch (error) {
     logger.warn({ err: error }, '订单已提交，商品缓存清理失败');
   }

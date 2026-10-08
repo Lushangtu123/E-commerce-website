@@ -1,6 +1,7 @@
 'use client';
 
 import { useI18n } from '@/lib/i18n';
+import { localizedText } from '@/lib/product-content';
 
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
@@ -20,7 +21,8 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const title = localizedText(product.title, product.title_en, locale);
   const active = useRef(true);
   const productContext = useRef(product.product_id);
   productContext.current = product.product_id;
@@ -61,7 +63,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       <div className="relative">
         <ProductImage
           src={product.main_image}
-          alt={product.title}
+          alt={title}
           className="aspect-square"
           imageClassName="transition-transform duration-300 group-hover:scale-105"
         />
@@ -73,7 +75,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-gray-900">
-          {product.title}
+          {title}
         </h3>
 
         <div className="flex items-baseline gap-2">

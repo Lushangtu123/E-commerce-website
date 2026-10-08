@@ -2,6 +2,7 @@
 
 import '@/lib/admin-i18n';
 import { useI18n } from '@/lib/i18n';
+import { localizedText } from '@/lib/product-content';
 
 import { useState, useEffect, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
@@ -62,7 +63,7 @@ function StatCard({ icon, title, value, growth, color }: StatCardProps) {
 }
 
 export default function AdminDashboardPage() {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, locale } = useI18n();
   const [mounted, setMounted] = useState(false);
   const statsQuery = useDashboardQuery('dashboard-stats', () => api.get<unknown, DashboardStats>('/admin/dashboard/stats'));
   const ordersQuery = useDashboardQuery('dashboard-recent-orders', async () => {
@@ -200,7 +201,7 @@ export default function AdminDashboardPage() {
                 <div key={product.product_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center flex-1">
                     <span className="text-lg font-bold text-gray-400 w-6">#{index + 1}</span>
-                    <span className="ml-3 text-sm font-medium text-gray-900 truncate">{product.title}</span>
+                    <span className="ml-3 text-sm font-medium text-gray-900 truncate">{localizedText(product.title, product.title_en, locale)}</span>
                   </div>
                   <div className="text-right ml-4">
                     <p className="text-sm font-semibold text-gray-900">{t("销量: {count}", { count: product.total_sales || 0 })}</p>

@@ -12,6 +12,7 @@ export interface Favorite {
 
 export interface FavoriteWithProduct extends Favorite {
   title: string;
+  title_en?: string | null;
   price: number;
   original_price?: number;
   main_image?: string;
@@ -79,6 +80,7 @@ export class FavoriteModel {
         f.created_at,
         p.product_id AS existing_product_id,
         p.title,
+        p.title_en,
         p.price,
         p.original_price,
         p.main_image,

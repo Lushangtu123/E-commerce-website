@@ -528,7 +528,7 @@ describe('admin product selection and creation', () => {
     await type(field(/^状态/), '0');
     await click(button('保存修改'));
     expect(mutations).toEqual([expect.objectContaining({ method: 'put', path: '/admin/products/1', body: {
-      title: 'Row 1', description: '', price: 15, stock: 0, category_id: 2, brand: '', image_url: '', status: 0,
+      price: 15, stock: 0, category_id: 2, status: 0,
     } })]);
     expect(notifications.at(-1)).toBe('商品更新成功');
     expect(screen.queryByRole('heading', { name: '编辑商品' })).not.toBeInTheDocument();

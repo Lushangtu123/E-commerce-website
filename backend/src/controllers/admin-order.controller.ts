@@ -104,10 +104,10 @@ export const getAdminOrderDetail = async (req: Request, res: Response) => {
     const [items] = await pool.query(
       `SELECT 
         oi.*,
-        p.title,
-        p.main_image
+        oi.product_name AS title,
+        oi.product_name_en AS title_en,
+        oi.product_image AS main_image
        FROM order_items oi
-       LEFT JOIN products p ON oi.product_id = p.product_id
        WHERE oi.order_id = ?`,
       [orderId]
     );

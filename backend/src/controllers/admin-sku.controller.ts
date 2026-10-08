@@ -20,7 +20,7 @@ export const getProductSKUs = async (req: Request, res: Response) => {
     const product = await ProductModel.findById(productId);
     if (!product || product.status === -1) return res.status(404).json({ error: '商品不存在' });
     const skus = await SKUModel.findByProductId(productId, true);
-    res.json({ product: { product_id: product.product_id, title: product.title, status: product.status }, skus });
+    res.json({ product: { product_id: product.product_id, title: product.title, title_en: product.title_en ?? null, status: product.status }, skus });
   } catch (error) {
     skuFailure(res, error, '获取SKU列表失败');
   }

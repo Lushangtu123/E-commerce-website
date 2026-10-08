@@ -83,6 +83,9 @@ router.get('/stats/overview', requirePermission('statistics:view'), getOrderStat
  *     responses:
  *       200:
  *         description: 订单详情（含订单项）
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/OrderDetail' }
  *       404:
  *         description: 订单不存在
  *         content:

@@ -123,6 +123,7 @@ export const getTopProducts = async (req: Request, res: Response) => {
       `SELECT 
         p.product_id,
         p.title,
+        p.title_en,
         p.price,
         p.main_image,
         COUNT(oi.item_id) as order_count,

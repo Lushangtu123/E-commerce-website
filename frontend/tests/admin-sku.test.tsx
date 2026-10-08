@@ -106,6 +106,100 @@ afterEach(() => {
 });
 
 describe('admin SKU management', () => {
+  it('opens a SKU with obsolete English keys and saves only their cleanup', async () => {
+    await setup({ list: async () => ({ product, skus: [{ ...sku,
+      specs_en: { Color: { name: 'Color', value: 'Blue' }, 已删除属性: { name: 'Old attribute', value: 'Old value' } },
+    }] }) });
+    expect(button('编辑规格')).toBeDefined();
+    await click('编辑规格');
+    expect(field('spec-name-0')).toHaveValue('Color');
+    expect(field('spec-nameEn-0')).toHaveValue('Color');
+    expect(document.querySelectorAll('input[name^="spec-name-"]')).toHaveLength(2);
+    await submit();
+    expect(requests[1].body).toEqual({ specs_en: { Color: { name: 'Color', value: 'Blue' } } });
+  });
+
+  it('disables English values for unchanged numbers and booleans and removes obsolete English values', async () => {
+    await setup({ locale: 'en', list: async () => ({ product, skus: [{ ...sku, specs: { Size: 42, Waterproof: false, Color: 'Blue' },
+      specs_en: { Size: { name: 'Size', value: 'Forty-two' }, Waterproof: { name: 'Waterproof', value: 'No' } } }] }) });
+    await click('Edit variant');
+    for (const index of [0, 1]) {
+      expect(field(`spec-nameEn-${index}`)).toBeEnabled();
+      expect(field(`spec-valueEn-${index}`)).toBeDisabled();
+      expect(field(`spec-valueEn-${index}`)).toHaveValue('');
+    }
+    expect(field('spec-valueEn-2')).toBeEnabled();
+    expect(screen.getAllByText('Numbers and boolean values keep their original values.')).toHaveLength(2);
+    await submit();
+    expect(requests[1].body).toEqual({ specs_en: { Size: { name: 'Size' }, Waterproof: { name: 'Waterproof' } } });
+  });
+
+  it('enables the English value when a typed Chinese value becomes text and saves both as text', async () => {
+    await setup({ list: async () => ({ product, skus: [{ ...sku, specs: { Size: 42, Waterproof: false } }] }) });
+    await click('编辑规格');
+    expect(field('spec-valueEn-0')).toBeDisabled();
+    await edit({ 'spec-value-0': '四十二码' });
+    expect(field('spec-valueEn-0')).toBeEnabled();
+    await edit({ 'spec-nameEn-0': 'Size', 'spec-valueEn-0': '  Size 42  ' });
+    await submit();
+    expect(requests[1].body).toEqual({ specs: { Size: '四十二码', Waterproof: false }, specs_en: { Size: { name: 'Size', value: 'Size 42' } } });
+  });
+
+  it('displays English content while keeping the Chinese attributes in the bilingual editor', async () => {
+    await setup({ locale: 'en', list: async () => ({ product: { ...product, title_en: 'English product' },
+      skus: [{ ...sku, specs: { 颜色: '蓝色', 尺寸: 42 }, specs_en: { 颜色: { name: 'Color', value: 'Blue' }, 尺寸: { name: 'Size' } } }] }) });
+    expect(screen.getByText(/English product/)).toBeInTheDocument();
+    expect(screen.getByText('Color: Blue / Size: 42')).toBeInTheDocument();
+    await click('Edit variant');
+    expect(field('spec-name-0')).toHaveValue('颜色');
+    expect(field('spec-value-0')).toHaveValue('蓝色');
+    expect(field('spec-nameEn-0')).toHaveValue('Color');
+    expect(field('spec-valueEn-0')).toHaveValue('Blue');
+  });
+
+  it('creates a SKU with trimmed optional English attributes keyed by the Chinese attribute name', async () => {
+    await setup();
+    await click('新增规格');
+    await edit({ sku_code: 'RED', price: '1', 'spec-name-0': '  颜色  ', 'spec-value-0': ' 红色 ',
+      'spec-nameEn-0': '  Color  ', 'spec-valueEn-0': '  Red  ' });
+    await submit();
+    expect(requests[1].body).toMatchObject({ specs: { 颜色: '红色' }, specs_en: { 颜色: { name: 'Color', value: 'Red' } } });
+  });
+
+  it('submits only changed English attributes and preserves numeric and boolean source values and live stock', async () => {
+    let current: AdminSKU = { ...sku, specs: { 尺寸: 42, 防水: false }, specs_en: { 尺寸: { name: 'Size' } } };
+    await setup({ list: async () => ({ product, skus: [current] }), mutate: async (_url, body) => { current = { ...current, ...body }; return {}; } });
+    await click('编辑规格'); current = { ...current, stock: 1 };
+    await edit({ 'spec-nameEn-1': '  Waterproof  ' });
+    await submit();
+    expect(requests[1].body).toEqual({ specs_en: { 尺寸: { name: 'Size' }, 防水: { name: 'Waterproof' } } });
+    expect(current.specs).toEqual({ 尺寸: 42, 防水: false });
+    expect(screen.getByText('可售库存：1')).toBeInTheDocument();
+  });
+
+  it('clears all English attributes with null and writes nothing for an unchanged translation', async () => {
+    await setup({ list: async () => ({ product, skus: [{ ...sku, specs_en: { Color: { name: 'Color', value: 'Blue' } } }] }) });
+    await click('编辑规格'); await submit();
+    expect(requests).toHaveLength(1);
+    await edit({ 'spec-nameEn-0': ' ', 'spec-valueEn-0': '' }); await submit();
+    expect(requests[1].body).toEqual({ specs_en: null });
+  });
+
+  it('moves translations to a renamed Chinese key and removes translations with deleted attributes', async () => {
+    await setup({ list: async () => ({ product, skus: [{ ...sku, specs_en: { Color: { name: 'Color', value: 'Blue' }, Size: { name: 'Size' } } }] }) });
+    await click('编辑规格');
+    await edit({ 'spec-name-0': '颜色' });
+    fireEvent.click(screen.getByRole('button', { name: '移除规格属性 2' })); await settle(); await submit();
+    expect(requests[1].body).toEqual({ specs: { 颜色: 'Blue' }, specs_en: { 颜色: { name: 'Color', value: 'Blue' } } });
+  });
+
+  it.each([['spec-nameEn-0', 51], ['spec-valueEn-0', 101]] as const)('validates the English %s length before calling the API', async (name, length) => {
+    await setup({ locale: 'en' }); await click('Edit variant');
+    act(() => reactHandler(field(name)!, 'onChange')({ target: { value: 'a'.repeat(length) } })); await submit();
+    expect(requests).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('English attribute names may contain up to 50 characters and values up to 100 characters.');
+  });
+
   it('is linked from each product in the admin product list', async () => {
     await setup({ page: () => <AdminProductsPage />,
       list: async config => config.url === '/products/categories' ? [] : { products: [{ ...product, price: 10, stock: 3 }], pagination: { total: 1 } } });
@@ -364,6 +458,10 @@ describe('admin SKU management', () => {
     ["another product's SKU", { product, skus: [{ ...sku, product_id: 2 }] }],
     ['a missing price', { product, skus: [{ ...sku, price: null }] }],
     ['nested spec values', { product, skus: [{ ...sku, specs: { Color: { nested: 'unsafe' } } }] }],
+    ['a non-text English title', { product: { ...product, title_en: 42 }, skus: [sku] }],
+    ['a non-text English attribute', { product, skus: [{ ...sku, specs_en: { Color: { name: 42 } } }] }],
+    ['a null English attribute', { product, skus: [{ ...sku, specs_en: { Color: null } }] }],
+    ['a nested English value', { product, skus: [{ ...sku, specs_en: { Color: { value: { nested: 'unsafe' } } } }] }],
   ])('fails closed on a response with %s and allows a reload', async (_, broken) => {
     let reads = 0;
     await setup({ list: async () => ++reads === 1 ? broken : { product, skus: [sku] } });

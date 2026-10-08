@@ -1,5 +1,6 @@
 import api from './client';
 import type { AdminSKU } from './admin';
+import type { SpecTranslations } from '@/lib/product-content';
 
 // 商品相关API
 /** MySQL DECIMAL columns arrive as strings, so prices may be either. */
@@ -8,7 +9,11 @@ export type Money = number | string;
 export interface Product {
   product_id: number;
   title: string;
+  title_en?: string | null;
   description?: string | null;
+  description_en?: string | null;
+  specs?: Record<string, unknown> | null;
+  specs_en?: SpecTranslations | null;
   category_id?: number;
   category_name?: string | null;
   brand?: string | null;

@@ -1,6 +1,7 @@
 import type { CartItem } from '@/store/useCartStore';
 import api from './client';
 import type { Money } from './catalog';
+import type { SpecTranslations } from '@/lib/product-content';
 
 // 购物车相关API
 export interface CartInput {
@@ -71,10 +72,12 @@ export interface OrderItem {
   order_id: number;
   product_id: number;
   product_name: string;
+  product_name_en?: string | null;
   product_image?: string | null;
   sku_id?: number | null;
   sku_code?: string | null;
   sku_specs?: Record<string, string | number | boolean> | null;
+  sku_specs_en?: SpecTranslations | null;
   quantity: number;
   price: Money;
 }

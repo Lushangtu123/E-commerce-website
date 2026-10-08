@@ -1,6 +1,7 @@
 import { getPool, query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { normalizePurchaseItems, pricePurchaseItems, PurchaseError, MAX_QUANTITY } from '../services/purchase-items.service';
+import { SpecsTranslation } from '../utils/product-i18n';
 
 export interface CartItem {
   cart_id: number;
@@ -9,10 +10,12 @@ export interface CartItem {
   sku_id: number | null;
   sku_code?: string | null;
   sku_specs?: Record<string, unknown> | null;
+  sku_specs_en?: SpecsTranslation | null;
   quantity: number;
   created_at: Date;
   updated_at: Date;
   title?: string;
+  title_en?: string | null;
   price?: number | string;
   main_image?: string;
   stock?: number;
@@ -61,11 +64,11 @@ export class CartModel {
 
   static async list(userId: number): Promise<CartItem[]> {
     const rows = await query<(CartItem & RowDataPacket)[]>(
-      `SELECT c.*, p.title, p.status AS product_status,
+      `SELECT c.*, p.title, p.title_en, p.status AS product_status,
               CASE WHEN c.sku_id IS NULL THEN p.price ELSE s.price END AS price,
               COALESCE(NULLIF(s.image, ''), p.main_image) AS main_image,
               CASE WHEN c.sku_id IS NULL THEN p.stock ELSE s.stock END AS stock,
-              s.sku_code, s.specs AS sku_specs, s.status AS sku_status,
+              s.sku_code, s.specs AS sku_specs, s.specs_en AS sku_specs_en, s.status AS sku_status,
               s.sku_id AS existing_sku_id,
               EXISTS (SELECT 1 FROM product_skus all_skus WHERE all_skus.product_id = c.product_id) AS has_sku
        FROM cart c LEFT JOIN products p ON c.product_id = p.product_id

@@ -3,7 +3,7 @@ import { ProductModel } from '../models/product.model';
 import { SKUModel } from '../models/sku.model';
 import { getRedisClient } from '../database/redis';
 import logger from '../utils/logger';
-import { PRODUCT_HOT_CACHE_KEY, PRODUCT_HOT_CACHE_KEYS } from '../utils/product-cache-keys';
+import { PRODUCT_HOT_CACHE_KEY, PRODUCT_HOT_CACHE_KEYS, productDetailCacheKey, productDetailCacheKeys } from '../utils/product-cache-keys';
 import { productCreateSchema, productQuerySchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 
 export class ProductController {
@@ -36,7 +36,7 @@ export class ProductController {
       // Availability is checked before cached details so a disabled product cannot remain purchasable.
       const product = await ProductModel.findById(productId);
       if (!product || product.status !== 1) return res.status(404).json({ error: '商品不存在' });
-      const cacheKey = `product:${productId}`;
+      const cacheKey = productDetailCacheKey(productId);
       try {
         const cached = await getRedisClient().get(cacheKey);
         if (cached) return res.json({ product: JSON.parse(cached), fromCache: true });
@@ -123,7 +123,7 @@ export class ProductController {
       if (success) {
         // 清除缓存
         try {
-          await getRedisClient().del(`product:${productId}`, ...PRODUCT_HOT_CACHE_KEYS);
+          await getRedisClient().del(...productDetailCacheKeys(productId), ...PRODUCT_HOT_CACHE_KEYS);
         } catch (cacheError) {
           logger.warn({ err: cacheError }, '商品已更新，缓存清理失败');
         }
