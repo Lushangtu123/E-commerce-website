@@ -32,14 +32,15 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const [reviewView, setReviewView] = useState<{ context: string; page: number; revision: number } | null>(null);
   const [reviewState, setReviewState] = useState<{ context: string; page: number; reviews: ProductReview[]; total: number; totalPages: number; loading: boolean; error: boolean } | null>(null);
   const reviewRequest = useRef<{ context: string; selection: string } | null>(null);
-  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [relatedState, setRelatedState] = useState<{ context: string; revision: number; products: Product[]; error: boolean } | null>(null);
+  const [relatedRetry, setRelatedRetry] = useState(0);
+  const relatedRequest = useRef<{ context: string } | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [favoriteState, setFavoriteState] = useState<{ context: string; revision: number; selected: boolean; error: boolean } | null>(null);
   const [favoriteRetry, setFavoriteRetry] = useState(0);
   const [favoriting, setFavoriting] = useState(false);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
   const [selectedSkuId, setSelectedSkuId] = useState<number | undefined>(undefined);
   const [loadedContext, setLoadedContext] = useState<string | null>(null);
@@ -55,6 +56,8 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const visibleFavorite = favoriteState?.context === context && favoriteState.revision === favoriteRetry ? { ...favoriteState, loading: false }
     : { selected: false, loading: isAuthenticated, error: false };
   const isFavorited = visibleFavorite.selected;
+  const visibleRelated = relatedState?.context === context && relatedState.revision === relatedRetry ? { ...relatedState, loading: false }
+    : { products: [], loading: true, error: false };
   const reviewPage = reviewView?.context === context ? reviewView.page : 1;
   const reviewRevision = reviewView?.context === context ? reviewView.revision : 0;
   const reviewSelection = JSON.stringify([context, reviewPage, reviewRevision]);
@@ -80,21 +83,39 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     if (!isHydrated || !productId) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentContext();
-    setRelatedProducts([]);
     setAdding(false);
     addingRequest.current = null;
     setFavoriting(false);
     favoriteRequest.current = null;
-    setLoadingRecommendations(true);
-    recommendationApi.getRelated(productId, 4).then((data) => {
-      if (isCurrentRequest()) setRelatedProducts(data.related_products || []);
-    }).catch((error) => { if (isCurrentRequest()) logger.error('加载相关推荐失败:', error); })
-      .finally(() => { if (isCurrentRequest()) setLoadingRecommendations(false); });
     if (isAuthenticated) {
       browseApi.record(productId).catch((error) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
     return () => { active = false; };
   }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, isCurrentContext]);
+
+  useEffect(() => {
+    if (!isHydrated || !productId) return;
+    let active = true;
+    const operation = { context };
+    relatedRequest.current = operation;
+    const isCurrentRequest = () => active && isCurrentContext() && relatedRequest.current === operation;
+    recommendationApi.getRelated(productId, 4).then(data => {
+      if (isCurrentRequest()) setRelatedState({ context, revision: relatedRetry, products: data.related_products || [], error: false });
+    }).catch(error => {
+      if (!isCurrentRequest()) return;
+      logger.error('加载相关推荐失败:', error);
+      setRelatedState({ context, revision: relatedRetry, products: [], error: true });
+    }).finally(() => {
+      if (relatedRequest.current === operation) relatedRequest.current = null;
+    });
+    return () => { active = false; };
+  }, [context, isHydrated, productId, isCurrentContext, relatedRetry]);
+
+  const retryRelated = () => {
+    if (!isCurrentContext() || !visibleRelated.error || relatedRequest.current?.context === context) return;
+    relatedRequest.current = { context };
+    setRelatedRetry(previous => previous + 1);
+  };
 
   useEffect(() => {
     if (!isHydrated || !productId || !isAuthenticated) return;
@@ -468,7 +489,8 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
           page={reviewPage} total={visibleReviews.total} totalPages={visibleReviews.totalPages}
           onRetry={() => changeReviewPage(reviewPage, true)} onPageChange={changeReviewPage} />
 
-        <RelatedProducts products={relatedProducts} loading={loadingRecommendations} />
+        <RelatedProducts products={visibleRelated.products} loading={visibleRelated.loading}
+          error={visibleRelated.error} onRetry={retryRelated} />
       </div>
     </div>
   );

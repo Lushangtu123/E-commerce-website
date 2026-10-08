@@ -358,6 +358,38 @@ async function localPlatformScripts(context) {
   await pricing.getByText('¥150.00', { exact: true }).waitFor({ state: 'visible' });
   assert.equal(await pricing.locator('.line-through').count(), 0, 'null variant original price does not inherit parent');
   console.log('PASS browser selected SKU owns its promotion price without inheriting parent discounts');
+  const relatedEndpoint = 'http://127.0.0.1:3101/api/recommendations/related/2';
+  let relatedUnavailable = true, relatedAttempts = 0;
+  const relatedFault = route => { relatedAttempts++; return relatedUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) }) : route.continue(); };
+  const neighboringReads = { product: 0, reviews: 0, favorite: 0, browse: 0 };
+  const countRelatedNeighbors = request => {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() === 'GET' && pathname === '/api/products/2') neighboringReads.product++;
+    if (request.method() === 'GET' && pathname === '/api/reviews/product/2') neighboringReads.reviews++;
+    if (request.method() === 'GET' && pathname === '/api/favorites/check/2') neighboringReads.favorite++;
+    if (request.method() === 'POST' && pathname === '/api/browse/record') neighboringReads.browse++;
+  };
+  page.on('request', countRelatedNeighbors);
+  expectedReadFailure = { endpoint: relatedEndpoint, prefix: '加载相关推荐失败:' };
+  await page.route(`${relatedEndpoint}*`, relatedFault); await page.reload();
+  const relatedSection = page.locator('section').filter({ has: page.getByRole('heading', { name: /^(相关推荐|Related products)$/ }) });
+  await relatedSection.getByRole('alert').waitFor({ state: 'visible' });
+  await variant.selectOption('201');
+  await page.getByRole('button', { name: '收藏', exact: true }).click({ trial: true });
+  await reviewsSection.getByText('暂无评价', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await relatedSection.getByText('Unable to load recommendations. Please try again.', { exact: true }).waitFor({ state: 'visible' });
+  const beforeRelatedRetry = { ...neighboringReads }, previousRelatedAttempts = relatedAttempts;
+  relatedUnavailable = false; await relatedSection.getByRole('button', { name: 'Retry', exact: true }).click();
+  await relatedSection.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(relatedAttempts, previousRelatedAttempts + 1);
+  assert.deepEqual(neighboringReads, beforeRelatedRetry, 'retry only reloads related products');
+  assert.equal(await page.getByLabel('Product options', { exact: true }).inputValue(), '201');
+  await page.unroute(`${relatedEndpoint}*`, relatedFault); expectedReadFailure = undefined;
+  page.off('request', countRelatedNeighbors);
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser bilingual related-product retry preserves SKU selection and leaves neighboring requests untouched');
   await page.goto('http://127.0.0.1:3100/profile/address');
   await page.getByRole('button', { name: '新增地址', exact: true }).click();
   for (const [field, value] of Object.entries({ receiver_name: '浏览器测试收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '仅测试地址1号' })) {
