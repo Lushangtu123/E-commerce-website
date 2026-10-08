@@ -56,16 +56,17 @@ function useProductSection(scope: string, load: () => Promise<Product[]>, isCurr
 
 export default function Home() {
   const { t } = useI18n();
-  const { isAuthenticated, sessionId, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const userId = user?.user_id;
   const scope = JSON.stringify([sessionId, userId, isAuthenticated]);
   const isCurrentSession = useCallback(() => {
+    if (!isHydrated) return false;
     const auth = useAuthStore.getState();
     try {
       return auth.isAuthenticated === isAuthenticated &&
         auth.sessionId === sessionId && auth.user?.user_id === userId && storedSessionId() === (sessionId ?? null);
     } catch { return false; }
-  }, [isAuthenticated, sessionId, userId]);
+  }, [isAuthenticated, isHydrated, sessionId, userId]);
   const hot = useProductSection('hot', loadHotProducts, publicCatalog, '加载热门商品失败，请重试', true);
   const latest = useProductSection('new', loadNewProducts, publicCatalog, '加载新品失败，请重试', true);
   const recommendations = useProductSection(scope, loadRecommendations, isCurrentSession, '加载推荐失败，请重试');
@@ -128,7 +129,8 @@ export default function Home() {
 
       <ProductSection title={t("热门商品")} href="/products?sort=sales_count DESC" products={hot.products} loading={hot.loading} error={hot.error} onRetry={hot.retry} />
       <ProductSection title={t("新品推荐")} href="/products?sort=created_at DESC" products={latest.products} loading={latest.loading} error={latest.error} onRetry={latest.retry} />
-      {isCurrentSession() && (recommendations.loading || recommendations.error || recommendations.products.length > 0) && (
+      {/* The server and first browser render share the unhydrated auth snapshot. */}
+      {isHydrated && isCurrentSession() && (recommendations.loading || recommendations.error || recommendations.products.length > 0) && (
         <ProductSection
           title={t("猜你喜欢")}
           subtitle={isAuthenticated ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}

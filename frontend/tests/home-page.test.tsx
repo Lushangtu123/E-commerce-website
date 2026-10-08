@@ -49,6 +49,7 @@ const signIn = () => act(() => useAuthStore.getState().login({ user_id: 1, usern
 describe('home page', () => {
   beforeEach(() => {
     toasts.length = 0;
+    useAuthStore.getState().hydrate();
   });
 
   it('shows hot and new products and hides empty recommendations', async () => {
