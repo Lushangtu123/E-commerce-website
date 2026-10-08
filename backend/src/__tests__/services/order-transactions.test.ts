@@ -10,6 +10,7 @@ import { sendOrderTimeoutCheckMessage } from '../../services/message-queue.servi
 import { OrderController } from '../../controllers/order.controller';
 import { cancelTimeoutOrder, checkAndCancelTimeoutOrders } from '../../services/order-timeout.service';
 import { getAdminOrderDetail, getOrderStatistics, updateOrderStatus } from '../../controllers/admin-order.controller';
+import { MAX_QUANTITY } from '../../services/purchase-items.service';
 
 const ADDRESS = { receiver_name: '收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '测试路1号' };
 const PRODUCT = { product_id: 1, title: '商品', price: '19.99', stock: 10, main_image: 'image.jpg', status: 1 };
@@ -82,6 +83,17 @@ beforeEach(() => {
 });
 
 describe('下单原子性', () => {
+  test.each(['create', 'preview'] as const)('%s 拒绝跨规格商品总量超限，尚未取得数据库连接', async operation => {
+    const res = response();
+    await OrderController[operation](request({ items: [
+      { product_id: 1, sku_id: 11, quantity: MAX_QUANTITY },
+      { product_id: 1, sku_id: 12, quantity: 1 },
+    ] }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '商品数量超出范围' });
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+
   test('双语商品与SKU快照只取服务器锁定内容，忽略客户端伪造翻译', async () => {
     const original = connection.execute.getMockImplementation();
     const specs = { 颜色: '红色', 尺寸: 42, 防水: false };
@@ -176,6 +188,69 @@ describe('下单原子性', () => {
 });
 
 describe('订单状态迁移', () => {
+  test.each(['manual', 'timeout'])('历史跨规格总量超限订单允许%s取消并分别回补', async operation => {
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('FROM order_items')) return Promise.resolve([[
+        { product_id: 1, sku_id: 11, quantity: 1100000000 },
+        { product_id: 1, sku_id: 12, quantity: 1100000000 },
+      ], []]);
+      return execute(sql, params);
+    });
+    if (operation === 'manual') {
+      const res = response();
+      await OrderController.cancel(request(), res);
+      expect(res.json).toHaveBeenCalledWith({ message: '订单已取消' });
+    } else {
+      expect(await cancelTimeoutOrder(1001)).toBe(true);
+    }
+    expect(matching('stock = stock +').map(([, params]: [string, number[]]) => params)).toEqual([
+      [1100000000, 11, 1, MAX_QUANTITY - 1100000000],
+      [1100000000, 12, 1, MAX_QUANTITY - 1100000000],
+    ]);
+    expect(matching('sales_count = sales_count +')).toHaveLength(0);
+    expect(order.status).toBe(4);
+    expect(connection.commit).toHaveBeenCalledTimes(1);
+    await OrderController.cancel(request(), response());
+    expect(matching('stock = stock +')).toHaveLength(2);
+  });
+
+  test('产品累计销量没有足够 INT 余量时付款返回业务错误并回滚', async () => {
+    order.has_timed_out = 0;
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('sales_count = sales_count +')) {
+        return Promise.resolve([{ affectedRows: 0 }, []]);
+      }
+      return execute(sql, params);
+    });
+    const res = response();
+    await OrderController.pay(request(), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '商品数量超出范围' });
+    expect(order.status).toBe(0);
+    expect(matching('UPDATE orders')).toHaveLength(0);
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+    expect(connection.commit).not.toHaveBeenCalled();
+  });
+
+  test('历史同规格累计数量超过 INT 上限时取消仍不能回补', async () => {
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('FROM order_items')) return Promise.resolve([[
+        { product_id: 1, sku_id: 11, quantity: 1100000000 },
+        { product_id: 1, sku_id: 11, quantity: 1100000000 },
+      ], []]);
+      return execute(sql, params);
+    });
+    const res = response();
+    await OrderController.cancel(request(), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(order.status).toBe(0);
+    expect(matching('stock = stock +')).toHaveLength(0);
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+  });
+
   test('手动取消恢复商品库存，重复请求不能重复回补', async () => {
     const first = response();
     await OrderController.cancel(request(), first);

@@ -296,24 +296,30 @@ export async function transitionOrder(
       const productQuantities = new Map<number, number>();
       const inventory = new Map<string, { productId: number; skuId: number | null; quantity: number }>();
       for (const item of items) {
-        if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) throw new Error('订单商品数量无效');
+        if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || item.quantity > MAX_QUANTITY) throw new Error('订单商品数量无效');
         productQuantities.set(item.product_id, (productQuantities.get(item.product_id) || 0) + item.quantity);
         const key = `${item.product_id}:${item.sku_id ?? 0}`;
         inventory.set(key, { productId: item.product_id, skuId: item.sku_id ?? null, quantity: (inventory.get(key)?.quantity || 0) + item.quantity });
       }
       for (const [productId, quantity] of [...productQuantities.entries()].sort(([a], [b]) => a - b)) {
-        if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) throw new Error('订单商品数量无效');
+        if (!Number.isSafeInteger(quantity)) throw new Error('订单商品数量无效');
         const [parents] = await connection.execute<RowDataPacket[]>(
           'SELECT product_id FROM products WHERE product_id = ? FOR UPDATE', [productId]
         );
         if (!parents[0]) throw new Error('订单商品不存在');
         if (targetStatus === OrderStatus.PAID) {
-          await connection.execute('UPDATE products SET sales_count = sales_count + ? WHERE product_id = ?', [quantity, productId]);
+          if (quantity > MAX_QUANTITY) throw new OrderError('商品数量超出范围');
+          const [updatedSales] = await connection.execute<ResultSetHeader>(
+            'UPDATE products SET sales_count = sales_count + ? WHERE product_id = ? AND sales_count <= ?',
+            [quantity, productId, MAX_QUANTITY - quantity]
+          );
+          if (updatedSales.affectedRows !== 1) throw new OrderError('商品数量超出范围');
         }
         productIds.push(productId);
       }
       if (targetStatus === OrderStatus.CANCELLED) {
         for (const item of [...inventory.values()].sort((a, b) => (a.skuId ?? 0) - (b.skuId ?? 0) || a.productId - b.productId)) {
+          if (!Number.isSafeInteger(item.quantity) || item.quantity > MAX_QUANTITY) throw new Error('订单商品数量无效');
           const [result] = await connection.execute<ResultSetHeader>(
             item.skuId === null
               ? 'UPDATE products SET stock = stock + ? WHERE product_id = ? AND stock <= ?'

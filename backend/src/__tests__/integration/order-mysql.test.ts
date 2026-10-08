@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
+import mysql, { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { getPool, query } from '../../database/mysql';
 import { createOrder as createOrderService, previewOrder, transitionOrder } from '../../services/order.service';
 import { ProductModel } from '../../models/product.model';
@@ -24,6 +24,7 @@ import { migrateOrderCheckout } from '../../database/migrate-order-checkout';
 import { migrateFulfillment } from '../../database/migrate-fulfillment';
 import addressRoutes from '../../routes/address.routes';
 import { AddressModel } from '../../models/address.model';
+import { MAX_QUANTITY } from '../../services/purchase-items.service';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 jest.mock('../../database/redis', () => ({ getRedisClient: () => ({ del: jest.fn().mockResolvedValue(1) }) }));
@@ -607,6 +608,68 @@ integration('真实 MySQL 订单事务及并发', () => {
       VALUES (1,1,'RED-M','{"颜色":"红色","尺寸":"M"}',15,3,'red.jpg'),
              (2,1,'BLUE-L','{"颜色":"蓝色","尺寸":"L"}',25,2,'blue.jpg')`);
   }
+
+  test('跨规格商品总量恰好达到 INT 上限时可预览、下单与付款', async () => {
+    await variants();
+    const firstQuantity = 1100000000;
+    const secondQuantity = MAX_QUANTITY - firstQuantity;
+    await db.query('UPDATE product_skus SET price = 0.01, stock = CASE WHEN sku_id = 1 THEN ? ELSE ? END', [firstQuantity, secondQuantity]);
+    const items = [{ product_id: 1, sku_id: 1, quantity: firstQuantity }, { product_id: 1, sku_id: 2, quantity: secondQuantity }];
+    expect(await previewOrder(1, items)).toMatchObject({ total_amount: MAX_QUANTITY / 100 });
+    const { orderId } = await createOrder(1, items);
+    await transitionOrder(orderId, OrderStatus.PAID, { userId: 1 });
+    expect(await state(orderId)).toBe(OrderStatus.PAID);
+    expect(await product()).toMatchObject({ stock: 10, sales_count: MAX_QUANTITY });
+    const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus ORDER BY sku_id');
+    expect(skus.map(sku => sku.stock)).toEqual([0, 0]);
+  });
+
+  test('跨规格商品总量超过 INT 上限时预览和下单都拒绝且不扣库存', async () => {
+    await variants();
+    await db.query('UPDATE product_skus SET price = 0.01, stock = CASE WHEN sku_id = 1 THEN ? ELSE 1 END', [MAX_QUANTITY]);
+    const items = [{ product_id: 1, sku_id: 1, quantity: MAX_QUANTITY }, { product_id: 1, sku_id: 2, quantity: 1 }];
+    await expect(previewOrder(1, items)).rejects.toMatchObject({ statusCode: 400, message: '商品数量超出范围' });
+    await expect(createOrder(1, items)).rejects.toMatchObject({ statusCode: 400, message: '商品数量超出范围' });
+    const [orders] = await db.query<RowDataPacket[]>('SELECT COUNT(*) AS count FROM orders');
+    const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus ORDER BY sku_id');
+    expect(orders[0].count).toBe(0);
+    expect(skus.map(sku => sku.stock)).toEqual([MAX_QUANTITY, 1]);
+    expect(await product()).toMatchObject({ stock: 10, sales_count: 0 });
+  });
+
+  test('历史跨规格商品总量超过 INT 上限时手动与超时取消只按各规格回补一次', async () => {
+    await variants();
+    await db.query('UPDATE product_skus SET stock = 100000000, price = 0.01');
+    await db.query('UPDATE products SET sales_count = ? WHERE product_id = 1', [MAX_QUANTITY]);
+    const [created] = await db.query<ResultSetHeader>(
+      "INSERT INTO orders (order_no,user_id,total_amount,status,created_at) VALUES ('HISTORICAL-LARGE',1,22000000,0,DATE_SUB(NOW(),INTERVAL 31 MINUTE))"
+    );
+    const orderId = created.insertId;
+    await db.query(`INSERT INTO order_items (order_id,product_id,product_name,sku_id,quantity,price)
+      VALUES (?,1,'商品一',1,1100000000,0.01),(?,1,'商品一',2,1100000000,0.01)`, [orderId, orderId]);
+    const outcomes = await Promise.allSettled([
+      transitionOrder(orderId, OrderStatus.CANCELLED, { userId: 1 }), cancelTimeoutOrder(orderId),
+    ]);
+    expect(outcomes.some(outcome => outcome.status === 'fulfilled' &&
+      (outcome.value === true || (typeof outcome.value === 'object' && outcome.value.changed)))).toBe(true);
+    expect(await state(orderId)).toBe(OrderStatus.CANCELLED);
+    expect(await cancelTimeoutOrder(orderId)).toBe(false);
+    await expect(transitionOrder(orderId, OrderStatus.CANCELLED, { userId: 1 })).rejects.toThrow('订单状态');
+    const [skus] = await db.query<RowDataPacket[]>('SELECT stock FROM product_skus ORDER BY sku_id');
+    expect(skus.map(sku => sku.stock)).toEqual([1200000000, 1200000000]);
+    expect(await product()).toMatchObject({ stock: 10, sales_count: MAX_QUANTITY });
+  });
+
+  test('付款拒绝累计销量 INT 溢出并保留订单库存，随后仍可取消', async () => {
+    await db.query('UPDATE products SET sales_count = ? WHERE product_id = 1', [MAX_QUANTITY - 1]);
+    const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 2 }]);
+    await expect(transitionOrder(orderId, OrderStatus.PAID, { userId: 1 }))
+      .rejects.toMatchObject({ statusCode: 400, message: '商品数量超出范围' });
+    expect(await state(orderId)).toBe(OrderStatus.PENDING);
+    expect(await product()).toMatchObject({ stock: 8, sales_count: MAX_QUANTITY - 1 });
+    await transitionOrder(orderId, OrderStatus.CANCELLED, { userId: 1 });
+    expect(await product()).toMatchObject({ stock: 10, sales_count: MAX_QUANTITY - 1 });
+  });
 
   function cartApp() {
     const app = express(); app.use(express.json()); app.use('/cart', cartRoutes);

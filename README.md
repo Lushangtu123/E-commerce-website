@@ -54,6 +54,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Order cancellation
 - Delivery confirmation
 - Durable checkout retry protection: one order per user and request ID, with pending checkout recovery after network failures
+- Checkout bounds the combined quantity of each product across variants. Cancellation can restore legacy orders across variants without a product total blocking safe inventory restoration; payment checks the remaining sales-counter range.
 - Cart and product loading failures provide an explicit retry; purchasing waits for fresh inventory. Catalog pagination returns to a valid page when listings shrink.
 - Payment rejects orders once their 30-minute deadline passes, using database time after taking the order lock. Timeout batches report failures for retry and keep scan progress in Redis across instances.
 - Registration, password change and reset share a minimum 12-character, maximum 72-byte UTF-8 policy; existing short passwords remain usable for sign-in
