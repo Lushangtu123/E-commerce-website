@@ -79,6 +79,8 @@ integration('真实 MySQL 订单事务及并发', () => {
     for (const table of ['coupon_usage_logs', 'user_coupons', 'coupons', 'order_items', 'orders', 'cart', 'favorites', 'browse_history', 'shipping_addresses', 'product_skus', 'products', 'users']) {
       await db.query(`DELETE FROM ${table}`);
     }
+    // BIGINT boundary fixtures must not leave the next test's generated IDs beyond JS safety.
+    await db.query('ALTER TABLE orders AUTO_INCREMENT = 1');
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (1,'customer','customer@example.test','test'),(2,'other','other@example.test','test')");
     await db.query(`INSERT INTO shipping_addresses (address_id,user_id,receiver_name,phone,province,city,district,detail_address,is_default)
       VALUES (101,1,'收件人','13800138000','浙江省','杭州市','西湖区','测试路1号',1),
@@ -90,6 +92,46 @@ integration('真实 MySQL 订单事务及并发', () => {
   const createOrder = (userId: number, items: unknown, addressId = 100 + userId, remark?: string, couponId?: number) =>
     createOrderService(userId, items, addressId, remark, couponId);
   const ADDRESS = { receiver_name: '收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '测试路1号' };
+
+  async function reserveIdFixtures(ids: number[]) {
+    for (const id of ids) {
+      await db.query('INSERT INTO orders(order_id,order_no,user_id,total_amount,status) VALUES(?,?,1,10.10,0)', [id, `ID-${id}`]);
+      await db.query("INSERT INTO order_items(order_id,product_id,product_name,price,quantity) VALUES(?,1,'商品一',10.10,1)", [id]);
+    }
+    await db.query('UPDATE products SET stock = ? WHERE product_id = 1', [10 - ids.length]);
+  }
+
+  test('非法订单编号不会读错订单或改变订单和库存', async () => {
+    await reserveIdFixtures([1, 1000]);
+    const app = express(); app.use(express.json()); app.use('/orders', orderRoutes);
+    const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
+    const endpoints = [['get', ''], ['get', '/remaining-time'], ['post', '/cancel'], ['post', '/pay'], ['post', '/confirm']] as const;
+    for (const id of ['1e3', '1abc', '9007199254740992']) {
+      for (const [method, suffix] of endpoints) {
+        await request(app)[method](`/orders/${id}${suffix}`).set(auth).expect(400, { error: '订单ID无效' });
+      }
+    }
+    const [orders] = await db.query<RowDataPacket[]>('SELECT order_id,status FROM orders ORDER BY order_id');
+    expect(orders).toEqual([{ order_id: 1, status: 0 }, { order_id: 1000, status: 0 }]);
+    expect(await product()).toMatchObject({ stock: 8, sales_count: 0 });
+  });
+
+  test.each([2147483648, Number.MAX_SAFE_INTEGER])('合法 BIGINT 编号 %s 保留归属检查和取消事务', async id => {
+    await reserveIdFixtures([id]);
+    const app = express(); app.use(express.json()); app.use('/orders', orderRoutes);
+    const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
+    const other = { Authorization: `Bearer ${jwt.sign({ userId: 2 }, 'test-jwt-secret')}` };
+    const detail = await request(app).get(`/orders/${id}`).set(auth).expect(200);
+    expect(detail.body.order.order_id).toBe(id);
+    await request(app).get(`/orders/${id}/remaining-time`).set(auth).expect(200);
+    await request(app).get(`/orders/${id}`).set(other).expect(403);
+    await request(app).post(`/orders/${id}/cancel`).set(other).expect(403);
+    expect(await state(id)).toBe(OrderStatus.PENDING);
+    expect(await product()).toMatchObject({ stock: 9 });
+    await request(app).post(`/orders/${id}/cancel`).set(auth).expect(200);
+    expect(await state(id)).toBe(OrderStatus.CANCELLED);
+    expect(await product()).toMatchObject({ stock: 10 });
+  });
 
   async function product() {
     const [rows] = await db.query<RowDataPacket[]>('SELECT stock, sales_count FROM products WHERE product_id = 1');

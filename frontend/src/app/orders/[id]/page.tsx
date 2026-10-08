@@ -41,7 +41,9 @@ export default function OrderDetailPage() {
   const [actionPending, setActionPending] = useState(false);
   const payments = usePaymentSettings(isHydrated && isAuthenticated);
 
-  const orderId = parseInt(params.id as string);
+  const rawOrderId = params.id;
+  const parsedOrderId = typeof rawOrderId === 'string' ? Number(rawOrderId) : NaN;
+  const orderId = Number.isSafeInteger(parsedOrderId) && parsedOrderId > 0 && String(parsedOrderId) === rawOrderId ? parsedOrderId : NaN;
   const sessionKey = JSON.stringify([sessionId, user?.user_id, orderId]);
   const loadError = failure?.key === sessionKey ? failure.message : null;
   const actionsBlocked = actionPending || loading || !!loadError;
@@ -71,6 +73,11 @@ export default function OrderDetailPage() {
     if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
+      return;
+    }
+    if (!Number.isSafeInteger(orderId)) {
+      toast.error(t('订单ID无效'));
+      router.push('/orders');
       return;
     }
     loadOrder();

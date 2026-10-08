@@ -509,6 +509,8 @@ The full browser checkout regression runs against a real local MySQL test databa
 
 Search keywords are trimmed and limited to 100 characters across product search, history and suggestions. History, hot-search and suggestion limits are 1–100; hot-search periods are 1–365 days. Invalid types, ranges and unknown fields return 400 before querying. Search history loads after the sign-in state is restored and is cleared when switching accounts; late responses cannot write into another account. Changing the keyword or sort order in product search returns to the first page, and failed loads can be retried.
 
+Order path IDs use canonical positive decimal integers up to 9007199254740991 consistently for customer and admin reads and updates. Scientific notation, prefixes, signs, leading zeroes and unsafe integers return 400 before accessing order data.
+
 Order details retain their route after a network or temporary server failure and provide an explicit retry. A failed status refresh preserves the last loaded details while blocking payment, cancellation and receipt actions until reloaded. Missing or forbidden orders keep their specific error; late retries cannot affect another account or order.
 
 The admin product, user and log lists all handle expired sign-ins through the API client, and late responses cannot overwrite the current identity or query. Bulk product selection applies only to the current page and is cleared after paging or filtering; product and user write actions block duplicate submissions until the request completes.

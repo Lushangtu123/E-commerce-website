@@ -178,6 +178,19 @@ async function visibleText(page, text) {
   console.log('PASS browser lost checkout response, HTTP 408/429 and reload preserve one order and stock deduction');
   const orderUrl = page.url();
   const detailEndpoint = `${checkoutEndpoint}/${committedOrderId}`;
+  const apiHeaders = { 'X-Requested-With': 'XMLHttpRequest', Origin: 'http://127.0.0.1:3100' };
+  for (const id of [`${committedOrderId}abc`, '1e3']) {
+    for (const [method, suffix] of [['get', ''], ['get', '/remaining-time'], ['post', '/cancel'], ['post', '/pay'], ['post', '/confirm']]) {
+      const rejected = await context.request[method](`${checkoutEndpoint}/${id}${suffix}`, { headers: apiHeaders });
+      assert.equal(rejected.status(), 400);
+      assert.equal((await rejected.json()).error, '订单ID无效');
+    }
+  }
+  const unchangedOrder = await context.request.get(detailEndpoint);
+  assert.equal((await unchangedOrder.json()).order.status, 0);
+  const unchangedStock = await context.request.get('http://127.0.0.1:3101/api/products/1');
+  assert.equal((await unchangedStock.json()).product.stock, 19);
+  console.log('PASS browser malformed order IDs leave the persisted order and stock unchanged');
   let detailFailures = 0;
   const failDetailOnce = async route => {
     if (route.request().method() !== 'GET') return route.continue();
