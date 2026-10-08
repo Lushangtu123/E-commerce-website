@@ -6,6 +6,7 @@ import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import AfterSalesProgress from '@/components/AfterSalesProgress';
+import { validAfterSalesRequest } from '@/lib/after-sales-response';
 
 export const AFTER_SALES_STATUS = { requested: '待审核', approved: '审核通过', rejected: '审核拒绝', withdrawn: '已撤回' };
 
@@ -19,6 +20,8 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const currentResult = useRef<typeof result>(null);
   const updateResult = (value: typeof result) => { currentResult.current = value; setResult(value); };
   const pendingLoad = useRef<{ key: string } | null>(null);
+  const recovery = useRef<{ key: string; unknown: boolean } | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
   const [type, setType] = useState<'refund' | 'return'>('refund');
@@ -34,16 +37,25 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const load = async (reconcileOperation?: object) => {
     if (!active() || (mutation.current && mutation.current !== reconcileOperation) || pendingLoad.current?.key === key) return;
     const operation = { key }; pendingLoad.current = operation;
+    const attempt = recovery.current?.key === key ? recovery.current : null;
     const loaded = currentResult.current?.key === key && !currentResult.current.error;
     const revision = ++request.current; setRefreshing(true);
     if (!loaded) updateResult(null);
     try {
       const data = await afterSalesApi.get(orderId);
-      if (active() && revision === request.current) { updateResult({ key, value: data.after_sales }); setLoadError(null); }
+      if (active() && revision === request.current) {
+        if (attempt && data.after_sales !== null && (!validAfterSalesRequest(data.after_sales) || data.after_sales.order_id !== orderId)) throw new Error('invalid after-sales state');
+        updateResult({ key, value: data.after_sales }); setLoadError(null);
+        if (attempt && recovery.current === attempt) {
+          recovery.current = null; setUnconfirmed(null);
+          if (attempt.unknown) setNotice({ key, success: '售后进度已重新加载，请核对处理结果' });
+        }
+      }
     } catch (error) {
       if (active() && revision === request.current) {
         const message = requestFailure(error).response?.data?.error || '加载售后申请失败，请重试';
-        if (loaded) setLoadError({ key, message });
+        if (attempt) setNotice({ key, error: '操作结果尚未确认，请刷新售后进度后再操作' });
+        else if (loaded) setLoadError({ key, message });
         else updateResult({ key, value: null, error: message });
       }
     } finally {
@@ -51,14 +63,14 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     }
   };
   useEffect(() => {
-    mounted.current = true; updateResult(null); setReason(''); setParcel({ company: '', tracking_number: '' }); setType('refund'); setNotice(null); setLoadError(null); setBusy(false); setRefreshing(false); mutation.current = null; pendingLoad.current = null;
+    mounted.current = true; updateResult(null); setReason(''); setParcel({ company: '', tracking_number: '' }); setType('refund'); setNotice(null); setLoadError(null); setBusy(false); setRefreshing(false); mutation.current = null; pendingLoad.current = null; recovery.current = null; setUnconfirmed(null);
     if (isAuthenticated) void load();
     const refreshVisible = () => { if (document.visibilityState === 'visible') void load(); };
     window.addEventListener('focus', refreshVisible); document.addEventListener('visibilitychange', refreshVisible);
     return () => { mounted.current = false; request.current++; window.removeEventListener('focus', refreshVisible); document.removeEventListener('visibilitychange', refreshVisible); };
   }, [key, isAuthenticated]);
   const mutate = async (withdraw: boolean) => {
-    if (!active() || mutation.current || pendingLoad.current?.key === key || currentResult.current !== result || result?.key !== key || result.error) return;
+    if (!active() || mutation.current || recovery.current?.key === key || pendingLoad.current?.key === key || currentResult.current !== result || result?.key !== key || result.error) return;
     if (withdraw ? result.value?.status !== 'requested' : !!result.value) return;
     const trimmed = reason.trim();
     if (!withdraw && (!trimmed || trimmed.length > 500)) { setNotice({ key, error: '请填写1至500个字符的申请原因' }); return; }
@@ -72,7 +84,11 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
       if (active() && mutation.current === operation) {
         const failure = requestFailure(error);
         setNotice({ key, error: failure.response?.data?.error || '处理售后申请失败，请重试' });
-        if (failure.response?.status === 409) await load(operation);
+        const status = failure.response?.status;
+        if (!status || status === 408 || status === 429 || status >= 500 || status === 409) {
+          recovery.current = { key, unknown: status !== 409 }; setUnconfirmed(key);
+          await load(operation);
+        }
       }
     } finally {
       if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); }
@@ -81,7 +97,7 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const submitTracking = async (event: React.FormEvent) => {
     event.preventDefault();
     const value = result?.key === key ? result.value : null;
-    if (!active() || mutation.current || pendingLoad.current?.key === key || currentResult.current !== result || result?.error || value?.status !== 'approved' || value.type !== 'return' || value.return_submitted_at || value.completed_at) return;
+    if (!active() || mutation.current || recovery.current?.key === key || pendingLoad.current?.key === key || currentResult.current !== result || result?.error || value?.status !== 'approved' || value.type !== 'return' || value.return_submitted_at || value.completed_at) return;
     const company = parcel.company.trim(), tracking_number = parcel.tracking_number.trim();
     if (!company || company.length > 60 || !tracking_number || tracking_number.length > 100) { setNotice({ key, error: '退货快递公司或运单号无效' }); return; }
     const operation = {}; mutation.current = operation; request.current++; setBusy(true); setNotice(null);
@@ -93,12 +109,17 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
       if (active() && mutation.current === operation) {
         const failure = requestFailure(error);
         setNotice({ key, error: failure.response?.data?.error || '保存退货运单失败' });
-        if (failure.response?.status === 409) await load(operation);
+        const status = failure.response?.status;
+        if (!status || status === 408 || status === 429 || status >= 500 || status === 409) {
+          recovery.current = { key, unknown: status !== 409 }; setUnconfirmed(key);
+          await load(operation);
+        }
       }
     } finally { if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   if (!isAuthenticated || !active()) return null;
   const value = result?.key === key ? result.value : null;
+  const blocked = unconfirmed === key;
   return <section className="card p-6 mb-6" aria-labelledby="after-sales-heading">
     <div className="flex flex-wrap items-center justify-between gap-3 mb-3"><h2 id="after-sales-heading" className="font-bold text-lg">{t('售后申请')}</h2><button type="button" className="btn btn-secondary" disabled={busy || refreshing} onClick={() => void load()}>{t('刷新售后进度')}</button></div>
     <p className="text-sm text-amber-800 mb-4">{t('售后审核、退货运单和人工处理进度在此查看，不会自动退款')}</p>
@@ -111,15 +132,15 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
       <AfterSalesProgress value={value} />
       {value.status === 'approved' && value.type === 'return' && !value.return_submitted_at && !value.completed_at && <form className="space-y-3" onSubmit={submitTracking}>
         <p className="text-sm text-amber-800">{t('请先与商家确认退货地址和方式；运单提交后如需更正请联系商家')}</p>
-        <label className="block"><span className="block mb-2">{t('退货快递公司')}</span><input className="input" maxLength={60} required disabled={busy} value={parcel.company} onChange={event => { if (active() && !mutation.current) setParcel({ ...parcel, company: event.target.value }); }} /></label>
-        <label className="block"><span className="block mb-2">{t('退货运单号')}</span><input className="input" maxLength={100} required disabled={busy} value={parcel.tracking_number} onChange={event => { if (active() && !mutation.current) setParcel({ ...parcel, tracking_number: event.target.value }); }} /></label>
-        <button className="btn btn-primary" disabled={busy || refreshing}>{t('提交退货运单')}</button>
+        <label className="block"><span className="block mb-2">{t('退货快递公司')}</span><input className="input" maxLength={60} required disabled={busy || blocked} value={parcel.company} onChange={event => { if (active() && !mutation.current && recovery.current?.key !== key) setParcel({ ...parcel, company: event.target.value }); }} /></label>
+        <label className="block"><span className="block mb-2">{t('退货运单号')}</span><input className="input" maxLength={100} required disabled={busy || blocked} value={parcel.tracking_number} onChange={event => { if (active() && !mutation.current && recovery.current?.key !== key) setParcel({ ...parcel, tracking_number: event.target.value }); }} /></label>
+        <button className="btn btn-primary" disabled={busy || blocked || refreshing}>{t('提交退货运单')}</button>
       </form>}
-      {value.status === 'requested' && <button disabled={busy || refreshing} onClick={() => mutate(true)} className="btn btn-secondary">{t('撤回申请')}</button>}
+      {value.status === 'requested' && <button disabled={busy || blocked || refreshing} onClick={() => mutate(true)} className="btn btn-secondary">{t('撤回申请')}</button>}
     </div> : <form className="space-y-4" onSubmit={event => { event.preventDefault(); void mutate(false); }}>
-      <label className="block"><span className="block mb-2">{t('申请类型')}</span><select className="input" value={type} disabled={busy} onChange={event => { if (active() && !mutation.current) setType(event.target.value as 'refund' | 'return'); }}><option value="refund">{t('退款申请')}</option><option value="return">{t('退货申请')}</option></select></label>
-      <label className="block"><span className="block mb-2">{t('申请原因')}</span><textarea className="input min-h-[100px]" value={reason} maxLength={500} required disabled={busy} onChange={event => { if (active() && !mutation.current) setReason(event.target.value); }} /></label>
-      <button className="btn btn-primary" disabled={busy || refreshing}>{t(busy ? '处理中...' : '提交申请')}</button>
+      <label className="block"><span className="block mb-2">{t('申请类型')}</span><select className="input" value={type} disabled={busy || blocked} onChange={event => { if (active() && !mutation.current && recovery.current?.key !== key) setType(event.target.value as 'refund' | 'return'); }}><option value="refund">{t('退款申请')}</option><option value="return">{t('退货申请')}</option></select></label>
+      <label className="block"><span className="block mb-2">{t('申请原因')}</span><textarea className="input min-h-[100px]" value={reason} maxLength={500} required disabled={busy || blocked} onChange={event => { if (active() && !mutation.current && recovery.current?.key !== key) setReason(event.target.value); }} /></label>
+      <button className="btn btn-primary" disabled={busy || blocked || refreshing}>{t(busy ? '处理中...' : '提交申请')}</button>
     </form>}
     {loadError?.key === key && <p role="alert" className="mt-4 text-red-600">{t(loadError.message)}</p>}
     {notice?.key === key && notice.error && <p role="alert" className="mt-4 text-red-600">{t(notice.error)}</p>}
