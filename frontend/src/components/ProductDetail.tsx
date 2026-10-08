@@ -3,7 +3,7 @@
 import { useI18n } from '@/lib/i18n';
 import { localizedText, localizedSpecs, specSummary, specValue } from '@/lib/product-content';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi, type Product, type ProductReview } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
@@ -40,18 +40,21 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
 
   const [selectedSkuId, setSelectedSkuId] = useState<number | undefined>(undefined);
   const [loadedContext, setLoadedContext] = useState<string | null>(null);
+  const [loadFailure, setLoadFailure] = useState<{ context: string; message: string } | null>(null);
+  const [retryRevision, setRetryRevision] = useState(0);
+  const productRequest = useRef<{ context: string } | null>(null);
   const mounted = useRef(true);
   const addingRequest = useRef<string | null>(null);
   const productId = parseInt(params.id as string);
   const context = JSON.stringify([productId, sessionId, user?.user_id, isAuthenticated]);
   const currentContext = useRef(context);
   currentContext.current = context;
-  const isCurrentContext = () => {
+  const isCurrentContext = useCallback(() => {
     const auth = useAuthStore.getState();
     return mounted.current && currentContext.current === context &&
       auth.isAuthenticated === isAuthenticated && auth.sessionId === sessionId && auth.user?.user_id === user?.user_id &&
       storedSessionId() === (sessionId ?? null);
-  };
+  }, [context, isAuthenticated, sessionId, user?.user_id]);
 
   useEffect(() => {
     mounted.current = true;
@@ -62,33 +65,12 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     if (!isHydrated || !productId) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentContext();
-    setLoading(true);
-    setLoadedProduct(null);
-    setLoadedContext(null);
     setReviews([]);
     setRelatedProducts([]);
-    setQuantity(1);
-    setSelectedSkuId(undefined);
     setAdding(false);
     addingRequest.current = null;
     setIsFavorited(false);
     setFavoriting(false);
-    productApi.getDetail(productId).then((data) => {
-      if (!isCurrentRequest()) return;
-      setLoadedProduct(data.product);
-      setLoadedContext(context);
-    }).catch((error) => {
-      if (!isCurrentRequest()) return;
-      logger.error('加载商品失败:', error);
-      const status = requestFailure(error).response?.status;
-      // The server copy stays readable, with its controls locked, through a failure that does not say the product is gone.
-      if (initialProduct?.product_id === productId && status !== 404 && status !== 400) {
-        toast.error(t('加载商品失败'));
-        return;
-      }
-      toast.error(t("商品不存在"));
-      router.push('/products');
-    }).finally(() => { if (isCurrentRequest()) setLoading(false); });
     reviewApi.listByProduct(productId, { limit: 5 }).then((data) => {
       if (isCurrentRequest()) setReviews(data.reviews || []);
     }).catch((error) => { if (isCurrentRequest()) logger.error('加载评论失败:', error); });
@@ -104,7 +86,45 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       browseApi.record(productId).catch((error) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
     return () => { active = false; };
-  }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router]);
+  }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, isCurrentContext]);
+
+  // Retrying inventory must not repeat browse recording or the other context side effects above.
+  useEffect(() => {
+    if (!isHydrated || !productId) return;
+    let active = true;
+    const request = { context };
+    productRequest.current = request;
+    const isCurrentRequest = () => active && isCurrentContext() && productRequest.current === request;
+    setLoading(true);
+    setLoadedProduct(null);
+    setLoadedContext(null);
+    setLoadFailure(null);
+    setQuantity(1);
+    setSelectedSkuId(undefined);
+    productApi.getDetail(productId).then(data => {
+      if (!isCurrentRequest()) return;
+      setLoadedProduct(data.product);
+      setLoadedContext(context);
+    }).catch(error => {
+      if (!isCurrentRequest()) return;
+      logger.error('加载商品失败:', error);
+      const status = requestFailure(error).response?.status;
+      if (status === 404 || status === 400) {
+        toast.error(t('商品不存在'));
+        router.push('/products');
+      } else {
+        setLoadFailure({ context, message: '加载商品失败，请重试' });
+        toast.error(t('加载商品失败'));
+      }
+    }).finally(() => {
+      if (isCurrentRequest()) setLoading(false);
+      if (productRequest.current === request) productRequest.current = null;
+    });
+    return () => {
+      active = false;
+      if (productRequest.current === request) productRequest.current = null;
+    };
+  }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, retryRevision, context, isCurrentContext, t]);
 
   // Until the client has loaded the product for this context, show the server's copy with every control locked.
   const ready = isHydrated && !loading && loadedContext === context;
@@ -120,6 +140,16 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const image = selectedSku?.image || product?.main_image;
   const canPurchase = !hasSku || !!selectedSku;
   const soldOut = hasSku ? (selectedSku ? stock <= 0 : !skus.some(sku => Number(sku.stock) > 0)) : stock <= 0;
+  const errorNotice = loadFailure?.context === context && (
+    <div className="card p-6 mb-6 text-center" role="alert">
+      <p className="text-red-600">{t(loadFailure.message)}</p>
+      <button className="btn btn-secondary mt-4" disabled={loading} onClick={() => {
+        if (!isCurrentContext() || productRequest.current?.context === context) return;
+        productRequest.current = { context };
+        setRetryRevision(value => value + 1);
+      }}>{t('重新加载')}</button>
+    </div>
+  );
 
   const handleAddToCart = async (): Promise<boolean> => {
     if (!product || !ready || !isCurrentContext() || addingRequest.current) return false;
@@ -184,6 +214,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   };
 
   if (!product) {
+    if (errorNotice) return <div className="py-10"><div className="container-custom">{errorNotice}</div></div>;
     return (
       // Same element tree as the loaded layout below, so the grid is updated in place
       // instead of being replaced (a replaced grid counts as a large layout shift).
@@ -205,6 +236,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   return (
     <div className="py-10">
       <div className="container-custom">
+        {errorNotice}
         <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:gap-12">
           {/* 商品图片 */}
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">

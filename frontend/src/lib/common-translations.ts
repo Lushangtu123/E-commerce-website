@@ -288,4 +288,5 @@ export const commonTranslations: Record<string, string> = {
   '搜索商品': 'Search products',
   '确定': 'OK',
   '商品参数': 'Product specifications',
+  '加载商品失败，请重试': 'Unable to load this product. Please try again.',
 };

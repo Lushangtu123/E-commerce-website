@@ -10,7 +10,7 @@ import ProductListView from '@/components/ProductList';
 import { productApi, type Product, type ProductList } from '@/lib/api';
 import { createQueryClient } from '@/lib/query-client';
 import { fetchApiResult, type ApiResult } from '@/lib/site';
-import { captureHandler, deferred, render, settle } from './helpers';
+import { CommitLog, captureHandler, deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
@@ -138,5 +138,54 @@ describe('server-rendered product list', () => {
     await stalePrevious();
     await settle();
     expect(cards()).toEqual(['Page 3']);
+  });
+
+  it('falls back to the latest last page when the catalog shrinks without showing a false empty result', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const fallback = deferred<ProductList>();
+    let shrunk = false;
+    vi.mocked(productApi.list).mockImplementation(async params => {
+      const page = (params as { page: number }).page;
+      if (page === 3) { shrunk = true; return list([], 2); }
+      if (shrunk) return fallback.promise;
+      return list([`Page ${page}`], 3);
+    });
+    const commits: HTMLElement[] = [];
+    render(<CommitLog commits={commits}><ProductListView /></CommitLog>);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '3' }));
+    await settle();
+
+    expect(vi.mocked(productApi.list).mock.lastCall?.[0]).toMatchObject({ page: 2 });
+    expect(commits.some(commit => commit.textContent?.includes('暂无商品'))).toBe(false);
+    await act(async () => fallback.resolve(list(['Remaining page two'], 2)));
+    await settle();
+    expect(cards()).toEqual(['Remaining page two']);
+    expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled();
+  });
+
+  it('returns to page one when all products disappear, then shows the true empty result without looping', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    let empty = false;
+    vi.mocked(productApi.list).mockImplementation(async params => {
+      if ((params as { page: number }).page === 2) empty = true;
+      return empty ? { ...list([], 0), total: 0 } : list(['Initial products'], 2);
+    });
+    render(<ProductListView />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await settle();
+
+    expect(vi.mocked(productApi.list).mock.lastCall?.[0]).toMatchObject({ page: 1 });
+    expect(productApi.list).toHaveBeenCalledTimes(3);
+    expect(screen.getByText('暂无商品')).toBeInTheDocument();
+  });
+
+  it('shows a truly empty search on page one without requesting it again', async () => {
+    vi.mocked(productApi.list).mockResolvedValue({ ...list([], 0), total: 0 });
+    render(<ProductListView />);
+    await settle();
+    expect(screen.getByText('暂无商品')).toBeInTheDocument();
+    expect(productApi.list).toHaveBeenCalledTimes(1);
   });
 });

@@ -341,9 +341,27 @@ integration('真实 MySQL 订单事务及并发', () => {
       cancelTimeoutOrder(orderId),
     ]);
     const status = await state(orderId);
-    expect([OrderStatus.PAID, OrderStatus.CANCELLED]).toContain(status);
-    expect(await product()).toMatchObject(status === OrderStatus.PAID
-      ? { stock: 8, sales_count: 2 } : { stock: 10, sales_count: 0 });
+    expect(status).toBe(OrderStatus.CANCELLED);
+    expect(await product()).toMatchObject({ stock: 10, sales_count: 0 });
+  });
+
+  test.each([1800, 1801])('数据库确认满%s秒后付款拒绝，库存销量和券保持不变', async seconds => {
+    await receivedCoupon();
+    const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 1 }], undefined, undefined, 1);
+    await db.query('UPDATE orders SET created_at = DATE_SUB(NOW(), INTERVAL ? SECOND) WHERE order_id = ?', [seconds, orderId]);
+    await expect(transitionOrder(orderId, OrderStatus.PAID, { userId: 1 })).rejects.toThrow('订单支付已超时');
+    expect(await state(orderId)).toBe(OrderStatus.PENDING);
+    expect(await product()).toMatchObject({ stock: 9, sales_count: 0 });
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+    expect(coupons[0]).toMatchObject({ status: 2, order_id: orderId });
+  });
+
+  test('尚未满30分钟的数据库订单可付款', async () => {
+    const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 1 }]);
+    await db.query('UPDATE orders SET created_at = DATE_SUB(NOW(), INTERVAL 29 MINUTE) WHERE order_id = ?', [orderId]);
+    await transitionOrder(orderId, OrderStatus.PAID, { userId: 1 });
+    expect(await state(orderId)).toBe(OrderStatus.PAID);
+    expect(await product()).toMatchObject({ stock: 9, sales_count: 1 });
   });
 
   test('重复支付不重复计销量，已支付订单不再允许取消', async () => {
@@ -517,8 +535,9 @@ integration('真实 MySQL 订单事务及并发', () => {
     await Promise.allSettled([transitionOrder(orderId, OrderStatus.PAID, { userId: 1 }), cancelTimeoutOrder(orderId)]);
     const status = await state(orderId);
     const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
-    expect(coupons[0]).toMatchObject(status === OrderStatus.PAID ? { status: 2, order_id: orderId } : { status: 1, order_id: null });
-    expect(await product()).toMatchObject(status === OrderStatus.PAID ? { stock: 9, sales_count: 1 } : { stock: 10, sales_count: 0 });
+    expect(status).toBe(OrderStatus.CANCELLED);
+    expect(coupons[0]).toMatchObject({ status: 1, order_id: null });
+    expect(await product()).toMatchObject({ stock: 10, sales_count: 0 });
   });
 
   test.each([

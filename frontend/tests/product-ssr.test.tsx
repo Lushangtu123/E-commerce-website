@@ -1,11 +1,11 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import ProductPage from '@/app/products/[id]/page';
 import ProductDetail from '@/components/ProductDetail';
-import { cartApi, favoriteApi, productApi, type Product } from '@/lib/api';
+import { browseApi, cartApi, favoriteApi, productApi, type Product } from '@/lib/api';
 import { fetchApiResult, type ApiResult } from '@/lib/site';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
@@ -145,13 +145,92 @@ describe('server-rendered product page', () => {
   });
 
   it.each([
+    ['the server copy', serverCopy],
     ['no server copy', undefined],
     ["another product's server copy", { ...serverCopy, product_id: 2 }],
-  ])('still leaves a page with %s when the client cannot load the product', async (_, initialProduct) => {
-    vi.mocked(productApi.getDetail).mockRejectedValue(new Error('Network Error'));
+  ])('recovers after a failed client load with %s without recording another browse', async (_, initialProduct) => {
+    const retry = deferred<Detail>();
+    vi.mocked(productApi.getDetail).mockRejectedValueOnce(new Error('Network Error')).mockReturnValueOnce(retry.promise);
     useAuthStore.getState().login(customer, 'buyer-session');
     render(<ProductDetail initialProduct={initialProduct} />);
     await settle();
-    expect(router.push).toHaveBeenCalledWith('/products');
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载商品失败，请重试');
+    const retryRead = captureHandler(screen.getByRole('button', { name: '重新加载' }));
+    void retryRead();
+    void retryRead();
+    await settle();
+    expect(productApi.getDetail).toHaveBeenCalledTimes(2);
+    expect(browseApi.record).toHaveBeenCalledTimes(1);
+    if (initialProduct === serverCopy) expect(addButton()).toBeDisabled();
+    expect(cartApi.add).not.toHaveBeenCalled();
+
+    await act(async () => retry.resolve({ product: { ...serverCopy, price: '12.00', stock: 2 } }));
+    await settle();
+    expect(screen.getByText('¥12.00')).toBeInTheDocument();
+    expect(screen.getByText('库存 2 件')).toBeInTheDocument();
+    expect(addButton()).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(browseApi.record).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a repeated failure retryable and still leaves a product deleted during retry', async () => {
+    vi.mocked(productApi.getDetail).mockRejectedValueOnce(new Error('Offline'))
+      .mockRejectedValueOnce(new Error('Still offline'))
+      .mockRejectedValueOnce(Object.assign(apiError('商品不存在'), { response: { status: 404 } }));
+    useAuthStore.getState().login(customer, 'buyer-session');
+    render(<ProductDetail initialProduct={serverCopy} />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    expect(addButton()).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载商品失败，请重试');
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/products');
+    expect(browseApi.record).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['success', 'failure'] as const)('ignores a late product retry %s after the customer changes', async outcome => {
+    const retry = deferred<Detail>();
+    vi.mocked(productApi.getDetail).mockRejectedValueOnce(new Error('Offline')).mockReturnValueOnce(retry.promise)
+      .mockResolvedValueOnce({ product: { ...serverCopy, title: 'Current customer copy', price: '7.00' } });
+    useAuthStore.getState().login(customer, 'buyer-session');
+    render(<ProductDetail initialProduct={serverCopy} />);
+    await settle();
+    const staleRetry = captureHandler(screen.getByRole('button', { name: '重新加载' }));
+    void staleRetry();
+    await settle();
+    act(() => useAuthStore.getState().login({ ...customer, user_id: 2 }, 'second-session'));
+    await settle();
+
+    await act(async () => {
+      if (outcome === 'success') retry.resolve({ product: { ...serverCopy, title: 'Old customer copy' } });
+      else retry.reject(new Error('Old customer failed'));
+    });
+    await staleRetry();
+    await settle();
+    expect(screen.getByText('Current customer copy')).toBeInTheDocument();
+    expect(screen.queryByText('Old customer copy')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(productApi.getDetail).toHaveBeenCalledTimes(3);
+    expect(addButton()).toBeEnabled();
+  });
+
+  it.each(['storage', 'unmount'] as const)('ignores a late product retry after a %s change', async change => {
+    const retry = deferred<Detail>();
+    vi.mocked(productApi.getDetail).mockRejectedValueOnce(new Error('Offline')).mockReturnValueOnce(retry.promise);
+    useAuthStore.getState().login(customer, 'buyer-session');
+    const view = render(<ProductDetail initialProduct={serverCopy} />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    if (change === 'storage') localStorage.setItem('session', 'other-session');
+    else view.unmount();
+
+    await act(async () => retry.resolve({ product: { ...serverCopy, title: 'Ignored retry copy' } }));
+    expect(screen.queryByText('Ignored retry copy')).not.toBeInTheDocument();
+    expect(cartApi.add).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
   });
 });

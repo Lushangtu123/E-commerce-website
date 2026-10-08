@@ -16,6 +16,7 @@
  *   LOG_FILE    日志文件路径（可选）
  */
 import pino from 'pino';
+import { safeError, safeLogArguments } from './log-safety';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const level = process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug');
@@ -43,7 +44,11 @@ if (process.env.LOG_FILE) {
 }
 
 // 有 target 时走 worker 线程 transport，否则直接输出到 stdout
-const logger =
-  targets.length > 0 ? pino({ level }, pino.transport({ targets })) : pino({ level });
+const options: pino.LoggerOptions = {
+  level,
+  serializers: { err: safeError, error: safeError },
+  hooks: { logMethod(args, method) { method.apply(this, safeLogArguments(args) as Parameters<typeof method>); } },
+};
+const logger = targets.length > 0 ? pino(options, pino.transport({ targets })) : pino(options);
 
 export default logger;

@@ -115,6 +115,16 @@ describe('language preference', () => {
 });
 
 describe('translation', () => {
+  it.each([
+    ['加载购物车失败，请重试', 'Unable to load your cart. Please try again.'],
+    ['加载商品失败，请重试', 'Unable to load this product. Please try again.'],
+    ['订单支付已超时，请重新下单', 'The payment deadline has passed. Please place a new order.'],
+    ['健康检查请求过于频繁，请稍后再试', 'Too many health checks. Please try again later.'],
+  ])('translates recovery message %s', (source, expected) => {
+    expect(translate(source, {}, 'en')).toBe(expected);
+    expect(translate(source, {}, 'zh-CN')).toBe(source);
+  });
+
   it('interpolates values literally and follows language changes', () => {
     expect(translate('登录')).toBe('登录');
     useLocaleStore.getState().setLocale('en');

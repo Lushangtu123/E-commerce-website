@@ -285,4 +285,6 @@ export const errorTranslations: Record<string, string> = {
   '暂无浏览历史': 'No browsing history',
   '暂无搜索历史': 'No search history',
   '评论成功': 'Review submitted successfully',
+  '订单支付已超时，请重新下单': 'The payment deadline has passed. Please place a new order.',
+  '健康检查请求过于频繁，请稍后再试': 'Too many health checks. Please try again later.',
 };

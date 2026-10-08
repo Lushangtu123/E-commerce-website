@@ -42,7 +42,9 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
     queryFn: () => productApi.list({ keyword, sort, page, limit: LIMIT }),
     initialData: seeded,
   });
-  const data = query.data;
+  const lastPage = Math.max(1, query.data?.totalPages || 0);
+  const beyondLastPage = query.isSuccess && page > lastPage;
+  const data = beyondLastPage ? undefined : query.data;
   const products = data?.products || [];
   const totalPages = data?.totalPages || 0;
   // A failed refresh keeps the products already shown; only a search with nothing to show reports the error in place.
@@ -50,6 +52,11 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   const loadError = !data && query.isError;
   const loading = !data && !loadError;
   const pagination = { page, totalPages };
+
+  // Catalog edits may remove the page being read. Hide that response until the valid page loads.
+  useEffect(() => {
+    if (beyondLastPage && currentScope.current === scope) setPageState({ keyword, sort, page: lastPage });
+  }, [beyondLastPage, keyword, sort, lastPage, scope]);
 
   useEffect(() => {
     if (!query.error) return;

@@ -34,6 +34,7 @@ let expectedCheckoutFailure = false;
 const checkoutEndpoint = 'http://127.0.0.1:3101/api/orders';
 const expectedCheckoutErrors = [/^Failed to load resource: net::ERR_FAILED$/, /^Failed to load resource: the server responded with a status of (408|429)(?: \([^)]*\))?$/];
 let expectedOrderDetailFailure;
+let expectedShoppingFailure;
 function watchConsole(page, label) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -42,6 +43,8 @@ function watchConsole(page, label) {
     if (expectedCheckoutFailure && message.location().url === checkoutEndpoint && expectedCheckoutErrors.some(pattern => pattern.test(text))) return;
     if (expectedOrderDetailFailure &&
         (message.location().url === expectedOrderDetailFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载订单失败:/.test(text))) return;
+    if (expectedShoppingFailure &&
+        (message.location().url === expectedShoppingFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载(?:商品|购物车)失败:/.test(text))) return;
     consoleErrors.push(`[${label}] ${new URL(page.url()).pathname}: ${text.slice(0, 300)}`);
   });
 }
@@ -117,10 +120,27 @@ async function visibleText(page, text) {
     assert.equal(Number(product.original_price), 100);
   }
   console.log('PASS browser catalog card, search, hot and related products share the cheapest SKU promotion price');
+  const productEndpoint = 'http://127.0.0.1:3101/api/products/2';
+  let productAttempts = 0;
+  const failProductOnce = route => ++productAttempts === 1
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) })
+    : route.continue();
+  expectedShoppingFailure = productEndpoint;
+  await page.route(productEndpoint, failProductOnce);
   await page.goto('http://127.0.0.1:3100/products/2');
   const variant = page.getByLabel('商品规格', { exact: true });
   await variant.waitFor({ state: 'visible' });
+  await visibleText(page, '加载商品失败，请重试');
+  assert.equal(await variant.isDisabled(), true, 'stale inventory stays locked after a 503');
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await visibleText(page, 'Unable to load this product. Please try again.');
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('#product-sku')?.disabled);
+  assert.equal(productAttempts, 2, 'one explicit retry reloads fresh inventory');
+  await page.unroute(productEndpoint, failProductOnce);
+  expectedShoppingFailure = undefined;
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser product 503 retains readable content and bilingual retry reloads inventory');
   const pricing = page.locator('span.text-3xl').locator('..');
   assert.equal(await pricing.locator('.line-through').count(), 0, 'no parent discount before selecting a variant');
   await variant.selectOption('201');
@@ -149,6 +169,8 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '保存地址', exact: true }).click();
   await visibleText(page, '仅测试地址1号');
   await page.goto('http://127.0.0.1:3100/products/1');
+  // SSR exposes the language select before its change handler hydrates. Fresh inventory unlocks this button.
+  await page.getByRole('button', { name: '加入购物车', exact: true }).click({ trial: true });
   await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
   await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
   await visibleText(page, 'Browser English description');
@@ -161,9 +183,24 @@ async function visibleText(page, text) {
   console.log('PASS browser bilingual product name, description, attributes and English search');
   await page.getByRole('button', { name: '加入购物车', exact: true }).click();
   await visibleText(page, '已加入购物车');
+  const cartEndpoint = 'http://127.0.0.1:3101/api/cart';
+  let cartAttempts = 0;
+  const failCartOnce = route => ++cartAttempts === 1
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) })
+    : route.continue();
+  expectedShoppingFailure = cartEndpoint;
+  await page.route(cartEndpoint, failCartOnce);
   await page.goto('http://127.0.0.1:3100/cart');
+  await visibleText(page, '加载购物车失败，请重试');
   await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await visibleText(page, 'Unable to load your cart. Please try again.');
+  assert.equal(await page.getByText('Your cart is empty', { exact: true }).count(), 0, 'failed loading never claims the cart is empty');
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(cartAttempts, 2);
+  await page.unroute(cartEndpoint, failCartOnce);
+  expectedShoppingFailure = undefined;
+  console.log('PASS browser cart 503 displays an error and explicit retry restores real items');
   await page.getByRole('checkbox', { name: 'Select Browser checkout product', exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
   console.log('PASS browser bilingual cart content');
