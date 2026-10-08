@@ -53,6 +53,34 @@ describe('header search history', () => {
     await settle();
   }
 
+  it.each(['zh-CN', 'en'] as const)('rejects an overlong search before navigation or recording (%s)', async locale => {
+    useAuthStore.getState().login(userA, 'session-A');
+    useLocaleStore.setState({ locale });
+    await setup(async () => ({ history: [] }));
+    const input = screen.getByRole('textbox', { name: locale === 'en' ? 'Search products' : '搜索商品' });
+    // Bypass the native limit to prove the submit handler also protects the API contract.
+    fireEvent.change(input, { target: { value: 'x'.repeat(101) } });
+    fireEvent.submit(input.closest('form')!);
+    await settle();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(searchApi.record).not.toHaveBeenCalled();
+    expect(errors).toContain(locale === 'en' ? 'Search keywords must not exceed 100 characters' : '搜索关键词最多100个字符');
+  });
+
+  it('limits normal typing to 100 characters and still submits the boundary keyword', async () => {
+    useAuthStore.getState().login(userA, 'session-A');
+    await setup(async () => ({ history: [] }));
+    const input = screen.getByRole('textbox', { name: '搜索商品' });
+    expect(input).toHaveAttribute('maxlength', '100');
+    const typing = userEvent.setup();
+    await typing.type(input, 'x'.repeat(101));
+    expect(input).toHaveValue('x'.repeat(100));
+    await typing.click(screen.getByRole('button', { name: '搜索' }));
+    await settle();
+    expect(router.push).toHaveBeenCalledWith(`/products?keyword=${'x'.repeat(100)}`);
+    expect(searchApi.record).toHaveBeenCalledWith('x'.repeat(100));
+  });
+
   it.each(['zh-CN', 'en'] as const)('deletes a history entry without submitting the populated search form (%s)', async locale => {
     useAuthStore.getState().login(userA, 'session-A');
     useLocaleStore.setState({ locale });

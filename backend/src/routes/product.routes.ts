@@ -60,7 +60,7 @@ router.get('/hot', ProductController.getHotProducts);
  *         description: 按分类筛选
  *       - name: keyword
  *         in: query
- *         schema: { type: string }
+ *         schema: { type: string, maxLength: 100 }
  *       - name: min_price
  *         in: query
  *         schema: { type: number }
