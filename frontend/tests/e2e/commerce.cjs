@@ -37,6 +37,7 @@ let expectedOrderDetailFailure;
 let expectedShoppingFailure;
 let expectedReadFailure;
 let expectedFavoriteWriteEndpoint;
+let expectedRecoveryWrite;
 function watchConsole(page, label) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -44,6 +45,7 @@ function watchConsole(page, label) {
     if (expectedLoginFailure && expectedLoginErrors.some(pattern => pattern.test(text))) return;
     if (expectedCheckoutFailure && message.location().url === checkoutEndpoint && expectedCheckoutErrors.some(pattern => pattern.test(text))) return;
     if (expectedFavoriteWriteEndpoint && message.location().url === expectedFavoriteWriteEndpoint && /^Failed to load resource: net::ERR_FAILED$/.test(text)) return;
+    if (expectedRecoveryWrite && (message.location().url === expectedRecoveryWrite.endpoint && /^Failed to load resource: net::ERR_FAILED$/.test(text) || expectedRecoveryWrite.prefix && text.startsWith(expectedRecoveryWrite.prefix))) return;
     if (expectedOrderDetailFailure &&
         (message.location().url === expectedOrderDetailFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载订单失败:/.test(text))) return;
     if (expectedShoppingFailure &&
@@ -172,10 +174,26 @@ async function localPlatformScripts(context) {
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await page.getByText('浏览器优惠券1', { exact: true }).waitFor({ state: 'visible' });
   await visibleText(page, '第 2 / 2 页');
-  const couponClaim = page.waitForResponse(response => response.url() === 'http://127.0.0.1:3101/api/coupons/receive' && response.request().method() === 'POST');
+  const couponWriteEndpoint = 'http://127.0.0.1:3101/api/coupons/receive';
+  const claimBodies = [];
+  const lostClaim = async route => {
+    claimBodies.push(route.request().postDataJSON());
+    const response = await route.fetch(); assert.equal(response.status(), 200);
+    return claimBodies.length === 1 ? route.abort('failed') : route.fulfill({ response });
+  };
+  expectedRecoveryWrite = { endpoint: couponWriteEndpoint, prefix: '领取失败:' };
+  await page.route(couponWriteEndpoint, lostClaim);
   await page.getByRole('button', { name: '立即领取', exact: true }).click();
-  assert.equal((await couponClaim).status(), 200);
+  await visibleText(page, '领取结果尚未确认，重试不会重复领取');
+  await page.reload();
+  await page.getByRole('button', { name: '重试领取', exact: true }).click();
   await visibleText(page, '领取成功！');
+  assert.equal(claimBodies.length, 2); assert.ok(claimBodies[0].claim_key);
+  assert.equal(claimBodies[1].claim_key, claimBodies[0].claim_key);
+  const claimReceipts = (await (await context.request.get('http://127.0.0.1:3101/api/coupons/my/list')).json()).data;
+  assert.equal(claimReceipts.filter(value => value.coupon_id === claimBodies[0].coupon_id).length, 1);
+  await page.unroute(couponWriteEndpoint, lostClaim); expectedRecoveryWrite = undefined;
+  console.log('PASS browser lost coupon response recovers one real receipt after last allocation disappears and reload');
   await visibleText(page, '共 50 张优惠券');
   await page.getByText('浏览器优惠券51', { exact: true }).waitFor({ state: 'visible' });
   assert.equal(await page.getByText('浏览器优惠券1', { exact: true }).count(), 0);

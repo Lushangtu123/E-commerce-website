@@ -3,6 +3,7 @@
  * 覆盖：领取优惠券（按 ID / 按 code）、异常分支
  */
 import { Response } from 'express';
+import { CouponClaimError } from '../../utils/coupon-claim';
 
 jest.mock('../../models/coupon.model', () => ({
   CouponModel: {
@@ -88,7 +89,7 @@ describe('receiveCoupon 领取优惠券', () => {
   });
 
   test('已领完时返回 400（model 抛错透出）', async () => {
-    CouponModel.receiveCoupon.mockRejectedValue(new Error('优惠券已领完'));
+    CouponModel.receiveCoupon.mockRejectedValue(new CouponClaimError('优惠券已领完'));
 
     const req = { userId: 7, body: { coupon_id: 10 } } as any;
     const res = mockRes();
@@ -102,7 +103,7 @@ describe('receiveCoupon 领取优惠券', () => {
   });
 
   test('达领取上限时返回 400', async () => {
-    CouponModel.receiveCoupon.mockRejectedValue(new Error('已达领取上限'));
+    CouponModel.receiveCoupon.mockRejectedValue(new CouponClaimError('已达领取上限'));
 
     const req = { userId: 7, body: { coupon_id: 10 } } as any;
     const res = mockRes();
@@ -114,4 +115,11 @@ describe('receiveCoupon 领取优惠券', () => {
       expect.objectContaining({ message: '已达领取上限' })
     );
   });
+});
+
+test('未知数据库失败返回500且不把底层错误当成确定领取失败', async () => {
+  CouponModel.receiveCoupon.mockRejectedValue(new Error('private database failure'));
+  const res = mockRes(); await CouponController.receiveCoupon({ userId: 7, body: { coupon_id: 10 } } as any, res);
+  expect(res.status).toHaveBeenCalledWith(500);
+  expect(res.json).toHaveBeenCalledWith({ success: false, message: '领取优惠券失败' });
 });

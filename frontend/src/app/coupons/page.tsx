@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
+import { clearPendingCouponClaim, listPendingCouponClaims, prepareCouponClaim, readPendingCouponClaim } from '@/lib/pending-coupon-claim';
 
 const pageSize = 50;
 
@@ -38,6 +39,7 @@ export default function CouponsPage() {
   const beyondLastPage = query.data !== undefined && page > lastPage;
   const shown = beyondLastPage ? undefined : query.data;
   const coupons = shown?.coupons || [];
+  const orphanClaims = listPendingCouponClaims(sessionKey).filter(claim => !coupons.some(coupon => coupon.coupon_id === claim.couponId));
   const error = query.error ? requestFailure(query.error).response?.data?.message || requestFailure(query.error).response?.data?.error || '加载优惠券失败，请重试' : undefined;
   const loading = !shown && !error;
   const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey && shown !== undefined;
@@ -59,15 +61,19 @@ export default function CouponsPage() {
     }
   }, [isHydrated, isAuthenticated, router]);
 
-  const handleReceive = async (coupon: Coupon) => {
-    if (!isCurrentScope() || claims.current.has(coupon.coupon_id) || coupon.remain_quantity <= 0 || !coupons.some(row => row.coupon_id === coupon.coupon_id)) return;
+  const handleReceive = async (coupon: Pick<Coupon, 'coupon_id' | 'remain_quantity'>, recovery = false) => {
+    if (!isCurrentSession() || claims.current.has(coupon.coupon_id)) return;
+    if (!recovery && (!isCurrentScope() || coupon.remain_quantity <= 0 || !coupons.some(row => row.coupon_id === coupon.coupon_id))) return;
+    const claimKey = recovery ? readPendingCouponClaim(sessionKey, coupon.coupon_id) : prepareCouponClaim(sessionKey, coupon.coupon_id);
+    if (!claimKey) { toast.error(translate('无法保存领取请求，请检查浏览器存储后重试')); return; }
     const operation = {};
     claims.current.set(coupon.coupon_id, operation);
     setPending(prev => ({ session: sessionKey, ids: new Set(prev.session === sessionKey ? prev.ids : []).add(coupon.coupon_id) }));
 
     try {
-      await couponApi.receive(coupon.code);
+      await couponApi.receive(coupon.coupon_id, claimKey);
       if (!isCurrentSession()) return;
+      clearPendingCouponClaim(sessionKey, coupon.coupon_id, claimKey);
       toast.success(translate('领取成功！'));
       
       // Exhausted coupons disappear from the available list; refresh its total and current page together.
@@ -75,7 +81,13 @@ export default function CouponsPage() {
     } catch (error) {
       if (!isCurrentSession()) return;
       logger.error('领取失败:', error);
-      const message = requestFailure(error).response?.data?.message || '领取失败';
+      const failure = requestFailure(error);
+      const status = failure.response?.status;
+      // Preserve the original identity after a timeout, lost response or server failure.
+      // A deliberate retry can then recover the original receipt without claiming another coupon.
+      const uncertain = !status || status === 408 || status === 429 || status >= 500;
+      if (!uncertain && status !== 409) clearPendingCouponClaim(sessionKey, coupon.coupon_id, claimKey);
+      const message = uncertain ? '领取结果尚未确认，重试不会重复领取' : failure.response?.data?.message || '领取失败';
       toast.error(translate(message));
     } finally {
       if (claims.current.get(coupon.coupon_id) === operation) {
@@ -162,6 +174,15 @@ export default function CouponsPage() {
           </div>
         </div>
 
+        {orphanClaims.length > 0 && <section className="card p-6 mb-6 space-y-3" aria-label={t('待确认的优惠券领取')}>
+          <h2 className="font-semibold">{t('待确认的优惠券领取')}</h2>
+          <p className="text-sm text-gray-600">{t('领取结果尚未确认，重试不会重复领取')}</p>
+          {orphanClaims.map(claim => <div className="flex items-center justify-between gap-3" key={claim.couponId}>
+            <span>{t('优惠券编号 {id}', { id: claim.couponId })}</span>
+            <button type="button" className="btn btn-secondary" disabled={receivingIds.has(claim.couponId)} onClick={() => handleReceive({ coupon_id: claim.couponId, remain_quantity: 0 }, true)}>{t(receivingIds.has(claim.couponId) ? '领取中...' : '重试领取')}</button>
+          </div>)}
+        </section>}
+
         {/* Coupons Grid */}
         {loading ? <div className="text-center py-12" role="status">{t('加载中...')}</div> : error ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm" role="alert">
@@ -232,6 +253,8 @@ export default function CouponsPage() {
                       ? t('领取中...')
                       : coupon.remain_quantity === 0
                       ? t('已领完')
+                      : readPendingCouponClaim(sessionKey, coupon.coupon_id)
+                      ? t('重试领取')
                       : t('立即领取')}
                   </button>
                 </div>

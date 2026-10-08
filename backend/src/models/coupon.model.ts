@@ -6,6 +6,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { calculateDiscountCents, couponMoneyToCents } from '../utils/coupon-discount';
 import logger from '../utils/logger';
+import { CouponClaimError, normalizeCouponClaimKey } from '../utils/coupon-claim';
 
 // 优惠券类型
 export enum CouponType {
@@ -173,11 +174,13 @@ export class CouponModel {
    */
   static async receiveCoupon(
     userId: number,
-    couponId: number
+    couponId: number,
+    claimKey?: string
   ): Promise<number> {
     if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(couponId) || couponId <= 0) {
       throw new RangeError('优惠券ID无效');
     }
+    const key = normalizeCouponClaimKey(claimKey);
     const connection = await getPool().getConnection();
 
     try {
@@ -187,7 +190,20 @@ export class CouponModel {
       const [users] = await connection.execute<RowDataPacket[]>(
         'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]
       );
-      if (!users.length) throw new Error('用户不存在');
+      if (!users.length) throw new CouponClaimError('用户不存在');
+
+      // The user mutex makes this the first consistent read after any preceding claim commits.
+      // Read an existing receipt before eligibility checks: a retry must work after expiry or use.
+      if (key !== undefined) {
+        const [receipts] = await connection.execute<RowDataPacket[]>(
+          'SELECT user_coupon_id, coupon_id FROM user_coupons WHERE user_id = ? AND claim_key = ?', [userId, key]
+        );
+        if (receipts[0]) {
+          if (receipts[0].coupon_id !== couponId) throw new CouponClaimError('领取请求号已用于其他优惠券', 409);
+          await connection.commit();
+          return receipts[0].user_coupon_id;
+        }
+      }
 
       // 检查优惠券
       const [couponRows] = await connection.execute<RowDataPacket[]>(
@@ -199,14 +215,14 @@ export class CouponModel {
       );
 
       if (couponRows.length === 0) {
-        throw new Error('优惠券不存在或已失效');
+        throw new CouponClaimError('优惠券不存在或已失效');
       }
 
       const coupon = couponRows[0] as Coupon;
 
       // 检查剩余数量
       if (coupon.remain_quantity <= 0) {
-        throw new Error('优惠券已领完');
+        throw new CouponClaimError('优惠券已领完');
       }
 
       // 检查用户领取次数
@@ -217,7 +233,7 @@ export class CouponModel {
       );
 
       if (userCouponRows[0].count >= coupon.per_user_limit) {
-        throw new Error('已达领取上限');
+        throw new CouponClaimError('已达领取上限');
       }
 
       // NOW() is fixed at statement start; the preceding row lock may have waited past expiry.
@@ -228,13 +244,13 @@ export class CouponModel {
            AND NOW() >= start_time AND NOW() < end_time`,
         [couponId]
       );
-      if (deduction.affectedRows !== 1) throw new Error('优惠券不存在或已失效');
+      if (deduction.affectedRows !== 1) throw new CouponClaimError('优惠券不存在或已失效');
 
       // 创建用户优惠券
       const [result] = await connection.execute<ResultSetHeader>(
-        `INSERT INTO user_coupons (user_id, coupon_id, expired_at)
-         VALUES (?, ?, ?)`,
-        [userId, couponId, coupon.end_time]
+        `INSERT INTO user_coupons (user_id, coupon_id, expired_at${key === undefined ? '' : ', claim_key'})
+         VALUES (?, ?, ?${key === undefined ? '' : ', ?'})`,
+        [userId, couponId, coupon.end_time, ...(key === undefined ? [] : [key])]
       );
 
       await connection.commit();

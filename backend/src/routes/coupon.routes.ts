@@ -74,6 +74,7 @@ router.get('/:id', authMiddleware, CouponController.getCouponDetail);
  *             properties:
  *               coupon_id: { type: integer, description: 优惠券 ID（与 code 二选一） }
  *               code: { type: string, description: 优惠券代码（与 coupon_id 二选一） }
+ *               claim_key: { type: string, format: uuid, description: 同一次领取重试复用此请求号；旧客户端可省略 }
  *     responses:
  *       200:
  *         description: 领取成功
@@ -82,6 +83,10 @@ router.get('/:id', authMiddleware, CouponController.getCouponDetail);
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       409:
+ *         description: 请求号已用于其他优惠券
+ *       500:
+ *         description: 领取结果可能未确认；使用相同请求号重试
  */
 router.post('/receive', authMiddleware, CouponController.receiveCoupon);
 
