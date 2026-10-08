@@ -1,5 +1,6 @@
 import { getPool, query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { PoolConnection } from 'mysql2/promise';
 import { normalizePurchaseItems, pricePurchaseItems, PurchaseError, MAX_QUANTITY } from '../services/purchase-items.service';
 import { SpecsTranslation } from '../utils/product-i18n';
 
@@ -24,15 +25,30 @@ export interface CartItem {
 }
 
 export class CartModel {
-  private static async write(userId: number, productId: number, quantity: number, skuId: number | undefined, add: boolean): Promise<boolean> {
-    const [item] = normalizePurchaseItems([{ product_id: productId, sku_id: skuId, quantity }]);
+  private static async transaction<T>(userId: number, work: (connection: PoolConnection) => Promise<T>): Promise<T> {
     const connection = await getPool().getConnection();
     try {
       await connection.beginTransaction();
-      // Checkout and cart writes share the same parent -> SKU -> cart lock order.
+      // Match checkout's user -> product -> SKU order. This also serializes remove/clear
+      // with writes, so a deleted item's old quantity cannot be restored by a late add.
+      const [users] = await connection.execute<RowDataPacket[]>('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]);
+      if (!users.length) throw new PurchaseError('用户不存在', 404);
+      const result = await work(connection);
+      await connection.commit();
+      return result;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally { connection.release(); }
+  }
+
+  private static async write(userId: number, productId: number, quantity: number, skuId: number | undefined, add: boolean): Promise<boolean> {
+    const [item] = normalizePurchaseItems([{ product_id: productId, sku_id: skuId, quantity }]);
+    return this.transaction(userId, async connection => {
       const { orderItems } = await pricePurchaseItems(connection, [item], true);
+      // First consistent read after the user mutex; missing rows must not take gap locks.
       const [existing] = await connection.execute<RowDataPacket[]>(
-        'SELECT quantity FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ? FOR UPDATE',
+        'SELECT quantity FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ?',
         [userId, productId, skuId ?? 0]
       );
       const total = quantity + (add ? Number(existing[0]?.quantity || 0) : 0);
@@ -50,12 +66,8 @@ export class CartModel {
           [total, userId, productId, skuId ?? 0]
         );
       }
-      await connection.commit();
       return result.affectedRows > 0;
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally { connection.release(); }
+    });
   }
 
   static async add(userId: number, productId: number, quantity: number, skuId?: number): Promise<boolean> {
@@ -92,14 +104,18 @@ export class CartModel {
   }
 
   static async remove(userId: number, productId: number, skuId?: number): Promise<boolean> {
-    const result = await query<ResultSetHeader>(
-      'DELETE FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ?', [userId, productId, skuId ?? 0]
-    );
-    return result.affectedRows > 0;
+    return this.transaction(userId, async connection => {
+      const [result] = await connection.execute<ResultSetHeader>(
+        'DELETE FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ?', [userId, productId, skuId ?? 0]
+      );
+      return result.affectedRows > 0;
+    });
   }
 
   static async clear(userId: number): Promise<boolean> {
-    const result = await query<ResultSetHeader>('DELETE FROM cart WHERE user_id = ?', [userId]);
-    return result.affectedRows > 0;
+    return this.transaction(userId, async connection => {
+      const [result] = await connection.execute<ResultSetHeader>('DELETE FROM cart WHERE user_id = ?', [userId]);
+      return result.affectedRows > 0;
+    });
   }
 }
