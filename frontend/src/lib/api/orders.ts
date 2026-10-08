@@ -96,7 +96,7 @@ export interface PaymentSettings { mode: 'disabled' | 'demo'; canPay: boolean; i
 export const paymentApi = { getSettings: () => api.get<unknown, PaymentSettings>('/payments/settings') };
 
 export interface AfterSalesRequest {
-  request_id: number; order_id: number; order_no?: string; username?: string;
+  request_id: number; order_id: number; order_no?: string; user_id?: number; username?: string | null;
   type: 'refund' | 'return'; reason: string; status: 'requested' | 'approved' | 'rejected' | 'withdrawn';
   review_note?: string | null; created_at?: string; reviewed_at?: string | null;
   total_amount?: Money; payment_method?: string | null;

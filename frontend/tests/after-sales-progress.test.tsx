@@ -95,4 +95,52 @@ describe('after-sales progress', () => {
     fireEvent.click(screen.getByRole('button', { name: t(change === 'cancel' ? '取消' : '重新加载') })); await settle();
     await stale(); expect(writes).toEqual([]);
   });
+  it.each(['zh-CN', 'en'] as const)('shows customer identity and paid/refund context in %s', async locale => {
+    useLocaleStore.getState().setLocale(locale);
+    await setup(true, { row: { type: 'refund', user_id: 1, username: 'Customer' } });
+    expect(screen.getByText(`${t('用户')}：Customer`)).toBeInTheDocument();
+    expect(screen.getByText(`${t('用户编号')}：1`)).toBeInTheDocument();
+    expect(screen.getByText(`${t('订单实付金额')}：¥29.99`)).toBeInTheDocument();
+    expect(screen.getByText(`${t('可记录退款上限')}：¥29.99`)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: t('查看订单列表') })).toHaveAttribute('href', '/admin/orders');
+    await openClosure();
+    expect(screen.getAllByText(`${t('可记录退款上限')}：¥29.99`)).toHaveLength(2);
+  });
+  it.each(['zh-CN', 'en'] as const)('marks a demo order and explains its zero refund ceiling in %s', async locale => {
+    useLocaleStore.getState().setLocale(locale);
+    await setup(true, { row: { type: 'refund', user_id: 8, username: null, payment_method: 'demo' } });
+    expect(screen.getByText(`${t('用户')}：—`)).toBeInTheDocument();
+    expect(screen.getByText(`${t('用户编号')}：8`)).toBeInTheDocument();
+    expect(screen.getByText(t('演示订单，未实际扣款'))).toBeInTheDocument();
+    expect(screen.getByText(`${t('可记录退款上限')}：¥0.00`)).toBeInTheDocument();
+    await openClosure();
+    expect(screen.getAllByText(t('演示订单，未实际扣款'))).toHaveLength(2);
+  });
+  it.each(['zh-CN', 'en'] as const)('rejects more than the paid amount before saving in %s', async locale => {
+    useLocaleStore.getState().setLocale(locale);
+    const { writes } = await setup(true, { row: { type: 'refund' } }); await openClosure(); fillClosure();
+    fireEvent.change(screen.getByLabelText(t('实际退款金额')), { target: { value: '30.00' } });
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(writes).toEqual([]); expect(notices.error).toHaveBeenCalledWith(t('退款金额不能超过订单实付金额'));
+    expect(screen.getByLabelText(t('实际退款金额'))).toHaveValue('30.00');
+  });
+  it.each(['zh-CN', 'en'] as const)('rejects a nonzero demo refund before saving in %s', async locale => {
+    useLocaleStore.getState().setLocale(locale);
+    const { writes } = await setup(true, { row: { type: 'refund', payment_method: 'demo' } }); await openClosure(); fillClosure();
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(writes).toEqual([]); expect(notices.error).toHaveBeenCalledWith(t('演示订单未实际扣款，退款金额必须为零'));
+  });
+  it('accepts zero for demo closure without a reference', async () => {
+    const { writes } = await setup(true, { row: { type: 'refund', payment_method: 'demo' } }); await openClosure();
+    fireEvent.change(screen.getByLabelText(t('实际退款金额')), { target: { value: '0.00' } });
+    fireEvent.change(screen.getByLabelText(t('结案说明')), { target: { value: 'No payment taken' } });
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(writes[0].body).toEqual({ refund_amount: '0.00', note: 'No payment taken' });
+  });
+  it.each(['29.991', '1e1', '99999999999999'])('rejects malformed or out-of-range cents %s', async amount => {
+    const { writes } = await setup(true, { row: { type: 'refund' } }); await openClosure(); fillClosure();
+    fireEvent.change(screen.getByLabelText(t('实际退款金额')), { target: { value: amount } });
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(writes).toEqual([]); expect(notices.error).toHaveBeenCalledWith(t('退款金额、凭证或结案说明无效'));
+  });
 });
