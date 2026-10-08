@@ -32,7 +32,7 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
   beforeAll(async () => {
     server = mysql.createPool(options); await server.query(`CREATE DATABASE ${database} CHARACTER SET utf8mb4`); created = true;
     db = mysql.createPool({ ...options, database });
-    const needed = new Set(['users', 'products', 'product_skus', 'orders', 'order_items', 'cart', 'shipping_addresses', 'roles', 'admins', 'permissions', 'role_permissions', 'admin_logs']);
+    const needed = new Set(['users', 'products', 'product_skus', 'reviews', 'orders', 'order_items', 'cart', 'shipping_addresses', 'roles', 'admins', 'permissions', 'role_permissions', 'admin_logs']);
     for (const filename of ['migrate.ts', 'admin-migrate.ts']) {
       const source = fs.readFileSync(path.join(__dirname, '../../database', filename), 'utf8');
       for (const match of source.matchAll(/`(\s*CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) if (needed.has(match[2])) await db.query(match[1]);
@@ -45,7 +45,7 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
   });
   afterAll(async () => { if (db) await db.end(); if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } } });
   beforeEach(async () => {
-    await getRedisClient().del('product:1', 'product:v2:1', 'product:2', 'product:v2:2', 'products:hot', 'products:hot:v2', 'products:hot:v3');
+    await getRedisClient().del('product:1', 'product:v2:1', 'product:v3:1', 'product:2', 'product:v2:2', 'product:v3:2', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4');
     (getPool as jest.Mock).mockReturnValue(db);
     (query as jest.Mock).mockImplementation(async (sql, values) => (await db.query(sql, values))[0]);
     for (const table of ['admin_logs', 'coupon_usage_logs', 'user_coupons', 'order_items', 'orders', 'cart', 'shipping_addresses', 'product_skus', 'products', 'users']) await db.query(`DELETE FROM ${table}`);
@@ -79,7 +79,7 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
   test('新增、改价和停用立即影响前台与订单价格库存，全部停用不回退基础库存', async () => {
     const before = await request(app).get('/api/products/1');
     expect(before.body.product).toMatchObject({ price: 12.5, stock: 3 });
-    expect(await getRedisClient().get('product:v2:1')).not.toBeNull();
+    expect(await getRedisClient().get('product:v3:1')).not.toBeNull();
     const added = await request(app).post('/api/admin/products/1/skus').set('Authorization', admin()).send({ ...body, sku_code: 'GREEN-M', price: 8.75, stock: 2 });
     expect(added.status).toBe(201); const id = added.body.sku_id;
     expect((await request(app).post('/api/admin/products/1/skus').set('Authorization', admin()).send({ ...body, sku_code: 'GREEN-M' })).status).toBe(409);

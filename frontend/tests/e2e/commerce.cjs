@@ -35,6 +35,7 @@ const checkoutEndpoint = 'http://127.0.0.1:3101/api/orders';
 const expectedCheckoutErrors = [/^Failed to load resource: net::ERR_FAILED$/, /^Failed to load resource: the server responded with a status of (408|429)(?: \([^)]*\))?$/];
 let expectedOrderDetailFailure;
 let expectedShoppingFailure;
+let expectedReadFailure;
 function watchConsole(page, label) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -45,6 +46,9 @@ function watchConsole(page, label) {
         (message.location().url === expectedOrderDetailFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载订单失败:/.test(text))) return;
     if (expectedShoppingFailure &&
         (message.location().url === expectedShoppingFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载(?:商品|购物车)失败:/.test(text))) return;
+    if (expectedReadFailure &&
+        (message.location().url.split('?')[0] === expectedReadFailure.endpoint && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) ||
+         expectedReadFailure.prefix && text.startsWith(expectedReadFailure.prefix))) return;
     consoleErrors.push(`[${label}] ${new URL(page.url()).pathname}: ${text.slice(0, 300)}`);
   });
 }
@@ -76,6 +80,27 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '注册', exact: true }).click();
   await page.waitForURL('http://127.0.0.1:3100/');
   console.log('PASS browser registration');
+  const hotEndpoint = 'http://127.0.0.1:3101/api/products/hot';
+  let hotUnavailable = true, hotAttempts = 0;
+  const hotFault = route => { hotAttempts++; return hotUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) }) : route.continue(); };
+  expectedReadFailure = { endpoint: hotEndpoint, prefix: '加载热门商品失败，请重试' };
+  await page.route(`${hotEndpoint}*`, hotFault);
+  await page.goto('http://127.0.0.1:3100/');
+  const hotSection = page.locator('section').filter({ has: page.getByRole('heading', { name: '热门商品', exact: true }) });
+  const newSection = page.locator('section').filter({ has: page.getByRole('heading', { name: '新品推荐', exact: true }) });
+  await hotSection.getByRole('alert').waitFor({ state: 'visible' });
+  await newSection.locator('a[href="/products/1"]').waitFor({ state: 'visible' });
+  assert.equal(await hotSection.locator('a[href="/products/1"]').count(), 0);
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+  await visibleText(page, 'Unable to load popular products. Please try again.');
+  const beforeHotRetry = hotAttempts; hotUnavailable = false;
+  await page.locator('section').filter({ has: page.getByRole('heading', { name: 'Best sellers', exact: true }) }).getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.locator('section').filter({ has: page.getByRole('heading', { name: 'Best sellers', exact: true }) }).locator('a[href="/products/1"]').waitFor({ state: 'visible' });
+  assert.equal(hotAttempts, beforeHotRetry + 1);
+  await page.unroute(`${hotEndpoint}*`, hotFault); expectedReadFailure = undefined;
+  await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+  console.log('PASS browser independent homepage failure preserves new arrivals and bilingual retry recovers hot products');
   const searchForm = page.getByRole('search');
   const searchInput = searchForm.getByRole('textbox', { name: '搜索商品', exact: true });
   const searchKeyword = '浏览器交易测试商品';
@@ -120,6 +145,40 @@ async function visibleText(page, text) {
     assert.equal(Number(product.original_price), 100);
   }
   console.log('PASS browser catalog card, search, hot and related products share the cheapest SKU promotion price');
+  const reviewEndpoint = 'http://127.0.0.1:3101/api/reviews/product/2';
+  let reviewsUnavailable = true, reviewAttempts = 0;
+  const reviewFault = route => { reviewAttempts++; return reviewsUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) }) : route.continue(); };
+  expectedReadFailure = { endpoint: reviewEndpoint, prefix: '加载评论失败:' };
+  await page.route(`${reviewEndpoint}*`, reviewFault);
+  await page.goto('http://127.0.0.1:3100/products/2');
+  const reviewsSection = page.getByRole('heading', { name: '用户评价', exact: true }).locator('..');
+  await reviewsSection.getByRole('alert').waitFor({ state: 'visible' });
+  assert.equal(await reviewsSection.getByText('暂无评价', { exact: true }).count(), 0);
+  const beforeReviewRetry = reviewAttempts; reviewsUnavailable = false;
+  await reviewsSection.getByRole('button', { name: '重新加载', exact: true }).click();
+  await reviewsSection.getByText('暂无评价', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(reviewAttempts, beforeReviewRetry + 1);
+  await page.unroute(`${reviewEndpoint}*`, reviewFault); expectedReadFailure = undefined;
+  console.log('PASS browser review read failure has its own retry and a real empty state after recovery');
+  const pagedReviews = route => {
+    const pageNumber = Number(new URL(route.request().url()).searchParams.get('page') || 1);
+    const reviews = Array.from({ length: Math.min(5, 12 - (pageNumber - 1) * 5) }, (_, index) => ({
+      review_id: (pageNumber - 1) * 5 + index + 1, rating: 4, username: 'Browser fixture',
+      content: `Synthetic review ${(pageNumber - 1) * 5 + index + 1}`, created_at: '2026-10-07T00:00:00Z',
+    }));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reviews, total: 12, page: pageNumber, limit: 5, totalPages: 3 }) });
+  };
+  await page.route(`${reviewEndpoint}*`, pagedReviews);
+  await page.reload();
+  await visibleText(page, 'Synthetic review 1');
+  await reviewsSection.getByRole('button', { name: '下一页', exact: true }).click();
+  await reviewsSection.getByText('Synthetic review 6', { exact: true }).waitFor({ state: 'visible' });
+  await reviewsSection.getByRole('button', { name: '下一页', exact: true }).click();
+  await reviewsSection.getByText('Synthetic review 12', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await reviewsSection.getByRole('button', { name: '下一页', exact: true }).isDisabled(), true);
+  await page.unroute(`${reviewEndpoint}*`, pagedReviews);
+  console.log('PASS browser product review pagination reaches all twelve controlled reviews');
   const productEndpoint = 'http://127.0.0.1:3101/api/products/2';
   let productAttempts = 0;
   const failProductOnce = route => ++productAttempts === 1
@@ -308,6 +367,28 @@ async function visibleText(page, text) {
   await admin.locator('input[type="password"]').fill('BrowserFixtureAdmin123!');
   await admin.getByRole('button', { name: '登录', exact: true }).click();
   await admin.waitForURL(/\/admin\/dashboard$/);
+  const realOrderNo = (await (await context.request.get(detailEndpoint)).json()).order.order_no;
+  for (const [kind, label, keyword, parameter] of [
+    ['products', '搜索商品', 'Browser', 'keyword'], ['users', '搜索用户', 'browser', 'keyword'], ['orders', '订单号', realOrderNo.slice(0, 6), 'orderNo'],
+  ]) {
+    await admin.goto(`http://127.0.0.1:3100/admin/${kind}`);
+    await admin.getByRole('table').waitFor({ state: 'visible' });
+    const reads = [];
+    const track = request => { if (new URL(request.url()).pathname === `/api/admin/${kind}` && request.method() === 'GET') reads.push(request.url()); };
+    admin.on('request', track);
+    const input = admin.getByRole('textbox', { name: label, exact: true });
+    await input.pressSequentially(keyword);
+    assert.deepEqual(reads, [], 'typing a draft never reads the admin list');
+    const submitted = admin.waitForResponse(response => new URL(response.url()).pathname === `/api/admin/${kind}` && response.request().method() === 'GET');
+    await input.press('Enter');
+    assert.equal((await submitted).status(), 200);
+    await admin.getByRole('table').waitFor({ state: 'visible' });
+    assert.equal(reads.length, 1);
+    assert.equal(new URL(reads[0]).searchParams.get(parameter), keyword);
+    assert.equal(new URL(reads[0]).searchParams.get('page'), '1');
+    admin.off('request', track);
+  }
+  console.log('PASS browser all three admin keyword drafts submit one list request on Enter');
   await admin.goto('http://127.0.0.1:3100/admin/orders');
   await admin.getByRole('button', { name: '发货', exact: true }).first().click();
   await admin.getByLabel('快递公司').fill('测试快递');
@@ -318,6 +399,20 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '确认收货', exact: true }).click();
   await visibleText(page, '已完成');
   console.log('PASS browser admin shipment and customer receipt');
+  await page.getByRole('combobox', { name: /^评分/ }).selectOption('3');
+  await page.getByLabel('评价内容（可选）', { exact: true }).fill('Browser verified purchase review');
+  await page.getByRole('button', { name: '提交评价', exact: true }).click();
+  await visibleText(page, '已评价');
+  const rated = await context.request.get('http://127.0.0.1:3101/api/products/1');
+  const ratedProduct = (await rated.json()).product;
+  assert.equal(Number(ratedProduct.rating), 3);
+  assert.equal(Number(ratedProduct.review_count), 1);
+  assert.equal(Number(ratedProduct.stock), 19);
+  await page.goto('http://127.0.0.1:3100/products/1');
+  await visibleText(page, 'Browser verified purchase review');
+  await visibleText(page, '共 1 条评价');
+  await page.goto(orderUrl);
+  console.log('PASS browser saved purchase review updates actual product score without changing stock');
   await page.goto('http://127.0.0.1:3100/orders?status=0');
   await visibleText(page, '暂无订单');
   const allOrders = page.getByRole('button', { name: '全部', exact: true });
@@ -355,9 +450,23 @@ async function visibleText(page, text) {
   console.log('PASS browser after-sales request and admin approval without refund');
   fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
   await page.screenshot({ path: path.join(root, 'test-results/commerce-after-sales.png'), fullPage: true });
+  const capabilityEndpoint = 'http://127.0.0.1:3101/api/users/password/capabilities';
+  let capabilityUnavailable = true, capabilityAttempts = 0;
+  const capabilityFault = route => { capabilityAttempts++; return capabilityUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) }) : route.continue(); };
+  expectedReadFailure = { endpoint: capabilityEndpoint };
+  await page.route(capabilityEndpoint, capabilityFault);
   await page.goto('http://127.0.0.1:3100/forgot-password');
+  await visibleText(page, '加载邮件服务状态失败，请重试');
+  await page.getByRole('textbox', { name: '邮箱', exact: true }).fill(customerEmail);
+  const beforeCapabilityRetry = capabilityAttempts; capabilityUnavailable = false;
+  await page.getByRole('button', { name: '重新加载', exact: true }).click();
   await visibleText(page, '密码找回邮件服务暂不可用');
+  assert.equal(capabilityAttempts, beforeCapabilityRetry + 1);
+  assert.equal(await page.getByRole('textbox', { name: '邮箱', exact: true }).inputValue(), customerEmail);
   assert.equal(await page.getByRole('button', { name: '发送重置邮件', exact: true }).isDisabled(), true);
+  await page.unroute(capabilityEndpoint, capabilityFault); expectedReadFailure = undefined;
+  console.log('PASS browser password capability retry preserves email and distinguishes the real disabled service');
   await page.goto('http://127.0.0.1:3100/profile/settings');
   await page.getByLabel('当前密码', { exact: true }).fill('BrowserCustomer123!');
   await page.getByLabel('新密码', { exact: true }).fill('BrowserUpdated456!');

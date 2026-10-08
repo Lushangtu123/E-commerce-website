@@ -100,7 +100,9 @@ describe('home page', () => {
     signIn();
     await settle();
 
-    expect(section('猜你喜欢'), 'generic picks must not stay labelled as personal ones').toBeNull();
+    expect(ids('猜你喜欢'), 'generic picks must not stay labelled as personal ones').toEqual([]);
+    expect(within(section('猜你喜欢')!).getByRole('alert')).toHaveTextContent('加载推荐失败，请重试');
+    expect(within(section('猜你喜欢')!).getByRole('button', { name: '重新加载' })).toBeVisible();
   });
 
   it('hides the previous account\'s recommendations in the next account\'s first render', async () => {

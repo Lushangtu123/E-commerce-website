@@ -103,6 +103,8 @@ const options: swaggerJSDoc.Options = {
             original_price: { type: 'number', nullable: true },
             main_image: { type: 'string', nullable: true },
             stock: { type: 'integer' },
+            rating: { type: 'number', minimum: 0, maximum: 5, description: '已发布购买评价的平均分，保留两位小数；暂无评价时为 0' },
+            review_count: { type: 'integer', minimum: 0, description: '已发布购买评价数量；前台为 0 时显示暂无评价' },
             sales: { type: 'integer' },
             status: { type: 'integer', description: '1 上架，0 下架' },
             category_id: { type: 'integer' },

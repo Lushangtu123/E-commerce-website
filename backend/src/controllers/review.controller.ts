@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { ReviewModel } from '../models/review.model';
 import logger from '../utils/logger';
+import { getRedisClient } from '../database/redis';
+import { PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
+import { syncProductsToSearchIndex } from '../services/product-search.service';
 import { ReviewError, parseReviewInput, parseReviewPage, parseMyReviewPage, reviewProductPathId } from '../utils/review-validation';
 
 export class ReviewController {
@@ -19,6 +22,18 @@ export class ReviewController {
         content ?? undefined,
         images
       );
+
+      // The purchase review is already committed. Ancillary failures cannot make a retry duplicate it.
+      try {
+        await getRedisClient().del(...productDetailCacheKeys(product_id), ...PRODUCT_HOT_CACHE_KEYS);
+      } catch (cacheError) {
+        logger.warn({ err: cacheError }, '评论已保存，商品缓存清理失败');
+      }
+      try {
+        await syncProductsToSearchIndex([product_id]);
+      } catch (indexError) {
+        logger.warn({ err: indexError }, '评论已保存，搜索索引更新失败');
+      }
 
       res.status(201).json({
         message: '评论成功',

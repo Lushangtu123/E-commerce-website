@@ -22,6 +22,8 @@ export interface Product {
   stock: number;
   sales_count: number;
   rating: number | string;
+  /** Actual published review count; zero means the product has not been rated. */
+  review_count?: number;
   main_image?: string | null;
   images?: string[] | null;
   status?: number;

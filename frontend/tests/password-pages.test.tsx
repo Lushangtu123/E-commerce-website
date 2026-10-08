@@ -162,14 +162,14 @@ describe('forgot password', () => {
     ['the capability check fails', async () => { throw new Error('Offline'); }],
   ])('stays unavailable when %s and sends no reset request', async (_, capabilities) => {
     await setup({ capabilities });
-    expect(screen.getByRole('alert')).toHaveTextContent('密码找回邮件服务暂不可用');
+    expect(screen.getByRole('alert')).toHaveTextContent(_ === 'the email service is off' ? '密码找回邮件服务暂不可用' : '加载邮件服务状态失败，请重试');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'customer@example.test' } });
     fireEvent.submit(form()!);
     await settle();
 
     expect(payloads).toEqual([]);
-    expect(screen.getByRole('button')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '发送重置邮件' })).toBeDisabled();
   });
 
   it('sends once and shows only a generic confirmation, never a returned reset URL', async () => {

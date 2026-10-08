@@ -17,6 +17,7 @@ export interface Product {
   has_sku?: boolean | number;
   sales_count: number;
   rating: number;
+  review_count?: number;
   main_image?: string;
   images?: string[];
   specs?: any;
@@ -42,7 +43,8 @@ export const customerProducts = `SELECT p.product_id, p.title, p.title_en, p.des
   CASE WHEN s.product_id IS NULL THEN p.price ELSE COALESCE(s.price, p.price) END AS price,
   CASE WHEN s.product_id IS NULL THEN p.original_price ELSE display_sku.original_price END AS original_price,
   CASE WHEN s.product_id IS NULL THEN p.stock ELSE COALESCE(s.stock, 0) END AS stock,
-  p.sales_count, p.rating, p.main_image, p.images, p.specs, p.specs_en, p.status, p.created_at, p.updated_at,
+  p.sales_count, COALESCE(r.rating, 0) AS rating, COALESCE(r.review_count, 0) AS review_count,
+  p.main_image, p.images, p.specs, p.specs_en, p.status, p.created_at, p.updated_at,
   (s.product_id IS NOT NULL) AS has_sku
   FROM products p LEFT JOIN (
     SELECT product_id, MIN(CASE WHEN status = 1 THEN price END) AS price,
@@ -52,9 +54,24 @@ export const customerProducts = `SELECT p.product_id, p.title, p.title_en, p.des
   LEFT JOIN product_skus display_sku ON display_sku.sku_id = (
     SELECT sku_id FROM product_skus WHERE product_id = s.product_id AND status = 1
     ORDER BY price ASC, sku_id ASC LIMIT 1
-  )`;
+  )
+  LEFT JOIN (
+    SELECT product_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS review_count
+    FROM reviews GROUP BY product_id
+  ) r ON r.product_id = p.product_id`;
 
 export class ProductModel {
+  /** One bounded, indexed query refreshes review statistics for cached public cards. */
+  static async getReviewStatistics(productIds: number[]): Promise<Array<{ product_id: number; rating: number; review_count: number }>> {
+    if (productIds.length > 100 || productIds.some(id => !Number.isSafeInteger(id) || id < 1)) throw new Error('商品ID无效');
+    const ids = [...new Set(productIds)];
+    if (!ids.length) return [];
+    const rows = await query<RowDataPacket[]>(
+      `SELECT product_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS review_count
+       FROM reviews WHERE product_id IN (${ids.map(() => '?').join(',')}) GROUP BY product_id`, ids);
+    return rows.map(row => ({ product_id: Number(row.product_id), rating: Number(row.rating), review_count: Number(row.review_count) }));
+  }
+
   // 创建商品
   static async create(product: Partial<Product>): Promise<number> {
     const { error, value } = productCreateSchema.validate(product);
@@ -126,11 +143,16 @@ export class ProductModel {
 
   // 根据ID获取商品
   static async findById(productId: number): Promise<Product | null> {
-    const products = await query<(Product & RowDataPacket)[]>(
-      'SELECT * FROM products WHERE product_id = ?',
+    const products = await query<(Product & RowDataPacket & { review_rating: number | null })[]>(
+      `SELECT p.*,
+        (SELECT ROUND(AVG(rating), 2) FROM reviews WHERE product_id = p.product_id) AS review_rating,
+        (SELECT COUNT(*) FROM reviews WHERE product_id = p.product_id) AS review_count
+       FROM products p WHERE p.product_id = ?`,
       [productId]
     );
-    return products.length > 0 ? products[0] : null;
+    if (!products.length) return null;
+    const { review_rating, ...product } = products[0];
+    return { ...product, rating: Number(review_rating ?? 0), review_count: Number(product.review_count ?? 0) };
   }
 
   // 更新商品

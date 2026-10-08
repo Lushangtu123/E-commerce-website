@@ -5,16 +5,14 @@ import { transitionOrder, invalidateOrderProductCache, OrderError } from '../ser
 import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 import { orderPathId } from '../utils/order-id';
+import { AdminQueryError, adminDatesQuerySchema, adminOrdersQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
 // 获取订单列表（管理员）
 export const getAdminOrders = async (req: Request, res: Response) => {
   try {
+    const {page, limit, orderNo, userId, status, startDate, endDate} = parseAdminQuery(req.query, adminOrdersQuerySchema);
     const pool = getPool();
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
-    
-    const { orderNo, userId, status, startDate, endDate } = req.query;
 
     let whereClause = '1=1';
     const params: any[] = [];
@@ -71,6 +69,7 @@ export const getAdminOrders = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取订单列表失败');
     res.status(500).json({ error: '获取订单列表失败' });
   }
@@ -172,8 +171,8 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 // 获取订单统计
 export const getOrderStatistics = async (req: Request, res: Response) => {
   try {
+    const {startDate, endDate} = parseAdminQuery(req.query, adminDatesQuerySchema);
     const pool = getPool();
-    const { startDate, endDate } = req.query;
 
     let whereClause = '1=1';
     const params: any[] = [];
@@ -205,6 +204,7 @@ export const getOrderStatistics = async (req: Request, res: Response) => {
 
     res.json(stats[0]);
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取订单统计失败');
     res.status(500).json({ error: '获取统计失败' });
   }

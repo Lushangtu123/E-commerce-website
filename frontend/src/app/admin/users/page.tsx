@@ -20,6 +20,8 @@ export default function AdminUsersPage() {
   const ownsView = view.sessionId === sessionId;
   const page = ownsView ? view.page : 1;
   const filters = ownsView ? view.filters : { keyword: '', status: '' };
+  const [draft, setDraft] = useState({ sessionId, keyword: '' });
+  const keywordDraft = draft.sessionId === sessionId ? draft.keyword : '';
   const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
@@ -100,6 +102,18 @@ export default function AdminUsersPage() {
     setView({ sessionId, page: target, filters });
   };
 
+  const submitSearch = () => {
+    if (!isCurrentScope()) return;
+    if (page === 1 && keywordDraft === filters.keyword) reload();
+    else changeFilters({ ...filters, keyword: keywordDraft });
+  };
+
+  const resetSearch = () => {
+    if (!isCurrentScope()) return;
+    setDraft({ sessionId, keyword: '' });
+    changeFilters({ keyword: '', status: '' });
+  };
+
   const handleStatusChange = (userId: number, newStatus: number) => {
     if (!users.some(row => row.user_id === userId)) return;
     return runMutation(() => api.put(`/admin/users/${userId}/status`, { status: newStatus }),
@@ -117,13 +131,13 @@ export default function AdminUsersPage() {
 
         {/* 搜索和筛选 */}
         <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <form role="search" onSubmit={event => { event.preventDefault(); submitSearch(); }} className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
               placeholder={t("搜索用户名、邮箱、手机号...")}
               aria-label={t("搜索用户")}
-              value={filters.keyword}
-              onChange={(e) => changeFilters({ ...filters, keyword: e.target.value })}
+              value={keywordDraft}
+              onChange={(e) => { if (isCurrentScope()) setDraft({ sessionId, keyword: e.target.value }); }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <select
@@ -137,18 +151,19 @@ export default function AdminUsersPage() {
               <option value="0">{t("已禁用")}</option>
             </select>
             <button
-              onClick={reload}
+              type="submit"
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               {t("搜索")}
             </button>
             <button
-              onClick={() => changeFilters({ keyword: '', status: '' })}
+              type="button"
+              onClick={resetSearch}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               {t("重置")}
             </button>
-          </div>
+          </form>
         </div>
 
         {/* 用户列表 */}

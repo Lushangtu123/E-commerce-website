@@ -108,6 +108,11 @@ async function type(element: HTMLElement, value: string) {
   await settle();
 }
 
+async function searchFor(value: string) {
+  await type(search(), value);
+  await click(button('搜索'));
+}
+
 beforeEach(() => {
   requests = [];
   mutations = [];
@@ -123,7 +128,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     const old = deferred();
     const { fetch } = await setup(kind, { list: params => params.keyword ? result(kind, [row(kind, 2, 'New filter')]) : old.promise });
 
-    await type(search(), 'new');
+    await searchFor('new');
     expect(screen.getByText('New filter')).toBeInTheDocument();
     await act(async () => old.resolve(result(kind, [row(kind, 1, 'Old filter')])));
     await settle();
@@ -139,7 +144,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
 
     await click(button('下一页'));
     expect(requests.at(-1)?.page).toBe(2);
-    await type(search(), 'Row 1');
+    await searchFor('Row 1');
     expect(requests.at(-1)?.page).toBe(1);
     expect(screen.getByText('第 1 页')).toBeInTheDocument();
     await type(statusFilter(), '0');
@@ -169,7 +174,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     const removed = vi.spyOn(window, 'removeEventListener');
     const replacement = deferred();
     const { view, commits } = await setup(kind, { list: (_, auth) => auth === 'session:admin-b' ? replacement.promise : result(kind, [row(kind, 1, 'Admin A data')], 40) });
-    await type(search(), 'Admin A');
+    await searchFor('Admin A');
     await click(button('下一页'));
 
     const before = commits.length;
@@ -312,9 +317,10 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
   it('invalidates row actions as soon as the list scope changes, before React commits the new query', async () => {
     await setup(kind);
     const action = button(statusAction[kind]);
+    await type(search(), 'new query');
 
     act(() => {
-      fireEvent.change(search(), { target: { value: 'new query' } });
+      fireEvent.submit(search().closest('form')!);
       action.click();
     });
     await settle();
@@ -373,7 +379,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
   it('ignores stale filter and pagination handlers once the list has moved on', async () => {
     await setup(kind, { list: params => result(kind, [row(kind, params.page, `Page ${params.page}`)], 60) });
     const staleStatus = reactHandler(statusFilter(), 'onChange');
-    await type(search(), 'kept');
+    await searchFor('kept');
     act(() => { staleStatus({ target: { value: '0' } }); });
     await settle();
     expect(requests.at(-1)).toMatchObject({ keyword: 'kept' });
@@ -430,7 +436,7 @@ describe('admin product selection and creation', () => {
     await click(checkboxes()[1]);
     expect(screen.getByText('已选择 1 个商品')).toBeInTheDocument();
 
-    await type(search(), 'changed');
+    await searchFor('changed');
     expect(screen.queryByText(/已选择/)).not.toBeInTheDocument();
   });
 
@@ -573,7 +579,7 @@ describe('admin product selection and creation', () => {
     await setup('products');
     await click(button('添加商品'));
     const staleCreate = captureHandler(createButton());
-    await type(search(), 'changed');
+    await searchFor('changed');
 
     await staleCreate();
     await settle();

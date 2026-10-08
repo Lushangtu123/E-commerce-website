@@ -65,6 +65,30 @@ integration('真实MySQL商品双语展示搜索与下单快照', () => {
     return { productId, skuId };
   }
 
+  test('真实评价平均分和数量在详情、列表、热榜、搜索和推荐一致，未评价商品不会获得虚构评分', async () => {
+    const { productId } = await bilingualProduct();
+    await db.query('UPDATE products SET rating=5 WHERE product_id=?', [productId]);
+    const unreviewed = await ProductModel.findById(productId);
+    expect(Number(unreviewed!.rating)).toBe(0);
+    expect(unreviewed).toHaveProperty('review_count', 0);
+    await db.query("INSERT INTO orders(order_id,order_no,user_id,total_amount,status) VALUES(901,'RATING-A',1,10,3),(902,'RATING-B',1,10,3)");
+    await db.query('INSERT INTO order_items(order_id,product_id,quantity,price) VALUES(901,?,1,10),(902,?,1,10)', [productId, productId]);
+    await ReviewModel.create(productId, 1, 901, 2);
+    await ReviewModel.create(productId, 1, 902, 5);
+    expect(await ProductModel.getReviewStatistics([productId, productId])).toEqual([{ product_id: productId, rating: 3.5, review_count: 2 }]);
+    const detail = response(); await ProductController.getDetail(request({ id: String(productId) }), detail as any);
+    const products = [detail.body.product, (await ProductModel.list({})).products[0],
+      (await ProductModel.getHotProducts())[0], (await searchProducts({ keyword: 'shirt', sort_by: 'created_at', sort_order: 'desc', page: 1, page_size: 20 })).products[0],
+      (await getNewUserRecommendations())[0]];
+    for (const product of products) {
+      expect(Number(product.rating)).toBe(3.5);
+      expect(Number(product.review_count)).toBe(2);
+    }
+    const raw = await ProductModel.findById(productId);
+    expect(Number(raw!.price)).toBe(99); // Inventory callers still receive the parent price/stock.
+    expect(raw!.stock).toBe(10);
+  });
+
   test('详情、catalog、推荐、管理SKU及用户活动投影都返回英文并保留原规格类型', async () => {
     const { productId, skuId } = await bilingualProduct();
     const detail = response(); await ProductController.getDetail(request({ id: String(productId) }), detail as any);

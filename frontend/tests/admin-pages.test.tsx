@@ -115,7 +115,7 @@ describe('admin orders', () => {
     expect(requests.filter(config => config.method === 'put')).toHaveLength(1);
     fireEvent.change(document.querySelector('input[name="shipping_company"]')!, { target: { value: 'SF Express' } });
     fireEvent.change(document.querySelector('input[name="tracking_number"]')!, { target: { value: 'SF123456' } });
-    fireEvent.submit(document.querySelector('form')!);
+    fireEvent.submit(document.querySelector('form:not([role="search"])')!);
     await settle();
     await click('完成订单');
 

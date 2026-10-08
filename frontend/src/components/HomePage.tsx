@@ -2,7 +2,7 @@
 
 import { useI18n } from '@/lib/i18n';
 
-import { useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
 import { storedSessionId, useAuthStore } from '@/store/useAuthStore';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
@@ -11,69 +11,65 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { FiArrowRight, FiGift, FiRotateCcw, FiShoppingBag, FiTruck } from 'react-icons/fi';
 
+const loadHotProducts = async () => (await productApi.getHotProducts(8)).products || [];
+const loadNewProducts = async () => (await productApi.list({ sort: 'created_at DESC', limit: 8 })).products || [];
+const loadRecommendations = async () => (await recommendationApi.getGuessYouLike(8)).recommendations || [];
+const publicCatalog = () => true;
+
+type SectionResult = { scope: string; products: Product[]; loading: boolean; error?: string };
+
+/** Each section owns its request, so retrying one cannot hide a successful neighbor. */
+function useProductSection(scope: string, load: () => Promise<Product[]>, isCurrent: () => boolean, errorMessage: string, notify = false) {
+  const { t } = useI18n();
+  const [result, setResult] = useState<SectionResult | null>(null);
+  const mounted = useRef(true);
+  const pending = useRef<{ scope: string } | null>(null);
+  const retry = useCallback(async () => {
+    if (!mounted.current || !isCurrent() || pending.current?.scope === scope) return;
+    const operation = { scope }; pending.current = operation;
+    setResult({ scope, products: [], loading: true });
+    const active = () => mounted.current && isCurrent() && pending.current === operation;
+    try {
+      const products = await load();
+      if (active()) setResult({ scope, products, loading: false });
+    } catch (error) {
+      if (!active()) return;
+      logger.error(errorMessage, error);
+      setResult({ scope, products: [], loading: false, error: errorMessage });
+      if (notify) toast.error(t('加载数据失败'));
+    } finally {
+      if (pending.current === operation) {
+        pending.current = null;
+        // Storage may change before the auth store re-renders. Discard this scope's loading state too.
+        if (mounted.current && !isCurrent()) setResult(null);
+      }
+    }
+  }, [scope, load, isCurrent, errorMessage, notify, t]);
+
+  useEffect(() => {
+    mounted.current = true;
+    void retry();
+    return () => { mounted.current = false; pending.current = null; };
+  }, [retry]);
+  const shown = result?.scope === scope && isCurrent() ? result : { scope, products: [], loading: true };
+  return { ...shown, retry };
+}
+
 export default function Home() {
   const { t } = useI18n();
   const { isAuthenticated, sessionId, user } = useAuthStore();
-  const [hotProducts, setHotProducts] = useState<Product[]>([]);
-  const [newProducts, setNewProducts] = useState<Product[]>([]);
-  // The subtitle must describe the session the recommendations were fetched for.
-  const [recommendations, setRecommendations] = useState<{ scope: string | null; products: Product[]; personalized: boolean }>({ scope: null, products: [], personalized: false });
-  const recommendationRequest = useRef(0);
-  const [loading, setLoading] = useState(true);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
-  const scope = JSON.stringify([sessionId, user?.user_id, isAuthenticated]);
-  const isCurrentSession = () => {
+  const userId = user?.user_id;
+  const scope = JSON.stringify([sessionId, userId, isAuthenticated]);
+  const isCurrentSession = useCallback(() => {
     const auth = useAuthStore.getState();
     try {
       return auth.isAuthenticated === isAuthenticated &&
-        auth.sessionId === sessionId && auth.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null);
+        auth.sessionId === sessionId && auth.user?.user_id === userId && storedSessionId() === (sessionId ?? null);
     } catch { return false; }
-  };
-  const shownRecommendations = recommendations.scope === scope && isCurrentSession() ? recommendations : null;
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    loadRecommendations(() => active);
-    return () => { active = false; };
-  }, [isAuthenticated, sessionId, user?.user_id]);
-
-  // Hot and new products load independently, so one failing request cannot blank both sections.
-  const loadData = async () => {
-    setLoading(true);
-    const [hot, latest] = await Promise.allSettled([
-      productApi.getHotProducts(8),
-      productApi.list({ sort: 'created_at DESC', limit: 8 }),
-    ]);
-    if (hot.status === 'fulfilled') setHotProducts(hot.value.products || []);
-    if (latest.status === 'fulfilled') setNewProducts(latest.value.products || []);
-    const failures = [hot, latest].filter((result) => result.status === 'rejected');
-    failures.forEach((failure) => logger.error('加载数据失败:', failure.reason));
-    if (failures.length) toast.error(t("加载数据失败"));
-    setLoading(false);
-  };
-
-  // Login state hydrates after mount, so requests can overlap; only the latest one may update the page.
-  const loadRecommendations = async (isActive: () => boolean) => {
-    const request = ++recommendationRequest.current;
-    if (!isActive() || !isCurrentSession()) return;
-    const personalized = isAuthenticated;
-    setLoadingRecommendations(true);
-    const isCurrentRequest = () => isActive() && request === recommendationRequest.current && isCurrentSession();
-    try {
-      const data = await recommendationApi.getGuessYouLike(8);
-      if (isCurrentRequest()) setRecommendations({ scope, products: data.recommendations || [], personalized });
-    } catch (error) {
-      if (!isCurrentRequest()) return;
-      logger.error('加载推荐失败:', error);
-      setRecommendations({ scope, products: [], personalized });
-    } finally {
-      if (isCurrentRequest()) setLoadingRecommendations(false);
-    }
-  };
+  }, [isAuthenticated, sessionId, userId]);
+  const hot = useProductSection('hot', loadHotProducts, publicCatalog, '加载热门商品失败，请重试', true);
+  const latest = useProductSection('new', loadNewProducts, publicCatalog, '加载新品失败，请重试', true);
+  const recommendations = useProductSection(scope, loadRecommendations, isCurrentSession, '加载推荐失败，请重试');
 
   return (
     <div>
@@ -131,15 +127,17 @@ export default function Home() {
         </div>
       </section>
 
-      <ProductSection title={t("热门商品")} href="/products?sort=sales_count DESC" products={hotProducts} loading={loading} />
-      <ProductSection title={t("新品推荐")} href="/products?sort=created_at DESC" products={newProducts} loading={loading} />
-      {shownRecommendations && shownRecommendations.products.length > 0 && (
+      <ProductSection title={t("热门商品")} href="/products?sort=sales_count DESC" products={hot.products} loading={hot.loading} error={hot.error} onRetry={hot.retry} />
+      <ProductSection title={t("新品推荐")} href="/products?sort=created_at DESC" products={latest.products} loading={latest.loading} error={latest.error} onRetry={latest.retry} />
+      {isCurrentSession() && (recommendations.loading || recommendations.error || recommendations.products.length > 0) && (
         <ProductSection
           title={t("猜你喜欢")}
-          subtitle={shownRecommendations.personalized ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
+          subtitle={isAuthenticated ? t("基于您的浏览历史为您推荐") : t("热门商品推荐")}
           href="/products"
-          products={shownRecommendations.products}
-          loading={loadingRecommendations}
+          products={recommendations.products}
+          loading={recommendations.loading}
+          error={recommendations.error}
+          onRetry={recommendations.retry}
         />
       )}
     </div>
@@ -158,9 +156,11 @@ interface ProductSectionProps {
   href: string;
   products: ComponentProps<typeof ProductCard>['product'][];
   loading: boolean;
+  error?: string;
+  onRetry: () => void;
 }
 
-function ProductSection({ title, subtitle, href, products, loading }: ProductSectionProps) {
+function ProductSection({ title, subtitle, href, products, loading, error, onRetry }: ProductSectionProps) {
   const { t } = useI18n();
   return (
     <section className="py-12 md:py-16">
@@ -176,11 +176,16 @@ function ProductSection({ title, subtitle, href, products, loading }: ProductSec
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
-          {loading
-            ? [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />)
-            : products.map((product) => <ProductCard key={product.product_id} product={product} />)}
-        </div>
+        {error ? <div role="alert" className="rounded-lg border border-red-100 p-6 text-center">
+          <p className="text-red-600">{t(error)}</p>
+          <button onClick={onRetry} className="btn btn-secondary mt-4">{t('重新加载')}</button>
+        </div> : !loading && products.length === 0 ? <p className="py-8 text-center text-gray-500">{t('暂无商品')}</p> : (
+          <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4" aria-busy={loading}>
+            {loading
+              ? [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />)
+              : products.map((product) => <ProductCard key={product.product_id} product={product} />)}
+          </div>
+        )}
       </div>
     </section>
   );

@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import logger from '../utils/logger';
+import { AdminQueryError, adminEmptyQuerySchema, adminRecentOrdersQuerySchema, adminSalesTrendQuerySchema, adminTopProductsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
 // 获取仪表盘统计数据
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
+    parseAdminQuery(req.query, adminEmptyQuerySchema);
     const pool = getPool();
     const today = new Date().toISOString().split('T')[0];
 
@@ -78,6 +80,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       revenue_growth: parseFloat(revenueGrowth.toString())
     });
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取仪表盘数据失败');
     res.status(500).json({ error: '获取数据失败' });
   }
@@ -86,8 +89,8 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 // 获取最近订单
 export const getRecentOrders = async (req: Request, res: Response) => {
   try {
+    const {limit} = parseAdminQuery(req.query, adminRecentOrdersQuerySchema);
     const pool = getPool();
-    const limit = parseInt(req.query.limit as string) || 10;
 
     const [orders] = await pool.query(
       `SELECT 
@@ -107,6 +110,7 @@ export const getRecentOrders = async (req: Request, res: Response) => {
 
     res.json(orders);
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取最近订单失败');
     res.status(500).json({ error: '获取订单失败' });
   }
@@ -115,9 +119,8 @@ export const getRecentOrders = async (req: Request, res: Response) => {
 // 获取热门商品
 export const getTopProducts = async (req: Request, res: Response) => {
   try {
+    const {days, limit} = parseAdminQuery(req.query, adminTopProductsQuerySchema);
     const pool = getPool();
-    const days = parseInt(req.query.days as string) || 7;
-    const limit = parseInt(req.query.limit as string) || 10;
 
     const [products] = await pool.query(
       `SELECT 
@@ -141,6 +144,7 @@ export const getTopProducts = async (req: Request, res: Response) => {
 
     res.json(products);
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取热门商品失败');
     res.status(500).json({ error: '获取商品失败' });
   }
@@ -149,8 +153,8 @@ export const getTopProducts = async (req: Request, res: Response) => {
 // 获取销售趋势
 export const getSalesTrend = async (req: Request, res: Response) => {
   try {
+    const {days} = parseAdminQuery(req.query, adminSalesTrendQuerySchema);
     const pool = getPool();
-    const days = parseInt(req.query.days as string) || 7;
 
     const [trend] = await pool.query(
       `SELECT 
@@ -166,6 +170,7 @@ export const getSalesTrend = async (req: Request, res: Response) => {
 
     res.json(trend);
   } catch (error) {
+    if (error instanceof AdminQueryError) return res.status(400).json({error: error.message});
     logger.error({ err: error }, '获取销售趋势失败');
     res.status(500).json({ error: '获取趋势失败' });
   }

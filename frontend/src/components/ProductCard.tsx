@@ -90,8 +90,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         <div className="mt-auto flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-3 text-xs text-gray-500">
             <span className="flex items-center gap-1">
-              <FaStar className="h-3 w-3 text-amber-400" aria-hidden="true" />
-              {product.rating}
+              {product.review_count === 0 || Number(product.rating) <= 0 ? t('暂无评价') : <>
+                <FaStar className="h-3 w-3 text-amber-400" aria-hidden="true" />
+                {Number(product.rating)}
+              </>}
             </span>
             <span className="hidden truncate sm:inline">{t('已售 {count}', { count: product.sales_count })}</span>
           </div>

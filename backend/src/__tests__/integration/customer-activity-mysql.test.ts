@@ -38,7 +38,7 @@ integration('真实 MySQL 收藏与浏览历史边界', () => {
     (getPool as jest.Mock).mockReturnValue(db);
     (query as jest.Mock).mockImplementation(async (sql: string, values?: any[]) => (await db.query(sql, values))[0]);
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
-    const tables = new Set(['users', 'products', 'product_skus', 'favorites', 'browse_history', 'orders']);
+    const tables = new Set(['users', 'products', 'product_skus', 'favorites', 'browse_history', 'orders', 'reviews']);
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
       if (tables.has(match[2])) await db.query(match[1]);
     }
