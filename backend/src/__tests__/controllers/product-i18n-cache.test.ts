@@ -31,16 +31,17 @@ beforeEach(() => {
   (SKUModel.findByProductId as jest.Mock).mockResolvedValue([]);
 });
 
-test('商品详情跳过旧缓存并缓存包含英文字段的新版本', async () => {
+test('商品详情不复用旧缓存，每次返回当前英文内容', async () => {
   cache.set('product:1', JSON.stringify({ ...product, title_en: undefined }));
   const res = response();
   await ProductController.getDetail(req, res as any);
   expect(res.body.product.title_en).toBe('Shirt');
-  expect(redis.setex).toHaveBeenCalledWith('product:v3:1', 300, expect.any(String));
+  expect(redis.setex).not.toHaveBeenCalled();
+  (ProductModel.findById as jest.Mock).mockResolvedValue({ ...product, title_en: 'Updated shirt' });
   const hit = response();
   await ProductController.getDetail(req, hit as any);
-  expect(hit.body.fromCache).toBe(true);
-  expect(hit.body.product.title_en).toBe('Shirt');
+  expect(hit.body.fromCache).toBeUndefined();
+  expect(hit.body.product.title_en).toBe('Updated shirt');
 });
 
 test('热榜跳过两个旧版本并使用英文字段缓存', async () => {

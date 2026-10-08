@@ -3,7 +3,7 @@ import { ProductModel, type Product } from '../models/product.model';
 import { SKUModel } from '../models/sku.model';
 import { getRedisClient } from '../database/redis';
 import logger from '../utils/logger';
-import { PRODUCT_HOT_CACHE_KEY, PRODUCT_HOT_CACHE_KEYS, productDetailCacheKey, productDetailCacheKeys } from '../utils/product-cache-keys';
+import { PRODUCT_HOT_CACHE_KEY, PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
 import { productCreateSchema, productQuerySchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 import { specsTranslationSchema } from '../utils/product-i18n';
 
@@ -21,18 +21,6 @@ function isCachedProduct(value: unknown): value is Product & { review_count: num
     Number.isSafeInteger(Number(product.stock)) && Number(product.stock) >= 0 &&
     (typeof product.rating === 'number' || typeof product.rating === 'string') && Number.isFinite(Number(product.rating)) && Number(product.rating) >= 0 && Number(product.rating) <= 5 &&
     Number.isSafeInteger(product.review_count) && Number(product.review_count) >= 0;
-}
-
-function isCachedDetail(value: unknown): value is Product & { review_count: number } {
-  if (!isCachedProduct(value)) return false;
-  const skus = (value as Product & { skus?: unknown }).skus;
-  if (skus === undefined) return !value.has_sku;
-  return Array.isArray(skus) && skus.every(sku => sku && typeof sku === 'object' &&
-    Number.isSafeInteger(sku.sku_id) && sku.sku_id > 0 && sku.product_id === value.product_id &&
-    typeof sku.sku_code === 'string' && sku.status === 1 &&
-    (typeof sku.price === 'number' || typeof sku.price === 'string') && Number.isFinite(Number(sku.price)) && Number(sku.price) >= 0 &&
-    Number.isSafeInteger(Number(sku.stock)) && Number(sku.stock) >= 0 &&
-    optionalRecord(sku.specs) && !specsTranslationSchema.validate(sku.specs_en, { convert: false }).error && optionalText(sku.image));
 }
 
 export class ProductController {
@@ -65,17 +53,6 @@ export class ProductController {
       // Availability is checked before cached details so a disabled product cannot remain purchasable.
       const product = await ProductModel.findById(productId);
       if (!product || product.status !== 1) return res.status(404).json({ error: '商品不存在' });
-      const cacheKey = productDetailCacheKey(productId);
-      try {
-        const cached = await getRedisClient().get(cacheKey);
-        if (cached) {
-          const cachedProduct = JSON.parse(cached);
-          if (!isCachedDetail(cachedProduct) || cachedProduct.product_id !== productId) throw new Error('Invalid product detail cache');
-          return res.json({ product: { ...cachedProduct, rating: product.rating, review_count: product.review_count }, fromCache: true });
-        }
-      } catch (error) {
-        logger.warn({ err: error }, '商品缓存读取失败，改用数据库');
-      }
       const allSKUs = await SKUModel.findByProductId(productId, true);
       const skus = allSKUs.filter(sku => sku.status === 1);
       const hasSKU = allSKUs.length > 0;
@@ -86,11 +63,6 @@ export class ProductController {
         stock: hasSKU ? skus.reduce((stock, sku) => stock + Number(sku.stock), 0) : product.stock,
         price: skus.length > 0 ? Math.min(...skus.map(sku => Number(sku.price))) : product.price,
       };
-      try {
-        await getRedisClient().setex(cacheKey, 300, JSON.stringify(productWithSKU));
-      } catch (error) {
-        logger.warn({ err: error }, '商品缓存写入失败');
-      }
       res.json({ product: productWithSKU });
     } catch (error) {
       logger.error({ err: error }, '获取商品详情失败');
@@ -112,12 +84,12 @@ export class ProductController {
           if (!Array.isArray(products) || products.length > 100 || !products.every(isCachedProduct)) {
             throw new Error('Invalid hot product cache');
           }
-          const selected = products.slice(0, limit) as Product[];
-          // A pre-review cache fill can finish after invalidation. Ratings always use the current committed rows.
-          const statistics = await ProductModel.getReviewStatistics(selected.map(product => product.product_id));
-          const ratings = new Map(statistics.map(statistic => [statistic.product_id, statistic]));
-          return res.json({ products: selected.map(product => ({ ...product,
-            rating: ratings.get(product.product_id)?.rating ?? 0, review_count: ratings.get(product.product_id)?.review_count ?? 0 })), fromCache: true });
+          // The cached list supplies ranking only. Every displayed field comes from current enabled rows.
+          const ids = [...new Set(products.map(product => product.product_id))] as number[];
+          const current = await ProductModel.findEnabledByIds(ids);
+          const byId = new Map(current.map(product => [product.product_id, product]));
+          const ranked = ids.flatMap(id => { const product = byId.get(id); return product ? [product] : []; });
+          return res.json({ products: ranked.slice(0, limit), fromCache: true });
         }
       } catch (cacheError) {
         logger.warn({ err: cacheError }, '热门商品缓存读取失败，改用数据库');

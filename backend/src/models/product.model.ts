@@ -61,6 +61,15 @@ export const customerProducts = `SELECT p.product_id, p.title, p.title_en, p.des
   ) r ON r.product_id = p.product_id`;
 
 export class ProductModel {
+  /** Hydrate a bounded cached ranking without reviving stale availability or prices. */
+  static async findEnabledByIds(productIds: number[]): Promise<Product[]> {
+    if (productIds.length > 100 || productIds.some(id => !Number.isSafeInteger(id) || id < 1)) throw new Error('商品ID无效');
+    const ids = [...new Set(productIds)];
+    if (!ids.length) return [];
+    return query<(Product & RowDataPacket)[]>(
+      `SELECT * FROM (${customerProducts}) AS products WHERE status = 1 AND product_id IN (${ids.map(() => '?').join(',')})`, ids);
+  }
+
   /** One bounded, indexed query refreshes review statistics for cached public cards. */
   static async getReviewStatistics(productIds: number[]): Promise<Array<{ product_id: number; rating: number; review_count: number }>> {
     if (productIds.length > 100 || productIds.some(id => !Number.isSafeInteger(id) || id < 1)) throw new Error('商品ID无效');

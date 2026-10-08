@@ -79,7 +79,8 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
   test('新增、改价和停用立即影响前台与订单价格库存，全部停用不回退基础库存', async () => {
     const before = await request(app).get('/api/products/1');
     expect(before.body.product).toMatchObject({ price: 12.5, stock: 3 });
-    expect(await getRedisClient().get('product:v3:1')).not.toBeNull();
+    // A copy left by an older deployment must still be invalidated by a SKU write.
+    await getRedisClient().setex('product:v3:1', 300, JSON.stringify(before.body.product));
     const added = await request(app).post('/api/admin/products/1/skus').set('Authorization', admin()).send({ ...body, sku_code: 'GREEN-M', price: 8.75, stock: 2 });
     expect(added.status).toBe(201); const id = added.body.sku_id;
     expect((await request(app).post('/api/admin/products/1/skus').set('Authorization', admin()).send({ ...body, sku_code: 'GREEN-M' })).status).toBe(409);
