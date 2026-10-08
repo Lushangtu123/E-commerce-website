@@ -1,5 +1,5 @@
 import { act, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import toast from 'react-hot-toast';
 import HomePage from '@/components/HomePage';
 import { productApi, recommendationApi, type Product } from '@/lib/api';
@@ -30,6 +30,7 @@ function defaults() {
 }
 
 describe('independent home section recovery', () => {
+  beforeEach(() => useAuthStore.getState().hydrate());
   it('switches language without refetching and translates a delayed failure in the latest language', async () => {
     defaults();
     const pending = deferred<Awaited<ReturnType<typeof productApi.getHotProducts>>>();
