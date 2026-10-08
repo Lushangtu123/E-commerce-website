@@ -14,7 +14,7 @@ export interface Product {
   description_en?: string | null;
   specs?: Record<string, unknown> | null;
   specs_en?: SpecTranslations | null;
-  category_id?: number;
+  category_id?: number | null;
   category_name?: string | null;
   brand?: string | null;
   price: Money;

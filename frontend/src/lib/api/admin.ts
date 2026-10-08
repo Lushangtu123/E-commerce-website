@@ -45,7 +45,7 @@ export interface AdminPage {
   pagination?: { page?: number; limit?: number; total?: number; totalPages?: number };
 }
 export interface Category { category_id: number; name: string }
-export interface AdminProductRow extends Product { category_id: number; status: number }
+export interface AdminProductRow extends Product { category_id: number | null; status: number }
 export interface AdminOrderRow extends Order { username?: string | null; item_count?: number }
 export interface AdminUserRow {
   user_id: number;
