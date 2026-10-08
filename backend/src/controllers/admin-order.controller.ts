@@ -47,7 +47,7 @@ export const getAdminOrders = async (req: Request, res: Response) => {
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.user_id
        WHERE ${whereClause}
-       ORDER BY o.created_at DESC
+       ORDER BY o.created_at DESC, o.order_id DESC
        LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );

@@ -60,7 +60,7 @@ export const getAdminLogs = async (req: Request, res: Response) => {
        FROM admin_logs al
        LEFT JOIN admins a ON al.admin_id = a.admin_id
        WHERE ${whereClause}
-       ORDER BY al.created_at DESC
+       ORDER BY al.created_at DESC, al.log_id DESC
        LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
