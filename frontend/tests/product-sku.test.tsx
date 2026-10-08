@@ -62,6 +62,35 @@ async function click(name: string) {
 }
 
 describe('product SKU purchase', () => {
+  it('keeps a successful favorite toggle when the initial same-session read arrives later', async () => {
+    const pending = deferred<{ is_favorited: boolean }>();
+    vi.mocked(favoriteApi.check).mockReturnValue(pending.promise);
+    await setup(); await click('收藏');
+    expect(button('取消收藏')).toBeEnabled();
+    await act(async () => pending.resolve({ is_favorited: false })); await settle();
+    expect(button('取消收藏')).toBeEnabled();
+  });
+
+  it('locks repeated favorite actions synchronously while a toggle is pending', async () => {
+    const pending = deferred<{ message: string; is_favorited: boolean }>();
+    vi.mocked(favoriteApi.toggle).mockReturnValue(pending.promise);
+    await setup(); const toggle = captureHandler(button('收藏'));
+    const first = toggle(); const second = toggle();
+    expect(favoriteApi.toggle).toHaveBeenCalledTimes(1);
+    await act(async () => pending.resolve({ message: '收藏成功', is_favorited: true }));
+    await Promise.all([first, second]); await settle();
+    expect(button('取消收藏')).toBeEnabled();
+  });
+
+  it('still accepts the initial favorite state when a pending toggle fails', async () => {
+    const read = deferred<{ is_favorited: boolean }>();
+    vi.mocked(favoriteApi.check).mockReturnValue(read.promise);
+    vi.mocked(favoriteApi.toggle).mockRejectedValue(apiError('操作失败', 'message'));
+    await setup(); await click('收藏');
+    await act(async () => read.resolve({ is_favorited: true })); await settle();
+    expect(button('取消收藏')).toBeEnabled();
+  });
+
   beforeEach(() => {
     params.id = '1';
     notifications.length = 0;

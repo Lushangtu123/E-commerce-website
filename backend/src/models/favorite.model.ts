@@ -1,6 +1,7 @@
-import { query } from '../database/mysql';
+import { getPool, query } from '../database/mysql';
 import { customerProducts } from './product.model';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import type { PoolConnection } from 'mysql2/promise';
 import { CustomerActivityError, assertActivityId, assertActivityPage, assertActivityBatch, activityProductDTO } from '../utils/customer-activity-validation';
 
 export interface Favorite {
@@ -21,35 +22,59 @@ export interface FavoriteWithProduct extends Favorite {
   has_sku?: number | boolean;
 }
 
+/** Every favorite write takes the account mutex before reading or changing receipts. */
+async function withFavoriteAccount<T>(userId: number, perform: (connection: PoolConnection) => Promise<T>): Promise<T> {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [users] = await connection.query<RowDataPacket[]>('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]);
+    if (!users.length) throw new CustomerActivityError('用户不存在', 404);
+    const result = await perform(connection);
+    await connection.commit(); return result;
+  } catch (error) { await connection.rollback(); throw error; }
+  finally { connection.release(); }
+}
+
 export class FavoriteModel {
-  // 添加收藏
-  static async add(userId: number, productId: number): Promise<number> {
+  static async toggle(userId: number, productId: number): Promise<{ is_favorited: boolean; favorite_id?: number }> {
     assertActivityId(userId); assertActivityId(productId);
-    try {
-      const result = await query<ResultSetHeader>(
-        `INSERT INTO favorites (user_id, product_id)
-         SELECT ?, product_id FROM products WHERE product_id = ? AND status = 1`,
-        [userId, productId]
-      );
-      if (result.affectedRows !== 1) throw new CustomerActivityError('商品不存在或已下架', 404);
-      return result.insertId;
-    } catch (error: any) {
-      // 如果是重复键错误，返回0表示已存在
-      if (error.code === 'ER_DUP_ENTRY') {
-        return 0;
+    return withFavoriteAccount(userId, async connection => {
+      // The account mutex serializes all writers. A missing receipt must not lock a shared index gap.
+      const [receipts] = await connection.query<RowDataPacket[]>(
+        'SELECT favorite_id FROM favorites WHERE user_id = ? AND product_id = ?', [userId, productId]);
+      if (receipts.length) {
+        await connection.query('DELETE FROM favorites WHERE user_id = ? AND product_id = ?', [userId, productId]);
+        return { is_favorited: false };
       }
-      throw error;
-    }
+      const [result] = await connection.query<ResultSetHeader>(
+        'INSERT INTO favorites (user_id, product_id) SELECT ?, product_id FROM products WHERE product_id = ? AND status = 1', [userId, productId]);
+      if (result.affectedRows !== 1) throw new CustomerActivityError('商品不存在或已下架', 404);
+      return { is_favorited: true, favorite_id: result.insertId };
+    });
   }
 
-  // 取消收藏
+  static async add(userId: number, productId: number): Promise<number> {
+    assertActivityId(userId); assertActivityId(productId);
+    return withFavoriteAccount(userId, async connection => {
+      try {
+        const [result] = await connection.query<ResultSetHeader>(
+          'INSERT INTO favorites (user_id, product_id) SELECT ?, product_id FROM products WHERE product_id = ? AND status = 1', [userId, productId]);
+        if (result.affectedRows !== 1) throw new CustomerActivityError('商品不存在或已下架', 404);
+        return result.insertId;
+      } catch (error: any) {
+        if (error.code === 'ER_DUP_ENTRY') return 0;
+        throw error;
+      }
+    });
+  }
+
   static async remove(userId: number, productId: number): Promise<boolean> {
     assertActivityId(userId); assertActivityId(productId);
-    const result = await query<ResultSetHeader>(
-      'DELETE FROM favorites WHERE user_id = ? AND product_id = ?',
-      [userId, productId]
-    );
-    return result.affectedRows > 0;
+    return withFavoriteAccount(userId, async connection => {
+      const [result] = await connection.query<ResultSetHeader>(
+        'DELETE FROM favorites WHERE user_id = ? AND product_id = ?', [userId, productId]);
+      return result.affectedRows > 0;
+    });
   }
 
   // 检查是否已收藏
