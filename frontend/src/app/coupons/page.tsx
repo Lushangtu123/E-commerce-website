@@ -6,7 +6,7 @@ import { couponApi, type Coupon } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
 
@@ -54,10 +54,10 @@ export default function CouponsPage() {
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
-      toast.error(t('请先登录'));
+      toast.error(translate('请先登录'));
       router.push('/login');
     }
-  }, [isHydrated, isAuthenticated, router, t]);
+  }, [isHydrated, isAuthenticated, router]);
 
   const handleReceive = async (coupon: Coupon) => {
     if (!isCurrentScope() || claims.current.has(coupon.coupon_id) || coupon.remain_quantity <= 0 || !coupons.some(row => row.coupon_id === coupon.coupon_id)) return;
@@ -68,7 +68,7 @@ export default function CouponsPage() {
     try {
       await couponApi.receive(coupon.code);
       if (!isCurrentSession()) return;
-      toast.success(t('领取成功！'));
+      toast.success(translate('领取成功！'));
       
       // Exhausted coupons disappear from the available list; refresh its total and current page together.
       await query.invalidate();
@@ -76,7 +76,7 @@ export default function CouponsPage() {
       if (!isCurrentSession()) return;
       logger.error('领取失败:', error);
       const message = requestFailure(error).response?.data?.message || '领取失败';
-      toast.error(t(message));
+      toast.error(translate(message));
     } finally {
       if (claims.current.get(coupon.coupon_id) === operation) {
         claims.current.delete(coupon.coupon_id);

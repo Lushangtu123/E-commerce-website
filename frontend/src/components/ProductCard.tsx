@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
 import Link from 'next/link';
@@ -35,7 +35,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     
     if (!isAuthenticated) {
-      toast.error(t("请先登录"));
+      toast.error(translate("请先登录"));
       return;
     }
 
@@ -43,10 +43,10 @@ export default function ProductCard({ product }: ProductCardProps) {
     try {
       const result = await quickAddToCart(product.product_id, () => active.current && productContext.current === product.product_id);
       if (result === 'select') router.push(`/products/${product.product_id}`);
-      if (result === 'added') toast.success(t("已加入购物车"));
+      if (result === 'added') toast.success(translate("已加入购物车"));
     } catch (error) {
       logger.error('加入购物车失败:', error);
-      toast.error(t(requestFailure(error).response?.data?.error || requestFailure(error).message || "加入购物车失败"));
+      toast.error(translate(requestFailure(error).response?.data?.error || requestFailure(error).message || "加入购物车失败"));
     } finally {
       if (active.current) setIsAdding(false);
     }

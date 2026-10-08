@@ -55,16 +55,27 @@ function watchConsole(page, label) {
 async function visibleText(page, text) {
   await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible' });
 }
+async function localPlatformScripts(context) {
+  // These platform-served scripts are absent from a local Next production server.
+  // Supply only those exact scripts; unexpected console and application failures remain fatal.
+  for (const script of ['insights', 'speed-insights']) {
+    await context.route(`http://127.0.0.1:3100/_vercel/${script}/script.js`, route => route.fulfill({
+      status: 200, contentType: 'application/javascript', body: '/* local platform script fixture */',
+    }));
+  }
+}
 (async () => {
   const fixture = start(process.execPath, ['scripts/e2e-server.cjs'], backend, {});
   await ready('http://127.0.0.1:3101/api/products', fixture);
-  const frontend = start(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '-p', '3100', '-H', '127.0.0.1'], root, {
+  const production = process.env.ECOMMERCE_E2E_PRODUCTION === 'true';
+  const frontend = start(process.execPath, ['node_modules/next/dist/bin/next', production ? 'start' : 'dev', '-p', '3100', '-H', '127.0.0.1'], root, {
     NEXT_PUBLIC_API_URL: 'http://127.0.0.1:3101/api', ECOMMERCE_SERVERLESS_API: 'false',
-    NODE_ENV: 'development', VERCEL: '', VERCEL_ENV: '', NEXT_TELEMETRY_DISABLED: '1',
+    NODE_ENV: production ? 'production' : 'development', VERCEL: '', VERCEL_ENV: '', NEXT_TELEMETRY_DISABLED: '1',
   });
   await ready('http://127.0.0.1:3100/register', frontend);
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
+  await localPlatformScripts(context);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   const errors = [];
@@ -100,6 +111,11 @@ async function visibleText(page, text) {
   await page.locator('section').filter({ has: page.getByRole('heading', { name: 'Best sellers', exact: true }) }).locator('a[href="/products/1"]').waitFor({ state: 'visible' });
   assert.equal(hotAttempts, beforeHotRetry + 1);
   await page.unroute(`${hotEndpoint}*`, hotFault); expectedReadFailure = undefined;
+  await page.reload();
+  await page.getByRole('heading', { name: 'Welcome to our shop', exact: true }).waitFor({ state: 'visible' });
+  await page.locator('section').filter({ has: page.getByRole('heading', { name: 'Best sellers', exact: true }) }).locator('a[href="/products/1"]').waitFor({ state: 'visible' });
+  assert.equal(await page.getByRole('combobox', { name: 'Interface language', exact: true }).inputValue(), 'en');
+  console.log('PASS browser persisted English preference survives homepage hydration');
   await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
   console.log('PASS browser independent homepage failure preserves new arrivals and bilingual retry recovers hot products');
   const couponsEndpoint = 'http://127.0.0.1:3101/api/coupons/available';
@@ -435,6 +451,7 @@ async function visibleText(page, text) {
   await visibleText(page, '已支付');
   console.log('PASS browser checkout and explicit demo payment');
   const adminContext = await browser.newContext();
+  await localPlatformScripts(adminContext);
   const admin = await adminContext.newPage();
   admin.setDefaultTimeout(30000);
   admin.on('pageerror', error => errors.push(error.message));

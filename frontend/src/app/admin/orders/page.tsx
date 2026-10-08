@@ -6,7 +6,7 @@ import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
 import type { AdminOrderRow, AdminPage } from '@/lib/api';
 import { useAdminSession } from '@/hooks/use-admin-session';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
 import { requestFailure } from '@/lib/api-error';
 import { confirmAction } from '@/lib/confirm';
@@ -83,16 +83,16 @@ export default function AdminOrdersPage() {
     if (!order || NEXT_STATUS[order.status]?.status !== status) return;
     if (status === 2 && (shipment?.key !== key || shipment.id !== id)) { setShipment({ key, id, company: '', tracking: '' }); return; }
     const company = shipment?.company.trim() || '', tracking = shipment?.tracking.trim() || '';
-    if (status === 2 && (!company || company.length > 60 || !tracking || tracking.length > 100 || /[\x00-\x1f\x7f]/.test(company + tracking))) { toast.error(t('请填写有效的快递公司和运单号')); return; }
+    if (status === 2 && (!company || company.length > 60 || !tracking || tracking.length > 100 || /[\x00-\x1f\x7f]/.test(company + tracking))) { toast.error(translate('请填写有效的快递公司和运单号')); return; }
     if (status === 4 && !(await confirmAction(t('确定要取消订单吗？')))) return;
     if (!active() || mutation.current) return;
     const operation = {}; mutation.current = operation; setBusy(true);
     try {
       await api.put(`/admin/orders/${id}/status`, { status, ...(status === 2 && { shipping_company: company, tracking_number: tracking }) });
       if (!session.active() || mutation.current !== operation) return;
-      if (active()) { toast.success(t('订单状态已更新')); setShipment(null); }
+      if (active()) { toast.success(translate('订单状态已更新')); setShipment(null); }
       await latestLoad.current?.();
-    } catch (error) { if (active() && mutation.current === operation) toast.error(t(requestFailure(error).response?.data?.error || '更新订单状态失败')); }
+    } catch (error) { if (active() && mutation.current === operation) toast.error(translate(requestFailure(error).response?.data?.error || '更新订单状态失败')); }
     finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   return <AdminLayout><div className="space-y-6">

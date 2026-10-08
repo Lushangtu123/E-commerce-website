@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
@@ -111,13 +111,13 @@ export default function AdminProductsPage() {
       await perform();
       if (isDisplayedScope()) {
         afterSuccess?.();
-        toast.success(t(success));
+        toast.success(translate(success));
       }
       // The page or filters may have changed meanwhile; this reloads whichever rows are displayed now.
       // After a session change it sends nothing: the old administrator's queries are gone or fail their session check.
       await query.invalidate();
     } catch (error) {
-      if (isDisplayedScope()) toast.error(t(requestFailure(error).response?.data?.error || failure));
+      if (isDisplayedScope()) toast.error(translate(requestFailure(error).response?.data?.error || failure));
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
@@ -162,7 +162,7 @@ export default function AdminProductsPage() {
   const handleBatchStatusChange = (newStatus: number) => {
     if (!isDisplayedScope() || mutation.current) return;
     const ids = [...selectedIds];
-    if (ids.length === 0) { toast.error(t('请先选择商品')); return; }
+    if (ids.length === 0) { toast.error(translate('请先选择商品')); return; }
     return runMutation(() => api.put('/admin/products/batch/status', { productIds: ids, status: newStatus }),
       t(newStatus === 1 ? '已上架{count}个商品' : '已下架{count}个商品', { count: ids.length }), '批量操作失败',
       () => setSelectedIds([]));
@@ -196,12 +196,12 @@ export default function AdminProductsPage() {
   const handleAddProduct = () => {
     if (formScope !== scopeKey || !isDisplayedScope() || mutation.current) return;
     if (!isProductFormComplete(newProduct)) {
-      toast.error(t('请填写商品标题、价格和分类'));
+      toast.error(translate('请填写商品标题、价格和分类'));
       return;
     }
     let payload;
     try { payload = toProductPayload(newProduct); }
-    catch (error) { toast.error(t((error as Error).message)); return; }
+    catch (error) { toast.error(translate((error as Error).message)); return; }
     return runMutation(() => api.post('/admin/products', payload), '商品添加成功', '添加商品失败', () => {
       setShowAddModal(false);
       setNewProduct(EMPTY_PRODUCT_FORM);
@@ -233,13 +233,13 @@ export default function AdminProductsPage() {
     if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || mutation.current ||
       !selectableProducts.some(product => product.product_id === editProduct.product_id)) return;
     if (!isProductFormComplete(editProduct)) {
-      toast.error(t('请填写商品标题、价格和分类'));
+      toast.error(translate('请填写商品标题、价格和分类'));
       return;
     }
     let payload;
     try { payload = toProductChanges(editProduct, editProduct.previous); }
-    catch (error) { toast.error(t((error as Error).message)); return; }
-    if (!Object.keys(payload).length) { toast.success(t('没有需要保存的修改')); return; }
+    catch (error) { toast.error(translate((error as Error).message)); return; }
+    if (!Object.keys(payload).length) { toast.success(translate('没有需要保存的修改')); return; }
     return runMutation(() => api.put(`/admin/products/${editProduct.product_id}`, payload), '商品更新成功', '更新商品失败', () => {
       setShowEditModal(false);
       setEditProduct(null);

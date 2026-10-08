@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 import { useState } from 'react';
@@ -42,14 +42,14 @@ export default function AdminLoginPage() {
       if (response.ok && data?.admin && typeof data.admin === 'object') {
         startAdminSession(data.admin);
 
-        toast.success(t('登录成功'));
+        toast.success(translate('登录成功'));
         router.push('/admin/dashboard');
       } else {
-        toast.error(t(data?.error || '登录失败'));
+        toast.error(translate(data?.error || '登录失败'));
       }
     } catch (error) {
       logger.error('登录失败:', error);
-      toast.error(t('登录失败，请稍后重试'));
+      toast.error(translate('登录失败，请稍后重试'));
     } finally {
       setLoading(false);
     }

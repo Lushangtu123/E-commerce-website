@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { addressApi, type AddressInput, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { confirmAction } from '@/lib/confirm';
@@ -66,13 +66,13 @@ export default function AddressPage() {
       await operation();
       if (!isCurrent()) return;
       setEditing(undefined);
-      toast.success(t(success));
+      toast.success(translate(success));
       await query.invalidate();
     } catch (error) {
       if (!isCurrent()) return;
       const message = requestFailure(error).response?.data?.error || requestFailure(error).response?.data?.message || '地址操作失败，请重试';
       setFormError(message);
-      toast.error(t(message));
+      toast.error(translate(message));
     } finally {
       if (isCurrent()) { mutation.current = null; setBusy(null); }
     }

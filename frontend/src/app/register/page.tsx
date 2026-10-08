@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -39,18 +39,18 @@ export default function RegisterPage() {
     const email = formData.email.trim();
 
     if (!username || !email || !password || !confirmPassword) {
-      toast.error(t("请填写完整信息"));
+      toast.error(translate("请填写完整信息"));
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error(t("两次密码不一致"));
+      toast.error(translate("两次密码不一致"));
       return;
     }
 
     const invalidPassword = passwordError(password);
     if (invalidPassword) {
-      toast.error(t(invalidPassword));
+      toast.error(translate(invalidPassword));
       return;
     }
 
@@ -58,11 +58,11 @@ export default function RegisterPage() {
     try {
       const data = await userApi.register({ username, email, password });
       login(data.user);
-      toast.success(t("注册成功"));
+      toast.success(translate("注册成功"));
       router.push('/');
     } catch (error) {
       logger.error('注册请求失败');
-      toast.error(t(requestFailure(error).response?.data?.error || "注册失败"));
+      toast.error(translate(requestFailure(error).response?.data?.error || "注册失败"));
     } finally {
       setLoading(false);
     }

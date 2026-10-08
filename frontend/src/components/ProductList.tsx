@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n } from '@/lib/i18n';
+import { translate, useI18n } from '@/lib/i18n';
 
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -61,7 +61,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   useEffect(() => {
     if (!query.error) return;
     logger.error('加载商品失败:', query.error);
-    toast.error(t('加载商品失败'));
+    toast.error(translate('加载商品失败'));
   }, [query.error]);
 
   const handlePageChange = (next: number) => {
