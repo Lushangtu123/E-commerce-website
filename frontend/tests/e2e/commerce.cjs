@@ -100,6 +100,23 @@ async function visibleText(page, text) {
   assert.equal(await searchInput.inputValue(), searchKeyword);
   page.off('request', watchSearch);
   console.log('PASS browser history deletion preserves search input and URL without re-recording the keyword');
+  await page.goto('http://127.0.0.1:3100/products/2');
+  const variant = page.getByLabel('商品规格', { exact: true });
+  await variant.waitFor({ state: 'visible' });
+  await page.waitForFunction(() => !document.querySelector('#product-sku')?.disabled);
+  const pricing = page.locator('span.text-3xl').locator('..');
+  assert.equal(await pricing.locator('.line-through').count(), 0, 'no parent discount before selecting a variant');
+  await variant.selectOption('201');
+  await pricing.getByText('¥100.00', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await pricing.locator('.line-through').textContent(), '¥100.00');
+  await pricing.getByText('¥99.00', { exact: true }).waitFor({ state: 'visible' });
+  await variant.selectOption('202');
+  await pricing.getByText('¥100.00', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await pricing.locator('.line-through').count(), 0, 'equal variant prices have no discount');
+  await variant.selectOption('203');
+  await pricing.getByText('¥150.00', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await pricing.locator('.line-through').count(), 0, 'null variant original price does not inherit parent');
+  console.log('PASS browser selected SKU owns its promotion price without inheriting parent discounts');
   await page.goto('http://127.0.0.1:3100/profile/address');
   await page.getByRole('button', { name: '新增地址', exact: true }).click();
   for (const [field, value] of Object.entries({ receiver_name: '浏览器测试收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '仅测试地址1号' })) {
