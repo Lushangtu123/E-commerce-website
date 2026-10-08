@@ -3,7 +3,8 @@ import { ProductModel, type Product } from '../models/product.model';
 import { SKUModel } from '../models/sku.model';
 import { getRedisClient } from '../database/redis';
 import logger from '../utils/logger';
-import { PRODUCT_HOT_CACHE_KEY, PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
+import { PRODUCT_HOT_CACHE_KEY } from '../utils/product-cache-keys';
+import { afterProductWrite } from './admin-product-write';
 import { productCreateSchema, productQuerySchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 import { specsTranslationSchema } from '../utils/product-i18n';
 
@@ -118,6 +119,7 @@ export class ProductController {
       const { error, value: product } = productCreateSchema.validate(req.body);
       if (error) return res.status(400).json({ error: '商品字段或值无效' });
       const productId = await ProductModel.create(product);
+      await afterProductWrite(req, [productId], 'CREATE_PRODUCT', 'product', String(productId), `创建商品: ${product.title}`);
       
       res.status(201).json({
         message: '商品创建成功',
@@ -139,12 +141,7 @@ export class ProductController {
       const success = await ProductModel.update(productId, updates);
       
       if (success) {
-        // 清除缓存
-        try {
-          await getRedisClient().del(...productDetailCacheKeys(productId), ...PRODUCT_HOT_CACHE_KEYS);
-        } catch (cacheError) {
-          logger.warn({ err: cacheError }, '商品已更新，缓存清理失败');
-        }
+        await afterProductWrite(req, [productId], 'UPDATE_PRODUCT', 'product', String(productId), `更新商品: ${updates.title || ''}`);
         
         res.json({ message: '商品更新成功' });
       } else {
