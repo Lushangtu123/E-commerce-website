@@ -33,7 +33,7 @@ export const getAdminUsers = async (req: Request, res: Response) => {
         u.created_at,
         u.updated_at,
         (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) as order_count,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3)) as total_spent
+        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3) AND (o.payment_method IS NULL OR o.payment_method <> 'demo')) as total_spent
        FROM users u
        WHERE ${whereClause}
        ORDER BY u.created_at DESC, u.user_id DESC
@@ -83,7 +83,7 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
         u.created_at,
         u.updated_at,
         (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id) as order_count,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3)) as total_spent
+        (SELECT COALESCE(SUM(total_amount), 0) FROM orders o WHERE o.user_id = u.user_id AND o.status IN (1,2,3) AND (o.payment_method IS NULL OR o.payment_method <> 'demo')) as total_spent
        FROM users u
        WHERE u.user_id = ?`,
       [userId]
