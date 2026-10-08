@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { quickAddToCart } from '@/lib/quick-cart';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/useAuthStore';
+import { storedSessionId, useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { FiShoppingCart } from 'react-icons/fi';
 import { FaStar } from 'react-icons/fa';
@@ -23,32 +23,48 @@ interface ProductCardProps {
 export default function ProductCard({ product }: ProductCardProps) {
   const { t, locale } = useI18n();
   const title = localizedText(product.title, product.title_en, locale);
+  const { isAuthenticated, sessionId, user } = useAuthStore();
+  const context = JSON.stringify([product.product_id, sessionId, user?.user_id]);
   const active = useRef(true);
-  const productContext = useRef(product.product_id);
-  productContext.current = product.product_id;
+  const productContext = useRef(context);
+  productContext.current = context;
+  const pending = useRef<{ context: string } | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const [isAdding, setIsAdding] = useState(false);
-  const { isAuthenticated } = useAuthStore();
+  const [pendingContext, setPendingContext] = useState<string | null>(null);
+  const isAdding = pendingContext === context;
   const router = useRouter();
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
+    const current = () => {
+      const auth = useAuthStore.getState();
+      return active.current && productContext.current === context && auth.sessionId === sessionId &&
+        auth.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null);
+    };
+    if (!current() || pending.current?.context === context) return;
     
     if (!isAuthenticated) {
       toast.error(translate("请先登录"));
       return;
     }
 
-    setIsAdding(true);
+    const operation = { context }; pending.current = operation;
+    setPendingContext(context);
     try {
-      const result = await quickAddToCart(product.product_id, () => active.current && productContext.current === product.product_id);
+      const result = await quickAddToCart(product.product_id, current);
+      if (!current()) return;
       if (result === 'select') router.push(`/products/${product.product_id}`);
       if (result === 'added') toast.success(translate("已加入购物车"));
     } catch (error) {
-      logger.error('加入购物车失败:', error);
-      toast.error(translate(requestFailure(error).response?.data?.error || requestFailure(error).message || "加入购物车失败"));
+      if (current()) {
+        logger.error('加入购物车失败:', error);
+        toast.error(translate(requestFailure(error).response?.data?.error || requestFailure(error).message || "加入购物车失败"));
+      }
     } finally {
-      if (active.current) setIsAdding(false);
+      if (pending.current === operation) {
+        pending.current = null;
+        if (current()) setPendingContext(null);
+      }
     }
   };
 

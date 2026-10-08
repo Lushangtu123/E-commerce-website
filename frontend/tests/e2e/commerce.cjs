@@ -98,6 +98,33 @@ async function localPlatformScripts(context) {
   await page.getByRole('button', { name: '注册', exact: true }).click();
   await page.waitForURL('http://127.0.0.1:3100/');
   console.log('PASS browser registration');
+  await page.goto('http://127.0.0.1:3100/products');
+  const ordinaryCard = page.locator('a[href="/products/1"]').filter({ has: page.getByRole('heading', { name: '浏览器交易测试商品', exact: true }) }).first();
+  const cardAdd = ordinaryCard.getByRole('button', { name: '加入', exact: true });
+  await cardAdd.waitFor({ state: 'visible' });
+  // The card is present in SSR HTML before the persisted customer's session has hydrated.
+  await page.getByRole('button', { name: '退出登录', exact: true }).waitFor({ state: 'visible' });
+  let releaseCardRead, cardReadReady, cardReads = 0, cardWrites = 0;
+  const cardReadGate = new Promise(resolve => { releaseCardRead = resolve; });
+  const cardReadStarted = new Promise(resolve => { cardReadReady = resolve; });
+  const cardEndpoint = 'http://127.0.0.1:3101/api/products/1';
+  const delayCardRead = async route => { cardReads++; cardReadReady(); await cardReadGate; return route.continue(); };
+  const countCardWrites = request => { if (request.method() === 'POST' && request.url() === 'http://127.0.0.1:3101/api/cart') cardWrites++; };
+  page.on('request', countCardWrites); await page.route(cardEndpoint, delayCardRead);
+  await cardAdd.evaluate(button => { button.click(); button.click(); });
+  await cardReadStarted;
+  assert.equal(await ordinaryCard.getByRole('button', { name: '处理中...', exact: true }).isDisabled(), true);
+  const cardWriteCompleted = page.waitForResponse(response => response.request().method() === 'POST' && response.url() === 'http://127.0.0.1:3101/api/cart');
+  releaseCardRead(); assert.equal((await cardWriteCompleted).status(), 200);
+  await cardAdd.click({ trial: true });
+  const cardCart = await context.request.get('http://127.0.0.1:3101/api/cart'); assert.equal(cardCart.status(), 200);
+  const cardRows = (await cardCart.json()).items.filter(item => item.product_id === 1);
+  assert.equal(cardReads, 1); assert.equal(cardWrites, 1); assert.equal(cardRows.length, 1); assert.equal(cardRows[0].quantity, 1);
+  await page.unroute(cardEndpoint, delayCardRead); page.off('request', countCardWrites);
+  const clearCardFixture = await context.request.delete('http://127.0.0.1:3101/api/cart/1', { headers: { 'X-Requested-With': 'XMLHttpRequest', Origin: 'http://127.0.0.1:3100' } });
+  assert.equal(clearCardFixture.status(), 200);
+  await page.goto('http://127.0.0.1:3100/');
+  console.log('PASS browser repeated same-task card events create one real cart increment');
   const hotEndpoint = 'http://127.0.0.1:3101/api/products/hot';
   let hotUnavailable = true, hotAttempts = 0;
   const hotFault = route => { hotAttempts++; return hotUnavailable
