@@ -75,8 +75,19 @@ router.post('/', requirePermission('coupon:create'), AdminCouponController.creat
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items: { $ref: '#/components/schemas/Coupon' }
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/AdminCoupon' }
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page: { type: integer }
+ *                     page_size: { type: integer }
+ *                     total: { type: integer }
+ *                     total_pages: { type: integer }
  *       403:
  *         description: 权限不足
  */

@@ -1,33 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { couponApi } from '@/lib/api';
-import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
+import { couponApi, type UserCoupon } from '@/lib/api';
+import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
-import { logger } from '@/lib/logger';
 import { useI18n } from '@/lib/i18n';
-
-interface UserCoupon {
-  user_coupon_id: number;
-  user_id: number;
-  coupon_id: number;
-  status: number;
-  used_at?: string;
-  order_id?: number;
-  received_at: string;
-  expired_at: string;
-  code: string;
-  name: string;
-  description: string;
-  type: number;
-  discount_value: number | string;
-  min_amount: number | string;
-  max_discount?: number | string | null;
-  coupon_status?: number;
-  start_time?: string;
-  end_time?: string;
-}
+import { useSessionQuery } from '@/hooks/use-session-query';
+import { requestFailure } from '@/lib/api-error';
 
 const STATUS_TABS = [
   { value: 1, label: '未使用' },
@@ -39,41 +19,27 @@ export default function MyCouponsPage() {
   const router = useRouter();
   const { t, locale, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
-  const [coupons, setCoupons] = useState<UserCoupon[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState(1);
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const requestKey = JSON.stringify([sessionId, user?.user_id, activeStatus]);
-  const isCurrentSession = () => {
-    const current = useAuthStore.getState();
-    return current.isAuthenticated && current.sessionId === sessionId && current.user?.user_id === user?.user_id &&
-      storedSessionId() === (sessionId ?? null);
-  };
+  const currentScope = useRef(requestKey);
+  useLayoutEffect(() => { currentScope.current = requestKey; }, [requestKey]);
+  const query = useSessionQuery({
+    name: 'my-coupons', params: [activeStatus],
+    load: async () => {
+      const response = await couponApi.getMyCoupons(activeStatus);
+      return response.data || [];
+    },
+  });
+  const coupons = query.data || [];
+  const error = query.error ? requestFailure(query.error).response?.data?.message || requestFailure(query.error).response?.data?.error || '加载优惠券失败，请重试' : undefined;
+  const loading = !query.data && !error;
 
   useEffect(() => {
-    setCoupons([]);
-    if (!isHydrated) return;
-    if (!isAuthenticated) {
+    if (isHydrated && !isAuthenticated) {
       toast.error(t('请先登录'));
       router.push('/login');
-      return;
     }
-    let active = true;
-    setLoading(true);
-    couponApi.getMyCoupons(activeStatus).then(response => {
-      if (active && isCurrentSession()) setCoupons(response.data || []);
-    }).catch(error => {
-      if (!active || !isCurrentSession()) return;
-      logger.error('加载优惠券失败:', error);
-      toast.error(t(error.response?.data?.message || '加载失败'));
-    }).finally(() => {
-      if (active && isCurrentSession()) {
-        setLoadedKey(requestKey);
-        setLoading(false);
-      }
-    });
-    return () => { active = false; };
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, activeStatus, router]);
+  }, [isHydrated, isAuthenticated, router, t]);
 
   const getCouponTypeText = (type: number) => {
     switch (type) {
@@ -101,7 +67,7 @@ export default function MyCouponsPage() {
       case 3:
         return t('直接抵扣{discount}元', { discount: coupon.discount_value });
       default:
-        return coupon.description;
+        return coupon.description || '';
     }
   };
 
@@ -120,7 +86,7 @@ export default function MyCouponsPage() {
   };
 
   const handleUse = (coupon: UserCoupon) => {
-    if (!isCurrentSession()) return;
+    if (!query.isCurrentSession() || currentScope.current !== requestKey || !query.data?.some(row => row.user_coupon_id === coupon.user_coupon_id)) return;
     if (!canUseCoupon(coupon)) {
       toast.error(t('优惠券当前不可用'));
       return;
@@ -136,7 +102,7 @@ export default function MyCouponsPage() {
       (!coupon.end_time || new Date(coupon.end_time).getTime() > now);
   };
 
-  if (!isHydrated || !isAuthenticated || loading || loadedKey !== requestKey) {
+  if (!isHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -188,7 +154,12 @@ export default function MyCouponsPage() {
         </div>
 
         {/* Coupons List */}
-        {coupons.length === 0 ? (
+        {loading ? <div className="text-center py-12" role="status">{t('加载中...')}</div> : error ? (
+          <div className="text-center py-12 bg-white rounded-lg shadow-sm" role="alert">
+            <p className="text-red-600">{t(error)}</p>
+            <button onClick={query.refetch} className="btn btn-secondary mt-4">{t('重新加载优惠券')}</button>
+          </div>
+        ) : coupons.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />

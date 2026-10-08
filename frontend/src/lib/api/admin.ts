@@ -1,6 +1,6 @@
 import api from './client';
 import type { Money, Product } from './catalog';
-import type { Order } from './orders';
+import type { Order, Coupon, CouponPagination } from './orders';
 import type { SpecTranslations } from '@/lib/product-content';
 
 // 管理后台
@@ -82,6 +82,8 @@ export interface TopProduct { product_id: number; title: string; title_en?: stri
 export interface SalesTrendPoint { date: string; order_count: number; revenue: Money | null }
 
 // 管理员优惠券API
+export interface AdminCoupon extends Coupon { received_count: number; used_count: number }
+export interface AdminCouponPage { data: AdminCoupon[]; pagination?: CouponPagination }
 export const adminCouponApi = {
   // 创建优惠券
   create: (data: {
@@ -100,7 +102,7 @@ export const adminCouponApi = {
   
   // 获取优惠券列表
   getList: (page = 1, pageSize = 20, status?: number) =>
-    api.get('/admin/coupons', { params: { page, page_size: pageSize, status } }),
+    api.get<unknown, AdminCouponPage>('/admin/coupons', { params: { page, page_size: pageSize, status } }),
   
   // 获取优惠券详情
   getDetail: (id: number) =>

@@ -94,6 +94,7 @@ export class AdminCouponController {
         status,
         page,
         page_size,
+        include_usage: true,
       });
 
       res.json({

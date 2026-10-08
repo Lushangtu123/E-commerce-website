@@ -96,8 +96,9 @@ export class CouponModel {
     page?: number;
     page_size?: number;
     available_only?: boolean;
+    include_usage?: boolean;
   }): Promise<{ coupons: Coupon[]; total: number }> {
-    const { status, page = 1, page_size = 20, available_only = false } = params;
+    const { status, page = 1, page_size = 20, available_only = false, include_usage = false } = params;
     if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(page_size) || page_size < 1 || page_size > 100) {
       throw new RangeError('分页参数无效');
     }
@@ -125,14 +126,24 @@ export class CouponModel {
 
     // 获取列表
     // Use escaped query parameters: some MySQL versions reject execute's numeric LIMIT bindings.
+    // Only administrators need usage counts. Correlated counts use idx_coupon and
+    // cannot be multiplied by repeated usage logs or by another coupon's receipts.
+    const selection = include_usage ? `coupons.*,
+      (SELECT COUNT(*) FROM user_coupons WHERE user_coupons.coupon_id = coupons.coupon_id) AS received_count,
+      (SELECT COUNT(*) FROM user_coupons WHERE user_coupons.coupon_id = coupons.coupon_id AND status = 2) AS used_count` : '*';
     const [coupons] = await getPool().query<RowDataPacket[]>(
-      `SELECT * FROM coupons ${whereClause} 
-       ORDER BY created_at DESC 
+      `SELECT ${selection} FROM coupons ${whereClause}
+       ORDER BY created_at DESC, coupon_id DESC
        LIMIT ? OFFSET ?`,
       [...queryParams, page_size, offset]
     );
 
-    return { coupons: coupons as Coupon[], total };
+    return {
+      coupons: (include_usage ? coupons.map(row => ({ ...row,
+        received_count: Number(row.received_count), used_count: Number(row.used_count),
+      })) : coupons) as Coupon[],
+      total,
+    };
   }
 
   /**

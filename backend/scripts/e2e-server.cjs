@@ -70,5 +70,10 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     (203,2,'PRICE-NONE','{"颜色":"绿色"}',?,150.00,NULL,3,1)`,
     ['Red', 'Blue', 'Green'].map(value => JSON.stringify({ 颜色: { name: 'Color', value } })));
   const app = require(path.join(backend, 'dist/app')).createApp();
+  for (let id = 1; id <= 51; id++) {
+    await pool.query(`INSERT INTO coupons(coupon_id,code,name,type,discount_value,total_quantity,remain_quantity,per_user_limit,start_time,end_time,created_at)
+      VALUES(?, ?, ?, 3, 5, ?, ?, 1, DATE_SUB(NOW(),INTERVAL 1 DAY), DATE_ADD(NOW(),INTERVAL 1 DAY), '2026-01-01 00:00:00')`,
+      [id, `BROWSER${id}`, `浏览器优惠券${id}`, id === 1 ? 1 : 3, id === 1 ? 1 : 3]);
+  }
   listener = app.listen(3101, '127.0.0.1', () => console.log('E2E fixture ready on 127.0.0.1:3101'));
 })().catch(async () => { console.error('E2E fixture initialization failed'); await stop(); process.exit(1); });
