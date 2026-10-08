@@ -45,6 +45,7 @@ integration('real MySQL shipment and after-sales locks', () => {
     if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } }
   });
   beforeEach(async () => {
+    (getPool as jest.Mock).mockReturnValue(db);
     for (const table of ['after_sales_requests', 'admin_logs', 'admins', 'roles', 'order_items', 'orders', 'products', 'users']) await db.query(`DELETE FROM ${table}`);
     await db.query("INSERT INTO roles (role_id,role_name) VALUES (1,'operator')");
     await db.query("INSERT INTO admins (admin_id,username,password_hash,role_id) VALUES (2,'operator','test',1)");
@@ -85,6 +86,38 @@ integration('real MySQL shipment and after-sales locks', () => {
     expect(await order()).toMatchObject({ status: 1 });
     expect(await product()).toMatchObject({ stock: 5, sales_count: 1 });
   });
+  test('different orders can create their first after-sales requests concurrently', async () => {
+    await db.query("INSERT INTO orders (order_id,order_no,user_id,total_amount,status) VALUES (11,'order11',8,10,1)");
+    let arrivals = 0;
+    let release!: () => void;
+    let timer!: ReturnType<typeof setTimeout>;
+    const barrier = new Promise<void>((resolve, reject) => {
+      release = resolve;
+      timer = setTimeout(() => reject(new Error('Concurrent test barrier timed out')), 2000);
+    });
+    (getPool as jest.Mock).mockReturnValue({ getConnection: async () => {
+      const connection = await db.getConnection();
+      return {
+        beginTransaction: () => connection.beginTransaction(), commit: () => connection.commit(),
+        rollback: () => connection.rollback(), release: () => connection.release(),
+        execute: async (sql: string, values: any[]) => {
+          const result = await connection.execute(sql, values);
+          if (sql.startsWith('SELECT * FROM after_sales_requests')) {
+            if (++arrivals === 2) release();
+            if (arrivals <= 2) await barrier;
+          }
+          return result;
+        },
+      };
+    } });
+    const results = await Promise.allSettled([
+      createAfterSales(7, 10, { type: 'refund', reason: 'one' }),
+      createAfterSales(8, 11, { type: 'return', reason: 'two' }),
+    ]).finally(() => clearTimeout(timer));
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'fulfilled']);
+    expect((await db.query<RowDataPacket[]>('SELECT order_id FROM after_sales_requests ORDER BY order_id'))[0]).toEqual([{ order_id: 10 }, { order_id: 11 }]);
+  });
+
   test('two conflicting reviews have one winner, one audit, no refund or stock mutation', async () => {
     const request = await createAfterSales(7, 10, { type: 'refund', reason: 'PRIVATE-REASON' });
     const reviews = await Promise.allSettled([

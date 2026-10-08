@@ -104,6 +104,37 @@ integration('真实 MySQL 评价完整性与迁移', () => {
     await expect(ReviewModel.create(2, 1, 1, 3)).resolves.toBeGreaterThan(0);
   });
 
+  test.each(['新表', '尚未升级的旧表'])('%s 不同订单首次评价并发均成功', async schema => {
+    if (schema === '尚未升级的旧表') await db.query('ALTER TABLE reviews DROP INDEX uk_review_order_product, DROP CHECK ck_reviews_rating');
+    await db.query("INSERT INTO orders (order_id,order_no,user_id,total_amount,status) VALUES (2,'OTHER-ORDER',2,10,3)");
+    await db.query('INSERT INTO order_items (order_id,product_id,quantity,price) VALUES (2,1,1,10)');
+    let arrivals = 0;
+    let release!: () => void;
+    let timer!: ReturnType<typeof setTimeout>;
+    const barrier = new Promise<void>((resolve, reject) => {
+      release = resolve;
+      timer = setTimeout(() => reject(new Error('Concurrent test barrier timed out')), 2000);
+    });
+    (getPool as jest.Mock).mockReturnValue({ getConnection: async () => {
+      const connection = await db.getConnection();
+      return {
+        beginTransaction: () => connection.beginTransaction(), commit: () => connection.commit(),
+        rollback: () => connection.rollback(), release: () => connection.release(),
+        execute: async (sql: string, values: any[]) => {
+          const result = await connection.execute(sql, values);
+          if (sql.startsWith('SELECT review_id FROM reviews')) {
+            if (++arrivals === 2) release();
+            await barrier;
+          }
+          return result;
+        },
+      };
+    } });
+    const results = await Promise.allSettled([ReviewModel.create(1, 1, 1, 5), ReviewModel.create(1, 2, 2, 4)]).finally(() => clearTimeout(timer));
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'fulfilled']);
+    expect((await db.query<RowDataPacket[]>('SELECT * FROM reviews ORDER BY order_id'))[0]).toMatchObject([{ order_id: 1 }, { order_id: 2 }]);
+  });
+
   test('拒绝他人订单、非订单商品和未完成订单，合法提交仍可成功', async () => {
     await expect(ReviewModel.create(1, 2, 1, 5)).rejects.toMatchObject({ statusCode: 403 });
     await expect(ReviewModel.create(3, 1, 1, 5)).rejects.toMatchObject({ statusCode: 400 });

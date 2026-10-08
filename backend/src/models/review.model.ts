@@ -52,10 +52,11 @@ export class ReviewModel {
         [input.order_id, input.product_id]
       );
       if (!items.length) throw new ReviewError('该商品不属于此订单');
-      // A locking read sees the latest committed review after waiting for the
-      // order lock, regardless of a transaction's earlier consistent snapshot.
+      // The order lock serializes this purchase. Its first consistent read above occurs
+      // after that lock, so this snapshot includes the previous writer's commit.
+      // Never gap-lock a missing receipt: unrelated orders must be able to insert.
       const [reviews] = await connection.execute<RowDataPacket[]>(
-        'SELECT review_id FROM reviews WHERE order_id = ? AND product_id = ? LIMIT 1 FOR UPDATE',
+        'SELECT review_id FROM reviews WHERE order_id = ? AND product_id = ? LIMIT 1',
         [input.order_id, input.product_id]
       );
       if (reviews.length) throw new ReviewError('评论已存在，请勿重复提交', 409);
