@@ -33,12 +33,15 @@ const expectedLoginErrors = [/status of 401 \(Unauthorized\)/, /^登录请求失
 let expectedCheckoutFailure = false;
 const checkoutEndpoint = 'http://127.0.0.1:3101/api/orders';
 const expectedCheckoutErrors = [/^Failed to load resource: net::ERR_FAILED$/, /^Failed to load resource: the server responded with a status of (408|429)(?: \([^)]*\))?$/];
+let expectedOrderDetailFailure;
 function watchConsole(page, label) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
     const text = message.text();
     if (expectedLoginFailure && expectedLoginErrors.some(pattern => pattern.test(text))) return;
     if (expectedCheckoutFailure && message.location().url === checkoutEndpoint && expectedCheckoutErrors.some(pattern => pattern.test(text))) return;
+    if (expectedOrderDetailFailure &&
+        (message.location().url === expectedOrderDetailFailure && /^Failed to load resource: the server responded with a status of 503(?: \([^)]*\))?$/.test(text) || /^加载订单失败:/.test(text))) return;
     consoleErrors.push(`[${label}] ${new URL(page.url()).pathname}: ${text.slice(0, 300)}`);
   });
 }
@@ -174,6 +177,28 @@ async function visibleText(page, text) {
   assert.equal((await product.json()).product.stock, 19, 'fixture stock deducted exactly once');
   console.log('PASS browser lost checkout response, HTTP 408/429 and reload preserve one order and stock deduction');
   const orderUrl = page.url();
+  const detailEndpoint = `${checkoutEndpoint}/${committedOrderId}`;
+  let detailFailures = 0;
+  const failDetailOnce = async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    detailFailures++;
+    if (detailFailures === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '服务暂不可用' }), headers: { 'Access-Control-Allow-Origin': 'http://127.0.0.1:3100', 'Access-Control-Allow-Credentials': 'true' } });
+    return route.continue();
+  };
+  expectedOrderDetailFailure = detailEndpoint;
+  await page.route(detailEndpoint, failDetailOnce);
+  await page.reload();
+  await page.getByRole('alert').filter({ hasText: '加载订单详情失败，请重试' }).waitFor({ state: 'visible' });
+  assert.equal(page.url(), orderUrl, 'temporary failure retains the detail route');
+  const reloadedDetail = page.waitForResponse(response => response.url() === detailEndpoint && response.status() === 200);
+  await page.getByRole('button', { name: '重新加载', exact: true }).click();
+  await reloadedDetail;
+  await visibleText(page, '订单详情');
+  assert.equal(page.url(), orderUrl);
+  assert.equal(detailFailures, 2, 'one explicit retry after one failure');
+  await page.unroute(detailEndpoint, failDetailOnce);
+  expectedOrderDetailFailure = undefined;
+  console.log('PASS browser order detail survives a 503 and reloads on explicit retry');
   await page.getByRole('button', { name: '模拟支付', exact: true }).click();
   await visibleText(page, '演示订单');
   await visibleText(page, '已支付');

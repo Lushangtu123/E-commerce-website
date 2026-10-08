@@ -2,12 +2,14 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import OrderDetailPage from '@/app/orders/[id]/page';
 import OrderReviews from '@/components/OrderReviews';
-import { orderApi, type Order, type OrderItem } from '@/lib/api';
+import { orderApi, orderTimeoutApi, type Order, type OrderItem } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { deferred, render, settle } from './helpers';
+import { useLocaleStore } from '@/store/useLocaleStore';
+import { clickTogether, deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({ id: '1' }) }));
+const params = vi.hoisted(() => ({ id: '1' }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => params }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
   paymentApi: { getSettings: vi.fn(async () => ({ mode: 'demo', canPay: true, isDemo: true })) },
@@ -35,6 +37,134 @@ async function setupDetail(order: Partial<Order> & Record<string, unknown>, item
 const amountRow = (label: string) => screen.queryByText(label, { selector: 'span' })?.parentElement?.textContent;
 
 describe('order detail', () => {
+  it('does not loop detail reloads while a zero countdown waits for automatic cancellation', async () => {
+    vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 } as never);
+    await setupDetail({ status: 0 });
+    await settle(10);
+    expect(orderTimeoutApi.getRemainingTime).toHaveBeenCalledTimes(1);
+    expect(orderApi.getDetail).toHaveBeenCalledTimes(2);
+  });
+  it.each(['zh-CN', 'en'] as const)('keeps a transient failure on the detail page and retries once (%s)', async locale => {
+    useLocaleStore.setState({ locale });
+    useAuthStore.getState().login(customer, 'A');
+    const pending = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi.getDetail).mockRejectedValueOnce({ response: { status: 503 } }).mockReturnValueOnce(pending.promise);
+    render(<OrderDetailPage />);
+    await settle();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(locale === 'en'
+      ? 'Could not load order details. Please try again' : '加载订单详情失败，请重试');
+    const retry = screen.getByRole('button', { name: locale === 'en' ? 'Retry' : '重新加载' });
+    clickTogether(retry, retry);
+    await settle();
+    expect(orderApi.getDetail).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await act(async () => pending.resolve({ order: baseOrder, items: [] }));
+    await settle();
+    expect(screen.getByText('ORDER-1')).toBeInTheDocument();
+  });
+
+  it.each([undefined, 408, 429, 500, 503])('does not misreport or navigate away from a recoverable failure (status %s)', async status => {
+    useAuthStore.getState().login(customer, 'A');
+    vi.mocked(orderApi.getDetail).mockRejectedValue(Object.assign(new Error('failure'), status === undefined ? {} : { response: { status } }));
+    render(<OrderDetailPage />);
+    await settle();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载订单详情失败，请重试');
+    expect(screen.getByRole('button', { name: '重新加载' })).toBeEnabled();
+  });
+
+  it.each([[400, '订单ID无效'], [403, '无权访问该订单'], [404, '订单不存在']] as const)
+  ('shows the actual terminal error for status %i and returns to the list', async (status, message) => {
+    useAuthStore.getState().login(customer, 'A');
+    vi.mocked(orderApi.getDetail).mockRejectedValue({ response: { status, data: { error: message } } });
+    const toast = (await import('react-hot-toast')).default;
+    const notify = vi.spyOn(toast, 'error');
+    render(<OrderDetailPage />);
+    await settle();
+    expect(router.push).toHaveBeenCalledWith('/orders');
+    expect(notify).toHaveBeenCalledWith(message);
+    expect(screen.queryByRole('button', { name: '重新加载' })).not.toBeInTheDocument();
+  });
+
+  it('leaves sign-in expiry to the API client rather than sending the customer to the list', async () => {
+    useAuthStore.getState().login(customer, 'A');
+    vi.mocked(orderApi.getDetail).mockRejectedValue({ response: { status: 401 } });
+    render(<OrderDetailPage />);
+    await settle();
+    expect(router.push).not.toHaveBeenCalledWith('/orders');
+    expect(screen.queryByRole('button', { name: '重新加载' })).not.toBeInTheDocument();
+  });
+
+  it.each(['success', 'failure'] as const)('ignores a late retry %s after the customer changes', async outcome => {
+    useAuthStore.getState().login(customer, 'A');
+    const pending = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi.getDetail).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ order: { ...baseOrder, order_no: 'B订单' }, items: [] });
+    render(<OrderDetailPage />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    act(() => useAuthStore.getState().login({ user_id: 2, username: 'b', email: 'b@example.test' }, 'B'));
+    await settle();
+    expect(screen.getByText('B订单')).toBeInTheDocument();
+    await act(async () => outcome === 'success' ? pending.resolve({ order: baseOrder, items: [] }) : pending.reject(new Error('offline')));
+    await settle();
+    expect(screen.getByText('B订单')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a saved retry handler after another tab changes the session', async () => {
+    useAuthStore.getState().login(customer, 'A');
+    vi.mocked(orderApi.getDetail).mockRejectedValue(new Error('offline'));
+    render(<OrderDetailPage />);
+    await settle();
+    localStorage.setItem('session', 'B');
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    expect(orderApi.getDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['route', 'unmount'] as const)('ignores a retry failure after %s', async change => {
+    useAuthStore.getState().login(customer, 'A');
+    const pending = deferred<Awaited<ReturnType<typeof orderApi.getDetail>>>();
+    vi.mocked(orderApi.getDetail).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ order: { ...baseOrder, order_id: 2, order_no: 'ORDER-2' }, items: [] });
+    const view = render(<OrderDetailPage />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    if (change === 'unmount') view.unmount();
+    else {
+      params.id = '2';
+      act(() => view.rerender(<OrderDetailPage />));
+      await settle();
+    }
+    await act(async () => pending.reject({ response: { status: 404 } }));
+    await settle();
+    expect(router.push).not.toHaveBeenCalled();
+    if (change === 'route') expect(screen.getByText('ORDER-2')).toBeInTheDocument();
+    params.id = '1';
+  });
+
+  it('preserves a loaded order when a later status refresh fails and offers another refresh', async () => {
+    await setupDetail({ status: 0 });
+    vi.mocked(orderApi.getDetail).mockRejectedValueOnce(new Error('offline'));
+    vi.stubGlobal('confirm', () => true);
+    fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
+    await settle();
+    expect(screen.getByText('ORDER-1')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载订单详情失败，请重试');
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '取消订单' })).toBeDisabled();
+    vi.mocked(orderApi.getDetail).mockResolvedValue({ order: { ...baseOrder, status: 4 }, items: [] });
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+    await settle();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('已取消')).toBeInTheDocument();
+  });
+
   it('renders the original shipping snapshot rather than the current address', async () => {
     const shipping_address_snapshot = { receiver_name: 'Original Receiver', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '旧地址 1 号' };
     await setupDetail({ shipping_address_snapshot, receiver_name: 'Current Address Receiver', detail_address: '新地址' });
