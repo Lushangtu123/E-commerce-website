@@ -591,6 +591,60 @@ integration('真实 MySQL 订单事务及并发', () => {
     expect(received).toHaveLength(1);
   });
 
+  test('coupon lock deadline: 等待行锁跨过有效期不扣余量、不发券，未过期控制仍可领取', async () => {
+    await receivedCoupon();
+    await db.query('DELETE FROM user_coupons');
+    await db.query('UPDATE coupons SET end_time = DATE_ADD(NOW(), INTERVAL 5 SECOND) WHERE coupon_id = 1');
+    const holder = await db.getConnection();
+    let pending: Promise<{ id?: number; error?: unknown }> | undefined;
+    try {
+      await holder.beginTransaction();
+      await holder.query('SELECT coupon_id FROM coupons WHERE coupon_id = 1 FOR UPDATE');
+      pending = CouponModel.receiveCoupon(1, 1).then(id => ({ id }), error => ({ error }));
+      // Observe the actual InnoDB wait in this test's database before allowing expiry.
+      let observedWait = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [waits] = await db.query<RowDataPacket[]>(
+          `SELECT COUNT(*) AS count FROM performance_schema.data_lock_waits w
+           JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.BLOCKING_ENGINE_LOCK_ID
+           WHERE l.OBJECT_SCHEMA = ? AND l.OBJECT_NAME = 'coupons'`, [database]
+        );
+        if (Number(waits[0].count) > 0) { observedWait = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(observedWait).toBe(true);
+      let expired = false;
+      for (let attempt = 0; attempt < 160; attempt++) {
+        const [clock] = await db.query<RowDataPacket[]>(
+          'SELECT NOW() >= end_time AS expired FROM coupons WHERE coupon_id = 1'
+        );
+        if (Number(clock[0].expired) === 1) { expired = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      expect(expired).toBe(true);
+      await holder.commit();
+      const result = await pending;
+      expect(result.error).toBeInstanceOf(Error);
+      expect((result.error as Error).message).toBe('优惠券不存在或已失效');
+      const [definitions] = await db.query<RowDataPacket[]>('SELECT remain_quantity FROM coupons WHERE coupon_id = 1');
+      const [receipts] = await db.query<RowDataPacket[]>('SELECT COUNT(*) AS count FROM user_coupons WHERE coupon_id = 1');
+      expect(definitions[0].remain_quantity).toBe(9);
+      expect(Number(receipts[0].count)).toBe(0);
+
+      await db.query(`INSERT INTO coupons (coupon_id,code,name,type,discount_value,total_quantity,remain_quantity,start_time,end_time)
+        VALUES (2,'LIVE-CONTROL','有效券',1,1,1,1,DATE_SUB(NOW(), INTERVAL 1 DAY),DATE_ADD(NOW(), INTERVAL 1 MINUTE))`);
+      const id = await CouponModel.receiveCoupon(1, 2);
+      const [control] = await db.query<RowDataPacket[]>(
+        'SELECT user_coupon_id, NOW() < expired_at AS valid FROM user_coupons WHERE coupon_id = 2'
+      );
+      expect(control).toEqual([{ user_coupon_id: id, valid: 1 }]);
+    } finally {
+      await holder.rollback();
+      holder.release();
+      if (pending) await pending;
+    }
+  }, 20000);
+
   test('SKU下单采用所选规格的服务器价格与库存，保留规格快照', async () => {
     await db.query(`INSERT INTO product_skus (sku_id,product_id,sku_code,specs,price,stock)
       VALUES (1,1,'RED-M','{"颜色":"红色","尺寸":"M"}',15,3)`);
