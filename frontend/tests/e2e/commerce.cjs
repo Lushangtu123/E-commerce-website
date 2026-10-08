@@ -169,6 +169,8 @@ async function visibleText(page, text) {
   await page.getByRole('button', { name: '保存地址', exact: true }).click();
   await visibleText(page, '仅测试地址1号');
   await page.goto('http://127.0.0.1:3100/products/1');
+  // SSR exposes the language select before its change handler hydrates. Fresh inventory unlocks this button.
+  await page.getByRole('button', { name: '加入购物车', exact: true }).click({ trial: true });
   await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
   await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
   await visibleText(page, 'Browser English description');
@@ -189,6 +191,7 @@ async function visibleText(page, text) {
   expectedShoppingFailure = cartEndpoint;
   await page.route(cartEndpoint, failCartOnce);
   await page.goto('http://127.0.0.1:3100/cart');
+  await visibleText(page, '加载购物车失败，请重试');
   await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
   await visibleText(page, 'Unable to load your cart. Please try again.');
   assert.equal(await page.getByText('Your cart is empty', { exact: true }).count(), 0, 'failed loading never claims the cart is empty');
