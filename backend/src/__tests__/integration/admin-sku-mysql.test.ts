@@ -45,7 +45,7 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
   });
   afterAll(async () => { if (db) await db.end(); if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } } });
   beforeEach(async () => {
-    await getRedisClient().del('product:1', 'product:2', 'products:hot');
+    await getRedisClient().del('product:1', 'product:2', 'products:hot', 'products:hot:v2');
     (getPool as jest.Mock).mockReturnValue(db);
     (query as jest.Mock).mockImplementation(async (sql, values) => (await db.query(sql, values))[0]);
     for (const table of ['admin_logs', 'coupon_usage_logs', 'user_coupons', 'order_items', 'orders', 'cart', 'shipping_addresses', 'product_skus', 'products', 'users']) await db.query(`DELETE FROM ${table}`);

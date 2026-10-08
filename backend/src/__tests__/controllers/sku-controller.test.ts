@@ -60,7 +60,7 @@ test('创建允许零价格库存，忽略缓存和审计外部故障且只返�
   expect(res.body.sku_id).toBe(12);
   expect(res.json).toHaveBeenCalledTimes(1);
   expect(connection.commit).toHaveBeenCalledTimes(1);
-  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot');
+  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot', 'products:hot:v2');
 });
 
 test.each([
@@ -93,7 +93,7 @@ test('批量创建拒绝嵌入商品ID；正常写入路径商品并失效缓存
   expect((await call(batchCreateSKUs, { skus: [valid] })).statusCode).toBe(201);
   const insert = connection.execute.mock.calls.find(([sql]: [string]) => sql.startsWith('INSERT'));
   expect(insert[1][0]).toBe(1);
-  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot');
+  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot', 'products:hot:v2');
 });
 
 test('管理列表包含停用规格以便重新启用', async () => {
@@ -116,7 +116,7 @@ test('更新和删除检查可选路径商品归属；全局删除软删并失�
   expect((await call(deleteSKU, {}, { skuId: '11', productId: '2' })).statusCode).toBe(404);
   expect((await call(deleteSKU, {}, { skuId: '11' })).statusCode).toBe(200);
   expect(connection.execute.mock.calls.some(([sql]: [string]) => sql.startsWith('DELETE'))).toBe(false);
-  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot');
+  expect(redis.del).toHaveBeenCalledWith('product:1', 'products:hot', 'products:hot:v2');
 });
 
 test('更新支持SKU编码并拒绝未知字段', async () => {
@@ -164,10 +164,10 @@ test('批量请求重复SKU编码返回409且无写入', async () => {
 
 test('商品后台更新、上下架、批量与删除都清详情和热榜缓存，审计失败不改成功结果', async () => {
   for (const [handler, body, params, cacheKeys] of [
-    [updateProduct, { title: '新标题' }, { productId: '1' }, ['product:1', 'products:hot']],
-    [updateProductStatus, { status: 0 }, { productId: '1' }, ['product:1', 'products:hot']],
-    [batchUpdateProductStatus, { productIds: [1,2], status: 0 }, {}, ['product:1', 'product:2', 'products:hot']],
-    [deleteProduct, {}, { productId: '1' }, ['product:1', 'products:hot']],
+    [updateProduct, { title: '新标题' }, { productId: '1' }, ['product:1', 'products:hot', 'products:hot:v2']],
+    [updateProductStatus, { status: 0 }, { productId: '1' }, ['product:1', 'products:hot', 'products:hot:v2']],
+    [batchUpdateProductStatus, { productIds: [1,2], status: 0 }, {}, ['product:1', 'product:2', 'products:hot', 'products:hot:v2']],
+    [deleteProduct, {}, { productId: '1' }, ['product:1', 'products:hot', 'products:hot:v2']],
   ] as const) {
     redis.del.mockClear();
     db.query.mockImplementation(async (sql: string) => {
