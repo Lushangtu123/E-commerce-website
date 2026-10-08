@@ -220,12 +220,15 @@ export class CouponModel {
         throw new Error('已达领取上限');
       }
 
-      // 扣减剩余数量
+      // NOW() is fixed at statement start; the preceding row lock may have waited past expiry.
+      // Check a fresh database clock at the atomic deduction while still holding that lock.
       const [deduction] = await connection.execute<ResultSetHeader>(
-        'UPDATE coupons SET remain_quantity = remain_quantity - 1 WHERE coupon_id = ? AND remain_quantity > 0',
+        `UPDATE coupons SET remain_quantity = remain_quantity - 1
+         WHERE coupon_id = ? AND remain_quantity > 0 AND status = 1
+           AND NOW() >= start_time AND NOW() < end_time`,
         [couponId]
       );
-      if (deduction.affectedRows !== 1) throw new Error('优惠券已领完');
+      if (deduction.affectedRows !== 1) throw new Error('优惠券不存在或已失效');
 
       // 创建用户优惠券
       const [result] = await connection.execute<ResultSetHeader>(
