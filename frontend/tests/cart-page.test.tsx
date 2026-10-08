@@ -4,6 +4,7 @@ import CartPage from '@/app/cart/page';
 import { cartApi, orderApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore, type CartItem } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -29,6 +30,15 @@ const switchToSecondCustomer = () => act(() => {
 });
 
 describe('cart page', () => {
+  it('shows the sum of selected purchasable quantities, not the number of cart rows', async () => {
+    list.mockResolvedValue({ items: [firstItem, { ...secondItem, cart_id: 2, quantity: 2 },
+      { ...firstItem, cart_id: 3, product_id: 33, title: 'Unavailable', stock: 0, available: false }] });
+    render(<CartPage />); await settle();
+    expect(screen.getByText('5 件', { exact: true })).toBeVisible();
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByText('5 items', { exact: true })).toBeVisible();
+  });
+
   beforeEach(() => {
     useAuthStore.getState().login(firstUser, 'first-session');
   });

@@ -386,7 +386,7 @@ export default function CartPage() {
 
           {/* 结算信息 */}
           <div className="lg:col-span-1">
-            <CheckoutSummary itemCount={orderItems.length} submitting={submitting} cartUpdating={cartUpdating}
+            <CheckoutSummary itemCount={orderItems.reduce((count, item) => count + item.quantity, 0)} submitting={submitting} cartUpdating={cartUpdating}
               addresses={addresses} addressLoading={addressLoading} addressError={addressError}
               selectedAddressId={selectedAddress?.address_id}
               onSelectAddress={id => setAddressSelection({ key: sessionKey, id })}
