@@ -60,6 +60,11 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
   await pool.query("INSERT INTO products(product_id,title,price,stock,status) VALUES(1,'浏览器交易测试商品',10.10,20,1)");
+  await pool.query("INSERT INTO products(product_id,title,price,original_price,stock,status) VALUES(2,'浏览器规格价格商品',99.00,150.00,0,1)");
+  await pool.query(`INSERT INTO product_skus(sku_id,product_id,sku_code,specs,price,original_price,stock,status) VALUES
+    (201,2,'PRICE-SALE','{"颜色":"红色"}',99.00,100.00,3,1),
+    (202,2,'PRICE-EQUAL','{"颜色":"蓝色"}',100.00,100.00,3,1),
+    (203,2,'PRICE-NONE','{"颜色":"绿色"}',150.00,NULL,3,1)`);
   const app = require(path.join(backend, 'dist/app')).createApp();
   listener = app.listen(3101, '127.0.0.1', () => console.log('E2E fixture ready on 127.0.0.1:3101'));
 })().catch(async () => { console.error('E2E fixture initialization failed'); await stop(); process.exit(1); });

@@ -114,6 +114,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const selectedSku = skus.find(sku => sku.sku_id === selectedSkuId);
   const stock = Number(hasSku ? selectedSku?.stock ?? 0 : product?.stock ?? 0);
   const price = selectedSku?.price ?? product?.price;
+  const originalPrice = hasSku ? selectedSku?.original_price : product?.original_price;
   const image = selectedSku?.image || product?.main_image;
   const canPurchase = !hasSku || !!selectedSku;
   const soldOut = hasSku ? (selectedSku ? stock <= 0 : !skus.some(sku => Number(sku.stock) > 0)) : stock <= 0;
@@ -229,9 +230,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
                   <span className="text-3xl font-semibold text-primary-600">
                     ¥{price}
                   </span>
-                  {Number(product.original_price) > Number(price) && (
+                  {Number(originalPrice) > Number(price) && (
                     <span className="text-base text-gray-500 line-through">
-                      ¥{product.original_price}
+                      ¥{originalPrice}
                     </span>
                   )}
                 </div>
