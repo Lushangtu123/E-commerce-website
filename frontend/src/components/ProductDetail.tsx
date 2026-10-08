@@ -36,7 +36,8 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteState, setFavoriteState] = useState<{ context: string; revision: number; selected: boolean; error: boolean } | null>(null);
+  const [favoriteRetry, setFavoriteRetry] = useState(0);
   const [favoriting, setFavoriting] = useState(false);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
@@ -48,9 +49,12 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const mounted = useRef(true);
   const addingRequest = useRef<string | null>(null);
   const favoriteRequest = useRef<{ context: string } | null>(null);
-  const favoriteRevision = useRef(0);
+  const favoriteReadRequest = useRef<{ context: string } | null>(null);
   const productId = parseInt(params.id as string);
   const context = JSON.stringify([productId, sessionId, user?.user_id, isAuthenticated]);
+  const visibleFavorite = favoriteState?.context === context && favoriteState.revision === favoriteRetry ? { ...favoriteState, loading: false }
+    : { selected: false, loading: isAuthenticated, error: false };
+  const isFavorited = visibleFavorite.selected;
   const reviewPage = reviewView?.context === context ? reviewView.page : 1;
   const reviewRevision = reviewView?.context === context ? reviewView.revision : 0;
   const reviewSelection = JSON.stringify([context, reviewPage, reviewRevision]);
@@ -79,23 +83,42 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     setRelatedProducts([]);
     setAdding(false);
     addingRequest.current = null;
-    setIsFavorited(false);
     setFavoriting(false);
     favoriteRequest.current = null;
-    const favoriteRead = ++favoriteRevision.current;
     setLoadingRecommendations(true);
     recommendationApi.getRelated(productId, 4).then((data) => {
       if (isCurrentRequest()) setRelatedProducts(data.related_products || []);
     }).catch((error) => { if (isCurrentRequest()) logger.error('加载相关推荐失败:', error); })
       .finally(() => { if (isCurrentRequest()) setLoadingRecommendations(false); });
     if (isAuthenticated) {
-      favoriteApi.check(productId).then((data) => {
-        if (isCurrentRequest() && favoriteRevision.current === favoriteRead) setIsFavorited(data.is_favorited);
-      }).catch((error) => { if (isCurrentRequest() && favoriteRevision.current === favoriteRead) logger.error('检查收藏状态失败:', error); });
       browseApi.record(productId).catch((error) => { if (isCurrentRequest()) logger.error('记录浏览历史失败:', error); });
     }
     return () => { active = false; };
   }, [isHydrated, productId, isAuthenticated, sessionId, user?.user_id, router, isCurrentContext]);
+
+  useEffect(() => {
+    if (!isHydrated || !productId || !isAuthenticated) return;
+    let active = true;
+    const operation = { context };
+    favoriteReadRequest.current = operation;
+    const isCurrentRequest = () => active && isCurrentContext() && favoriteReadRequest.current === operation;
+    favoriteApi.check(productId).then(data => {
+      if (isCurrentRequest()) setFavoriteState({ context, revision: favoriteRetry, selected: data.is_favorited, error: false });
+    }).catch(error => {
+      if (!isCurrentRequest()) return;
+      logger.error('检查收藏状态失败:', error);
+      setFavoriteState({ context, revision: favoriteRetry, selected: false, error: true });
+    }).finally(() => {
+      if (favoriteReadRequest.current === operation) favoriteReadRequest.current = null;
+    });
+    return () => { active = false; };
+  }, [context, isHydrated, productId, isAuthenticated, isCurrentContext, favoriteRetry]);
+
+  const retryFavorite = () => {
+    if (!isCurrentContext() || !visibleFavorite.error || favoriteReadRequest.current?.context === context) return;
+    favoriteReadRequest.current = { context };
+    setFavoriteRetry(previous => previous + 1);
+  };
 
   useEffect(() => {
     if (!isHydrated || !productId) return;
@@ -247,14 +270,14 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       router.push('/login');
       return;
     }
+    if (visibleFavorite.loading || visibleFavorite.error || favoriteReadRequest.current?.context === context) return;
     const operation = { context };
     favoriteRequest.current = operation;
     setFavoriting(true);
     try {
       const data = await favoriteApi.toggle(productId);
       if (!isCurrentContext()) return;
-      favoriteRevision.current += 1;
-      setIsFavorited(data.is_favorited);
+      setFavoriteState({ context, revision: favoriteRetry, selected: data.is_favorited, error: false });
       toast.success(translate(data.message));
     } catch (error) {
       if (isCurrentContext()) toast.error(translate(requestFailure(error).response?.data?.message || "操作失败"));
@@ -384,7 +407,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
             <div className="flex gap-3">
               <button
                 onClick={handleToggleFavorite}
-                disabled={favoriting || !ready}
+                disabled={favoriting || !ready || (isAuthenticated && (visibleFavorite.loading || visibleFavorite.error))}
                 className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border transition-colors ${
                   isFavorited
                     ? 'border-primary-200 bg-primary-50 text-primary-600 hover:bg-primary-100'
@@ -412,6 +435,12 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
                 {soldOut ? t("已售罄") : t("立即购买")}
               </button>
             </div>
+
+            {isAuthenticated && visibleFavorite.loading && <p role="status" className="text-sm text-gray-500">{t('正在加载收藏状态...')}</p>}
+            {isAuthenticated && visibleFavorite.error && <div role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">
+              <p>{t('加载收藏状态失败，请重试')}</p>
+              <button onClick={retryFavorite} className="mt-2 btn btn-outline">{t('重新加载收藏状态')}</button>
+            </div>}
 
             {/* 商品描述 */}
             <div className="border-t border-gray-200 pt-6">
