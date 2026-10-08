@@ -4,6 +4,8 @@
  */
 
 import { getPool } from '../database/mysql';
+import { getRedisClient } from '../database/redis';
+import { randomUUID } from 'crypto';
 import { RowDataPacket } from 'mysql2';
 import { OrderStatus } from '../models/order.model';
 import { transitionOrder, invalidateOrderProductCache } from './order.service';
@@ -20,6 +22,11 @@ interface PendingOrder extends RowDataPacket {
  * 订单超时配置（分钟）
  */
 const ORDER_TIMEOUT_MINUTES = 30;
+const CURSOR_KEY = 'order-timeouts:cursor:v1';
+// The version prevents a late batch (including a wrap to zero) overwriting newer progress.
+const ADVANCE_CURSOR = `if (redis.call('GET', KEYS[1]) or '') ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'EX', 86400)
+return 1`;
 
 /**
  * 取消单个超时订单：恢复库存并更新状态
@@ -36,9 +43,23 @@ export async function cancelTimeoutOrder(orderId: number): Promise<boolean> {
 /**
  * 检查并取消超时订单
  */
-export async function checkAndCancelTimeoutOrders(batchSize = 50): Promise<{ checked: number; cancelled: number }> {
+export async function checkAndCancelTimeoutOrders(batchSize = 50): Promise<{ checked: number; cancelled: number; failed: number; skipped: number }> {
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 100) throw new Error('无效的订单检查批次大小');
   const pool = getPool();
+  let cursor: string | null = null;
+  let afterId = 0;
+  let canAdvance = false;
+  try {
+    cursor = await getRedisClient().get(CURSOR_KEY);
+    if (cursor) {
+      const parsed = JSON.parse(cursor);
+      if (!Number.isSafeInteger(parsed?.afterId) || parsed.afterId < 0 || typeof parsed.version !== 'string') throw new Error('invalid cursor');
+      afterId = parsed.afterId;
+    }
+    canAdvance = true;
+  } catch {
+    logger.warn('订单超时扫描进度不可用，将从头进行有界检查');
+  }
 
   try {
     // 1. 查找超时的待支付订单
@@ -47,17 +68,22 @@ export async function checkAndCancelTimeoutOrders(batchSize = 50): Promise<{ che
        FROM orders 
        WHERE status = 0 
        AND created_at <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
-       ORDER BY created_at, order_id LIMIT ${batchSize}`
+       AND order_id > ?
+       ORDER BY order_id LIMIT ${batchSize}`, [afterId]
     );
 
     logger.info(`[订单超时检查] 发现 ${timeoutOrders.length} 个超时订单`);
 
     let successCount = 0;
+    let failed = 0;
+    let skipped = 0;
     for (const order of timeoutOrders) {
       try {
         const cancelled = await cancelTimeoutOrder(order.order_id);
         if (cancelled) successCount++;
+        else skipped++;
       } catch (error) {
+        failed++;
         logger.error({ err: error }, `[订单超时] 处理订单 ${order.order_no} 失败`);
         // 继续处理下一个订单
       }
@@ -66,7 +92,16 @@ export async function checkAndCancelTimeoutOrders(batchSize = 50): Promise<{ che
     if (timeoutOrders.length > 0) {
       logger.info(`[订单超时检查] 成功处理 ${successCount} 个超时订单`);
     }
-    return { checked: timeoutOrders.length, cancelled: successCount };
+    if (canAdvance) try {
+      const next = timeoutOrders.length ? timeoutOrders[timeoutOrders.length - 1].order_id : 0;
+      await getRedisClient().eval(ADVANCE_CURSOR, 1, CURSOR_KEY, cursor ?? '', JSON.stringify({ afterId: next, version: randomUUID() }));
+    } catch {
+      // Advisory progress cannot undo cancellations that already committed.
+      logger.warn('订单超时扫描进度保存失败');
+    }
+    const result = { checked: timeoutOrders.length, cancelled: successCount, failed, skipped };
+    logger.info(result, '订单超时批次已完成');
+    return result;
   } catch (error) {
     logger.error({ err: error }, '[订单超时检查] 查询超时订单失败');
     throw error;

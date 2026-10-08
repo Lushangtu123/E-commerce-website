@@ -209,6 +209,37 @@ describe('product SKU purchase', () => {
     expect(notifications).not.toContain('商品不存在');
   });
 
+  it.each(['success', 'failure'] as const)('ignores a late product retry %s after navigating to another product', async outcome => {
+    const retry = deferred<Detail>();
+    let firstRequests = 0;
+    const { rerender } = await setup({ detail: id => {
+      if (id !== 1) return Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt' } });
+      if (++firstRequests === 1) return Promise.reject(new Error('Offline'));
+      return retry.promise;
+    } });
+    const staleRetry = captureHandler(button('重新加载'));
+    void staleRetry();
+    await settle();
+    params.id = '2';
+    rerender();
+    await settle();
+    await chooseSku('102');
+    const noticesBefore = [...notifications];
+
+    await act(async () => {
+      if (outcome === 'success') retry.resolve({ product });
+      else retry.reject(new Error('Old retry failed'));
+    });
+    await staleRetry();
+    await settle();
+    expect(screen.getByRole('heading', { name: 'Second shirt' })).toBeInTheDocument();
+    expect(sku()).toHaveValue('102');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(notifications).toEqual(noticesBefore);
+    expect(firstRequests).toBe(2);
+  });
+
   const lateAddCases = (['route', 'account', 'storage', 'unmount'] as const).flatMap(change =>
     (['success', 'failure'] as const).map(outcome => ({ change, outcome })));
 

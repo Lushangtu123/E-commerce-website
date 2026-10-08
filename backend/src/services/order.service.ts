@@ -269,6 +269,15 @@ export async function transitionOrder(
     if (options.userId !== undefined && order.user_id !== options.userId) {
       throw new OrderError('无权操作该订单', 403);
     }
+    if (targetStatus === OrderStatus.PAID) {
+      // NOW() is fixed at statement start: refresh it after acquiring a possibly contended row lock.
+      const [deadline] = await connection.execute<RowDataPacket[]>(
+        'SELECT (created_at <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) AS has_timed_out FROM orders WHERE order_id = ?', [orderId]
+      );
+      if (Number(order.has_timed_out) === 1 || Number(deadline[0]?.has_timed_out) === 1) {
+        throw new OrderError('订单支付已超时，请重新下单');
+      }
+    }
     const previousStatus: Partial<Record<OrderStatus, OrderStatus>> = {
       [OrderStatus.PAID]: OrderStatus.PENDING,
       [OrderStatus.CANCELLED]: OrderStatus.PENDING,

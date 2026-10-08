@@ -21,6 +21,8 @@ export default function CartPage() {
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const { items, setItems, updateQuantity, removeItem } = useCartStore();
   const [loading, setLoading] = useState(true);
+  const [cartFailure, setCartFailure] = useState<{ key: string; message: string } | null>(null);
+  const cartLoadRequest = useRef<{ key: string } | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [selectedCouponId, setSelectedCouponId] = useState<number | undefined>(undefined);
@@ -43,6 +45,7 @@ export default function CartPage() {
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const hasUnconfirmedCheckout = unconfirmedSession === sessionKey;
   const cartUpdating = updatingSession === sessionKey;
+  const cartError = cartFailure?.key === sessionKey ? cartFailure.message : null;
   const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
   const addressLoading = addressResult?.key !== sessionKey;
   const addressError = addressResult?.key === sessionKey ? addressResult.error : null;
@@ -154,20 +157,28 @@ export default function CartPage() {
   }, [isHydrated, isAuthenticated, loading, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
 
   const loadCart = async () => {
+    if (!isCurrentSession() || cartLoadRequest.current?.key === sessionKey) return;
+    const request = { key: sessionKey };
+    cartLoadRequest.current = request;
     try {
       setLoading(true);
+      setCartFailure(null);
       const data = await cartApi.list();
-      if (!isCurrentSession()) return;
+      if (!isCurrentSession() || cartLoadRequest.current !== request) return;
       setItems(data.items || []);
       setSelectedItems((data.items || []).filter(isAvailable).map(cartItemKey));
     } catch (error) {
-      if (!isCurrentSession()) return;
+      if (!isCurrentSession() || cartLoadRequest.current !== request) return;
       setItems([]);
       setSelectedItems([]);
+      setCartFailure({ key: sessionKey, message: '加载购物车失败，请重试' });
       logger.error('加载购物车失败:', error);
       toast.error(t('加载购物车失败'));
     } finally {
-      if (isCurrentSession()) setLoading(false);
+      if (cartLoadRequest.current === request) {
+        cartLoadRequest.current = null;
+        if (isCurrentSession()) setLoading(false);
+      }
     }
   };
 
@@ -316,6 +327,14 @@ export default function CartPage() {
         if (attempt?.sessionKey === sessionKey) void submitCheckout(attempt.input, true);
       }}>{t(submitting ? '确认中...' : '重试确认订单')}</button>
       <Link href="/orders" className="block text-primary-600 underline">{t('查看我的订单')}</Link>
+    </div></div>;
+  }
+
+  if (cartError) {
+    return <div className="py-12 container-custom"><div className="card p-6 text-center" role="alert">
+      <h1 className="text-xl font-bold mb-3">{t('购物车')}</h1>
+      <p className="text-red-600">{t(cartError)}</p>
+      <button onClick={loadCart} disabled={loading} className="btn btn-secondary mt-4">{t('重新加载')}</button>
     </div></div>;
   }
 

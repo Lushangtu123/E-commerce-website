@@ -11,7 +11,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   res.on('finish', () => {
     const data = {
       method: req.method,
-      url: req.originalUrl,
+      url: req.originalUrl.split('?')[0],
       status: res.statusCode,
       durationMs: Date.now() - start,
       ip: req.ip,

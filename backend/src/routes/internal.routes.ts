@@ -11,7 +11,10 @@ router.post('/order-timeouts', async (req, res) => {
   if (!secret || secret.length < 32 || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
     return res.status(401).json({ error: '未授权的定时任务' });
   }
-  try { res.json(await checkAndCancelTimeoutOrders(50)); }
+  try {
+    const result = await checkAndCancelTimeoutOrders(50);
+    res.status(result.failed > 0 ? 503 : 200).json(result);
+  }
   catch { logger.error('订单超时任务失败'); res.status(503).json({ error: '订单超时任务失败' }); }
 });
 export default router;

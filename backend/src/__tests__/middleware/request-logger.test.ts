@@ -55,3 +55,13 @@ test('500 请求记 error 日志', async () => {
   expect(data).toMatchObject({ method: 'GET', url: '/boom', status: 500 });
   expect(logger.info).not.toHaveBeenCalled();
 });
+
+test.each([
+  ['/ok', 'info', 200], ['/bad', 'warn', 400], ['/boom', 'error', 500],
+] as const)('%s 的日志仅记录路径，不记录任何查询参数', async (url, level, status) => {
+  await request(buildApp()).get(`${url}?token=fixture_reset_token&email=fixture%40example.test`).expect(status);
+  const [data] = logger[level].mock.calls[0];
+  expect(data).toMatchObject({method: 'GET', url, status});
+  expect(JSON.stringify(data)).not.toContain('fixture');
+  expect(data.url).not.toContain('?');
+});

@@ -45,7 +45,7 @@ async function checkDependency(check: () => Promise<unknown>): Promise<Dependenc
  * 已配置的 RabbitMQ（精确超时取消）和 Elasticsearch（商品搜索）为可选依赖，
  * 异常时由定时任务和 MySQL 搜索兜底，只在报告中标记为 down
  */
-export async function getHealthReport(serverless = false): Promise<HealthReport> {
+async function collectHealthReport(serverless: boolean, inFlight?: Map<string, Promise<unknown>>): Promise<HealthReport> {
   const required: Record<string, () => Promise<unknown>> = {
     mysql: () => getPool().query('SELECT 1'),
     redis: () => getRedisClient().ping(),
@@ -56,8 +56,19 @@ export async function getHealthReport(serverless = false): Promise<HealthReport>
     const es = getESClient();
     if (es) optional.elasticsearch = () => es.ping();
   }
+  const probe = (name: string, check: () => Promise<unknown>) => {
+    if (!inFlight) return check();
+    const existing = inFlight.get(name);
+    if (existing) return existing;
+    const pending = Promise.resolve().then(check);
+    inFlight.set(name, pending);
+    const finished = () => { if (inFlight.get(name) === pending) inFlight.delete(name); };
+    // Keep the underlying probe shared even after a report's three-second timeout.
+    pending.then(finished, finished);
+    return pending;
+  };
   const run = (checks: Record<string, () => Promise<unknown>>, extra: Partial<DependencyStatus> = {}) => Promise.all(
-    Object.entries(checks).map(async ([name, check]) => [name, { ...await checkDependency(check), ...extra }] as const)
+    Object.entries(checks).map(async ([name, check]) => [name, { ...await checkDependency(() => probe(name, check)), ...extra }] as const)
   );
   const [requiredResults, optionalResults] = await Promise.all([run(required), run(optional, { optional: true })]);
 
@@ -67,4 +78,33 @@ export async function getHealthReport(serverless = false): Promise<HealthReport>
     uptimeSeconds: Math.floor(process.uptime()),
     dependencies: Object.fromEntries([...requiredResults, ...optionalResults]),
   };
+}
+
+export function getHealthReport(serverless = false): Promise<HealthReport> {
+  return collectHealthReport(serverless);
+}
+
+const REPORT_TTL_MS = 5000;
+const dependencyProbes = new Map<string, Promise<unknown>>();
+const reports = new Map<boolean, { report?: HealthReport; expiresAt: number; pending?: Promise<HealthReport> }>();
+
+/** Public checks share work within this process, without depending on Redis for protection. */
+export function getCachedHealthReport(serverless = false): Promise<HealthReport> {
+  let cache = reports.get(serverless);
+  if (!cache) { cache = { expiresAt: 0 }; reports.set(serverless, cache); }
+  if (cache.pending) return cache.pending;
+  if (cache.report && cache.expiresAt > Date.now()) return Promise.resolve(cache.report);
+  const state = cache;
+  state.pending = collectHealthReport(serverless, dependencyProbes).then(report => {
+    state.report = {
+      ...report,
+      dependencies: Object.fromEntries(Object.entries(report.dependencies).map(([name, status]) => [name, {
+        ...status,
+        ...(status.error === undefined ? {} : { error: status.error === '检查超时' ? '检查超时' : '依赖不可用' }),
+      }])),
+    };
+    state.expiresAt = Date.now() + REPORT_TTL_MS;
+    return state.report;
+  }).finally(() => { state.pending = undefined; });
+  return state.pending;
 }

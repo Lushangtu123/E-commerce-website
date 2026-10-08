@@ -3,9 +3,10 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import { rateLimit } from 'express-rate-limit';
 import { apiLimiter } from './middleware/rate-limit';
 import { requestLogger } from './middleware/request-logger';
-import { getHealthReport } from './utils/health';
+import { getCachedHealthReport } from './utils/health';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './utils/openapi';
 
@@ -67,7 +68,12 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
   // HTTP 请求日志
   app.use(requestLogger);
 
-  // 健康检查（不计入限流）：依赖异常时返回 503
+  // Health has its own in-memory quota; checking Redis must not require a Redis rate-limit write.
+  const healthLimiter = rateLimit({
+    windowMs: 60000, limit: 30,
+    standardHeaders: 'draft-7', legacyHeaders: false,
+    message: { error: '健康检查请求过于频繁，请稍后再试' },
+  });
   /**
    * @openapi
    * /health:
@@ -81,8 +87,11 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
    *       503:
    *         description: MySQL 或 Redis 异常
    */
-  app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
-    const report = await getHealthReport(options.serverless);
+  app.get(['/health', '/api/health'], (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  }, healthLimiter, async (_req: Request, res: Response) => {
+    const report = await getCachedHealthReport(options.serverless);
     res.status(report.status === 'ok' ? 200 : 503).json(report);
   });
 

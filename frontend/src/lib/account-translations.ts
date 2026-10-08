@@ -211,4 +211,5 @@ export const accountTranslations: Record<string, string> = {
   '请先添加收货地址': 'Please add a shipping address first',
   '请选择收货地址': 'Select a shipping address',
   '管理收货地址': 'Manage shipping addresses',
+  '加载购物车失败，请重试': 'Unable to load your cart. Please try again.',
 };

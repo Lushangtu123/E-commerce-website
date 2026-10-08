@@ -191,6 +191,7 @@ describe('订单状态迁移', () => {
   });
 
   test('支付只计销量一次，取消不能覆盖已支付订单', async () => {
+    order.has_timed_out = 0;
     const first = response();
     await OrderController.pay(request(), first);
     expect(first.json).toHaveBeenCalledWith({ message: '模拟支付完成，未实际扣款', payment_mode: 'demo' });
@@ -203,6 +204,37 @@ describe('订单状态迁移', () => {
     expect(cancel.status).toHaveBeenCalledWith(400);
     expect(matching('sales_count = sales_count +')).toHaveLength(1);
     expect(matching('stock = stock +')).toHaveLength(0);
+  });
+
+  test.each([1, '1'])('数据库行锁确认已到期时拒绝付款且不改变库存、券或销量（%s）', async timedOut => {
+    order.has_timed_out = timedOut;
+    order.user_coupon_id = 3;
+    const res = response();
+    await OrderController.pay(request(), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '订单支付已超时，请重新下单' });
+    expect(matching('FROM orders')[0][0]).toContain('FOR UPDATE');
+    expect(matching('FROM orders')[0][0]).toMatch(/created_at\s*<=\s*DATE_SUB\(NOW\(\), INTERVAL 30 MINUTE\)/);
+    expect(connection.execute.mock.calls.filter(([sql]: [string]) => /^UPDATE\b/i.test(sql))).toHaveLength(0);
+    expect(matching('FROM order_items')).toHaveLength(0);
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+    expect(redis.del).not.toHaveBeenCalled();
+    expect(order.status).toBe(0);
+  });
+
+  test('付款等待订单行锁跨过截止时间后，按取得锁后的数据库时间拒绝', async () => {
+    order.has_timed_out = 0;
+    const original = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('FROM orders') && !sql.includes('FOR UPDATE')) return Promise.resolve([[{ has_timed_out: 1 }], []]);
+      return original(sql, params);
+    });
+    const res = response();
+    await OrderController.pay(request(), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '订单支付已超时，请重新下单' });
+    expect(connection.execute.mock.calls.filter(([sql]: [string]) => /^UPDATE\b/i.test(sql))).toHaveLength(0);
   });
 
   test('库存回补失败时回滚取消状态', async () => {
