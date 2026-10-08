@@ -103,6 +103,20 @@ async function visibleText(page, text) {
   assert.equal(await searchInput.inputValue(), searchKeyword);
   page.off('request', watchSearch);
   console.log('PASS browser history deletion preserves search input and URL without re-recording the keyword');
+  await page.goto('http://127.0.0.1:3100/products');
+  const skuCard = page.locator('a[href="/products/2"]').filter({ has: page.getByRole('heading', { name: '浏览器规格价格商品', exact: true }) }).first();
+  await skuCard.getByText('¥99.00', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await skuCard.locator('.line-through').textContent(), '¥100.00');
+  for (const endpoint of ['/products/hot', '/search/es?keyword=浏览器规格价格商品', '/recommendations/related/1']) {
+    const response = await context.request.get(`http://127.0.0.1:3101/api${endpoint}`);
+    assert.equal(response.status(), 200);
+    const data = await response.json();
+    const product = (data.products || data.data || data.related_products).find(p => p.product_id === 2);
+    assert.ok(product, `SKU fixture is present in ${endpoint}`);
+    assert.equal(Number(product.price), 99);
+    assert.equal(Number(product.original_price), 100);
+  }
+  console.log('PASS browser catalog card, search, hot and related products share the cheapest SKU promotion price');
   await page.goto('http://127.0.0.1:3100/products/2');
   const variant = page.getByLabel('商品规格', { exact: true });
   await variant.waitFor({ state: 'visible' });

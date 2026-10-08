@@ -59,8 +59,8 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-account-security', 'migrateAccountSecurity'], ['migrate-fulfillment', 'migrateFulfillment'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
-  await pool.query("INSERT INTO products(product_id,title,price,stock,status) VALUES(1,'浏览器交易测试商品',10.10,20,1)");
-  await pool.query("INSERT INTO products(product_id,title,price,original_price,stock,status) VALUES(2,'浏览器规格价格商品',99.00,150.00,0,1)");
+  await pool.query("INSERT INTO products(product_id,title,category_id,price,stock,status) VALUES(1,'浏览器交易测试商品',1,10.10,20,1)");
+  await pool.query("INSERT INTO products(product_id,title,category_id,price,original_price,stock,status) VALUES(2,'浏览器规格价格商品',1,99.00,150.00,0,1)");
   await pool.query(`INSERT INTO product_skus(sku_id,product_id,sku_code,specs,price,original_price,stock,status) VALUES
     (201,2,'PRICE-SALE','{"颜色":"红色"}',99.00,100.00,3,1),
     (202,2,'PRICE-EQUAL','{"颜色":"蓝色"}',100.00,100.00,3,1),

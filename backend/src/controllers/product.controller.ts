@@ -3,6 +3,7 @@ import { ProductModel } from '../models/product.model';
 import { SKUModel } from '../models/sku.model';
 import { getRedisClient } from '../database/redis';
 import logger from '../utils/logger';
+import { PRODUCT_HOT_CACHE_KEY, PRODUCT_HOT_CACHE_KEYS } from '../utils/product-cache-keys';
 import { productCreateSchema, productQuerySchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 
 export class ProductController {
@@ -73,7 +74,7 @@ export class ProductController {
       const redis = getRedisClient();
 
       // 尝试从缓存获取
-      const cacheKey = 'products:hot';
+      const cacheKey = PRODUCT_HOT_CACHE_KEY;
       const cached = await redis.get(cacheKey);
 
       if (cached) {
@@ -122,7 +123,7 @@ export class ProductController {
       if (success) {
         // 清除缓存
         try {
-          await getRedisClient().del(`product:${productId}`, 'products:hot');
+          await getRedisClient().del(`product:${productId}`, ...PRODUCT_HOT_CACHE_KEYS);
         } catch (cacheError) {
           logger.warn({ err: cacheError }, '商品已更新，缓存清理失败');
         }

@@ -10,6 +10,7 @@ import { CouponModel } from '../models/coupon.model';
 import { normalizeAddress } from '../models/address.model';
 import { getPaymentSettings } from '../utils/payment-settings';
 import { syncProductsToSearchIndex } from './product-search.service';
+import { PRODUCT_HOT_CACHE_KEYS } from '../utils/product-cache-keys';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
@@ -354,7 +355,7 @@ export async function transitionOrder(
 export async function invalidateOrderProductCache(productIds: number[]): Promise<void> {
   if (productIds.length === 0) return;
   try {
-    await getRedisClient().del(...productIds.map(id => `product:${id}`), 'products:hot');
+    await getRedisClient().del(...productIds.map(id => `product:${id}`), ...PRODUCT_HOT_CACHE_KEYS);
   } catch (error) {
     logger.warn({ err: error }, '订单已提交，商品缓存清理失败');
   }

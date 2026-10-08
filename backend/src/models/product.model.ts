@@ -36,14 +36,19 @@ export interface ProductQuery {
 // Customer prices and availability come from enabled variants; legacy parent stock remains independent.
 export const customerProducts = `SELECT p.product_id, p.title, p.description, p.category_id, p.brand,
   CASE WHEN s.product_id IS NULL THEN p.price ELSE COALESCE(s.price, p.price) END AS price,
-  p.original_price, CASE WHEN s.product_id IS NULL THEN p.stock ELSE COALESCE(s.stock, 0) END AS stock,
+  CASE WHEN s.product_id IS NULL THEN p.original_price ELSE display_sku.original_price END AS original_price,
+  CASE WHEN s.product_id IS NULL THEN p.stock ELSE COALESCE(s.stock, 0) END AS stock,
   p.sales_count, p.rating, p.main_image, p.images, p.specs, p.status, p.created_at, p.updated_at,
   (s.product_id IS NOT NULL) AS has_sku
   FROM products p LEFT JOIN (
     SELECT product_id, MIN(CASE WHEN status = 1 THEN price END) AS price,
       SUM(CASE WHEN status = 1 THEN stock ELSE 0 END) AS stock
     FROM product_skus GROUP BY product_id
-  ) s ON p.product_id = s.product_id`;
+  ) s ON p.product_id = s.product_id
+  LEFT JOIN product_skus display_sku ON display_sku.sku_id = (
+    SELECT sku_id FROM product_skus WHERE product_id = s.product_id AND status = 1
+    ORDER BY price ASC, sku_id ASC LIMIT 1
+  )`;
 
 export class ProductModel {
   // 创建商品

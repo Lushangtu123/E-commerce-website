@@ -39,7 +39,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Product list (pagination and sorting)
 - Promotion badges and crossed-out original prices appear only when the original price exceeds the selling price, including decimal strings returned by MySQL
 - Product details
-- **Product SKUs** - Products with multiple variants; the selected variant owns its selling and original prices. A variant without an original price does not inherit a parent discount.
+- **Product SKUs** - Products with multiple variants; the selected variant owns its selling and original prices. A variant without an original price does not inherit a parent discount. Catalog, search and recommendations pair the lowest enabled SKU price with that same SKU’s original price (ties use the lowest SKU ID).
 - Categories and filtering
 - Product search (full-text with Elasticsearch when configured; falls back to MySQL otherwise or when Elasticsearch fails)
 - Popular product recommendations
