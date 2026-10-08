@@ -34,6 +34,8 @@ export default function OrderDetailPage() {
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const detailRequest = useRef(0);
+  const detailInFlight = useRef<number | null>(null);
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const mounted = useRef(true);
   const actionLock = useRef(false);
   const [actionPending, setActionPending] = useState(false);
@@ -41,6 +43,8 @@ export default function OrderDetailPage() {
 
   const orderId = parseInt(params.id as string);
   const sessionKey = JSON.stringify([sessionId, user?.user_id, orderId]);
+  const loadError = failure?.key === sessionKey ? failure.message : null;
+  const actionsBlocked = actionPending || loading || !!loadError;
   const currentSession = useRef(sessionKey);
   currentSession.current = sessionKey;
   const isCurrentSession = () => {
@@ -58,6 +62,10 @@ export default function OrderDetailPage() {
     setOrder(null);
     setItems([]);
     setRemainingTime(null);
+    setLoadedKey(null);
+    setFailure(null);
+    detailRequest.current++;
+    detailInFlight.current = null;
     actionLock.current = false;
     setActionPending(false);
     if (!isHydrated) return;
@@ -69,20 +77,22 @@ export default function OrderDetailPage() {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, router]);
 
   useEffect(() => {
-    if (isHydrated && isAuthenticated && loadedKey === sessionKey && order?.status === 0) {
+    if (isHydrated && isAuthenticated && !loadError && loadedKey === sessionKey && order?.status === 0) {
       let active = true;
       const refresh = () => loadRemainingTime(() => active);
       refresh();
       const interval = setInterval(refresh, 60000);
       return () => { active = false; clearInterval(interval); };
     }
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status, loadError]);
 
   const loadOrder = async () => {
-    if (!isCurrentSession()) return;
+    if (!isCurrentSession() || detailInFlight.current !== null) return;
     const request = ++detailRequest.current;
+    detailInFlight.current = request;
     try {
       setLoading(true);
+      setFailure(null);
       const data = await orderApi.getDetail(orderId);
       if (!isCurrentSession() || request !== detailRequest.current) return;
       setOrder(data.order);
@@ -91,9 +101,17 @@ export default function OrderDetailPage() {
     } catch (error) {
       if (!isCurrentSession() || request !== detailRequest.current) return;
       logger.error('加载订单失败:', error);
-      toast.error(t('订单不存在'));
-      router.push('/orders');
+      const response = requestFailure(error).response;
+      if (response?.status === 401) return; // The API client handles expired sign-ins.
+      if (response?.status === 400 || response?.status === 403 || response?.status === 404) {
+        toast.error(t(response.data?.error || response.data?.message ||
+          (response.status === 404 ? '订单不存在' : response.status === 403 ? '无权访问该订单' : '订单ID无效')));
+        router.push('/orders');
+      } else {
+        setFailure({ key: sessionKey, message: '加载订单详情失败，请重试' });
+      }
     } finally {
+      if (detailInFlight.current === request) detailInFlight.current = null;
       if (isCurrentSession() && request === detailRequest.current) setLoading(false);
     }
   };
@@ -116,7 +134,7 @@ export default function OrderDetailPage() {
   };
 
   const handlePay = async () => {
-    if (!isCurrentSession() || !payments.canPay || actionLock.current || order?.status !== 0) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || loadError || !payments.canPay || actionLock.current || order?.status !== 0) return;
     actionLock.current = true; setActionPending(true);
     try {
       await orderApi.pay(orderId);
@@ -132,9 +150,9 @@ export default function OrderDetailPage() {
   };
 
   const handleCancel = async () => {
-    if (!isCurrentSession() || actionLock.current || order?.status !== 0) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || loadError || actionLock.current || order?.status !== 0) return;
     if (!(await confirmAction(t('确定要取消订单吗？')))) return;
-    if (!isCurrentSession() || actionLock.current) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || loadError || actionLock.current) return;
     actionLock.current = true; setActionPending(true);
 
     try {
@@ -151,7 +169,7 @@ export default function OrderDetailPage() {
   };
 
   const handleConfirm = async () => {
-    if (!isCurrentSession() || actionLock.current || order?.status !== 2) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || loadError || actionLock.current || order?.status !== 2) return;
     actionLock.current = true; setActionPending(true);
     try {
       await orderApi.confirm(orderId);
@@ -165,6 +183,17 @@ export default function OrderDetailPage() {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
   };
+
+  const errorNotice = loadError && (
+    <div className="card p-6 mb-6 text-center" role="alert">
+      <p className="text-red-600">{t(loadError)}</p>
+      <button onClick={loadOrder} disabled={loading} className="btn btn-secondary mt-4">{t('重新加载')}</button>
+    </div>
+  );
+
+  if (isHydrated && isAuthenticated && !loading && loadError && loadedKey !== sessionKey) {
+    return <div className="py-8"><div className="container-custom max-w-4xl">{errorNotice}</div></div>;
+  }
 
   if (!isHydrated || !isAuthenticated || loading || loadedKey !== sessionKey) {
     return (
@@ -189,6 +218,7 @@ export default function OrderDetailPage() {
     <div className="py-8">
       <div className="container-custom max-w-4xl">
         <h1 className="text-3xl font-bold mb-8">{t("订单详情")}</h1>
+        {errorNotice}
         {order.payment_method === 'demo' ? <p role="status" className="mb-6 rounded-lg bg-amber-50 p-4 text-amber-900">{t('演示订单，未实际扣款')}</p> : order.status === 0 && <p role="status" className="mb-6 rounded-lg bg-amber-50 p-4 text-amber-900">{t(payments.loading ? '正在确认支付服务...' : payments.isDemo ? '当前为演示支付，不会实际扣款' : '暂未开通在线支付，请勿向任何个人转账')}</p>}
 
         {/* 订单状态 */}
@@ -324,17 +354,17 @@ export default function OrderDetailPage() {
 
           {order.status === 0 && (
             <>
-              {payments.canPay && <button onClick={handlePay} disabled={actionPending} className="btn btn-primary">
+              {payments.canPay && <button onClick={handlePay} disabled={actionsBlocked} className="btn btn-primary">
                 {t("模拟支付")}
               </button>}
-              <button onClick={handleCancel} disabled={actionPending} className="btn btn-secondary">
+              <button onClick={handleCancel} disabled={actionsBlocked} className="btn btn-secondary">
                 {t("取消订单")}
               </button>
             </>
           )}
 
           {order.status === 2 && (
-            <button onClick={handleConfirm} disabled={actionPending} className="btn btn-primary">
+            <button onClick={handleConfirm} disabled={actionsBlocked} className="btn btn-primary">
               {t("确认收货")}
             </button>
           )}

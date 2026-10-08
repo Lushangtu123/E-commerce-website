@@ -3,6 +3,7 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '加载订单详情失败，请重试': 'Could not load order details. Please try again',
   '搜索关键词最多100个字符': 'Search keywords must not exceed 100 characters',
   '无法保存结算信息，请允许浏览器存储后重试': 'Unable to save checkout details. Allow browser storage and try again',
   '结算请求号无效，请刷新页面后重试': 'Invalid checkout request ID. Refresh the page and try again',
