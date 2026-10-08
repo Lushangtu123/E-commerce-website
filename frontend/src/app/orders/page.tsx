@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { orderApi } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
@@ -23,19 +23,39 @@ const ORDER_STATUS = {
 };
 
 export default function OrdersPage() {
+  const { t } = useI18n();
+  return <Suspense fallback={<div className="py-8 text-center text-gray-600">{t('加载中...')}</div>}><OrdersContent /></Suspense>;
+}
+
+function OrdersContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlKey = searchParams?.toString() || '';
+  const statuses = searchParams?.getAll('status') || [];
+  const urlStatus = statuses.length === 1 && statuses[0].length === 1 && /^[0-4]$/.test(statuses[0]) ? Number(statuses[0]) : undefined;
   const { t, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
-  // Null until the status link is read. The filter belongs to the session that chose it; a session of null
-  // is the link's filter, which the first hydrated session claims, so a later account starts unfiltered.
-  const [filters, setFilters] = useState<{ session: string | null; tab?: number; page: number } | null>(null);
-  const ownsFilters = filters !== null && (filters.session === null || filters.session === sessionKey);
-  const page = ownsFilters ? filters.page : 1;
-  const activeTab = ownsFilters ? filters.tab : undefined;
-  const setPage = (next: number) => setFilters({ session: sessionKey, tab: activeTab, page: next });
-  const setActiveTab = (tab?: number) => setFilters({ session: sessionKey, tab, page: 1 });
-  const scopeKey = JSON.stringify([sessionKey, activeTab, page]);
+  // The URL owns status; pagination belongs to this URL and session. The first session claims a deep link.
+  const [filters, setFilters] = useState<{ session: string | null; urlKey: string; page: number }>({ session: null, urlKey, page: 1 });
+  const ownsFilters = filters.session === null || filters.session === sessionKey;
+  if ((ownsFilters && filters.urlKey !== urlKey) || (!ownsFilters && isHydrated && statuses.length === 0)) {
+    setFilters({ session: ownsFilters ? filters.session : sessionKey, urlKey, page: 1 });
+  }
+  const page = ownsFilters && filters.urlKey === urlKey ? filters.page : 1;
+  const activeTab = ownsFilters ? urlStatus : undefined;
+  const setPage = (next: number) => {
+    if (isCurrentScope()) setFilters({ session: sessionKey, urlKey, page: next });
+  };
+  const setActiveTab = (tab?: number) => {
+    if (!isCurrentScope()) return;
+    const params = new URLSearchParams(urlKey);
+    if (tab === undefined) params.delete('status');
+    else params.set('status', String(tab));
+    const next = params.toString();
+    if (next !== urlKey) window.history.pushState(null, '', `/orders${next ? `?${next}` : ''}`);
+  };
+  const scopeKey = JSON.stringify([sessionKey, activeTab, page, urlKey]);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
@@ -44,7 +64,6 @@ export default function OrdersPage() {
     name: 'orders',
     params: [activeTab ?? 'all', page],
     load: () => orderApi.list({ page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) }),
-    enabled: filters !== null,
   });
   const { isCurrentSession } = query;
   const lastPage = Math.max(1, Number(query.data?.totalPages) || 0);
@@ -57,17 +76,21 @@ export default function OrdersPage() {
   const orders = shown?.orders || [];
   const total = shown?.total || 0;
   const totalPages = shown?.totalPages || 0;
-  const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey;
+  const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey &&
+    new URLSearchParams(window.location.search).toString() === urlKey;
   const actionsPending = pendingSession === sessionKey;
   const payments = usePaymentSettings(isHydrated && isAuthenticated);
 
   useEffect(() => {
-    const value = new URLSearchParams(window.location.search).get('status');
-    setFilters({ session: null, tab: value !== null && /^[0-4]$/.test(value) ? Number(value) : undefined, page: 1 });
-  }, []);
-
-  useEffect(() => {
-    if (isHydrated && filters?.session === null) setFilters({ ...filters, session: sessionKey });
+    if (!isHydrated) return;
+    if (filters.session === null) setFilters({ ...filters, session: sessionKey });
+    else if (filters.session !== sessionKey) {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('status');
+      const next = params.toString();
+      // Wait for useSearchParams to observe this replacement before the next account claims the URL.
+      window.history.replaceState(null, '', `/orders${next ? `?${next}` : ''}`);
+    }
   }, [isHydrated, filters, sessionKey]);
 
   // A pending action belongs to the session that started it; the next session may act at once.
