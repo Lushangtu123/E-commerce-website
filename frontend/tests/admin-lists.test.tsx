@@ -533,6 +533,10 @@ describe('admin product selection and creation', () => {
     await type(field(/^分类/), '2');
     await type(field(/^状态/), '0');
     await click(button('保存修改'));
+    expect(mutations).toEqual([]);
+    expect(notifications.at(-1)).toBe('库存须为0至2147483647的整数');
+    await type(field(/^库存/), '0');
+    await click(button('保存修改'));
     expect(mutations).toEqual([expect.objectContaining({ method: 'put', path: '/admin/products/1', body: {
       price: 15, stock: 0, category_id: 2, status: 0,
     } })]);

@@ -45,6 +45,16 @@ function translatedSpecs(values: ProductFormValues, allowTypedValues = false) {
   return englishEntries.length ? Object.fromEntries(englishEntries) : null;
 }
 
+function productStock(value: string) {
+  // Stock is optional for a new product, which starts with no inventory.
+  if (value === '') return 0;
+  const stock = Number(value);
+  if (/[^0-9]/.test(value) || !Number.isInteger(stock) || stock > 2147483647) {
+    throw new Error('库存须为0至2147483647的整数');
+  }
+  return stock;
+}
+
 export function toProductPayload(values: ProductFormValues, includeEmptyEnglish = false) {
   const titleEn = values.title_en.trim(), descriptionEn = values.description_en.trim();
   if (titleEn.length > 200) throw new Error('英文商品标题最多200个字符');
@@ -54,7 +64,7 @@ export function toProductPayload(values: ProductFormValues, includeEmptyEnglish 
     ...((titleEn || includeEmptyEnglish) && { title_en: titleEn || null }),
     ...((descriptionEn || includeEmptyEnglish) && { description_en: descriptionEn || null }),
     ...((specsEn || includeEmptyEnglish) && { specs_en: specsEn }),
-    price: parseFloat(values.price), stock: parseInt(values.stock) || 0,
+    price: parseFloat(values.price), stock: productStock(values.stock),
     category_id: parseInt(values.category_id), brand: values.brand,
     image_url: values.main_image, status: values.status,
   };
@@ -62,6 +72,8 @@ export function toProductPayload(values: ProductFormValues, includeEmptyEnglish 
 
 /** Updates only what the administrator changed, so an English edit cannot reset live inventory. */
 export function toProductChanges(values: ProductFormValues, previous: ProductFormValues) {
+  // Clearing existing stock must not silently reset live inventory to zero.
+  if (values.stock === '') throw new Error('库存须为0至2147483647的整数');
   const payload = toProductPayload(values, true), original = { ...toProductPayload(previous, true), specs_en: translatedSpecs(previous, true) };
   return Object.fromEntries(Object.entries(payload).filter(([key, value]) =>
     JSON.stringify(value) !== JSON.stringify(original[key as keyof typeof original]))) as Partial<typeof payload>;
@@ -158,7 +170,7 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
               </div>
               <div>
                 <label htmlFor={id('stock')} className={labelClass}>{t('库存')}</label>
-                <input id={id('stock')} type="number" value={values.stock} onChange={e => set('stock', e.target.value)}
+                <input id={id('stock')} type="text" inputMode="numeric" value={values.stock} onChange={e => set('stock', e.target.value)}
                   className={inputClass} placeholder="0" />
               </div>
             </div>
