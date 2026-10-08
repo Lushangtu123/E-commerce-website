@@ -4,6 +4,7 @@
 import { connectDatabase, getPool } from './mysql';
 import { Pool, RowDataPacket } from 'mysql2/promise';
 import logger from '../utils/logger';
+import { migrateCouponClaims } from './migrate-coupon-claims';
 
 export async function migrateCouponTables(pool: Pool) {
   try {
@@ -101,6 +102,7 @@ export async function migrateCouponTables(pool: Pool) {
       }
     }
 
+    await migrateCouponClaims(pool);
     logger.info('🎉 优惠券相关表创建完成！');
   } catch (error) {
     logger.error({ err: error }, '❌ 创建优惠券表失败');

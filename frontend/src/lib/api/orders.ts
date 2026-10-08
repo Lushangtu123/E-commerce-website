@@ -154,8 +154,9 @@ export const couponApi = {
     api.get<unknown, CouponPage>('/coupons/available', { params: { page, page_size: pageSize } }),
   
   // 领取优惠券
-  receive: (code: string) =>
-    api.post('/coupons/receive', { code }),
+  receive: (coupon: string | number, claimKey?: string) =>
+    api.post('/coupons/receive', { ...(typeof coupon === 'number' ? { coupon_id: coupon } : { code: coupon }),
+      ...(claimKey !== undefined && { claim_key: claimKey }) }),
   
   // 获取我的优惠券
   getMyCoupons: (status?: number) =>

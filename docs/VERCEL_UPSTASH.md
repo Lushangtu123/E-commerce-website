@@ -63,6 +63,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 结算重试保护需要 `orders.checkout_key`、`orders.checkout_fingerprint` 和 `(user_id, checkout_key)` 唯一索引。发布此功能前，核对目标库并备份，在 `backend` 目录运行 `npm run build`、`npm run schema:checkout`；若提示 `migration_required`，执行 `npm run migrate:checkout`，再检查，必须返回 `ready`。迁移只增加可空列和索引，既有订单保持不变，可重复执行；回滚旧代码时保留这些列。迁移不在构建或请求中自动执行。完整基础迁移也包含此升级。
 
+优惠券领取重试保护需要 `user_coupons.claim_key` 可空字段及 `(user_id, claim_key)` 唯一索引。推送会触发 Preview，须先核对共享目标库并备份 `user_coupons` 结构与数据，在 `backend` 编译后运行 `npm run schema:coupon-claims`；缺少结构时，经授权执行 `npm run migrate:coupon-claims`，再检查必须成功。迁移仅增加字段与索引，不修改历史领取记录或剩余数量，重复运行安全；回滚旧代码保留新增结构。构建和 API 请求不会自动运行迁移。商城在发出领取请求前保存当前账号与券对应的 UUID 请求号；网络、408、429 或 5xx 后继续复用，确认成功或明确业务拒绝后清除。相同请求号返回原券记录，不再次扣余量；新的主动领取仍可领取下一张。旧客户端可省略请求号并继续受限领数量约束。
+
 `POST /api/orders` 必须携带 UUID 格式的 `checkout_key`。新结算生成新请求号，同一次结算重试保留原请求号、商品、地址、备注和优惠券；同号修改内容返回 409。浏览器在提交前把待确认结算保存到当前标签页的会话存储；保存失败时不发请求，网络错误、HTTP 408 超时、429 限流或 5xx 后显示“重试确认订单”，重新打开购物车也可恢复。超时或限流不能确认此前下单失败，因此继续保留原请求号；明确的业务拒绝仍允许重新结算。重试返回原订单和原金额，不再次扣库存、使用优惠券或移除新加入购物车的同种商品；已取消订单仍返回原订单。
 
 账户安全迁移还会补齐 `users.status`（既有用户默认启用）与 `admins.auth_version`。禁用用户会撤销旧会话，重新启用后需要重新登录。发布包含这些字段的新代码前，使用目标环境的数据库配置，从 `backend` 目录先执行 `npm run build`，再执行 `npm run schema:check`。该检查只读取数据库结构；缺列会列出字段并以非零状态退出。核对目标库并备份后运行 `npm run migrate:account-security`，然后重复 `npm run schema:check`，结果必须是 `ready`。不要把迁移放进构建命令或每次 API 请求，也不要在共享数据库上运行 `seed`。

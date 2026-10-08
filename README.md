@@ -396,6 +396,8 @@ The account centre shows statistics from the server and can retry failed loads; 
 
 After-sales progress requires eight nullable columns. Before deploying, back up `after_sales_requests`, build the backend, then check using the target database configuration with `npm run schema:after-sales` in `backend`. If it reports `migration_required`, run `npm run migrate:after-sales` after approval and check again for `ready`. The migration is repeatable and preserves legacy request status, orders, stock and payments; keep the new columns when rolling code back. Builds and API requests never run it automatically.
 
+Coupon claims accept an optional UUID `claim_key`. The storefront persists it before sending a claim, reuses it after an uncertain response or reload, and generates a new ID after confirmation. The same user/key/coupon returns the original receipt without consuming another allocation; changing the coupon with the same key returns 409. Before pushing this feature, back up `user_coupons`, build the backend and run `npm run schema:coupon-claims`. After authorization, run `npm run migrate:coupon-claims` if needed and check again. The repeatable migration adds only nullable `claim_key` and a unique `(user_id, claim_key)` index; preserve both when rolling code back. Legacy requests without a key remain supported.
+
 ### Review APIs
 - `POST /api/reviews` - Create a review
 - `GET /api/reviews/product/:id` - Reviews for a product

@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { couponClaimKeyPattern } from './coupon-claim';
 
 const positiveId = Joi.number().integer().min(1).max(2147483647);
 const money = Joi.number().min(0).max(99999999.99).precision(2);
@@ -33,6 +34,11 @@ export const couponStatusSchema = Joi.object({ status: Joi.number().valid(0, 1).
 export const couponReceiveSchema = Joi.object({
   coupon_id: positiveId,
   code: Joi.string().trim().min(1).max(50),
+  claim_key: Joi.string().pattern(couponClaimKeyPattern).messages({
+    'string.base': '领取请求号无效，请刷新页面后重试',
+    'string.empty': '领取请求号无效，请刷新页面后重试',
+    'string.pattern.base': '领取请求号无效，请刷新页面后重试',
+  }),
 }).xor('coupon_id', 'code').unknown(false).prefs({ convert: false });
 
 // Query strings must be complete decimal amounts; parseFloat-style prefixes are rejected.

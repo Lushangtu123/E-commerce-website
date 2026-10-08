@@ -10,6 +10,7 @@ import {
 } from '../utils/coupon-validation';
 import { couponMoneyToCents } from '../utils/coupon-discount';
 import logger from '../utils/logger';
+import { CouponClaimError } from '../utils/coupon-claim';
 
 export class CouponController {
   /**
@@ -85,7 +86,7 @@ export class CouponController {
       const userId = req.userId!;
       const { error, value } = couponReceiveSchema.validate(req.body || {});
       if (error) return res.status(400).json({ success: false, message: error.details[0].message });
-      const { coupon_id, code } = value;
+      const { coupon_id, code, claim_key } = value;
 
       let couponId = coupon_id;
 
@@ -101,18 +102,20 @@ export class CouponController {
         couponId = coupon.coupon_id;
       }
 
-      const userCouponId = await CouponModel.receiveCoupon(userId, couponId);
+      const userCouponId = claim_key === undefined ? await CouponModel.receiveCoupon(userId, couponId)
+        : await CouponModel.receiveCoupon(userId, couponId, claim_key);
 
       res.json({
         success: true,
         message: '领取成功',
         data: { user_coupon_id: userCouponId },
       });
-    } catch (error: any) {
-      logger.error({ err: error }, '领取优惠券失败');
-      res.status(400).json({
+    } catch (error: unknown) {
+      const known = error instanceof CouponClaimError || error instanceof RangeError;
+      if (!known) logger.error({ errorType: error instanceof Error ? error.name : 'UnknownError' }, '领取优惠券失败');
+      res.status(error instanceof CouponClaimError ? error.statusCode : known ? 400 : 500).json({
         success: false,
-        message: error.message || '领取优惠券失败',
+        message: known ? error.message : '领取优惠券失败',
       });
     }
   }
