@@ -6,7 +6,7 @@ import AdminDashboardPage from '@/app/admin/dashboard/page';
 import api, { type DashboardStats, type RecentOrder, type SalesTrendPoint, type TopProduct } from '@/lib/api';
 import { clearAdminSession } from '@/lib/admin-session';
 import { useLocaleStore } from '@/store/useLocaleStore';
-import { deferred, render, settle } from './helpers';
+import { captureHandler, deferred, render, settle } from './helpers';
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 // The shared frame has its own session tests; this suite exercises dashboard sections.
@@ -64,6 +64,61 @@ const section = (title: string) => screen.getByRole('heading', { name: title }).
 afterEach(() => { api.defaults.adapter = originalAdapter; });
 
 describe('dashboard permission sections', () => {
+  it.each(['stats', 'recent-orders', 'top-products', 'sales-trend'])('retries only the failed %s section and coalesces repeated actions', async name => {
+    const target = `/admin/dashboard/${name}`;
+    const retry = deferred<unknown>(); const calls: string[] = [];
+    await setup(config => {
+      calls.push(config.url!);
+      if (config.url === target) {
+        if (calls.filter(url => url === target).length === 1) throw failure(config, 503, '获取数据失败');
+        return retry.promise;
+      }
+      return success(config);
+    });
+    const action = captureHandler(screen.getByRole('button', { name: '重新加载' }));
+    const first = action(); const second = action(); await settle();
+    expect(calls.filter(url => url === target)).toHaveLength(2);
+    expect(calls.filter(url => url !== target)).toHaveLength(3);
+    await act(async () => retry.resolve(success({ url: target } as InternalAxiosRequestConfig)));
+    await Promise.all([first, second]); await settle();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('ORDER-AUTHORIZED')).toBeVisible();
+    expect(screen.getByText('授权商品')).toBeVisible();
+  });
+
+  it('does not offer a retry for an explicit permission denial', async () => {
+    await setup(config => { if (config.url === '/admin/dashboard/recent-orders') throw failure(config, 403); return success(config); });
+    expect(screen.getByRole('alert')).toHaveTextContent('权限不足');
+    expect(screen.queryByRole('button', { name: '重新加载' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a failed retry recoverable and updates its controls with the current language', async () => {
+    let attempts = 0;
+    await setup(config => {
+      if (config.url === '/admin/dashboard/recent-orders' && ++attempts < 3) throw failure(config, 503);
+      return success(config);
+    });
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    await captureHandler(screen.getByRole('button', { name: 'Retry' }))(); await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load data');
+    await captureHandler(screen.getByRole('button', { name: 'Retry' }))(); await settle();
+    expect(screen.getByText('ORDER-AUTHORIZED')).toBeVisible();
+    expect(attempts).toBe(3);
+  });
+
+  it('rejects an old retry handler after the administrator session changes', async () => {
+    const calls: string[] = [];
+    const view = await setup(config => {
+      calls.push(config.url!);
+      if (config.url === '/admin/dashboard/recent-orders') throw failure(config, 503);
+      return success(config);
+    });
+    const oldRetry = captureHandler(screen.getByRole('button', { name: '重新加载' }));
+    signIn('second-admin'); view.rerender(<AdminDashboardPage />); await settle();
+    const before = calls.length; await oldRetry(); await settle();
+    expect(calls).toHaveLength(before);
+  });
+
   it('shows an analyst the authorized statistics when recent orders return 403', async () => {
     await setup(config => {
       if (config.url === '/admin/dashboard/recent-orders') throw failure(config, 403, '权限不足');
