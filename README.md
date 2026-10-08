@@ -68,6 +68,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 ### Admin Panel
 - **Dashboard** - Live sales and order statistics
+- Dashboard revenue, average paid order value and top-product sales exclude demo payments. Operational order counts retain them; historical orders without a payment method remain included. Date-based reports continue to group by order creation date.
 - **Product management** - Create, edit, bulk list/delist, SKU management
 - **Bilingual product content** - Optional English names, descriptions and specification labels, with Chinese fallback for each missing translation. Cart, saved products and new order snapshots follow the selected language.
 - **Order management** - Order list, status updates, shipping
