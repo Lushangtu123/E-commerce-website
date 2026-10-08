@@ -6,6 +6,7 @@ import {
   getGuessYouLike
 } from '../services/recommendation.service';
 import logger from '../utils/logger';
+import { RecommendationError, recommendationLimit, recommendationProductId } from '../utils/recommendation-validation';
 
 export class RecommendationController {
   /**
@@ -14,7 +15,7 @@ export class RecommendationController {
   static async getPersonalized(req: AuthRequest, res: Response) {
     try {
       const userId = req.userId!;
-      const limit = parseInt(req.query.limit as string) || 10;
+      const limit = recommendationLimit(req.query);
 
       const recommendations = await getRecommendationsByBrowseHistory(userId, limit);
 
@@ -23,6 +24,7 @@ export class RecommendationController {
         total: recommendations.length
       });
     } catch (error) {
+      if (error instanceof RecommendationError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '获取个性化推荐失败');
       res.status(500).json({ error: '获取推荐失败' });
     }
@@ -33,12 +35,8 @@ export class RecommendationController {
    */
   static async getRelated(req: AuthRequest, res: Response) {
     try {
-      const productId = parseInt(req.params.productId as string);
-      const limit = parseInt(req.query.limit as string) || 10;
-
-      if (!productId) {
-        return res.status(400).json({ error: '商品ID不能为空' });
-      }
+      const productId = recommendationProductId(req.params.productId);
+      const limit = recommendationLimit(req.query);
 
       const relatedProducts = await getRelatedProducts(productId, limit);
 
@@ -47,6 +45,7 @@ export class RecommendationController {
         total: relatedProducts.length
       });
     } catch (error) {
+      if (error instanceof RecommendationError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '获取相关商品失败');
       res.status(500).json({ error: '获取相关商品失败' });
     }
@@ -58,7 +57,7 @@ export class RecommendationController {
   static async getGuessYouLike(req: AuthRequest, res: Response) {
     try {
       const userId = req.userId || null;
-      const limit = parseInt(req.query.limit as string) || 10;
+      const limit = recommendationLimit(req.query);
 
       const recommendations = await getGuessYouLike(userId, limit);
 
@@ -67,10 +66,10 @@ export class RecommendationController {
         total: recommendations.length
       });
     } catch (error) {
+      if (error instanceof RecommendationError) return res.status(error.statusCode).json({ error: error.message });
       logger.error({ err: error }, '获取猜你喜欢失败');
       res.status(500).json({ error: '获取推荐失败' });
     }
   }
 }
-
 
