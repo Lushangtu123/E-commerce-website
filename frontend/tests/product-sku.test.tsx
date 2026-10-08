@@ -4,6 +4,7 @@ import ProductDetailPage from '@/components/ProductDetail';
 import { cartApi, favoriteApi, productApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { apiError, captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -64,6 +65,58 @@ describe('product SKU purchase', () => {
   beforeEach(() => {
     params.id = '1';
     notifications.length = 0;
+  });
+
+  it.each([
+    { price: '99.00', original_price: '100.00', discounted: true },
+    { price: '100.00', original_price: '99.00', discounted: false },
+    { price: '100.00', original_price: '100.00', discounted: false },
+    { price: '9.99', original_price: '10.00', discounted: true },
+    { price: 99, original_price: 100, discounted: true },
+    { price: '99.00', original_price: 100, discounted: true },
+    { price: 99, original_price: '100.00', discounted: true },
+    { price: '0.00', original_price: '10.00', discounted: true },
+    { price: '100.00', original_price: 0, discounted: false },
+    { price: '100.00', original_price: '0.00', discounted: false },
+    { price: '100.00', original_price: null, discounted: false },
+    { price: '100.00', original_price: undefined, discounted: false },
+  ])('uses the selected variant original price $original_price against $price', async ({ price, original_price, discounted }) => {
+    const variant: Product = { ...product, original_price: 999, skus: [
+      { sku_id: 101, product_id: 1, sku_code: 'SALE', specs: { Color: 'Red' }, price, original_price, stock: 2, status: 1 },
+    ] };
+    const { view } = await setup({ detail: async () => ({ product: variant }) });
+    await chooseSku('101');
+    for (const locale of ['zh-CN', 'en'] as const) {
+      act(() => useLocaleStore.setState({ locale }));
+      const strike = view.container.querySelector('.line-through');
+      if (discounted) expect(strike).toHaveTextContent(`¥${original_price}`);
+      else expect(strike).toBeNull();
+      expect(view.container.querySelector('span.text-3xl')).toHaveTextContent(`¥${price}`);
+      expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
+    }
+  });
+
+  it('waits for an explicit variant and updates its sale price when switching between variants', async () => {
+    const detail: Product = { ...product, original_price: 999, skus: [
+      { sku_id: 101, product_id: 1, sku_code: 'SALE', specs: { Color: 'Red' }, price: 100, original_price: 200, stock: 2, status: 1 },
+      { sku_id: 102, product_id: 1, sku_code: 'REGULAR', specs: { Color: 'Blue' }, price: 150, original_price: null, stock: 2, status: 1 },
+    ] };
+    const { view } = await setup({ detail: async () => ({ product: detail }) });
+    expect(view.container.querySelector('.line-through')).toBeNull();
+    await chooseSku('101');
+    expect(view.container.querySelector('.line-through')).toHaveTextContent('¥200');
+    await chooseSku('102');
+    expect(view.container.querySelector('.line-through')).toBeNull();
+    expect(view.container.querySelector('span.text-3xl')).toHaveTextContent('¥150');
+    await chooseSku('');
+    expect(view.container.querySelector('.line-through')).toBeNull();
+  });
+
+  it.each([150, '150.00', null])('keeps a simple product original price %s', async original_price => {
+    const { view } = await setup({ detail: async () => ({ product: { ...base, has_sku: false, price: 100, original_price } }) });
+    const strike = view.container.querySelector('.line-through');
+    if (original_price === null) expect(strike).toBeNull();
+    else expect(strike).toHaveTextContent(`¥${original_price}`);
   });
 
   it("requires an explicit variant and uses that variant's price, image, stock and cart identity", async () => {
