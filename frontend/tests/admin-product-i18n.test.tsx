@@ -73,6 +73,20 @@ describe('admin product bilingual content', () => {
     } } }]);
   });
 
+  it('opens an uncategorized legacy product and saves its selected category without rewriting other fields', async () => {
+    const { writes } = await setup({ ...product, category_id: null } as unknown as AdminProductRow);
+    await captureHandler(screen.getByRole('button', { name: 'Edit' }))();
+    await settle();
+    expect(input('title')).toHaveValue('中文商品');
+    expect(input('category-id')).toHaveValue('');
+    await save();
+    expect(writes).toHaveLength(0);
+    expect(notifications.error).toHaveBeenCalled();
+    await change('category-id', '1');
+    await save();
+    expect(writes).toEqual([{ url: '/admin/products/1', body: { category_id: 1 } }]);
+  });
+
   it('displays the English title but opens the Chinese source and both existing English text fields', async () => {
     await setup();
     expect(screen.getByText('English product')).toBeInTheDocument();

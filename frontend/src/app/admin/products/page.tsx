@@ -219,7 +219,7 @@ export default function AdminProductsPage() {
       specs_en: product.specs_en,
       price: product.price.toString(),
       stock: product.stock.toString(),
-      category_id: product.category_id.toString(),
+      category_id: product.category_id == null ? '' : String(product.category_id),
       brand: product.brand || '',
       main_image: product.main_image || '',
       status: product.status
