@@ -137,7 +137,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 ## Database Design
 
-### Tables (24)
+### Tables (26)
 | Table | Description | Status |
 |-------|-------------|--------|
 | `users` | Users | Core |
@@ -164,6 +164,8 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 | `page_visits` | Page visits | Core |
 | `password_reset_tokens` | One-time password reset tokens | Core |
 | `after_sales_requests` | After-sales requests | Core |
+| `address_creation_receipts` | Idempotency receipts for new addresses | Core |
+| `cart_add_receipts` | Idempotency receipts for cart additions | Core |
 
 ### Database Characteristics
 - Normalised design (third normal form)
@@ -617,12 +619,12 @@ The user list links to read-only customer details, including profile, non-demo p
 
 | Metric | Count |
 |--------|-------|
-| Lines of code (excluding tests) | 22,000+ |
-| Frontend pages | 29 |
+| Lines of code (excluding tests) | 27,000+ |
+| Frontend pages | 30 |
 | API endpoints | 100+ |
-| Database tables | 24 |
+| Database tables | 26 |
 | Feature modules | 15 |
-| Commits | 180+ |
+| Commits | 390+ |
 | Documentation | 7,000+ lines |
 
 ## Documentation
