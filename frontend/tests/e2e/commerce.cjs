@@ -532,8 +532,22 @@ async function localPlatformScripts(context) {
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
   assert.equal(cartAttempts, 2);
+  let uncertainCartWrites = 0;
+  const loseCartWriteReply = async route => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    uncertainCartWrites++;
+    const response = await route.fetch(); assert.equal(response.status(), 200);
+    await route.abort('failed');
+  };
+  expectedRecoveryWrite = { endpoint: cartEndpoint };
+  await page.route(cartEndpoint, loseCartWriteReply);
   await page.getByRole('button', { name: '+', exact: true }).click();
   await visibleText(page, '2 items');
+  assert.equal(uncertainCartWrites, 1);
+  const recoveredCart = await (await context.request.get(cartEndpoint)).json();
+  assert.equal(recoveredCart.items[0].quantity, 2);
+  await page.unroute(cartEndpoint, loseCartWriteReply); expectedRecoveryWrite = undefined;
+  console.log('PASS browser committed cart quantity with a lost reply rereads real MySQL without repeating the write');
   await page.unroute(cartEndpoint, failCartOnce);
   expectedShoppingFailure = undefined;
   console.log('PASS browser cart 503 displays an error and explicit retry restores real items');
