@@ -58,7 +58,25 @@ export class ProductController {
       const skus = allSKUs.filter(sku => sku.status === 1);
       const hasSKU = allSKUs.length > 0;
       const productWithSKU = {
-        ...product,
+        // Public details must not inherit internal columns added to the products table.
+        product_id: product.product_id,
+        title: product.title,
+        title_en: product.title_en,
+        description: product.description,
+        description_en: product.description_en,
+        category_id: product.category_id,
+        brand: product.brand,
+        original_price: product.original_price,
+        sales_count: product.sales_count,
+        rating: product.rating,
+        review_count: product.review_count,
+        main_image: product.main_image,
+        images: product.images,
+        specs: product.specs,
+        specs_en: product.specs_en,
+        status: product.status,
+        created_at: product.created_at,
+        updated_at: product.updated_at,
         skus: hasSKU ? skus : undefined,
         has_sku: hasSKU,
         stock: hasSKU ? skus.reduce((stock, sku) => stock + Number(sku.stock), 0) : product.stock,

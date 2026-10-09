@@ -65,6 +65,22 @@ test('商品列表保持公开并支持已有价格排序', async () => {
   expect(query).toHaveBeenLastCalledWith(expect.stringContaining('ORDER BY price ASC'), [10, 10]);
 });
 
+test('公开商品详情只返回商品字段，不暴露内部创建收据或未来的私有列', async () => {
+  const publicProduct = {
+    product_id: 9, title: '商品', title_en: 'Product', description: '描述', description_en: 'Description',
+    category_id: 1, brand: 'Brand', price: 12, original_price: 15, stock: 5, sales_count: 2,
+    main_image: 'https://example.test/product.png', images: ['https://example.test/other.png'],
+    specs: { color: '红' }, specs_en: { color: 'Red' }, status: 1,
+    created_at: '2026-10-08T00:00:00Z', updated_at: '2026-10-08T01:00:00Z',
+  };
+  (query as jest.Mock).mockImplementation(async (statement: string) => statement.includes('FROM products p')
+    ? [{ ...publicProduct, review_rating: '4.50', review_count: 3, created_by_admin_id: 123,
+      create_key: '00000000-0000-4000-8000-000000000099', create_fingerprint: 'a'.repeat(64), private_future_column: 'internal' }]
+    : []);
+  const response = await request(app).get('/products/9').expect(200);
+  expect(response.body.product).toEqual({ ...publicProduct, rating: 4.5, review_count: 3, has_sku: false });
+});
+
 test.each([
   { sort: 'price; DROP TABLE products' }, { page: '-1' }, { page: '1x' },
   { limit: '10001' }, { min_price: 'NaN' }, { min_price: '5', max_price: '1' }
