@@ -27,6 +27,8 @@ delete process.env.VERCEL;
 delete process.env.VERCEL_ENV;
 delete process.env.RESEND_API_KEY;
 delete process.env.EMAIL_FROM;
+delete process.env.GMAIL_USER;
+delete process.env.GMAIL_APP_PASSWORD;
 let owner, pool, listener, created = false, stopping = false;
 async function stop() {
   if (stopping) return;

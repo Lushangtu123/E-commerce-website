@@ -62,4 +62,37 @@ integration('真实 MySQL 管理员会话版本', () => {
     const [rows] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 9');
     expect(rows[0].auth_version).toBe(1);
   });
+
+  test('Bearer 退出在真实数据库撤销令牌及 Cookie 副本', async () => {
+    const app = express();
+    app.post('/logout', adminLogout);
+    app.get('/me', authenticateAdmin, (req, res) => res.json({ adminId: req.admin?.adminId }));
+    const [before] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 9');
+    const token = jwt.sign({ adminId: 9, type: 'admin', authVersion: before[0].auth_version }, 'test-jwt-secret', { expiresIn: '1h' });
+
+    await request(app).get('/me').set('Authorization', `Bearer ${token}`).expect(200);
+    await request(app).post('/logout').set('Authorization', `Bearer ${token}`).set('X-Requested-With', 'XMLHttpRequest').expect(200);
+    await request(app).get('/me').set('Authorization', `Bearer ${token}`).expect(401);
+    await request(app).get('/me').set('Cookie', `admin_session=${token}`).expect(401);
+    const [after] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 9');
+    expect(after[0].auth_version).toBe(before[0].auth_version + 1);
+  });
+
+  test('同时携带另一管理员 Cookie 时，只撤销 Bearer 所属管理员', async () => {
+    await db.query("INSERT INTO admins (admin_id, username, password_hash, role_id) VALUES (10, 'other', 'x', 1)");
+    const app = express();
+    app.post('/logout', adminLogout);
+    app.get('/me', authenticateAdmin, (req, res) => res.json({ adminId: req.admin?.adminId }));
+    const [before] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 9');
+    const token = jwt.sign({ adminId: 9, type: 'admin', authVersion: before[0].auth_version }, 'test-jwt-secret', { expiresIn: '1h' });
+    const otherCookie = `admin_session=${jwt.sign({ adminId: 10, type: 'admin', authVersion: 0 }, 'test-jwt-secret', { expiresIn: '1h' })}`;
+
+    await request(app).post('/logout').set('Authorization', `Bearer ${token}`).set('Cookie', otherCookie)
+      .set('X-Requested-With', 'XMLHttpRequest').expect(200);
+    await request(app).get('/me').set('Authorization', `Bearer ${token}`).expect(401);
+    const other = await request(app).get('/me').set('Cookie', otherCookie).expect(200);
+    expect(other.body.adminId).toBe(10);
+    const [rows] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 10');
+    expect(rows[0].auth_version).toBe(0);
+  });
 });

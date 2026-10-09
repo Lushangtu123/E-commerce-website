@@ -21,7 +21,9 @@ async function setupApi(storage: Storage, apiUrl = 'http://localhost:3001/api') 
   const requests: InternalAxiosRequestConfig[] = [];
   const respond: AxiosAdapter = async config => {
     requests.push(config);
-    return { data: { data: [] }, status: 200, statusText: 'OK', headers: {}, config };
+    const data = config.method === 'post' && ['/users/login', '/users/register'].includes(config.url || '')
+      ? { user: { user_id: 1, username: 'customer', email: 'customer@example.test' } } : { data: [] };
+    return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
   client.default.defaults.adapter = respond;
   const fail = (status: number, message = 'Request failed') => {
@@ -281,6 +283,16 @@ describe('API client sign-in routes', () => {
 });
 
 describe('API client cookie session', () => {
+  it('can clear a changed cookie without a current stored identity, while guarding other logout paths', async () => {
+    const { api, requests } = await setupApi({ session: 'customer-a' });
+    localStorage.setItem('session', 'customer-b');
+    await api.post('/users/logout');
+    expect(requests).toHaveLength(1);
+    expect(credentials(requests[0])).toEqual(asCustomer);
+    await expect(api.get('/users/logout')).rejects.toThrow(/登录状态已变化/);
+    await expect(api.post('/users/logout/other')).rejects.toThrow(/登录状态已变化/);
+    expect(requests).toHaveLength(1);
+  });
   it('sends anonymous and customer requests with credentials and the CSRF header, and never stores a token', async () => {
     const { productApi, userApi, requests } = await setupApi({});
 
@@ -313,4 +325,3 @@ describe('API client admin cookie session', () => {
     expect(credentials(requests[0])).toEqual(asAdmin);
   });
 });
-

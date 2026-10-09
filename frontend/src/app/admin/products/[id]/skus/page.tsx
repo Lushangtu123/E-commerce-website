@@ -2,6 +2,7 @@
 
 import '@/lib/admin-i18n';
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
@@ -11,8 +12,10 @@ import { useI18n } from '@/lib/i18n';
 import { skuDraft, parseSKUForm, skuChanges, type SKUDraft } from '@/lib/sku-form';
 import { requestFailure } from '@/lib/api-error';
 import { localizedText, specSummary } from '@/lib/product-content';
+import { inventoryUpdateAcknowledged, unknownInventoryWrite } from '@/lib/admin-inventory-write';
 
 type Editor = { key: string; id: number | null; draft: SKUDraft };
+type Recovery = { key: string; checking: boolean };
 
 const validMoney = (value: unknown) => (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
   Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 99999999.99;
@@ -42,11 +45,14 @@ export default function AdminSKUPage() {
   const productId = typeof params.id === 'string' && /^[1-9]\d*$/.test(params.id) ? Number(params.id) : 0;
   const validId = Number.isSafeInteger(productId) && productId > 0 && productId <= 2147483647;
   const sessionId = useAdminSessionId();
+  const queryClient = useQueryClient();
   const key = JSON.stringify([sessionId, productId]);
   const currentKey = useRef(key); currentKey.current = key;
   const [editor, setEditor] = useState<Editor | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const mutation = useRef<object | null>(null);
+  const recovery = useRef<Recovery | null>(null);
+  const [recovering, setRecovering] = useState<Recovery | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ key: string; error?: string; success?: string } | null>(null);
   // The product and session whose list is reloading after a save; its failure says the save itself went through.
@@ -69,17 +75,19 @@ export default function AdminSKUPage() {
     : undefined;
   const loading = !data && !loadError;
   const isCurrent = () => query.isCurrentSession() && currentKey.current === key;
-  const busy = pendingKey === key;
+  const unresolved = recovering?.key === key && isCurrent() ? recovering : null;
+  const busy = pendingKey === key || !!unresolved;
+  const writeLocked = () => !!mutation.current || recovery.current?.key === key;
   const isDisplayed = () => isCurrent() && !!data && displayedData.current === data;
   const replaceEditor = (next: Editor | null) => { editorRef.current = next; setEditor(next); };
 
   // The editor, a pending change and notices belong to the administrator and product they were made for.
   useEffect(() => {
-    replaceEditor(null); mutation.current = null; setPendingKey(null); setNotice(null); setRefreshAfterSave(null);
+    replaceEditor(null); mutation.current = null; recovery.current = null; setRecovering(null); setPendingKey(null); setNotice(null); setRefreshAfterSave(null);
   }, [key]);
 
   const reload = () => {
-    if (!isCurrent() || mutation.current) return;
+    if (!isCurrent() || writeLocked()) return;
     setRefreshAfterSave(null);
     void query.refetch();
   };
@@ -87,20 +95,46 @@ export default function AdminSKUPage() {
     setRefreshAfterSave(key);
     await query.invalidate();
   };
+  const checkSKUs = async (record: Recovery) => {
+    if (!isCurrent() || recovery.current !== record || record.checking) return;
+    const checking = { ...record, checking: true }; recovery.current = checking; setRecovering(checking);
+    try {
+      // Older in-flight list requests cannot replace this fresh inventory snapshot.
+      await queryClient.cancelQueries({ queryKey: ['admin', 'skus', sessionId, productId], exact: true });
+      if (!isCurrent() || recovery.current !== checking) return;
+      const actual = await adminSKUApi.list(productId);
+      if (!isCurrent() || recovery.current !== checking) return;
+      if (!validList(actual, productId)) throw new Error('Invalid SKU recovery list');
+      queryClient.setQueryData(['admin', 'skus', sessionId, productId], actual);
+      // A buyer may change stock between the write and this read. Retire every submitted draft,
+      // even when the current quantity is equal to the old quantity or to the requested quantity.
+      replaceEditor(null); setRefreshAfterSave(null);
+      setNotice({ key, success: '已重新加载当前规格数据，请核对后重新编辑；此前提交结果仍无法确认' });
+      recovery.current = null; setRecovering(null);
+    } catch {
+      if (isCurrent() && recovery.current === checking) {
+        const failed = { ...checking, checking: false }; recovery.current = failed; setRecovering(failed);
+      }
+    }
+  };
+  const startRecovery = async () => {
+    const record = { key, checking: false }; recovery.current = record; setRecovering(record); setNotice(null); setRefreshAfterSave(null);
+    await checkSKUs(record);
+  };
 
   const open = (sku?: AdminSKU) => {
-    if (!isDisplayed() || mutation.current || editorRef.current || (sku && !data?.skus.some(row => row.sku_id === sku.sku_id))) return;
+    if (!isDisplayed() || writeLocked() || editorRef.current || (sku && !data?.skus.some(row => row.sku_id === sku.sku_id))) return;
     replaceEditor({ key, id: sku?.sku_id ?? null, draft: skuDraft(sku) }); setNotice(null);
   };
   const change = (update: (draft: SKUDraft) => SKUDraft) => {
     const current = editorRef.current;
-    if (!isDisplayed() || mutation.current || current?.key !== key) return;
+    if (!isDisplayed() || writeLocked() || current?.key !== key) return;
     replaceEditor({ ...current, draft: update(current.draft) }); setNotice(null);
   };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     const current = editorRef.current;
-    if (!isDisplayed() || mutation.current || current?.key !== key || (current.id !== null && !data?.skus.some(row => row.sku_id === current.id))) return;
+    if (!isDisplayed() || writeLocked() || current?.key !== key || (current.id !== null && !data?.skus.some(row => row.sku_id === current.id))) return;
     let payload;
     try { payload = parseSKUForm(current.draft); }
     catch (error) { setNotice({ key, error: (error as Error).message }); return; }
@@ -110,31 +144,39 @@ export default function AdminSKUPage() {
     const operation = {}; mutation.current = operation; setPendingKey(key); setNotice(null);
     const active = () => isCurrent() && mutation.current === operation;
     try {
-      if (current.id === null) await adminSKUApi.create(productId, payload);
-      else await adminSKUApi.update(productId, current.id, changes!);
+      const response = current.id === null ? await adminSKUApi.create(productId, payload) : await adminSKUApi.update(productId, current.id, changes!);
       if (!active()) return;
+      const acknowledged = current.id === null
+        ? !!response && typeof response === 'object' && 'sku_id' in response && Number.isSafeInteger(response.sku_id) && Number(response.sku_id) > 0 && Number(response.sku_id) <= 2147483647
+        : inventoryUpdateAcknowledged(response);
+      if (!acknowledged) { await startRecovery(); return; }
       replaceEditor(null); setNotice({ key, success: '规格已保存' });
       await refreshAfter();
     } catch (error) {
-      if (active()) setNotice({ key, error: requestFailure(error).response?.data?.error || (current.id === null ? '创建SKU失败' : '更新SKU失败') });
+      if (!active()) return;
+      if (unknownInventoryWrite(error)) await startRecovery();
+      else setNotice({ key, error: requestFailure(error).response?.data?.error || (current.id === null ? '创建SKU失败' : '更新SKU失败') });
     } finally {
       if (mutation.current === operation) { mutation.current = null; setPendingKey(null); }
     }
   };
 
   const toggle = async (id: number) => {
-    if (!isDisplayed() || mutation.current || editorRef.current) return;
+    if (!isDisplayed() || writeLocked() || editorRef.current) return;
     const sku = data?.skus.find(row => row.sku_id === id);
     if (!sku) return;
     const operation = {}; mutation.current = operation; setPendingKey(key); setNotice(null);
     const active = () => isCurrent() && mutation.current === operation;
     try {
-      await adminSKUApi.update(productId, id, { status: sku.status === 1 ? 0 : 1 });
+      const response = await adminSKUApi.update(productId, id, { status: sku.status === 1 ? 0 : 1 });
       if (!active()) return;
+      if (!inventoryUpdateAcknowledged(response)) { await startRecovery(); return; }
       setNotice({ key, success: sku.status === 1 ? '规格已停用' : '规格已启用' });
       await refreshAfter();
     } catch (error) {
-      if (active()) setNotice({ key, error: requestFailure(error).response?.data?.error || '更新SKU失败' });
+      if (!active()) return;
+      if (unknownInventoryWrite(error)) await startRecovery();
+      else setNotice({ key, error: requestFailure(error).response?.data?.error || '更新SKU失败' });
     } finally {
       if (mutation.current === operation) { mutation.current = null; setPendingKey(null); }
     }
@@ -145,6 +187,10 @@ export default function AdminSKUPage() {
     <Link href="/admin/products" className="block w-fit text-primary-600 underline">{t('返回商品管理')}</Link>
     <div><h1 className="text-2xl font-bold text-gray-900">{t('SKU 管理')}</h1>{data && <p className="mt-2 text-gray-600">{localizedText(data.product.title, data.product.title_en, locale)} · #{productId}</p>}</div>
     {notice?.key === key && <div role={notice.error ? 'alert' : 'status'} className={notice.error ? 'text-red-600' : 'text-green-700'}>{t(notice.error || notice.success || '')}</div>}
+    {unresolved && <div role="alert" className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+      <p>{t(unresolved.checking ? '规格更新结果未知，正在重新加载当前数据...' : '规格更新结果尚未确认，请重新加载核对；确认前不会再次提交')}</p>
+      <button type="button" className="btn btn-outline" disabled={unresolved.checking || pendingKey === key} onClick={() => void checkSKUs(unresolved)}>{t('重新核对规格')}</button>
+    </div>}
     {!validId ? <p role="alert">{t('商品ID无效')}</p> : loading ? <p role="status">{t('加载中...')}</p> : loadError ? <div role="alert" className="bg-white rounded-lg p-6 shadow-sm"><p className="text-red-600">{t(loadError)}</p><button type="button" onClick={reload} className="btn btn-outline mt-3">{t('重新加载')}</button></div> : data && <>
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
         {data.product.status === 0 && <p className="font-medium text-amber-800">{t('商品已下架，需上架商品后才能购买')}</p>}
@@ -180,7 +226,7 @@ export default function AdminSKUPage() {
         </fieldset>
         <p className="text-sm text-gray-500">{t('原价和图片地址留空可清除；规格名称不可重复，最多20项')}</p>
         <p className="text-sm text-gray-500">{t('英文内容可选，留空显示中文；清空已有英文可删除翻译')}</p>
-        <div className="flex flex-wrap gap-3"><button type="submit" disabled={busy} className="btn btn-primary disabled:opacity-50">{t(busy ? '保存中...' : '保存规格')}</button><button type="button" disabled={busy} className="btn btn-outline" onClick={() => { if (isDisplayed() && !mutation.current) { replaceEditor(null); setNotice(null); } }}>{t('取消')}</button></div>
+        <div className="flex flex-wrap gap-3"><button type="submit" disabled={busy} className="btn btn-primary disabled:opacity-50">{t(pendingKey === key ? '保存中...' : '保存规格')}</button><button type="button" disabled={busy} className="btn btn-outline" onClick={() => { if (isDisplayed() && !writeLocked()) { replaceEditor(null); setNotice(null); } }}>{t('取消')}</button></div>
       </form>}
       {!data.skus.length ? <p className="bg-white p-6 rounded-lg shadow-sm">{t('暂无规格')}</p> : <div className="grid gap-4 xl:grid-cols-2">{data.skus.map(sku => <article key={sku.sku_id} className="bg-white rounded-lg shadow-sm p-5 space-y-3">
         <div className="flex justify-between gap-3"><h2 className="font-semibold break-all">{sku.sku_code}</h2><span className={sku.status === 1 ? 'text-green-700' : 'text-gray-500'}>{t(sku.status === 1 ? '已启用' : '已停用')}</span></div>
