@@ -100,7 +100,7 @@ router.get('/:orderId', requirePermission('order:view'), getAdminOrderDetail);
  *   put:
  *     tags: [管理后台-订单]
  *     summary: 更新订单状态
- *     description: 需要 order:edit 权限，操作记审计日志。发货必须提供物流公司和运单号，已发货订单禁止再次修改。
+ *     description: 需要 order:edit 权限。订单状态、库存与优惠券变更和管理员审计在同一事务提交；审计写入失败则完整回滚。请求来源 IP 最多保留 50 字符，User-Agent 最多保留 500 字符。发货必须提供物流公司和运单号，已发货订单禁止再次修改。支付未开放时不能将订单设为已支付。
  *     security: [{ adminAuth: [] }]
  *     parameters:
  *       - name: orderId
@@ -120,7 +120,9 @@ router.get('/:orderId', requirePermission('order:view'), getAdminOrderDetail);
  *               tracking_number: { type: string, minLength: 1, maxLength: 100, description: 发货必填的运单号 }
  *     responses:
  *       200:
- *         description: 更新成功
+ *         description: 订单状态与管理员审计均已保存
+ *       500:
+ *         description: 状态更新或审计写入失败时回滚事务
  */
 router.put('/:orderId/status', requirePermission('order:edit'), updateOrderStatus);
 

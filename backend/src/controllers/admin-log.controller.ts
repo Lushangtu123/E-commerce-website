@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import logger from '../utils/logger';
 import { AdminQueryError, adminLogsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
+import { normalizeAdminAuditMetadata } from '../utils/admin-audit-metadata';
 
 // 记录管理员操作日志（辅助函数）
 export async function logAdminAction(
@@ -15,10 +16,11 @@ export async function logAdminAction(
 ) {
   try {
     const pool = getPool();
+    const metadata = normalizeAdminAuditMetadata({ ip: ipAddress, userAgent });
     await pool.query(
       `INSERT INTO admin_logs (admin_id, action, resource_type, resource_id, description, ip_address, user_agent)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [adminId, action, resourceType, resourceId, description, ipAddress || null, userAgent || null]
+      [adminId, action, resourceType, resourceId, description, metadata.ip, metadata.userAgent]
     );
   } catch (error) {
     logger.error({ err: error }, '记录操作日志失败');
