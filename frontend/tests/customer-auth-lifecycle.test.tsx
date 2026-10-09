@@ -367,6 +367,34 @@ describe('customer cookie mutation order across actual routed pages', () => {
     expect(useAuthStore.getState().user).toEqual(userB); expect(cookieUser).toBe(2);
   });
 
+  it('retains logout cleanup when local removals fail and the final storage read is unavailable', async () => {
+    act(() => useAuthStore.getState().login(userA, 'session-a')); cookieUser = 1;
+    const removeItem = localStorage.removeItem.bind(localStorage), getItem = localStorage.getItem.bind(localStorage);
+    let readDenied = false;
+    const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+      if (key === 'session' || key === 'user') throw new DOMException('Storage denied', 'SecurityError');
+      removeItem(key);
+    });
+    const read = vi.spyOn(localStorage, 'getItem').mockImplementation(key => {
+      if (readDenied) throw new DOMException('Storage denied', 'SecurityError');
+      return getItem(key);
+    });
+    serve({ 'POST /users/logout': () => { readDenied = true; return { message: '已退出登录' }; } });
+    await signOut();
+    expect(cookieUser).toBeNull();
+    readDenied = false;
+    expect(localStorage.getItem('customer_session_cleanup_pending')).toBe('1');
+    act(() => useAuthStore.getState().hydrate());
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    read.mockRestore(); remove.mockRestore();
+    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
+    render(<LoginPage />); await settle(); fill('login', userB);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual(['POST /users/logout', 'POST /users/logout', 'POST /users/login']);
+    expect(useAuthStore.getState().user).toEqual(userB); expect(cookieUser).toBe(2);
+    expect(localStorage.getItem('customer_session_cleanup_pending')).toBeNull();
+  });
+
   it('clears a lost sign-in result without resending credentials', async () => {
     serve({ 'POST /users/login': () => { cookieUser = 1; throw new Error('Lost reply'); },
       'POST /users/logout': () => ({ message: '已退出登录' }) });

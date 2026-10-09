@@ -91,24 +91,22 @@ export function customerAccountWrite<T>(write: () => Promise<T>, stillInvoked: (
 }
 
 /** Called inside the queue; invoking the public queued logout here would deadlock. */
-export async function clearCustomerCookie(clear: () => Promise<unknown>): Promise<void> {
+export async function clearCustomerCookie(clear: () => Promise<unknown>, canFinishCleanup: () => boolean = () => true): Promise<void> {
   try { recordCleanup(true); } catch { /* The in-memory marker remains set; always try server cleanup. */ }
   const value = await clear();
   if (!value || typeof value !== 'object' || !('message' in value) || value.message !== '已退出登录') {
     throw new Error('Invalid customer logout acknowledgement');
   }
-  recordCleanup(false);
+  // A confirmed server logout can still leave a local profile that is unsafe to restore.
+  // Keep the marker if its final check fails or cannot read browser storage.
+  if (canFinishCleanup()) recordCleanup(false);
 }
 
 /** Remember logout before a Web Lock or earlier cookie writer makes it wait. */
 export function customerSessionLogout(clear: () => Promise<unknown>): Promise<{ message: string }> {
   try { recordCleanup(true); } catch { /* Cleanup must still run when storage is denied. */ }
   return customerSessionWrite(async () => {
-    await clearCustomerCookie(clear);
-    if (!useAuthStore.getState().sessionId && storedSessionId() && localStorage.getItem('user')) {
-      // Cookie removal alone cannot make an unremovable old profile safe to restore after reload.
-      recordCleanup(true);
-    }
+    await clearCustomerCookie(clear, () => !!useAuthStore.getState().sessionId || !storedSessionId() || !localStorage.getItem('user'));
     return { message: '已退出登录' };
   });
 }
