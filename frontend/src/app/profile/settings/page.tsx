@@ -38,7 +38,7 @@ export default function ProfileSettingsPage() {
   const mutation = useRef<object | null>(null);
   const recovery = useRef<{ key: string; payload: Draft; draft: Draft } | null>(null);
   const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
-  const passwordChanged = useRef(false);
+  const passwordRedirect = useRef<'/login?passwordChanged=1' | '/login?passwordChangeUnconfirmed=1' | null>(null);
   const profile = result?.key === sessionKey ? result.profile : undefined;
   const busy = saving === sessionKey;
   const blocked = unconfirmed === sessionKey;
@@ -111,8 +111,8 @@ export default function ProfileSettingsPage() {
   useEffect(() => {
     setResult(null); loaded.current = null; replaceDraft(null); setNotice(null); setSaving(null); mutation.current = null; recovery.current = null; setUnconfirmed(null);
     if (!isHydrated) return;
-    if (!isAuthenticated) { router.push(passwordChanged.current ? '/login?passwordChanged=1' : '/login'); return; }
-    passwordChanged.current = false;
+    if (!isAuthenticated) { router.push(passwordRedirect.current ?? '/login'); return; }
+    passwordRedirect.current = null;
     loadProfile();
     return () => { revision.current += 1; };
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
@@ -214,7 +214,9 @@ export default function ProfileSettingsPage() {
           </div>
         </form>
       )}
-      <ChangePassword key={sessionKey} onPasswordChanged={() => { if (isCurrent()) passwordChanged.current = true; }} />
+      <ChangePassword key={sessionKey}
+        onPasswordChanged={() => { if (isCurrent()) passwordRedirect.current = '/login?passwordChanged=1'; }}
+        onPasswordUnconfirmed={() => { if (isCurrent()) passwordRedirect.current = '/login?passwordChangeUnconfirmed=1'; }} />
     </div>
   );
 }
