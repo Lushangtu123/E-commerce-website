@@ -1,6 +1,6 @@
 import type { User } from '@/store/useAuthStore';
 import api from './client';
-import { clearCustomerCookie, customerSessionWrite, customerSignIn, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
+import { clearCustomerCookie, customerAccountWrite, customerSessionWrite, customerSignIn, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
 
 // 用户相关API
 export interface UserStats {
@@ -39,7 +39,8 @@ export const userApi = {
   passwordCapabilities: () => api.get<unknown, { passwordResetAvailable: boolean; passwordMinLength: number; passwordMaxBytes: number }>('/users/password/capabilities'),
   forgotPassword: (email: string) => api.post<unknown, { message: string }>('/users/password/forgot', { email }),
   resetPassword: (data: { token: string; newPassword: string }) => customerSessionWrite(() => api.post('/users/password/reset', data)),
-  changePassword: (data: { currentPassword: string; newPassword: string }) => customerSessionWrite(() => api.put('/users/password', data)),
+  changePassword: (data: { currentPassword: string; newPassword: string }, stillInvoked?: () => boolean) =>
+    customerAccountWrite(() => api.put('/users/password', data), stillInvoked),
 };
 
 // 收货地址相关API

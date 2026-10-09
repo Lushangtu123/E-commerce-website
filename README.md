@@ -326,6 +326,8 @@ Customer login, registration, logout and password requests share a cookie-write 
 
 Profile updates accept only `username`, `phone` and `avatar_url`, and at least one must be provided. The phone number is at most 20 characters and the avatar is an HTTP(S) URL of at most 255 characters; both can be cleared with an empty string or `null`. Re-submitting existing values also succeeds. The public profile never includes the password hash, and error messages are available in Chinese and English.
 
+A password change binds the submitting account and sign-in before waiting in the queue, then checks them again after acquiring the cookie lock and before sending credentials. Switching accounts, replacing the sign-in, or leaving the form cancels a queued request that has not been sent. Already-dispatched requests keep the existing completion and uncertain-result handling.
+
 The "Edit profile" entry in the account centre opens `/profile/settings`, which loads the latest profile from the server. The username, phone number and avatar URL can be edited; the email is read-only. After saving, the account centre and the browser cache are updated, and changes survive a refresh; leave the phone number or avatar empty to clear them. Loading failures can be retried, a failed save keeps the draft, and duplicate submissions are blocked while saving. Switching language takes effect immediately, and after switching account or leaving the page, earlier requests cannot overwrite the current profile. The account centre shows the saved avatar, and falls back to a default icon if the image fails to load.
 
 ### Address APIs
