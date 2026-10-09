@@ -5,6 +5,7 @@ import { localizedText } from '@/lib/product-content';
 import Header from '@/components/Header';
 import SiteFooter from '@/components/SiteFooter';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import CartAddRecovery from '@/components/CartAddRecovery';
 import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -82,6 +83,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {!isAdminRoute && <Header />}
+      {!isAdminRoute && <CartAddRecovery />}
       <main className={`min-h-screen ${!isAdminRoute ? 'bg-gray-50' : ''}`}>
         {children}
       </main>

@@ -5,9 +5,9 @@ import { localizedText, localizedSpecs, specSummary, specValue } from '@/lib/pro
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { productApi, cartApi, reviewApi, favoriteApi, browseApi, recommendationApi, type Product, type ProductReview } from '@/lib/api';
+import { productApi, reviewApi, favoriteApi, browseApi, recommendationApi, type Product, type ProductReview } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
-import { useCartStore } from '@/store/useCartStore';
+import { addToCart } from '@/lib/cart-add';
 import toast from 'react-hot-toast';
 import { FiHeart, FiShoppingCart } from 'react-icons/fi';
 import { FaHeart, FaStar } from 'react-icons/fa';
@@ -26,7 +26,6 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const params = useParams() || {};
   const router = useRouter();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
-  const { addItem } = useCartStore();
   
   const [loadedProduct, setLoadedProduct] = useState<Product | null>(null);
   const [reviewView, setReviewView] = useState<{ context: string; page: number; revision: number } | null>(null);
@@ -260,13 +259,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     addingRequest.current = context;
     setAdding(true);
     try {
-      await cartApi.add({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) });
-      if (!isCurrentContext()) return false;
-      addItem({
-        cart_id: Date.now(), product_id: productId, quantity, title: product.title, title_en: product.title_en,
-        price: Number(price), main_image: image ?? undefined, stock,
-        ...(selectedSku && { sku_id: selectedSku.sku_id, sku_code: selectedSku.sku_code, sku_specs: selectedSku.specs, sku_specs_en: selectedSku.specs_en }),
-      });
+      if (!await addToCart({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) }, isCurrentContext)) return false;
       toast.success(translate("已加入购物车"));
       return true;
     } catch (error) {

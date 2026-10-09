@@ -22,7 +22,8 @@ vi.mock('react-hot-toast', () => {
 vi.mock('@/components/ProductCard', () => ({ default: () => null }));
 vi.mock('@/lib/api', () => ({
   productApi: { getDetail: vi.fn() },
-  cartApi: { add: vi.fn(async () => ({})) },
+  cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false })),
+    list: vi.fn(async () => ({ items: [{ cart_id: 7, product_id: 1, quantity: 1, title: 'Server shirt', price: '19.90', stock: 5 }] })) },
   reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [], total: 0, totalPages: 0 })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
   favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功' })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
@@ -110,7 +111,8 @@ describe('server-rendered product page', () => {
     await settle();
     await act(async () => { addButton().click(); });
     await settle();
-    expect(cartApi.add).toHaveBeenCalledWith({ product_id: 1, quantity: 1 });
+    expect(cartApi.add).toHaveBeenCalledWith({ product_id: 1, quantity: 1, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) });
+    expect(cartApi.list).toHaveBeenCalledOnce();
   });
 
   it("never shows another product's server copy", async () => {

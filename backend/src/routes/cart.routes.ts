@@ -35,7 +35,7 @@ router.get('/', CartController.list);
  * /api/cart:
  *   post:
  *     tags: [购物车]
- *     summary: 添加到购物车
+ *     summary: 添加到购物车（请求号可安全重试）
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -48,9 +48,12 @@ router.get('/', CartController.list);
  *               product_id: { type: integer, minimum: 1 }
  *               sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *               quantity: { type: integer, minimum: 1 }
+ *               add_key: { type: string, format: uuid, description: 可选。同一用户的相同请求只添加一次；旧请求重试不会恢复已删除的购物车行 }
  *     responses:
  *       200:
- *         description: 添加成功
+ *         description: 添加成功；带请求号时返回 add_key 和 replayed，随后 GET 读取最新购物车
+ *       409:
+ *         description: 请求号已用于不同的商品、规格或数量
  *       400:
  *         description: 参数错误 / 库存不足
  *         content:

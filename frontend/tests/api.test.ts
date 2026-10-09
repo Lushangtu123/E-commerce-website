@@ -82,12 +82,12 @@ describe('API client requests', () => {
 
     await cartApi.remove(12, 101);
     await cartApi.remove(12);
-    await cartApi.add({ product_id: 12, quantity: 2, sku_id: 101 });
+    await cartApi.add({ product_id: 12, quantity: 2, sku_id: 101, add_key: '00000000-0000-4000-8000-000000000001' });
     await cartApi.updateQuantity({ product_id: 12, quantity: 3, sku_id: 102 });
 
     expect(requests[0].params?.sku_id).toBe(101);
     expect(requests[1].params?.sku_id).toBeUndefined();
-    expect(JSON.parse(requests[2].data)).toEqual({ product_id: 12, quantity: 2, sku_id: 101 });
+    expect(JSON.parse(requests[2].data)).toEqual({ product_id: 12, quantity: 2, sku_id: 101, add_key: '00000000-0000-4000-8000-000000000001' });
     expect(JSON.parse(requests[3].data)).toEqual({ product_id: 12, quantity: 3, sku_id: 102 });
   });
 
@@ -103,11 +103,11 @@ describe('API client requests', () => {
   it("keeps a customer request's cookie session, body, params and response", async () => {
     const { cartApi, couponApi, requests } = await setupApi(both);
 
-    await cartApi.add({ product_id: 12, quantity: 3 });
+    await cartApi.add({ product_id: 12, quantity: 3, add_key: '00000000-0000-4000-8000-000000000002' });
     const result = await couponApi.getMyCoupons(1);
 
     expect(credentials(requests[0])).toEqual(asCustomer);
-    expect(JSON.parse(requests[0].data)).toEqual({ product_id: 12, quantity: 3 });
+    expect(JSON.parse(requests[0].data)).toEqual({ product_id: 12, quantity: 3, add_key: '00000000-0000-4000-8000-000000000002' });
     expect(credentials(requests[1])).toEqual(asCustomer);
     expect(requests[1].params.status).toBe(1);
     expect(result).toEqual({ data: [] });
