@@ -3,6 +3,7 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '订单已变更，请核对实际状态': 'The order has changed. Review its current state.',
   '商品更新结果未知，正在重新加载当前数据...': 'The product update result is unknown. Reloading the current data...',
   '商品更新结果尚未确认，请重新加载核对；确认前不会再次提交': 'The product update is unconfirmed. Reload to check it before submitting another update.',
   '重新核对商品': 'Check products again',

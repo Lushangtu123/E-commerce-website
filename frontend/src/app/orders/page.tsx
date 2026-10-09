@@ -1,8 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { orderApi } from '@/lib/api';
+import { orderApi, type Order } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -13,6 +14,9 @@ import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { confirmAction } from '@/lib/confirm';
+import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, validCustomerOrder, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
+
+type Recovery = { key: string; order: Order; action: CustomerOrderAction; checking: boolean };
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -60,10 +64,18 @@ function OrdersContent() {
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
+  const recovery = useRef(new Map<number, Recovery>());
+  const [recoveries, setRecoveries] = useState<Recovery[]>([]);
+  const confirmed = useRef(new Map<number, { key: string; before: number; order: Order }>());
+  const queryClient = useQueryClient();
   const query = useSessionQuery({
     name: 'orders',
     params: [activeTab ?? 'all', page],
-    load: () => orderApi.list({ page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) }),
+    load: async () => {
+      const data = await orderApi.list({ page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) });
+      if (!data || !Array.isArray(data.orders) || !data.orders.every(validCustomerOrder)) throw new Error('Invalid order list');
+      return data;
+    },
   });
   const { isCurrentSession } = query;
   const lastPage = Math.max(1, Number(query.data?.totalPages) || 0);
@@ -73,13 +85,25 @@ function OrdersContent() {
     ? requestFailure(query.error).response?.data?.error || requestFailure(query.error).response?.data?.message || '加载订单失败，请重试'
     : undefined;
   const loading = !shown && !loadError;
-  const orders = shown?.orders || [];
-  const total = shown?.total || 0;
+  // An authoritative detail check takes precedence over lagging list rows from before the write.
+  const checkedOrders = (shown?.orders || []).map(order => {
+    const checked = confirmed.current.get(order.order_id);
+    return checked?.key === sessionKey && order.status === checked.before ? { ...order, ...checked.order } : order;
+  });
+  const orders = activeTab === undefined ? checkedOrders : checkedOrders.filter(order => order.status === activeTab);
+  const total = Math.max(0, (shown?.total || 0) - (checkedOrders.length - orders.length));
   const totalPages = shown?.totalPages || 0;
   const isCurrentScope = () => isCurrentSession() && currentScope.current === scopeKey &&
     new URLSearchParams(window.location.search).toString() === urlKey;
   const actionsPending = pendingSession === sessionKey;
+  const unresolved = recoveries.filter(record => record.key === sessionKey && isCurrentSession());
   const payments = usePaymentSettings(isHydrated && isAuthenticated);
+  const refreshOrders = async () => {
+    if (!isCurrentSession()) return;
+    // Cancel a pre-write GET even when it has not returned any data yet, then request a fresh snapshot.
+    await queryClient.cancelQueries({ queryKey: ['orders', sessionId, user?.user_id] });
+    if (isCurrentSession()) await query.invalidate();
+  };
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -97,6 +121,7 @@ function OrdersContent() {
   useEffect(() => {
     mutation.current = null;
     setPendingSession(null);
+    recovery.current.clear(); confirmed.current.clear(); setRecoveries([]);
   }, [sessionKey]);
 
   // Cancelling the only order on the final page leaves that page empty; show the new last page.
@@ -112,13 +137,33 @@ function OrdersContent() {
     if (isHydrated && !isAuthenticated) router.push('/login');
   }, [isHydrated, isAuthenticated, router]);
 
-  const handleMutation = async (orderId: number, action: 'pay' | 'cancel' | 'confirm') => {
-    if (!isCurrentScope() || mutation.current) return;
+  const syncRecovery = () => setRecoveries(Array.from(recovery.current.values()));
+  const checkOrder = async (record: Recovery) => {
+    const id = record.order.order_id;
+    if (!isCurrentSession() || record.key !== sessionKey || recovery.current.get(id) !== record || record.checking) return;
+    record.checking = true; syncRecovery();
+    try {
+      const data = await orderApi.getDetail(id);
+      if (!isCurrentSession() || recovery.current.get(id) !== record) return;
+      const actual = customerOrderSnapshot(data, id);
+      if (!actual) throw new Error('Invalid order detail');
+      confirmed.current.set(id, { key: sessionKey, before: record.order.status, order: actual.order });
+      toast[actual.order.status === customerOrderTarget[record.action] ? 'success' : 'error'](translate(customerOrderCheckMessage(record.order.status, actual.order.status, record.action)));
+      await refreshOrders();
+      if (!isCurrentSession() || recovery.current.get(id) !== record) return;
+      recovery.current.delete(id); syncRecovery();
+    } catch {
+      if (isCurrentSession() && recovery.current.get(id) === record) { record.checking = false; syncRecovery(); }
+    }
+  };
+
+  const handleMutation = async (orderId: number, action: CustomerOrderAction) => {
+    if (!isCurrentScope() || mutation.current || loading || loadError || recovery.current.get(orderId)?.key === sessionKey) return;
     if (action === 'pay' && !payments.canPay) return;
     const order = orders.find(item => item.order_id === orderId);
     if (!order || (action === 'confirm' ? order.status !== 2 : order.status !== 0)) return;
     if (action === 'cancel' && !(await confirmAction(t('确定要取消订单吗？')))) return;
-    if (!isCurrentScope() || mutation.current) return;
+    if (!isCurrentScope() || mutation.current || recovery.current.get(orderId)?.key === sessionKey) return;
     const operation = {};
     mutation.current = operation;
     setPendingSession(sessionKey);
@@ -127,10 +172,13 @@ function OrdersContent() {
       if (!isCurrentSession()) return;
       toast.success(translate(action === 'pay' ? '模拟支付完成，未实际扣款' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
       // The filter or page may have changed meanwhile; this reloads whichever orders are displayed now.
-      await query.invalidate();
+      await refreshOrders();
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(translate(requestFailure(error).response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
+      if (uncertainCustomerOrderWrite(error)) {
+        const record: Recovery = { key: sessionKey, order, action, checking: false };
+        recovery.current.set(orderId, record); syncRecovery(); await checkOrder(record);
+      } else toast.error(translate(requestFailure(error).response?.data?.error || (action === 'pay' ? '支付失败' : action === 'cancel' ? '取消失败' : '确认收货失败')));
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
@@ -148,6 +196,11 @@ function OrdersContent() {
       <div className="container-custom">
         <h1 className="text-3xl font-bold mb-8">{t("我的订单")}</h1>
         <p className="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-900" role="status">{t(payments.loading ? '正在确认支付服务...' : payments.isDemo ? '当前为演示支付，不会实际扣款' : '暂未开通在线支付，请勿向任何个人转账')}</p>
+        {unresolved.map(record => <div key={record.order.order_id} className="card p-6 mb-6" role="alert">
+          <p>{record.order.order_no}</p>
+          <p>{t(record.checking ? '订单更新结果未知，正在核对实际状态...' : '订单更新结果尚未确认，请重新核对订单；确认前不会再次提交')}</p>
+          <button className="btn btn-secondary mt-4" disabled={actionsPending || record.checking} onClick={() => void checkOrder(record)}>{t('重新核对订单')}</button>
+        </div>)}
 
         {/* 状态筛选 */}
         <div className="card p-4 mb-6">
@@ -259,14 +312,14 @@ function OrdersContent() {
                     <>
                       {payments.canPay && <button
                         onClick={() => handleMutation(order.order_id, 'pay')}
-                        disabled={actionsPending}
+                        disabled={actionsPending || unresolved.some(record => record.order.order_id === order.order_id)}
                         className="btn btn-primary"
                       >
                         {t("模拟支付")}
                       </button>}
                       <button
                         onClick={() => handleMutation(order.order_id, 'cancel')}
-                        disabled={actionsPending}
+                        disabled={actionsPending || unresolved.some(record => record.order.order_id === order.order_id)}
                         className="btn btn-secondary"
                       >
                         {t("取消订单")}
@@ -277,7 +330,7 @@ function OrdersContent() {
                   {order.status === 2 && (
                     <button
                       onClick={() => handleMutation(order.order_id, 'confirm')}
-                      disabled={actionsPending}
+                      disabled={actionsPending || unresolved.some(record => record.order.order_id === order.order_id)}
                       className="btn btn-primary"
                     >
                       {t("确认收货")}

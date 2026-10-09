@@ -314,7 +314,7 @@ describe('order detail', () => {
     vi.mocked(orderApi.getDetail).mockReturnValueOnce(freshRead.promise);
     fireEvent.click(screen.getByRole('button', { name: '取消订单' }));
     await settle();
-    vi.mocked(orderApi.getDetail).mockResolvedValue({ order: { ...baseOrder, order_no: 'New view' }, items: [] });
+    vi.mocked(orderApi.getDetail).mockResolvedValue({ order: { ...baseOrder, order_id: change === 'route' ? 2 : 1, order_no: 'New view' }, items: [] });
     if (change === 'customer') act(() => useAuthStore.getState().login({ user_id: 2, username: 'b', email: 'b@example.test' }, 'B'));
     else if (change === 'route') {
       params.id = '2';
