@@ -38,13 +38,16 @@ export default function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     const current = () => {
       const auth = useAuthStore.getState();
-      return active.current && productContext.current === context && auth.sessionId === sessionId &&
-        auth.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null);
+      if (!active.current || productContext.current !== context || auth.isAuthenticated !== isAuthenticated ||
+        auth.sessionId !== sessionId || auth.user?.user_id !== user?.user_id) return false;
+      try { return storedSessionId() === (sessionId ?? null); }
+      catch { return auth.isHydrated && !isAuthenticated && sessionId === null && auth.user === null; }
     };
     if (!current() || pending.current?.context === context) return;
     
     if (!isAuthenticated) {
       toast.error(translate("请先登录"));
+      router.push('/login');
       return;
     }
 

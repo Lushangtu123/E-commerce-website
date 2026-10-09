@@ -68,9 +68,14 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   currentContext.current = context;
   const isCurrentContext = useCallback(() => {
     const auth = useAuthStore.getState();
-    return mounted.current && currentContext.current === context &&
-      auth.isAuthenticated === isAuthenticated && auth.sessionId === sessionId && auth.user?.user_id === user?.user_id &&
-      storedSessionId() === (sessionId ?? null);
+    if (!mounted.current || currentContext.current !== context || auth.isAuthenticated !== isAuthenticated ||
+      auth.sessionId !== sessionId || auth.user?.user_id !== user?.user_id) return false;
+    try { return storedSessionId() === (sessionId ?? null); }
+    catch {
+      // Public reads can finish for a guest whose storage is unavailable. An
+      // authenticated context cannot prove its cookie's identity, so it stays locked.
+      return !isAuthenticated && sessionId === null && auth.user === null;
+    }
   }, [context, isAuthenticated, sessionId, user?.user_id]);
 
   useEffect(() => {

@@ -36,6 +36,13 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
   // Keep this exception exact and read-only; protected customer calls still
   // require their hydrated identity to match browser storage.
   if (path === '/products/categories' && config.method?.toLowerCase() === 'get') return null;
+  // These responses are identical for every shopper. Browsing must also work when
+  // storage is disabled; keep optional personalized reads and every write guarded.
+  if (config.method?.toLowerCase() === 'get' && (
+    ['/products', '/products/hot', '/search/hot', '/search/suggestions'].includes(path) ||
+    /^\/products\/[1-9]\d*$/.test(path) || /^\/reviews\/product\/[1-9]\d*$/.test(path) ||
+    /^\/recommendations\/related\/[1-9]\d*$/.test(path)
+  )) return null;
   if ((path === '/payments/settings' || path === '/users/password/capabilities') && config.method?.toLowerCase() === 'get') return null;
   if ((path === '/users/password/forgot' || path === '/users/password/reset') && config.method?.toLowerCase() === 'post') return null;
   return path === '/admin' || path.startsWith('/admin/') ? 'admin' : 'customer';

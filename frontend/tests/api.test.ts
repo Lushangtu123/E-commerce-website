@@ -46,6 +46,38 @@ const asAdmin = asCustomer;
 const both = { session: 'customer-session', admin_session: 'admin-session' };
 
 describe('API client requests', () => {
+  it.each(['/products', '/products/hot', '/products/12', '/reviews/product/12', '/recommendations/related/12', '/search/hot', '/search/suggestions'])
+    ('reads public GET %s when browser storage is unavailable', async path => {
+      const { api, requests } = await setupApi({});
+      vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new DOMException('Storage disabled', 'SecurityError'); });
+
+      await expect(api.get(path, { headers: { Authorization: 'Bearer supplied-session' } })).resolves.toEqual({ data: [] });
+      expect(requests).toHaveLength(1);
+      expect(credentials(requests[0])).toEqual(asCustomer);
+    });
+
+  it.each([
+    ['get', '/orders'], ['get', '/search/history'], ['get', '/favorites/check/12'],
+    ['get', '/recommendations/guess-you-like'], ['get', '/recommendations/personalized'], ['get', '/search/es'],
+    ['get', '/products/private'], ['get', '/products/12/other'], ['get', '/search/hot/other'],
+    ['post', '/products'], ['post', '/reviews/product/12'], ['post', '/recommendations/related/12'],
+    ['post', '/search/hot'], ['post', '/cart'], ['delete', '/favorites/12'], ['get', '/admin/products'],
+  ])('keeps %s %s guarded when storage is unavailable to an authenticated customer', async (method, path) => {
+    const { api, requests } = await setupApi(both);
+    vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new DOMException('Storage disabled', 'SecurityError'); });
+
+    await expect(api.request({ method, url: path })).rejects.toThrow('Storage disabled');
+    expect(requests).toHaveLength(0);
+  });
+
+  it('a public read cannot clear a current customer session after its 401', async () => {
+    const { api, fail } = await setupApi(both);
+    fail(401, 'Public read failed');
+    await expect(api.get('/products/12')).rejects.toThrow('Public read failed');
+    expect(localStorage.getItem('session')).toBe('customer-session');
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('reads profile statistics as the signed-in customer and returns the server counters', async () => {
     const { userApi, api, requests } = await setupApi(both);
     const stats = { totalOrders: 17, pendingOrders: 3, totalCoupons: 11, availableCoupons: 4, favoriteCount: 8 };
