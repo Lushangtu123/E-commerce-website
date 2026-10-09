@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 import { passwordError } from '@/lib/password-validation';
-import { customerAuthAttempt, CustomerAuthAbandoned, CustomerAuthUnconfirmed } from '@/lib/customer-auth-flow';
+import { customerAuthAttempt, CustomerAuthAbandoned, CustomerAuthUnconfirmed, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
 
 export default function RegisterPage() {
   const { t } = useI18n();
@@ -63,22 +63,25 @@ export default function RegisterPage() {
 
     const operation = {}; mutation.current = operation;
     const alive = () => mounted.current && mutation.current === operation;
-    const attempt = customerAuthAttempt(alive, data => {
-      login(data.user);
-      toast.success(translate("注册成功"));
-      router.push('/');
-    });
-    if (!attempt.current()) { mutation.current = null; return; }
+    let attempt: CustomerAuthAttempt | undefined;
+    let publishedSessionId: string | null = null;
     setLoading(true);
     try {
+      attempt = customerAuthAttempt(alive, data => { publishedSessionId = login(data.user); });
       await userApi.register({ username, email, password }, attempt);
+      // login confirms storage in the cookie queue; only its still-published state may announce success.
+      if (alive() && publishedSessionId && useAuthStore.getState().sessionId === publishedSessionId) {
+        toast.success(translate('注册成功'));
+        router.push('/');
+      }
     } catch (error) {
       if (!alive() || error instanceof CustomerAuthAbandoned) return;
       if (error instanceof CustomerAuthUnconfirmed) {
-        if (error.report) toast.error(translate('注册结果尚未确认，请先尝试登录或找回密码'));
+        if (error.report) toast.error(translate(error.reason === 'cleanup' ? '登录状态清理尚未确认，请恢复浏览器存储后重试'
+          : error.reason === 'storage' ? '无法保存登录状态，请恢复浏览器存储后重新登录' : '注册结果尚未确认，请先尝试登录或找回密码'));
         return;
       }
-      if (!attempt.current()) return;
+      if (!attempt?.current()) return;
       logger.error('注册请求失败');
       toast.error(translate(requestFailure(error).response?.data?.error || "注册失败"));
     } finally {
