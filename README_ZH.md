@@ -320,6 +320,7 @@ E-commerce-website/
 - `GET /api/addresses` - 获取本人收货地址，默认地址优先
 - `POST /api/addresses` - 添加完整地址，首个自动设为默认，每人最多 20 个
 - `PUT /api/addresses/:id` - 编辑完整地址，`is_default: true` 可设为默认
+- `PUT /api/addresses/:id/default` - 仅接受空对象，将本人地址设为默认；保留其他标签页刚保存的收件信息，并与地址编辑串行处理
 - `DELETE /api/addresses/:id` - 删除本人地址，删除默认地址后自动选择另一地址
 
 完整地址包含 `receiver_name`、`phone`、`province`、`city`、`district`、`detail_address` 六个非空字符串，可选 `is_default` 布尔值；不能指定其他用户。前端个人中心的「收货地址」可管理地址，购物车结算必须选择地址。
