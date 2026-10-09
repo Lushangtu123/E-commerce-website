@@ -791,6 +791,7 @@ async function localPlatformScripts(context) {
   await createEditor.locator('#newProduct-category-id').selectOption('1');
   await createEditor.getByRole('button', { name: '添加商品', exact: true }).click();
   await admin.getByRole('button', { name: '重试确认商品', exact: true }).waitFor({ state: 'visible' });
+  await createEditor.waitFor({ state: 'hidden' });
   assert.match(creationBodies[0].create_key, /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i);
   assert.equal(await admin.getByRole('button', { name: '添加商品', exact: true }).isDisabled(), true);
   await admin.reload();
