@@ -56,7 +56,13 @@ export interface AdminPage {
   pagination?: { page?: number; limit?: number; total?: number; totalPages?: number };
 }
 export interface Category { category_id: number; name: string }
-export interface AdminProductRow extends Product { category_id: number | null; status: number }
+export interface AdminProductRow extends Product {
+  category_id: number | null;
+  status: number;
+  /** Enabled variant inventory, or base stock for a product without variants. */
+  sellable_stock?: number;
+  sku_min_price?: Product['price'] | null;
+}
 export interface AdminOrderRow extends Order { username?: string | null; item_count?: number }
 export interface AdminUserRow {
   user_id: number;
