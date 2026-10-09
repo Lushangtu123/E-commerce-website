@@ -2,7 +2,7 @@
 
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { userApi } from '@/lib/api';
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import { customerAuthAttempt, CustomerAuthAbandoned, CustomerAuthUnconfirmed } from '@/lib/customer-auth-flow';
 
 export default function LoginPage() {
   const { t } = useI18n();
@@ -18,31 +19,46 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuthStore();
+  const mounted = useRef(true), mutation = useRef<object | null>(null);
   const [passwordNotice, setPasswordNotice] = useState<'changed' | 'unconfirmed' | null>(null);
   useEffect(() => {
+    mounted.current = true;
     const query = new URLSearchParams(window.location.search);
     setPasswordNotice(query.get('passwordChangeUnconfirmed') === '1' ? 'unconfirmed' : query.get('passwordChanged') === '1' ? 'changed' : null);
+    return () => { mounted.current = false; mutation.current = null; };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!mounted.current || mutation.current) return;
 
     if (!email || !password) {
       toast.error(translate("请填写完整信息"));
       return;
     }
 
-    setLoading(true);
-    try {
-      const data = await userApi.login({ email, password });
+    const operation = {}; mutation.current = operation;
+    const alive = () => mounted.current && mutation.current === operation;
+    const attempt = customerAuthAttempt(alive, data => {
       login(data.user);
       toast.success(translate("登录成功"));
       router.push('/');
+    });
+    if (!attempt.current()) { mutation.current = null; return; }
+    setLoading(true);
+    try {
+      await userApi.login({ email, password }, attempt);
     } catch (error) {
+      if (!alive() || error instanceof CustomerAuthAbandoned) return;
+      if (error instanceof CustomerAuthUnconfirmed) {
+        if (error.report) toast.error(translate('登录结果尚未确认，请重新登录'));
+        return;
+      }
+      if (!attempt.current()) return;
       logger.error('登录请求失败');
       toast.error(translate(requestFailure(error).response?.data?.error || "登录失败"));
     } finally {
-      setLoading(false);
+      if (alive()) { mutation.current = null; setLoading(false); }
     }
   };
 

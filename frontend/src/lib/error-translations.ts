@@ -3,6 +3,8 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '登录结果尚未确认，请重新登录': 'The sign-in result is unconfirmed. Please sign in again.',
+  '注册结果尚未确认，请先尝试登录或找回密码': 'The registration result is unconfirmed. Try signing in or recovering your password first.',
   '订单已变更，请核对实际状态': 'The order has changed. Review its current state.',
   '商品更新结果未知，正在重新加载当前数据...': 'The product update result is unknown. Reloading the current data...',
   '商品更新结果尚未确认，请重新加载核对；确认前不会再次提交': 'The product update is unconfirmed. Reload to check it before submitting another update.',
