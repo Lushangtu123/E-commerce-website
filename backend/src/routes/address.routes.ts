@@ -75,4 +75,26 @@ router.post('/', AddressController.create);
 router.put('/:id', AddressController.update);
 router.delete('/:id', AddressController.remove);
 
+/**
+ * @openapi
+ * /api/addresses/{id}/default:
+ *   put:
+ *     tags: [收货地址]
+ *     summary: 仅将本人地址设为默认，不修改收货信息
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 9007199254740991 } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false, maxProperties: 0 }
+ *     responses:
+ *       200: { description: 已设置默认地址；重复设置同一地址也成功 }
+ *       400: { description: 请求体必须为空对象，或地址ID无效 }
+ *       401: { description: 未登录 }
+ *       404: { description: 地址不存在或不属于当前用户 }
+ */
+router.put('/:id/default', AddressController.setDefault);
+
 export default router;

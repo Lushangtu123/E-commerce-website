@@ -342,6 +342,7 @@ The "Edit profile" entry in the account centre opens `/profile/settings`, which 
 - `GET /api/addresses` - Get the user's shipping addresses, default address first
 - `POST /api/addresses` - Add a complete address; the first one becomes the default, up to 20 per user
 - `PUT /api/addresses/:id` - Edit a complete address; `is_default: true` makes it the default
+- `PUT /api/addresses/:id/default` - Set the user's default address with an empty object; preserves shipping details saved in another tab and serializes with address edits
 - `DELETE /api/addresses/:id` - Delete one of the user's addresses; deleting the default selects another one automatically
 
 A complete address has six non-empty strings, `receiver_name`, `phone`, `province`, `city`, `district` and `detail_address`, plus an optional boolean `is_default`; it cannot be assigned to another user. Addresses are managed under "Shipping addresses" in the account centre, and checkout requires choosing one.
