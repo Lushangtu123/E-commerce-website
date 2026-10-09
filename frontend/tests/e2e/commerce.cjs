@@ -815,10 +815,26 @@ async function localPlatformScripts(context) {
   await visibleText(admin, '共 1 张优惠券');
   console.log('PASS browser admin coupon retry, real receipt counts, pagination and disabled-status filtering');
   await admin.goto('http://127.0.0.1:3100/admin/orders');
-  await admin.getByRole('button', { name: '发货', exact: true }).first().click();
+  const shipmentRow = admin.getByRole('row').filter({ hasText: realOrderNo });
+  await shipmentRow.getByRole('button', { name: '发货', exact: true }).click();
   await admin.getByLabel('快递公司').fill('测试快递');
   await admin.getByLabel('运单号').fill('E2E-TRACK-123');
+  const shipmentEndpoint = `http://127.0.0.1:3101/api/admin/orders/${orderUrl.split('/').pop()}/status`;
+  let shipmentWrites = 0;
+  const lostShipmentReply = async route => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    shipmentWrites++;
+    const response = await route.fetch(); assert.equal(response.status(), 200);
+    return route.abort('failed');
+  };
+  expectedRecoveryWrite = { endpoint: shipmentEndpoint }; await admin.route(shipmentEndpoint, lostShipmentReply);
   await admin.getByRole('button', { name: '确认发货', exact: true }).click();
+  await shipmentRow.getByText('已发货', { exact: true }).waitFor({ state: 'visible' });
+  await shipmentRow.getByText('E2E-TRACK-123', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(shipmentWrites, 1);
+  assert.equal(await admin.getByRole('button', { name: '确认发货', exact: true }).count(), 0);
+  await admin.unroute(shipmentEndpoint, lostShipmentReply); expectedRecoveryWrite = undefined;
+  console.log('PASS browser lost shipment reply reads actual shipped state without repeating PUT');
   await page.goto(orderUrl);
   await visibleText(page, 'E2E-TRACK-123');
   await page.getByRole('button', { name: '确认收货', exact: true }).click();

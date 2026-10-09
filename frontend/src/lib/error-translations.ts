@@ -3,6 +3,13 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '订单更新结果未知，正在核对实际状态...': 'The order update result is unknown. Checking the current state...',
+  '订单更新结果尚未确认，请重新核对订单；确认前不会再次提交': 'The order update is unconfirmed. Check the order again before submitting another update.',
+  '重新核对订单': 'Check order again',
+  '已核对，订单状态已更新': 'Checked: the order status was updated.',
+  '已核对，订单尚未更新，请确认信息后重试': 'The order has not updated yet. Confirm the details before trying again.',
+  '订单核对结果': 'Order check result',
+  '订单已变更，请核对实际状态和物流信息': 'The order has changed. Check its current status and shipping details.',
   '修改密码结果尚未确认，请先尝试用新密码登录；若无法登录，请使用密码找回': 'The password change result is unconfirmed. Try signing in with your new password first. If that fails, use password recovery.',
   '评价结果尚未确认，请重新加载评价后再操作': 'Your review result is unconfirmed. Reload reviews before continuing.',
   '评价尚未保存，已保留草稿，请检查后重试': 'Your review has not been saved. Your draft was kept; check it before trying again.',

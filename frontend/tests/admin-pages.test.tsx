@@ -61,7 +61,9 @@ function answer(respond: (config: InternalAxiosRequestConfig) => unknown) {
 async function renderOrders(rows: AdminOrderRow[] = orders) {
   signIn();
   vi.stubGlobal('confirm', () => true);
-  answer(() => ({ orders: rows, pagination: { total: rows.length } }));
+  answer(config => config.method === 'put'
+    ? { message: '更新成功', status: JSON.parse(config.data).status }
+    : { orders: rows, pagination: { total: rows.length } });
   render(<AdminOrdersPage />);
   await settle();
 }
@@ -117,7 +119,8 @@ describe('admin orders', () => {
     fireEvent.change(document.querySelector('input[name="tracking_number"]')!, { target: { value: 'SF123456' } });
     fireEvent.submit(document.querySelector('form:not([role="search"])')!);
     await settle();
-    await click('完成订单');
+    fireEvent.click(screen.getByRole('row', { name: /ORDER-2/ }).querySelector('button')!);
+    await settle();
 
     const updates = requests.filter(config => config.method === 'put');
     expect(updates.map(config => [config.url, JSON.parse(config.data).status])).toEqual([
