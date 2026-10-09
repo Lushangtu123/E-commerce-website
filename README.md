@@ -77,6 +77,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - **User management** - User list and spending statistics
 - **Coupon management** - Create coupons and manage their status
 - **Audit log** - Records administrator actions
+- Product, SKU, coupon and user-status mutations commit with their audit record on the same MySQL connection. Audit failures roll back the mutation, including session revocation. Retrying a keyed product creation returns its receipt without another audit; product cache and search refresh run after commit.
 - **Access control** - JWT authentication and per-action permission checks
 
 ### Technical Features

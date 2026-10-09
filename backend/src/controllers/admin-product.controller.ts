@@ -5,6 +5,7 @@ import { ProductCreateError, ProductModel } from '../models/product.model';
 import { productCreateSchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 import { afterProductWrite } from './admin-product-write';
 import { AdminQueryError, adminProductsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
+import { adminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
 
 function normalizedProductBody(body: any) {
   const { image_url, ...fields } = body;
@@ -73,7 +74,6 @@ export const getAdminProducts = async (req: Request, res: Response) => {
 // 更新商品状态（上下架）
 export const updateProductStatus = async (req: Request, res: Response) => {
   try {
-    const pool = getPool();
     const productId = positiveId(req.params.productId);
     if (!productId) return res.status(400).json({ error: '商品ID无效' });
     const { status } = req.body; // 1: 上架, 0: 下架
@@ -82,27 +82,17 @@ export const updateProductStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: '无效的状态值' });
     }
 
-    // 获取商品信息
-    const [products] = await pool.query(
-      'SELECT product_id, title FROM products WHERE product_id = ? AND status IN (0, 1)',
-      [productId]
-    );
-
-    if (!Array.isArray(products) || products.length === 0) {
-      return res.status(404).json({ error: '商品不存在' });
-    }
-
-    const product = products[0] as any;
-
-    // 更新状态
-    const [updated] = await pool.query<import('mysql2').ResultSetHeader>(
-      'UPDATE products SET status = ?, updated_at = NOW() WHERE product_id = ? AND status IN (0, 1)',
-      [status, productId]
-    );
-    if (!updated.affectedRows) return res.status(404).json({ error: '商品不存在' });
-
-    // 记录操作日志
-    await afterProductWrite(req, [Number(productId)], 'UPDATE_PRODUCT_STATUS', 'product', String(productId), `${status === 1 ? '上架' : '下架'}商品: ${product.title}`);
+    const changed = await adminWriteTransaction(async connection => {
+      const [products] = await connection.execute<import('mysql2').RowDataPacket[]>(
+        'SELECT product_id, title FROM products WHERE product_id = ? AND status IN (0, 1) FOR UPDATE', [productId]
+      );
+      if (!products.length) return false;
+      await connection.execute('UPDATE products SET status = ?, updated_at = NOW() WHERE product_id = ?', [status, productId]);
+      await writeAdminAudit(connection, adminAuditContext(req), 'UPDATE_PRODUCT_STATUS', 'product', String(productId), `${status === 1 ? '上架' : '下架'}商品: ${products[0].title}`);
+      return true;
+    });
+    if (!changed) return res.status(404).json({ error: '商品不存在' });
+    await afterProductWrite([productId]);
 
     res.json({ message: '更新成功', status });
   } catch (error) {
@@ -141,14 +131,16 @@ export const batchUpdateProductStatus = async (req: Request, res: Response) => {
         `UPDATE products SET status = ?, updated_at = NOW() WHERE product_id IN (${placeholders}) AND status IN (0, 1)`,
         [status, ...ids]
       );
+      const resourceId = ids.join(',');
+      await writeAdminAudit(connection, adminAuditContext(req), 'BATCH_UPDATE_PRODUCT_STATUS', 'product', resourceId.length <= 100 ? resourceId : null,
+        `批量${status === 1 ? '上架' : '下架'}商品: ${ids.length}个; 商品ID: ${resourceId}`);
       await connection.commit();
     } catch (error) {
       await connection.rollback();
       throw error;
     } finally { connection.release(); }
 
-    // 记录操作日志
-    await afterProductWrite(req, ids, 'BATCH_UPDATE_PRODUCT_STATUS', 'product', ids.join(','), `批量${status === 1 ? '上架' : '下架'}商品: ${ids.length}个`);
+    await afterProductWrite(ids);
 
     res.json({ message: '批量更新成功', count: ids.length });
   } catch (error) {
@@ -164,12 +156,11 @@ export const createProduct = async (req: Request, res: Response) => {
     if (create_key !== undefined && (typeof create_key !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(create_key))) return res.status(400).json({ error: '商品新增请求号无效' });
     const { error, value: product } = productCreateSchema.validate(normalizedProductBody(fields));
     if (error || !product.category_id) return res.status(400).json({ error: '商品字段或值无效，标题、价格和分类必填' });
-    const { title } = product;
-    const { productId, replayed } = create_key === undefined ? { productId: await ProductModel.create(product), replayed: false }
-      : await ProductModel.createForAdmin(product, (req as any).admin?.adminId, create_key);
+    const audit = adminAuditContext(req);
+    const { productId, replayed } = create_key === undefined ? { productId: await ProductModel.create(product, audit), replayed: false }
+      : await ProductModel.createForAdmin(product, audit.adminId, create_key, audit);
 
-    // 记录操作日志
-    if (!replayed) await afterProductWrite(req, [productId], 'CREATE_PRODUCT', 'product', String(productId), `创建商品: ${title}`);
+    if (!replayed) await afterProductWrite([productId]);
 
     res.status(201).json({
       message: '创建成功',
@@ -201,10 +192,9 @@ export const updateProduct = async (req: Request, res: Response) => {
       return res.status(404).json({ error: '商品不存在' });
     }
 
-    if (!await ProductModel.update(productId, fields)) return res.status(404).json({ error: '商品不存在' });
+    if (!await ProductModel.update(productId, fields, adminAuditContext(req))) return res.status(404).json({ error: '商品不存在' });
 
-    // 记录操作日志
-    await afterProductWrite(req, [productId], 'UPDATE_PRODUCT', 'product', String(productId), `更新商品: ${fields.title || ''}`);
+    await afterProductWrite([productId]);
 
     res.json({ message: '更新成功' });
   } catch (error) {
@@ -216,30 +206,20 @@ export const updateProduct = async (req: Request, res: Response) => {
 // 删除商品（软删除）
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
-    const pool = getPool();
     const productId = positiveId(req.params.productId);
     if (!productId) return res.status(400).json({ error: '商品ID无效' });
 
-    // 获取商品信息
-    const [products] = await pool.query(
-      'SELECT product_id, title FROM products WHERE product_id = ?',
-      [productId]
-    );
-
-    if (!Array.isArray(products) || products.length === 0) {
-      return res.status(404).json({ error: '商品不存在' });
-    }
-
-    const product = products[0] as any;
-
-    // 软删除：将状态设为-1
-    await pool.query(
-      'UPDATE products SET status = -1, updated_at = NOW() WHERE product_id = ?',
-      [productId]
-    );
-
-    // 记录操作日志
-    await afterProductWrite(req, [Number(productId)], 'DELETE_PRODUCT', 'product', String(productId), `删除商品: ${product.title}`);
+    const changed = await adminWriteTransaction(async connection => {
+      const [products] = await connection.execute<import('mysql2').RowDataPacket[]>(
+        'SELECT product_id, title FROM products WHERE product_id = ? FOR UPDATE', [productId]
+      );
+      if (!products.length) return false;
+      await connection.execute('UPDATE products SET status = -1, updated_at = NOW() WHERE product_id = ?', [productId]);
+      await writeAdminAudit(connection, adminAuditContext(req), 'DELETE_PRODUCT', 'product', String(productId), `删除商品: ${products[0].title}`);
+      return true;
+    });
+    if (!changed) return res.status(404).json({ error: '商品不存在' });
+    await afterProductWrite([productId]);
 
     res.json({ message: '删除成功' });
   } catch (error) {

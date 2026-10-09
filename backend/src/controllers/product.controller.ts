@@ -7,6 +7,7 @@ import { PRODUCT_HOT_CACHE_KEY } from '../utils/product-cache-keys';
 import { afterProductWrite } from './admin-product-write';
 import { productCreateSchema, productQuerySchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 import { specsTranslationSchema } from '../utils/product-i18n';
+import { adminAuditContext } from '../utils/admin-write-audit';
 
 const optionalText = (value: unknown) => value == null || typeof value === 'string';
 const optionalRecord = (value: unknown) => value == null || typeof value === 'object' && !Array.isArray(value);
@@ -136,8 +137,8 @@ export class ProductController {
     try {
       const { error, value: product } = productCreateSchema.validate(req.body);
       if (error) return res.status(400).json({ error: '商品字段或值无效' });
-      const productId = await ProductModel.create(product);
-      await afterProductWrite(req, [productId], 'CREATE_PRODUCT', 'product', String(productId), `创建商品: ${product.title}`);
+      const productId = await ProductModel.create(product, adminAuditContext(req));
+      await afterProductWrite([productId]);
       
       res.status(201).json({
         message: '商品创建成功',
@@ -156,10 +157,10 @@ export class ProductController {
       const { error, value: updates } = productUpdateSchema.validate(req.body);
       if (!productId || error) return res.status(400).json({ error: '商品ID、字段或值无效' });
       
-      const success = await ProductModel.update(productId, updates);
+      const success = await ProductModel.update(productId, updates, adminAuditContext(req));
       
       if (success) {
-        await afterProductWrite(req, [productId], 'UPDATE_PRODUCT', 'product', String(productId), `更新商品: ${updates.title || ''}`);
+        await afterProductWrite([productId]);
         
         res.json({ message: '商品更新成功' });
       } else {

@@ -1,6 +1,6 @@
 /**
  * 管理员优惠券审计日志测试
- * 验证创建/更新优惠券时会写入操作日志
+ * 验证控制器将审计身份交给优惠券事务模型；SQL 原子性由集成测试覆盖
  */
 import { Response } from 'express';
 
@@ -87,7 +87,7 @@ describe('createCoupon', () => {
     expect(logAdminAction).not.toHaveBeenCalled();
   });
 
-  test('创建成功时记录 CREATE_COUPON 审计日志', async () => {
+  test('创建成功时将管理员身份及审计元数据传给同事务模型', async () => {
     CouponModel.findByCode.mockResolvedValue(null);
     CouponModel.create.mockResolvedValue(42);
 
@@ -109,16 +109,9 @@ describe('createCoupon', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true })
     );
-    expect(logAdminAction).toHaveBeenCalledTimes(1);
-    expect(logAdminAction).toHaveBeenCalledWith(
-      1,
-      'CREATE_COUPON',
-      'coupon',
-      '42',
-      '创建优惠券: 新用户券 (NEW2024)',
-      '127.0.0.1',
-      'test-agent'
-    );
+    expect(CouponModel.create).toHaveBeenCalledWith(expect.objectContaining({ code: 'NEW2024' }),
+      { adminId: 1, ip: '127.0.0.1', userAgent: 'test-agent' });
+    expect(logAdminAction).not.toHaveBeenCalled();
   });
 
   test('创建失败时不记录审计日志', async () => {
@@ -133,13 +126,13 @@ describe('createCoupon', () => {
 });
 
 describe('updateCouponStatus', () => {
-  test('更新成功时记录 UPDATE_COUPON_STATUS 审计日志', async () => {
+  test('更新成功时将审计身份传入事务而不调用提交后的日志助手', async () => {
     CouponModel.findById.mockResolvedValue({
       coupon_id: 7,
       name: '老券',
       code: 'OLD2024',
     });
-    CouponModel.updateStatus.mockResolvedValue(undefined);
+    CouponModel.updateStatus.mockResolvedValue(true);
 
     const req = mockReq({ params: { id: '7' }, body: { status: 0 } });
     const res = mockRes();
@@ -149,16 +142,8 @@ describe('updateCouponStatus', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true })
     );
-    expect(logAdminAction).toHaveBeenCalledTimes(1);
-    expect(logAdminAction).toHaveBeenCalledWith(
-      1,
-      'UPDATE_COUPON_STATUS',
-      'coupon',
-      '7',
-      '停用优惠券: 老券 (OLD2024)',
-      '127.0.0.1',
-      'test-agent'
-    );
+    expect(CouponModel.updateStatus).toHaveBeenCalledWith(7, 0, { adminId: 1, ip: '127.0.0.1', userAgent: 'test-agent' });
+    expect(logAdminAction).not.toHaveBeenCalled();
   });
 
   test('优惠券不存在时不记录审计日志', async () => {

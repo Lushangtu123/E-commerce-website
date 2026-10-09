@@ -52,14 +52,14 @@ async function call(handler: any, body = {}, params: any = { productId: '1' }) {
 
 const valid = { sku_code: 'BLUE', specs: { color: 'blue' }, price: 0, stock: 0 };
 
-test('创建允许零价格库存，忽略缓存和审计外部故障且只返回一次成功', async () => {
+test('创建允许零价格库存，事务保存审计后忽略缓存故障且只返回一次成功', async () => {
   redis.del.mockRejectedValue(new Error('redis down'));
-  db.query.mockRejectedValue(new Error('audit down'));
   const res = await call(createSKU, valid);
   expect(res.statusCode).toBe(201);
   expect(res.body.sku_id).toBe(12);
   expect(res.json).toHaveBeenCalledTimes(1);
   expect(connection.commit).toHaveBeenCalledTimes(1);
+  expect(connection.execute.mock.calls.some(([sql]: [string]) => sql.includes('INSERT INTO admin_logs'))).toBe(true);
   expect(redis.del).toHaveBeenCalledWith('product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4');
 });
 
@@ -162,7 +162,7 @@ test('批量请求重复SKU编码返回409且无写入', async () => {
   expect(connection.execute).not.toHaveBeenCalled();
 });
 
-test('商品后台更新、上下架、批量与删除都清详情和热榜缓存，审计失败不改成功结果', async () => {
+test('商品后台更新、上下架、批量与删除都在提交审计后清详情和热榜缓存', async () => {
   for (const [handler, body, params, cacheKeys] of [
     [updateProduct, { title: '新标题' }, { productId: '1' }, ['product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4']],
     [updateProductStatus, { status: 0 }, { productId: '1' }, ['product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4']],
@@ -174,10 +174,10 @@ test('商品后台更新、上下架、批量与删除都清详情和热榜缓�
       ? [[product, { ...product, product_id: 2 }], []] : [{ affectedRows: 2 }, []]);
     db.query.mockImplementation(async (sql: string) => {
       if (sql.includes('SELECT')) return [[product], []];
-      if (sql.includes('admin_logs')) throw new Error('audit down');
       return [{ affectedRows: 1 }, []];
     });
     expect((await call(handler, body, params)).statusCode).toBe(200);
+    expect(connection.execute.mock.calls.some(([sql]: [string]) => sql.includes('INSERT INTO admin_logs'))).toBe(true);
     expect(redis.del).toHaveBeenCalledWith(...cacheKeys);
   }
 });

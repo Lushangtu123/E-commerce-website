@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
-import { logAdminAction } from './admin-log.controller';
+import { adminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
 import logger from '../utils/logger';
 import { AdminQueryError, adminEmptyQuerySchema, adminUserOrdersQuerySchema, adminUserPathId, adminUsersQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
@@ -137,37 +137,21 @@ export const updateUserStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: '无效的状态值' });
     }
     const { status } = body;
-    const pool = getPool();
-
-    // 获取用户信息
-    const [users] = await pool.query(
-      'SELECT user_id, username FROM users WHERE user_id = ?',
-      [userId]
-    );
-
-    if (!Array.isArray(users) || users.length === 0) {
-      return res.status(404).json({ error: '用户不存在' });
-    }
-
-    const user = users[0] as any;
-
-    // Revoke existing sessions atomically when disabling. Re-enabling retains the version,
-    // so cookies and legacy Bearer tokens issued before the disable cannot become valid again.
-    await pool.query(
-      'UPDATE users SET auth_version = auth_version + IF(? = 0, 1, 0), status = ?, updated_at = NOW() WHERE user_id = ?',
-      [status, status, userId]
-    );
-
-    // 记录操作日志
-    await logAdminAction(
-      (req as any).admin.adminId,
-      'UPDATE_USER_STATUS',
-      'user',
-      userId as string,
-      `${status === 1 ? '启用' : '禁用'}用户: ${user.username}`,
-      req.ip,
-      req.get('user-agent')
-    );
+    const changed = await adminWriteTransaction(async connection => {
+      const [users] = await connection.execute<import('mysql2').RowDataPacket[]>(
+        'SELECT user_id, username FROM users WHERE user_id = ? FOR UPDATE', [userId]
+      );
+      if (!users.length) return false;
+      // A failed audit must also roll back session revocation.
+      await connection.execute(
+        'UPDATE users SET auth_version = auth_version + IF(? = 0, 1, 0), status = ?, updated_at = NOW() WHERE user_id = ?',
+        [status, status, userId]
+      );
+      await writeAdminAudit(connection, adminAuditContext(req), 'UPDATE_USER_STATUS', 'user', userId,
+        `${status === 1 ? '启用' : '禁用'}用户: ${users[0].username}`);
+      return true;
+    });
+    if (!changed) return res.status(404).json({ error: '用户不存在' });
 
     res.json({ message: '更新成功', status });
   } catch (error) {

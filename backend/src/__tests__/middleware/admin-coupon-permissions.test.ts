@@ -111,10 +111,10 @@ test.each(['coupon:view', 'coupon:create', 'coupon:edit'])('%s permits only its 
       expect(response.body.success).toBe(true);
       if (endpoint.method === 'post') {
         expect(CouponModel.create).toHaveBeenCalledTimes(1);
-        expect(logAdminAction).toHaveBeenCalledWith(2, 'CREATE_COUPON', 'coupon', '7', expect.any(String), expect.any(String), undefined);
+        expect(CouponModel.create).toHaveBeenCalledWith(expect.objectContaining({ code: 'TEST' }),
+          { adminId: 2, ip: expect.any(String), userAgent: undefined });
       } else if (endpoint.method === 'put') {
-        expect(CouponModel.updateStatus).toHaveBeenCalledWith(7, 0);
-        expect(logAdminAction).toHaveBeenCalledWith(2, 'UPDATE_COUPON_STATUS', 'coupon', '7', expect.any(String), expect.any(String), undefined);
+        expect(CouponModel.updateStatus).toHaveBeenCalledWith(7, 0, { adminId: 2, ip: expect.any(String), userAgent: undefined });
       } else {
         expect(CouponModel.create).not.toHaveBeenCalled();
         expect(CouponModel.updateStatus).not.toHaveBeenCalled();
@@ -135,8 +135,8 @@ test('existing super administrators need no coupon permission rows', async () =>
   role = 'super_admin'; admin.role_id = 7;
   for (const endpoint of endpoints) await call(endpoint).expect(200);
   expect(CouponModel.create).toHaveBeenCalledTimes(1);
-  expect(CouponModel.updateStatus).toHaveBeenCalledWith(7, 0);
-  expect(logAdminAction).toHaveBeenCalledTimes(2);
+  expect(CouponModel.updateStatus).toHaveBeenCalledWith(7, 0, { adminId: 2, ip: expect.any(String), userAgent: undefined });
+  expect(logAdminAction).not.toHaveBeenCalled();
 });
 
 test.each(endpoints)('$method $path rejects disabled super administrators before coupon access', async endpoint => {

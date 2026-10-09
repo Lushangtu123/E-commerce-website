@@ -45,6 +45,11 @@ integration('真实 MySQL 商品售价与原价来自同一规格', () => {
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
       if (['products', 'product_skus', 'reviews'].includes(match[2])) await db.query(match[1]);
     }
+    const adminSource = fs.readFileSync(path.join(__dirname, '../../database/admin-migrate.ts'), 'utf8');
+    for (const match of adminSource.matchAll(/`(\s*CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
+      if (['roles', 'admins', 'admin_logs'].includes(match[2])) await db.query(match[1]);
+    }
+    await db.query("INSERT INTO admins(admin_id,username,password_hash) VALUES(1,'fixture','fixture')");
     await db.query(`INSERT INTO products(product_id,title,category_id,price,original_price,stock,sales_count) VALUES
       (1,'最低价',1,199,250,99,8),(2,'无原价',1,199,200,99,7),(3,'零价',1,199,200,99,6),
       (4,'同价',1,199,250,99,5),(5,'全停用',1,77,100,99,4),(6,'无规格',1,20,30,3,3),
@@ -109,9 +114,9 @@ integration('真实 MySQL 商品售价与原价来自同一规格', () => {
     expect(await redis!.ttl('products:hot:v4')).toBeGreaterThan(0);
     const req = { admin: { adminId: 1 }, get: () => 'fixture', ip: '127.0.0.1' } as any;
     const writers = [
-      () => afterProductWrite(req, [1], 'UPDATE', 'product', '1', 'fixture'),
+      () => afterProductWrite([1]),
       () => invalidateOrderProductCache([1]),
-      () => ProductController.update({ params: { id: '1' }, body: { price: 200 } } as any, { status() { return this; }, json() {} } as any),
+      () => ProductController.update({ ...req, params: { id: '1' }, body: { price: 200 } } as any, { status() { return this; }, json() {} } as any),
     ];
     for (const write of writers) {
       for (const key of ['product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4']) await redis!.set(key, 'stale');

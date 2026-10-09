@@ -5,6 +5,7 @@ import { ProductModel } from '../models/product.model';
 import { positiveId } from '../utils/product-validation';
 import { skuCreateSchema, skuUpdateSchema, skuBatchSchema } from '../utils/sku-validation';
 import { afterProductWrite } from './admin-product-write';
+import { adminAuditContext } from '../utils/admin-write-audit';
 
 function skuFailure(res: Response, error: unknown, message: string) {
   if (error instanceof SKUError) return res.status(error.statusCode).json({ error: error.message });
@@ -32,8 +33,8 @@ export const createSKU = async (req: Request, res: Response) => {
     const productId = positiveId(req.params.productId);
     const { error, value } = skuCreateSchema.validate(req.body);
     if (!productId || error) return res.status(400).json({ error: '商品ID、SKU字段或值无效' });
-    const skuId = await SKUModel.create({ ...value, product_id: productId });
-    await afterProductWrite(req, [productId], 'CREATE_SKU', 'sku', String(skuId), `为商品${productId}创建SKU: ${value.sku_code}`);
+    const skuId = await SKUModel.create({ ...value, product_id: productId }, adminAuditContext(req));
+    await afterProductWrite([productId]);
 
     res.status(201).json({
       message: 'SKU创建成功',
@@ -51,8 +52,8 @@ export const batchCreateSKUs = async (req: Request, res: Response) => {
     const { error, value } = skuBatchSchema.validate(req.body);
     if (!productId || error) return res.status(400).json({ error: '商品ID或SKU列表无效' });
     const { skus } = value;
-    await SKUModel.createBatch(skus.map((sku: any) => ({ ...sku, product_id: productId })));
-    await afterProductWrite(req, [productId], 'BATCH_CREATE_SKU', 'sku', String(productId), `为商品${productId}批量创建${skus.length}个SKU`);
+    await SKUModel.createBatch(skus.map((sku: any) => ({ ...sku, product_id: productId })), adminAuditContext(req));
+    await afterProductWrite([productId]);
 
     res.status(201).json({
       message: `成功创建${skus.length}个SKU`,
@@ -72,9 +73,9 @@ export const updateSKU = async (req: Request, res: Response) => {
     if (!skuId || error || (req.params.productId !== undefined && !productId)) return res.status(400).json({ error: '商品或SKU ID、字段或值无效' });
     const sku = await SKUModel.findById(skuId);
     if (!sku || (productId !== undefined && sku.product_id !== productId)) return res.status(404).json({ error: 'SKU不存在' });
-    const success = await SKUModel.update(skuId, value, productId);
+    const success = await SKUModel.update(skuId, value, productId, adminAuditContext(req));
     if (!success) return res.status(404).json({ error: 'SKU不存在' });
-    await afterProductWrite(req, [sku.product_id], 'UPDATE_SKU', 'sku', String(skuId), '更新SKU');
+    await afterProductWrite([sku.product_id]);
 
     res.json({ message: '更新成功' });
   } catch (error) {
@@ -90,9 +91,9 @@ export const deleteSKU = async (req: Request, res: Response) => {
     if (!skuId || (req.params.productId !== undefined && !productId)) return res.status(400).json({ error: '商品或SKU ID无效' });
     const sku = await SKUModel.findById(skuId);
     if (!sku || (productId !== undefined && sku.product_id !== productId)) return res.status(404).json({ error: 'SKU不存在' });
-    const success = await SKUModel.delete(skuId, productId);
+    const success = await SKUModel.delete(skuId, productId, adminAuditContext(req));
     if (!success) return res.status(404).json({ error: 'SKU不存在' });
-    await afterProductWrite(req, [sku.product_id], 'DELETE_SKU', 'sku', String(skuId), '删除SKU');
+    await afterProductWrite([sku.product_id]);
 
     res.json({ message: '删除成功' });
   } catch (error) {

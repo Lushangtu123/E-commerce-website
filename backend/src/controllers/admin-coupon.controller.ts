@@ -3,9 +3,9 @@
  */
 import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/admin-auth';
-import { CouponModel, CouponStatus } from '../models/coupon.model';
+import { CouponModel } from '../models/coupon.model';
 import { adminCouponListSchema, couponCodeSchema, couponCreateSchema, couponIdSchema, couponStatusSchema } from '../utils/coupon-validation';
-import { logAdminAction } from './admin-log.controller';
+import { adminAuditContext } from '../utils/admin-write-audit';
 import logger from '../utils/logger';
 
 export class AdminCouponController {
@@ -54,7 +54,7 @@ export class AdminCouponController {
         start_time,
         end_time,
         status,
-      });
+      }, adminAuditContext(req));
 
       res.json({
         success: true,
@@ -62,16 +62,6 @@ export class AdminCouponController {
         data: { coupon_id: couponId },
       });
 
-      // 记录操作日志
-      await logAdminAction(
-        req.admin?.adminId || 0,
-        'CREATE_COUPON',
-        'coupon',
-        String(couponId),
-        `创建优惠券: ${name} (${code})`,
-        req.ip,
-        req.get('user-agent')
-      );
     } catch (error) {
       // Another creator can take the code after the precheck. The unique index
       // decides ownership; report that conflict without starting failure recovery.
@@ -184,18 +174,9 @@ export class AdminCouponController {
         });
       }
 
-      await CouponModel.updateStatus(couponId, status);
-
-      // 记录操作日志
-      await logAdminAction(
-        req.admin?.adminId || 0,
-        'UPDATE_COUPON_STATUS',
-        'coupon',
-        String(couponId),
-        `${status === CouponStatus.ENABLED ? '启用' : '停用'}优惠券: ${coupon.name} (${coupon.code})`,
-        req.ip,
-        req.get('user-agent')
-      );
+      if (!await CouponModel.updateStatus(couponId, status, adminAuditContext(req))) {
+        return res.status(404).json({ success: false, message: '优惠券不存在' });
+      }
 
       res.json({
         success: true,
