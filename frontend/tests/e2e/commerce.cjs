@@ -826,8 +826,21 @@ async function localPlatformScripts(context) {
   console.log('PASS browser admin shipment and customer receipt');
   await page.getByRole('combobox', { name: /^评分/ }).selectOption('3');
   await page.getByLabel('评价内容（可选）', { exact: true }).fill('Browser verified purchase review');
+  const purchaseReviewEndpoint = 'http://127.0.0.1:3101/api/reviews';
+  let purchaseReviewWrites = 0;
+  const loseReviewReply = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    purchaseReviewWrites++;
+    const response = await route.fetch(); assert.equal(response.status(), 201);
+    await route.abort('failed');
+  };
+  expectedRecoveryWrite = { endpoint: purchaseReviewEndpoint };
+  await page.route(purchaseReviewEndpoint, loseReviewReply);
   await page.getByRole('button', { name: '提交评价', exact: true }).click();
   await visibleText(page, '已评价');
+  assert.equal(purchaseReviewWrites, 1);
+  await page.unroute(purchaseReviewEndpoint, loseReviewReply); expectedRecoveryWrite = undefined;
+  console.log('PASS browser committed review with a lost reply restores saved status without another POST');
   const rated = await context.request.get('http://127.0.0.1:3101/api/products/1');
   const ratedProduct = (await rated.json()).product;
   assert.equal(Number(ratedProduct.rating), 3);

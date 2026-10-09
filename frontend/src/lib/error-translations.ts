@@ -3,6 +3,8 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '评价结果尚未确认，请重新加载评价后再操作': 'Your review result is unconfirmed. Reload reviews before continuing.',
+  '评价尚未保存，已保留草稿，请检查后重试': 'Your review has not been saved. Your draft was kept; check it before trying again.',
   '购物车操作结果尚未确认，请重新加载后再操作': 'The cart update is unconfirmed. Reload your cart before continuing.',
   '购物车已重新同步，请核对商品和数量': 'Your cart has been refreshed. Check the items and quantities.',
   '退货快递公司或运单号无效': 'The return carrier or tracking number is invalid.',
