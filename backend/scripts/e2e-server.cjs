@@ -21,8 +21,9 @@ process.env.JWT_SECRET = 'isolated-browser-fixture-only-secret';
 process.env.CORS_ORIGIN = 'http://127.0.0.1:3100';
 process.env.ADMIN_BOOTSTRAP_PASSWORD = 'BrowserFixtureAdmin123!';
 // The complete commerce flow shares one loopback IP and has no customer think time.
-// Limiter behavior is verified separately by middleware/Redis regression tests.
-process.env.RATE_LIMIT_MAX = '500';
+// A fast runner can make more than 500 API reads in one minute across the recovery flows.
+// Keep a fixture-only budget; middleware/Redis suites verify production limiter behavior.
+process.env.RATE_LIMIT_MAX = '2000';
 delete process.env.VERCEL;
 delete process.env.VERCEL_ENV;
 delete process.env.RESEND_API_KEY;
