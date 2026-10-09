@@ -64,6 +64,11 @@ integration('admin chronological lists with tied timestamps', () => {
     await db.query('INSERT INTO orders(order_id,order_no,user_id,total_amount,status,created_at) VALUES(51,\'EXCLUDED\',2,10,4,?)', [timestamp]);
     await db.query('INSERT INTO admin_logs(log_id,admin_id,action,created_at) VALUES(51,2,\'EXCLUDED\',?)', [timestamp]);
     await db.query('INSERT INTO shipping_addresses(address_id,user_id,receiver_name,phone,is_default,created_at) VALUES(51,2,\'Excluded\',\'123456789\',1,?)', [timestamp]);
+    await db.query(`INSERT INTO order_items(order_id,product_id,product_name,price,quantity) VALUES
+      (1,1,'Multiple products A',10,2),(1,2,'Multiple products B',10,3),
+      (2,1,'One product, many units',10,7),
+      (3,1,'Same product, first line',10,1),(3,1,'Same product, second line',10,4),
+      (51,1,'Other account',10,9)`);
   });
 
   afterAll(async () => {
@@ -116,6 +121,24 @@ integration('admin chronological lists with tied timestamps', () => {
       expect(orders[1]).toMatchObject({ order_no: 'FIXTURE-50', user_id: 1, username: 'Fixture user 1', status: 1 });
     }
   });
+
+  test.each([
+    ['order management', getAdminOrders, { userId: '1' }, {}],
+    ['user order details', getUserOrders, {}, { userId: '1' }],
+  ] as [string, Controller, Record<string, string>, Record<string, string>][])(
+    '%s counts purchased units, including repeated product lines and historical empty orders',
+    async (_name, controller, filters, params) => {
+      const body = await invoke(controller, { ...filters, limit: '100' }, params);
+      const counts = new Map<number, unknown>(body.orders.map((order: any) => [Number(order.order_id), order.item_count]));
+      expect(counts.get(1)).toBe(5);
+      expect(counts.get(2)).toBe(7);
+      expect(counts.get(3)).toBe(5);
+      expect(counts.get(4)).toBe(0);
+      expect(counts.size).toBe(50);
+      expect(counts.has(51)).toBe(false);
+      expect(body.pagination.total).toBe(50);
+    },
+  );
 
   test('user detail orders use the same tie order and addresses retain default-first priority', async () => {
     const body = await invoke(getAdminUserDetail, {}, { userId: '1' });

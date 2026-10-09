@@ -232,7 +232,7 @@ export const getUserOrders = async (req: Request, res: Response) => {
     const [orders] = await pool.query(
       `SELECT 
         o.*,
-        (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
+        (SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
        FROM orders o
        WHERE o.user_id = ?
        ORDER BY o.created_at DESC, o.order_id DESC

@@ -73,6 +73,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - **Product management** - Create, edit, bulk list/delist, SKU management
 - **Bilingual product content** - Optional English names, descriptions and specification labels, with Chinese fallback for each missing translation. Cart, saved products and new order snapshots follow the selected language.
 - **Order management** - Order list, status updates, shipping
+- Order management and user-detail order lists count purchased units, including multiple pieces of one product or variant; historical orders without item rows show zero.
 - **User management** - User list and spending statistics
 - **Coupon management** - Create coupons and manage their status
 - **Audit log** - Records administrator actions

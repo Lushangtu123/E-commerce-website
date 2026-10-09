@@ -43,7 +43,7 @@ export const getAdminOrders = async (req: Request, res: Response) => {
         o.*,
         u.username,
         u.email,
-        (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
+        (SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.user_id
        WHERE ${whereClause}
