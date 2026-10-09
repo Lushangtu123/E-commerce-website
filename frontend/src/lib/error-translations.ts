@@ -275,6 +275,17 @@ export const errorTranslations: Record<string, string> = {
 
   // Coupons and discounts.
   '优惠券ID无效': 'Invalid coupon ID',
+  '优惠券代码无效': 'Invalid coupon code',
+  '无法保存优惠券请求，请允许浏览器存储后重试': 'Unable to save the coupon request. Allow browser storage and try again',
+  '无法读取优惠券待确认请求，请检查浏览器存储后重试': 'Unable to read the pending coupon request. Check browser storage and try again',
+  '重新读取待确认请求': 'Read pending request again',
+  '优惠券提交结果尚未确认，请先重新确认；确认期间不能创建或修改优惠券': 'The coupon result is unconfirmed. Confirm it before creating or changing coupons',
+  '重新确认优惠券结果': 'Confirm coupon result again',
+  '暂未找到原代码的优惠券，可重试原创建请求；重试保留原代码和全部内容': 'No coupon was found for the original code. You can retry the original creation with the same code and details',
+  '重试原创建请求': 'Retry original creation',
+  '已确认原优惠券创建结果，请核对当前列表': 'The original coupon creation was confirmed. Check the current list',
+  '该代码对应的优惠券与原创建内容不一致，请核对后修改草稿': 'This code belongs to a coupon with different details. Check it and edit your draft',
+  '已重新加载优惠券当前状态，请核对后再操作': 'The current coupon status was reloaded. Check it before taking another action',
   '优惠券状态无效': 'Invalid coupon status',
   '优惠券类型无效': 'Invalid coupon type',
   '优惠值无效': 'Invalid discount value',

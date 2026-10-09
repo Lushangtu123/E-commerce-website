@@ -25,6 +25,7 @@ export const couponCreateSchema = Joi.object({
 }).unknown(false).prefs({ convert: false });
 
 export const couponIdSchema = Joi.object({ id: positiveId.required() }).unknown(false);
+export const couponCodeSchema = Joi.object({ code: Joi.string().trim().min(1).max(50).required() }).unknown(false);
 export const couponListSchema = Joi.object(pagination).unknown(false);
 export const adminCouponListSchema = Joi.object({ ...pagination, status: Joi.number().valid(0, 1) }).unknown(false);
 export const userCouponListSchema = Joi.object({ status: Joi.number().valid(1, 2, 3) }).unknown(false);

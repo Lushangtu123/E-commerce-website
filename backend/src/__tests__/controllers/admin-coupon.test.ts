@@ -138,3 +138,39 @@ describe('updateCouponStatus', () => {
     expect(logAdminAction).not.toHaveBeenCalled();
   });
 });
+
+describe('getCouponByCode', () => {
+  test('returns the canonical coupon even when disabled or exhausted', async () => {
+    const coupon = { coupon_id: 7, code: 'SAVE', status: 0, remain_quantity: 0 };
+    CouponModel.findByCode.mockResolvedValue(coupon);
+    const res = mockRes();
+    await AdminCouponController.getCouponByCode(mockReq({ params: { code: 'SAVE' } }), res);
+    expect(CouponModel.findByCode).toHaveBeenCalledWith('SAVE');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: coupon });
+    expect(logAdminAction).not.toHaveBeenCalled();
+  });
+
+  test('returns explicit absence for an unused code', async () => {
+    CouponModel.findByCode.mockResolvedValue(null);
+    const res = mockRes();
+    await AdminCouponController.getCouponByCode(mockReq({ params: { code: 'MISSING' } }), res);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: null });
+  });
+
+  test.each([{}, { code: '' }, { code: 'x'.repeat(51) }, { code: ['SAVE'] }, { code: 'SAVE', extra: 'bad' }])(
+    'rejects invalid code parameters %j before reading the model', async params => {
+      const res = mockRes();
+      await AdminCouponController.getCouponByCode(mockReq({ params }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(CouponModel.findByCode).not.toHaveBeenCalled();
+    }
+  );
+
+  test('returns a failed read without claiming absence', async () => {
+    CouponModel.findByCode.mockRejectedValue(new Error('database unavailable'));
+    const res = mockRes();
+    await AdminCouponController.getCouponByCode(mockReq({ params: { code: 'SAVE' } }), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ success: false, message: '获取优惠券详情失败' });
+  });
+});

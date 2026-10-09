@@ -95,6 +95,29 @@ router.get('/', requirePermission('coupon:view'), AdminCouponController.getCoupo
 
 /**
  * @openapi
+ * /api/admin/coupons/by-code/{code}:
+ *   get:
+ *     tags: [管理后台-优惠券]
+ *     summary: 根据唯一代码确认优惠券创建结果
+ *     description: 需要 coupon:view 权限，返回所有状态的优惠券；代码不存在时 data 为 null
+ *     security: [{ adminAuth: [] }]
+ *     parameters:
+ *       - name: code
+ *         in: path
+ *         required: true
+ *         schema: { type: string, minLength: 1, maxLength: 50 }
+ *     responses:
+ *       200:
+ *         description: 优惠券或明确不存在
+ *       400:
+ *         description: 优惠券代码无效
+ *       403:
+ *         description: 权限不足
+ */
+router.get('/by-code/:code', requirePermission('coupon:view'), AdminCouponController.getCouponByCode);
+
+/**
+ * @openapi
  * /api/admin/coupons/{id}:
  *   get:
  *     tags: [管理后台-优惠券]

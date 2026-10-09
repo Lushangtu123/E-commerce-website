@@ -31,6 +31,7 @@ const createBody = {
 const endpoints = [
   { method: 'get', path: '/', permission: 'coupon:view' },
   { method: 'get', path: '/7', permission: 'coupon:view' },
+  { method: 'get', path: '/by-code/TEST', permission: 'coupon:view' },
   { method: 'post', path: '/', permission: 'coupon:create' },
   { method: 'put', path: '/7/status', permission: 'coupon:edit' },
 ] as const;

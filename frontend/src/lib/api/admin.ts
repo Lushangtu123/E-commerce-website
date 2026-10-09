@@ -129,6 +129,9 @@ export const adminCouponApi = {
   // 获取优惠券详情
   getDetail: (id: number) =>
     api.get(`/admin/coupons/${id}`),
+
+  getByCode: (code: string) =>
+    api.get<unknown, unknown>(`/admin/coupons/by-code/${encodeURIComponent(code)}`),
   
   // 更新优惠券状态
   updateStatus: (id: number, status: number) =>
