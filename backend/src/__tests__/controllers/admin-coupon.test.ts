@@ -51,7 +51,42 @@ function mockReq(overrides: any = {}) {
 
 beforeEach(() => jest.clearAllMocks());
 
+const validCreation = {
+  code: 'NEW2024', name: '新用户券', type: 1, discount_value: 10, total_quantity: 100,
+  start_time: '2026-01-01', end_time: '2026-12-31',
+};
+
 describe('createCoupon', () => {
+  test('代码预查冲突返回 409，不插入或记录创建日志', async () => {
+    CouponModel.findByCode.mockResolvedValue({ coupon_id: 1 });
+    const res = mockRes();
+    await AdminCouponController.createCoupon(mockReq({ body: validCreation }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ success: false, message: '优惠券代码已存在' });
+    expect(CouponModel.create).not.toHaveBeenCalled();
+    expect(logAdminAction).not.toHaveBeenCalled();
+  });
+
+  test('代码插入竞争的唯一键冲突返回 409，不误报服务器故障', async () => {
+    CouponModel.findByCode.mockResolvedValue(null);
+    CouponModel.create.mockRejectedValue(Object.assign(new Error('duplicate'), { code: 'ER_DUP_ENTRY' }));
+    const res = mockRes();
+    await AdminCouponController.createCoupon(mockReq({ body: validCreation }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ success: false, message: '优惠券代码已存在' });
+    expect(logAdminAction).not.toHaveBeenCalled();
+  });
+
+  test('其他插入故障仍返回 500，不误报代码冲突', async () => {
+    CouponModel.findByCode.mockResolvedValue(null);
+    CouponModel.create.mockRejectedValue(Object.assign(new Error('database unavailable'), { code: 'ER_LOCK_WAIT_TIMEOUT' }));
+    const res = mockRes();
+    await AdminCouponController.createCoupon(mockReq({ body: validCreation }), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ success: false, message: '创建优惠券失败' });
+    expect(logAdminAction).not.toHaveBeenCalled();
+  });
+
   test('创建成功时记录 CREATE_COUPON 审计日志', async () => {
     CouponModel.findByCode.mockResolvedValue(null);
     CouponModel.create.mockResolvedValue(42);

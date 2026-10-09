@@ -41,10 +41,12 @@ router.use(adminAuthMiddleware);
  *       200:
  *         description: 创建成功，返回 coupon_id
  *       400:
- *         description: 参数不完整 / 类型无效 / 代码已存在
+ *         description: 参数不完整 / 类型无效
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       409:
+ *         description: 优惠券代码已存在，包括其他管理员并发创建冲突
  *       403:
  *         description: 权限不足
  */
