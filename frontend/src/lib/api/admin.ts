@@ -2,6 +2,7 @@ import api from './client';
 import type { Money, Product } from './catalog';
 import type { Order, Coupon, CouponPagination } from './orders';
 import type { SpecTranslations } from '@/lib/product-content';
+import { adminSessionLogout, adminSignIn, type AdminAuthAttempt, type AdminAuthResult } from '@/lib/admin-auth-flow';
 
 // 管理后台
 export interface AdminSKU {
@@ -31,8 +32,18 @@ export interface AdminSKUList {
   skus: AdminSKU[];
 }
 export const adminApi = {
+  login: (data: { username: string; password: string }, attempt: AdminAuthAttempt) => adminSignIn(async () => {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/admin/login`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok) throw Object.assign(new Error('Administrator sign-in rejected'), { response: { status: response.status, data: result } });
+    return result as AdminAuthResult;
+  }, () => api.post('/admin/logout'), attempt),
   /** Clears the administrator's httpOnly session cookie; works after the session has expired too. */
-  logout: () => api.post<unknown, { message: string }>('/admin/logout'),
+  logout: () => adminSessionLogout(() => api.post('/admin/logout')),
 };
 
 export const adminSKUApi = {

@@ -4,12 +4,15 @@ import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
-import { startAdminSession } from '@/lib/admin-session';
+import { getAdminSessionId, startAdminSession } from '@/lib/admin-session';
+import { adminApi } from '@/lib/api';
+import { adminAuthAttempt, AdminAuthAbandoned, AdminAuthUnconfirmed, type AdminAuthAttempt } from '@/lib/admin-auth-flow';
+import { requestFailure } from '@/lib/api-error';
 
 export default function AdminLoginPage() {
   const { t } = useI18n();
@@ -19,39 +22,41 @@ export default function AdminLoginPage() {
     password: ''
   });
   const [loading, setLoading] = useState(false);
+  const mounted = useRef(true), mutation = useRef<object | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; mutation.current = null; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!mounted.current || mutation.current) return;
+    const operation = {}; mutation.current = operation;
+    const alive = () => mounted.current && mutation.current === operation;
+    let attempt: AdminAuthAttempt | undefined;
+    let publishedSessionId: string | null = null;
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/admin/login`, {
-        method: 'POST',
-        // Without credentials a cross-origin API's Set-Cookie would be discarded.
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: JSON.stringify(formData)
+      attempt = adminAuthAttempt(alive, data => {
+        publishedSessionId = startAdminSession(data.admin);
       });
-
-      const data = await response.json();
-
-      // The API has set the httpOnly session cookie; record this sign-in and who it belongs to.
-      if (response.ok && data?.admin && typeof data.admin === 'object') {
-        startAdminSession(data.admin);
-
+      await adminApi.login(formData, attempt);
+      if (alive() && publishedSessionId && getAdminSessionId() === publishedSessionId) {
         toast.success(translate('登录成功'));
         router.push('/admin/dashboard');
-      } else {
-        toast.error(translate(data?.error || '登录失败'));
       }
     } catch (error) {
-      logger.error('登录失败:', error);
-      toast.error(translate('登录失败，请稍后重试'));
+      if (!alive() || error instanceof AdminAuthAbandoned) return;
+      if (error instanceof AdminAuthUnconfirmed) {
+        if (error.report) toast.error(translate(error.message));
+        return;
+      }
+      if (!attempt?.current()) return;
+      logger.error('管理员登录请求失败');
+      toast.error(translate(requestFailure(error).response?.data?.error || '登录失败'));
     } finally {
-      setLoading(false);
+      if (alive()) { mutation.current = null; setLoading(false); }
     }
   };
 

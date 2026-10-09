@@ -1,6 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminLoginPage from '@/app/admin/login/page';
+import api from '@/lib/api';
 import { render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -15,8 +16,11 @@ vi.mock('react-hot-toast', () => {
 const admin = { admin_id: 1, username: 'root', role_name: '管理员' };
 type Respond = () => Promise<Partial<Response>>;
 const json = (status: number, body: unknown): Respond => async () => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const originalAdapter = api.defaults.adapter;
+afterEach(() => { api.defaults.adapter = originalAdapter; });
 
 function setup(respond: Respond) {
+  api.defaults.adapter = async config => ({ config, status: 200, statusText: 'OK', headers: {}, data: { message: '已退出登录' } });
   // The page falls back to the same-origin API when no backend address is configured.
   vi.stubEnv('NEXT_PUBLIC_API_URL', '');
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => (await respond()) as Response);
@@ -65,10 +69,10 @@ describe('admin login', () => {
 
   it.each([
     ['a rejection', json(401, { error: '用户名或密码错误' }), '用户名或密码错误'],
-    ['a success without an administrator', json(200, { token: 'admin-signed-token' }), '登录失败'],
-    ['a success with a malformed administrator', json(200, { admin: 'root' }), '登录失败'],
-    ['a non-JSON gateway error', async () => ({ ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } }), '登录失败，请稍后重试'],
-    ['an unreachable server', async () => { throw new TypeError('Failed to fetch'); }, '登录失败，请稍后重试'],
+    ['a success without an administrator', json(200, { token: 'admin-signed-token' }), '管理员登录结果尚未确认，请重新登录'],
+    ['a success with a malformed administrator', json(200, { admin: 'root' }), '管理员登录结果尚未确认，请重新登录'],
+    ['a non-JSON gateway error', async () => ({ ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } }), '管理员登录结果尚未确认，请重新登录'],
+    ['an unreachable server', async () => { throw new TypeError('Failed to fetch'); }, '管理员登录结果尚未确认，请重新登录'],
   ] as [string, Respond, string][])('never stores a session after %s and lets the form be used again', async (_, respond, message) => {
     setup(respond);
 

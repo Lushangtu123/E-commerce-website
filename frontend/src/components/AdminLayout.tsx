@@ -53,7 +53,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     clearAdminSession(sessionId);
     setAdmin(null);
     setSessionId(null);
-    // The page cannot remove the httpOnly session cookie itself; the client-side navigation lets this request finish.
+    // Login waits for this queued cookie cleanup even after the layout has unmounted.
     adminApi.logout().catch(error => logger.error('退出登录失败:', error));
     router.push('/admin/login');
   };

@@ -14,6 +14,8 @@ export const adminTranslations: Record<string, string> = {
   '用户状态': 'User status',
   '搜索用户': 'Search users',
   '管理员登录': 'Admin sign in',
+  '管理员登录结果尚未确认，请重新登录': 'The administrator sign-in result is unconfirmed. Please sign in again.',
+  '管理员会话清理尚未确认，请重试登录': 'Administrator session cleanup is unconfirmed. Retry sign-in to clear the session.',
   '电商平台后台管理系统': 'Store administration',
   '登录失败，请稍后重试': 'Sign in failed. Please try again later.',
   '请使用部署时配置的管理员账号和密码登录。': 'Sign in with the administrator account and password configured for this deployment.',
