@@ -15,6 +15,21 @@ import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 
+function validCartItems(value: unknown): value is CartItem[] {
+  if (!Array.isArray(value)) return false;
+  const keys = new Set<string>();
+  return value.every(item => {
+    if (!item || !Number.isSafeInteger(item.cart_id) || item.cart_id < 1 || !Number.isSafeInteger(item.product_id) || item.product_id < 1 ||
+      !Number.isInteger(item.quantity) || item.quantity < 1 || !Number.isInteger(item.stock) || item.stock < 0 || typeof item.title !== 'string' ||
+      !['string', 'number'].includes(typeof item.price) || !Number.isFinite(Number(item.price)) || Number(item.price) < 0 ||
+      (item.sku_id != null && (!Number.isSafeInteger(item.sku_id) || item.sku_id < 1)) ||
+      (item.available !== undefined && ![true, false, 0, 1].includes(item.available))) return false;
+    const key = cartItemKey(item);
+    if (keys.has(key)) return false;
+    keys.add(key); return true;
+  });
+}
+
 export default function CartPage() {
   const router = useRouter();
   const { t } = useI18n();
@@ -38,13 +53,15 @@ export default function CartPage() {
   // Lock writes synchronously, including clicks received before the disabled controls render.
   const cartMutation = useRef<object | null>(null);
   const [updatingSession, setUpdatingSession] = useState<string | null>(null);
+  const cartRecovery = useRef<string | null>(null);
+  const [unconfirmedCartSession, setUnconfirmedCartSession] = useState<string | null>(null);
   const mounted = useRef(true);
   const [addressResult, setAddressResult] = useState<{ key: string; addresses: ShippingAddress[]; error?: string } | null>(null);
   const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
   const [addressRevision, setAddressRevision] = useState(0);
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const hasUnconfirmedCheckout = unconfirmedSession === sessionKey;
-  const cartUpdating = updatingSession === sessionKey;
+  const cartUpdating = updatingSession === sessionKey || unconfirmedCartSession === sessionKey;
   const cartError = cartFailure?.key === sessionKey ? cartFailure.message : null;
   const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
   const addressLoading = addressResult?.key !== sessionKey;
@@ -90,6 +107,8 @@ export default function CartPage() {
       submittingRequest.current = false;
       cartMutation.current = null;
       setUpdatingSession(null);
+      cartRecovery.current = null;
+      setUnconfirmedCartSession(null);
     }
     previousSession.current = session;
     pendingCheckout.current = readPendingCheckout(session);
@@ -165,13 +184,21 @@ export default function CartPage() {
       setCartFailure(null);
       const data = await cartApi.list();
       if (!isCurrentSession() || cartLoadRequest.current !== request) return;
+      const recovering = cartRecovery.current === sessionKey;
+      if (recovering && !validCartItems(data.items)) throw new Error('invalid cart recovery');
       setItems(data.items || []);
-      setSelectedItems((data.items || []).filter(isAvailable).map(cartItemKey));
+      const availableKeys = (data.items || []).filter(isAvailable).map(cartItemKey);
+      setSelectedItems(previous => recovering ? previous.filter(key => availableKeys.includes(key)) : availableKeys);
+      if (recovering) {
+        cartRecovery.current = null; setUnconfirmedCartSession(null);
+        setQuoteRevision(value => value + 1);
+        toast.success(translate('购物车已重新同步，请核对商品和数量'));
+      }
     } catch (error) {
       if (!isCurrentSession() || cartLoadRequest.current !== request) return;
-      setItems([]);
-      setSelectedItems([]);
-      setCartFailure({ key: sessionKey, message: '加载购物车失败，请重试' });
+      const recovering = cartRecovery.current === sessionKey;
+      if (!recovering) { setItems([]); setSelectedItems([]); }
+      setCartFailure({ key: sessionKey, message: recovering ? '购物车操作结果尚未确认，请重新加载后再操作' : '加载购物车失败，请重试' });
       logger.error('加载购物车失败:', error);
       toast.error(translate('加载购物车失败'));
     } finally {
@@ -182,8 +209,18 @@ export default function CartPage() {
     }
   };
 
+  const handleCartFailure = async (error: unknown, message: string) => {
+    if (!isCurrentSession()) return;
+    const status = requestFailure(error).response?.status;
+    if (status === undefined || status === 408 || status === 429 || status === 409 || status >= 500) {
+      cartRecovery.current = sessionKey; setUnconfirmedCartSession(sessionKey);
+      setQuoteResult(null);
+      await loadCart();
+    } else toast.error(translate(message));
+  };
+
   const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
-    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
+    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
 
     const operation = {};
     cartMutation.current = operation;
@@ -196,8 +233,8 @@ export default function CartPage() {
         if (!isCurrentSession()) return;
         setItems(refreshed.items || []);
       } else updateQuantity(item.product_id, newQuantity, item.sku_id);
-    } catch {
-      if (isCurrentSession()) toast.error(translate('更新失败'));
+    } catch (error) {
+      await handleCartFailure(error, '更新失败');
     } finally {
       if (cartMutation.current === operation) {
         cartMutation.current = null;
@@ -207,7 +244,7 @@ export default function CartPage() {
   };
 
   const handleRemove = async (item: CartItem) => {
-    if (submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
+    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
     const operation = {};
     cartMutation.current = operation;
     setUpdatingSession(sessionKey);
@@ -217,8 +254,8 @@ export default function CartPage() {
       removeItem(item.product_id, item.sku_id);
       setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
       toast.success(translate('已删除'));
-    } catch {
-      if (isCurrentSession()) toast.error(translate('删除失败'));
+    } catch (error) {
+      await handleCartFailure(error, '删除失败');
     } finally {
       if (cartMutation.current === operation) {
         cartMutation.current = null;
@@ -228,7 +265,7 @@ export default function CartPage() {
   };
 
   const handleSelectAll = () => {
-    if (submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
+    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
     if (orderItems.length === availableItems.length) {
       setSelectedItems([]);
     } else {
@@ -237,12 +274,13 @@ export default function CartPage() {
   };
 
   const handleToggleSelect = (item: CartItem) => {
-    if (!isAvailable(item) || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
+    if (!isAvailable(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
     const key = cartItemKey(item);
     setSelectedItems(selected => selected.includes(key) ? selected.filter(id => id !== key) : [...selected, key]);
   };
 
   const handleCheckout = async () => {
+    if (cartRecovery.current === sessionKey) return;
     if (pendingCheckout.current?.sessionKey === sessionKey) return;
     if (orderItems.length === 0) {
       toast.error(translate('请选择要结算的商品'));
