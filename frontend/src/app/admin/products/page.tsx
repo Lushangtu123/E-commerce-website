@@ -19,7 +19,7 @@ import { localizedText } from '@/lib/product-content';
 import { clearPendingProductCreation, readPendingProductCreation, storePendingProductCreation, type PendingProductCreation } from '@/lib/pending-product-creation';
 import { inventoryUpdateAcknowledged, unknownInventoryWrite, validProductSnapshot } from '@/lib/admin-inventory-write';
 
-type EditProductForm = ProductFormValues & { product_id: number; previous: ProductFormValues };
+type EditProductForm = ProductFormValues & { product_id: number; has_sku: boolean; previous: ProductFormValues };
 type Recovery = { sessionId: string | null; checking: boolean };
 
 export default function AdminProductsPage() {
@@ -343,7 +343,7 @@ export default function AdminProductsPage() {
       main_image: product.main_image || '',
       status: product.status
     };
-    setEditProduct({ ...values, product_id: product.product_id, previous: values });
+    setEditProduct({ ...values, product_id: product.product_id, has_sku: product.has_sku === 1 || product.has_sku === true, previous: values });
     setShowEditModal(true);
   };
 
@@ -543,10 +543,16 @@ export default function AdminProductsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{product.price ? Number(product.price).toFixed(2) : '0.00'}
+                        {product.has_sku === 1 || product.has_sku === true ? <>
+                          <div>{product.sku_min_price == null ? t('无启用规格') : t('规格起价 ¥{price}', { price: Number(product.sku_min_price).toFixed(2) })}</div>
+                          <div className="text-xs font-normal text-gray-500 mt-1">{t('基础价格 ¥{price}', { price: Number(product.price).toFixed(2) })}</div>
+                        </> : <>¥{product.price ? Number(product.price).toFixed(2) : '0.00'}</>}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {product.stock}
+                        {product.has_sku === 1 || product.has_sku === true ? <>
+                          <div>{t('可售库存 {stock}', { stock: product.sellable_stock ?? 0 })}</div>
+                          <div className="text-xs text-gray-500 mt-1">{t('基础库存 {stock}', { stock: product.stock })}</div>
+                        </> : product.stock}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {product.sales_count || 0}
@@ -625,8 +631,9 @@ export default function AdminProductsPage() {
         {formScope === scopeKey && showEditModal && editProduct && (
           <AdminProductForm idPrefix="editProduct" heading={t('编辑商品')} submitLabel={t('保存修改')}
             values={editProduct} categories={categories} busy={busy}
+            variantProductId={editProduct.has_sku ? editProduct.product_id : undefined}
             categoriesLoading={categoriesLoading} categoriesFailed={!!categoriesQuery.error} onRetryCategories={reloadCategories}
-            onChange={values => updateEditProduct({ ...values, product_id: editProduct.product_id, previous: editProduct.previous })}
+            onChange={values => updateEditProduct({ ...values, product_id: editProduct.product_id, has_sku: editProduct.has_sku, previous: editProduct.previous })}
             onClose={() => { setShowEditModal(false); setEditProduct(null); }} onSubmit={handleEditProduct} />
         )}
       </div>

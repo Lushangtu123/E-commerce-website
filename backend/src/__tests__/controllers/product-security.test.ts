@@ -23,7 +23,10 @@ const sql = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (getPool as jest.Mock).mockReturnValue({ query: sql });
+  (getPool as jest.Mock).mockReturnValue({ query: sql, getConnection: jest.fn().mockResolvedValue({
+    execute: async (statement: string, values: unknown[]) => [(await (query as jest.Mock)(statement, values))],
+    beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
+  }) });
   sql.mockImplementation(async (statement: string) => {
     if (statement.includes('FROM admins')) return [[{ admin_id: 1, username: 'editor', role_id: 2, status: 1 }]];
     if (statement.includes('FROM role_permissions')) return [[{ permission_code: 'product:create' }, { permission_code: 'product:edit' }]];

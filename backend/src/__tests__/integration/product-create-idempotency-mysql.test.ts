@@ -39,10 +39,12 @@ integration('real MySQL product creation retry identity', () => {
     await db.query(source.match(/`(CREATE TABLE IF NOT EXISTS products[\s\S]*?)`/)![1]);
     await db.query('CREATE TABLE admins(admin_id BIGINT PRIMARY KEY, status TINYINT DEFAULT 1)');
     await db.query('INSERT INTO admins(admin_id) VALUES(1),(2)');
+    const adminSource = fs.readFileSync(path.join(__dirname, '../../database/admin-migrate.ts'), 'utf8');
+    await db.query(adminSource.match(/`(\s*CREATE TABLE IF NOT EXISTS admin_logs[\s\S]*?)`/)![1]);
     await migrateProductCreations(db);
   });
   afterAll(async () => { if (db) await db.end(); if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } } });
-  beforeEach(async () => { await db.query('DELETE FROM products'); jest.clearAllMocks(); });
+  beforeEach(async () => { await db.query('DELETE FROM admin_logs'); await db.query('DELETE FROM products'); jest.clearAllMocks(); });
   const rows = async () => (await db.query<RowDataPacket[]>('SELECT product_id,title,stock,create_key FROM products ORDER BY product_id'))[0];
   test('same key concurrent requests and lost-response retries create one product', async () => {
     const receipts = await Promise.all([create(), create(), create()]);
@@ -68,6 +70,8 @@ integration('real MySQL product creation retry identity', () => {
     const retry = await request(app).post('/products').send({ ...input, create_key: key }).expect(201);
     expect(first.body.product_id).toBe(retry.body.product_id); expect(retry.body.replayed).toBe(true);
     expect(await rows()).toHaveLength(1); expect(afterProductWrite).toHaveBeenCalledTimes(1);
+    const [logs] = await db.query<RowDataPacket[]>('SELECT action,resource_id FROM admin_logs');
+    expect(logs).toEqual([{ action: 'CREATE_PRODUCT', resource_id: String(first.body.product_id) }]);
   });
   test('rejects invalid request IDs, retains legacy API compatibility', async () => {
     for (const create_key of ['', 'invalid', null, 1]) await request(app).post('/products').send({ ...input, create_key }).expect(400);

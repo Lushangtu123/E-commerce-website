@@ -17,7 +17,8 @@ integration('deleted product publication boundaries', () => {
   const response = () => ({ body: undefined as any, statusCode: 200,
     status(code: number) { this.statusCode = code; return this; }, json(body: any) { this.body = body; return this; } });
   async function call(handler: any, body = {}, input = {}) {
-    const res = response(); await handler({ params: { productId: '1', id: '1' }, body, query: input } as any, res as any); return res;
+    const res = response(); await handler({ params: { productId: '1', id: '1' }, body, query: input,
+      admin: { adminId: 1 }, get: () => 'fixture', ip: '127.0.0.1' } as any, res as any); return res;
   }
   beforeAll(async () => {
     server = mysql.createPool(options); await server.query(`CREATE DATABASE ${database} CHARACTER SET utf8mb4`); created = true;
@@ -25,14 +26,20 @@ integration('deleted product publication boundaries', () => {
     (query as jest.Mock).mockImplementation(async (sql, values) => (await db.query(sql, values))[0]);
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
-      if (['products', 'categories', 'orders', 'order_items'].includes(match[2])) await db.query(match[1]);
+      if (['products', 'categories', 'orders', 'order_items', 'product_skus'].includes(match[2])) await db.query(match[1]);
     }
+    const adminSource = fs.readFileSync(path.join(__dirname, '../../database/admin-migrate.ts'), 'utf8');
+    for (const match of adminSource.matchAll(/`(\s*CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
+      if (['roles', 'admins', 'admin_logs'].includes(match[2])) await db.query(match[1]);
+    }
+    await db.query("INSERT INTO admins(admin_id,username,password_hash) VALUES(1,'fixture','fixture')");
   });
   afterAll(async () => {
     if (db) await db.end();
     if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } }
   });
   beforeEach(async () => {
+    await db.query('DELETE FROM admin_logs');
     await db.query('DELETE FROM products');
     await db.query("INSERT INTO products(product_id,title,price,stock,status) VALUES(1,'Deleted',10,5,-1),(2,'Active',20,6,1),(3,'Disabled',30,7,0)");
   });

@@ -72,12 +72,14 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Dashboard revenue, average paid order value and top-product sales exclude demo payments. Operational order counts retain them; historical orders without a payment method remain included. Date-based reports continue to group by order creation date.
 - Top-product revenue allocates each order's actual paid amount across its historical item subtotals. Allocation uses exact cents, gives spare cents to the largest fractional shares, and breaks ties by item ID before grouping or ranking products. Legacy all-zero subtotals use equal weights per line. Shares belonging to missing products or orders without lines cannot appear in the product ranking, so its visible total can be lower than dashboard revenue.
 - **Product management** - Create, edit, bulk list/delist, SKU management
+- Variant products show enabled SKU stock and the minimum enabled SKU price alongside labelled base fields. Their base price and stock are read-only in the product editor; use variant management to change selling prices and inventory.
 - **Bilingual product content** - Optional English names, descriptions and specification labels, with Chinese fallback for each missing translation. Cart, saved products and new order snapshots follow the selected language.
 - **Order management** - Order list, status updates, shipping
 - Order management and user-detail order lists count purchased units, including multiple pieces of one product or variant; historical orders without item rows show zero.
 - **User management** - User list and spending statistics
 - **Coupon management** - Create coupons and manage their status
 - **Audit log** - Records administrator actions
+- Product, SKU, coupon and user-status mutations commit with their audit record on the same MySQL connection. Audit failures roll back the mutation, including session revocation. Retrying a keyed product creation returns its receipt without another audit; product cache and search refresh run after commit.
 - **Access control** - JWT authentication and per-action permission checks
 
 ### Technical Features
@@ -343,6 +345,7 @@ The "Edit profile" entry in the account centre opens `/profile/settings`, which 
 - `GET /api/addresses` - Get the user's shipping addresses, default address first
 - `POST /api/addresses` - Add a complete address; the first one becomes the default, up to 20 per user
 - `PUT /api/addresses/:id` - Edit a complete address; `is_default: true` makes it the default
+- `PUT /api/addresses/:id/default` - Set the user's default address with an empty object; preserves shipping details saved in another tab and serializes with address edits
 - `DELETE /api/addresses/:id` - Delete one of the user's addresses; deleting the default selects another one automatically
 
 A complete address has six non-empty strings, `receiver_name`, `phone`, `province`, `city`, `district` and `detail_address`, plus an optional boolean `is_default`; it cannot be assigned to another user. Addresses are managed under "Shipping addresses" in the account centre, and checkout requires choosing one.

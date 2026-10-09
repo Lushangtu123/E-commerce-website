@@ -172,6 +172,16 @@ export class AddressModel {
     });
   }
 
+  /** A default-only action must never replay another tab's stale shipping details. */
+  static async setDefault(userId: number, addressId: number): Promise<boolean> {
+    checkId(addressId);
+    return transaction(userId, async (connection, addresses) => {
+      if (!addresses.some(row => row.address_id === addressId)) throw new AddressError('收货地址不存在', 404);
+      await chooseDefault(connection, userId, addresses, addressId, true);
+      return true;
+    });
+  }
+
   static async remove(userId: number, addressId: number): Promise<boolean> {
     checkId(addressId);
     return transaction(userId, async (connection, addresses) => {

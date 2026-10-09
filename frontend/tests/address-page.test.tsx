@@ -16,7 +16,7 @@ vi.mock('react-hot-toast', () => {
   const toast = { error: record, success: record };
   return { default: toast, toast };
 });
-vi.mock('@/lib/api', () => ({ addressApi: { list: vi.fn(), create: vi.fn(async () => ({ address_id: 88, creation_status: 'created' })), update: vi.fn(async () => ({})), remove: vi.fn(async () => ({})) } }));
+vi.mock('@/lib/api', () => ({ addressApi: { list: vi.fn(), create: vi.fn(async () => ({ address_id: 88, creation_status: 'created' })), update: vi.fn(async () => ({})), setDefault: vi.fn(async () => ({})), remove: vi.fn(async () => ({})) } }));
 
 type List = { addresses: ShippingAddress[] };
 const customer = { user_id: 1, username: 'one', email: 'one@test' };
@@ -41,6 +41,7 @@ const form = () => document.querySelector('form')!;
 const writes = () => [
   ...vi.mocked(addressApi.create).mock.calls.map(([body]) => ({ method: 'create', body })),
   ...vi.mocked(addressApi.update).mock.calls.map(([id, body]) => ({ method: 'update', id, body })),
+  ...vi.mocked(addressApi.setDefault).mock.calls.map(([id]) => ({ method: 'setDefault', id })),
   ...vi.mocked(addressApi.remove).mock.calls.map(([id]) => ({ method: 'remove', id })),
 ];
 
@@ -64,6 +65,19 @@ describe('address management', () => {
     for (const name of fields) fireEvent.change(input(name), { target: { value: address[name] } });
   };
   const unavailable = (status?: number) => Object.assign(new Error('network unavailable'), status ? { response: { status, data: { error: '暂时不可用' } } } : {});
+
+  it('sets default with only the address ID and preserves a newer address from another tab', async () => {
+    let latest = { ...address };
+    await setup(async () => ({ addresses: [{ ...latest }] }));
+    latest = { ...latest, receiver_name: 'New Receiver', phone: '13900139000', detail_address: 'New street' };
+    vi.mocked(addressApi.setDefault).mockImplementation(async () => { latest = { ...latest, is_default: true }; return {} as never; });
+    await click('设为默认');
+    expect(addressApi.setDefault).toHaveBeenCalledExactlyOnceWith(41);
+    expect(addressApi.update).not.toHaveBeenCalled();
+    expect(screen.getByText(/New Receiver/)).toBeInTheDocument();
+    expect(screen.getByText(/New street/)).toBeInTheDocument();
+    expect(screen.getByText('默认地址')).toBeInTheDocument();
+  });
 
   it('keeps the original creation UUID and payload after an unknown result and recovers explicitly after refresh', async () => {
     const { view } = await setup();
@@ -307,7 +321,7 @@ describe('address management', () => {
     let reads = 0;
     await setup(async () => ({ addresses: ++reads === 1 ? [address] : action === '删除' ? [] : [{ ...address, is_default: true }] }));
     vi.mocked(addressApi.remove).mockRejectedValue(unavailable());
-    vi.mocked(addressApi.update).mockRejectedValue(unavailable());
+    vi.mocked(addressApi.setDefault).mockRejectedValue(unavailable());
     await click(action);
     expect(addressApi.list).toHaveBeenCalledTimes(2);
     expect(writes()).toHaveLength(1);
@@ -320,15 +334,15 @@ describe('address management', () => {
   it('keeps writes locked if canonical GET resolves with a malformed address list', async () => {
     let reads = 0;
     await setup(async () => ++reads === 1 ? { addresses: [address] } : ({ addresses: 'invalid' } as never));
-    vi.mocked(addressApi.update).mockRejectedValue(unavailable());
+    vi.mocked(addressApi.setDefault).mockRejectedValue(unavailable());
     await click('设为默认');
     await click('重新核对地址');
-    expect(addressApi.update).toHaveBeenCalledTimes(1);
+    expect(addressApi.setDefault).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: '新增地址' })).toBeDisabled();
     expect(notifications).toEqual([]);
   });
 
-  it('adds, edits, sets default and deletes with the owned full fields only', async () => {
+  it('adds and edits owned fields, sets default by ID and deletes', async () => {
     await setup();
     expect(screen.getByText(/Receiver/)).toBeInTheDocument();
 
@@ -348,7 +362,8 @@ describe('address management', () => {
     expect(body).not.toHaveProperty('address_id');
 
     await click('设为默认');
-    expect(vi.mocked(addressApi.update).mock.calls[1][1]).toMatchObject({ is_default: true, receiver_name: 'Receiver' });
+    expect(addressApi.setDefault).toHaveBeenCalledExactlyOnceWith(41);
+    expect(addressApi.update).toHaveBeenCalledTimes(1);
 
     await click('删除');
     expect(addressApi.remove).toHaveBeenCalledWith(41);
@@ -409,7 +424,7 @@ describe('address management', () => {
   it.each(lateCases)('neither refreshes nor reports a late $outcome after a $change change', async ({ change, outcome }) => {
     const pending = deferred();
     const { view } = await setup();
-    vi.mocked(addressApi.update).mockReturnValue(pending.promise as never);
+    vi.mocked(addressApi.setDefault).mockReturnValue(pending.promise as never);
     fireEvent.click(screen.getByRole('button', { name: '设为默认' }));
 
     if (change === 'account') {
@@ -453,7 +468,7 @@ describe('address management', () => {
 
   it('refreshes the list after a successful change', async () => {
     let defaulted = false;
-    vi.mocked(addressApi.update).mockImplementation(async () => { defaulted = true; return {} as never; });
+    vi.mocked(addressApi.setDefault).mockImplementation(async () => { defaulted = true; return {} as never; });
     await setup(async () => ({ addresses: [{ ...address, is_default: defaulted }] }));
     expect(screen.queryByText('默认地址')).not.toBeInTheDocument();
 
@@ -467,7 +482,7 @@ describe('address management', () => {
   it('sends one change for a double click or a double submit', async () => {
     const pending = deferred();
     await setup();
-    vi.mocked(addressApi.update).mockReturnValue(pending.promise as never);
+    vi.mocked(addressApi.setDefault).mockReturnValue(pending.promise as never);
 
     const setDefault = screen.getByRole('button', { name: '设为默认' });
     clickTogether(setDefault, setDefault);
@@ -496,7 +511,7 @@ describe('address management', () => {
     const previous = deferred();
     const next = deferred();
     await setup();
-    vi.mocked(addressApi.update).mockReturnValueOnce(previous.promise as never).mockReturnValueOnce(next.promise as never);
+    vi.mocked(addressApi.setDefault).mockReturnValueOnce(previous.promise as never).mockReturnValueOnce(next.promise as never);
     fireEvent.click(screen.getByRole('button', { name: '设为默认' }));
 
     switchAccount();

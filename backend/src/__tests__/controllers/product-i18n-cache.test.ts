@@ -55,7 +55,7 @@ test('热榜跳过两个旧版本并使用英文字段缓存', async () => {
 test('后台和结算写入清除新旧详情及热榜版本', async () => {
   const keys = ['product:1', 'product:v2:1', 'product:v3:1', 'products:hot', 'products:hot:v2', 'products:hot:v3', 'products:hot:v4'];
   for (const write of [
-    () => afterProductWrite(req, [1], 'UPDATE_PRODUCT', 'product', '1', 'test'),
+    () => afterProductWrite([1]),
     () => invalidateOrderProductCache([1]),
     () => ProductController.update({ ...req, body: { title_en: 'Changed shirt' } }, response() as any),
   ]) {

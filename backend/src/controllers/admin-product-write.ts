@@ -1,21 +1,18 @@
-import { Request } from 'express';
-import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 import { getRedisClient } from '../database/redis';
 import { syncProductsToSearchIndex } from '../services/product-search.service';
 import { PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
 
-/** After a product or SKU write: drop the cached copies, refresh the search index and record the action. No failure undoes the write. */
-export async function afterProductWrite(req: Request, productIds: number[], action: string, resourceType: string, resourceId: string, description: string) {
+/** After commit, refresh derived data. Audit is already part of the write transaction. */
+export async function afterProductWrite(productIds: number[]) {
   try {
     await getRedisClient().del(...productIds.flatMap(productDetailCacheKeys), ...PRODUCT_HOT_CACHE_KEYS);
   } catch (error) {
     logger.warn({ err: error }, '商品已写入，缓存清理失败');
   }
-  await syncProductsToSearchIndex(productIds);
   try {
-    await logAdminAction((req as any).admin.adminId, action, resourceType, resourceId, description, req.ip, req.get('user-agent'));
+    await syncProductsToSearchIndex(productIds);
   } catch (error) {
-    logger.warn({ err: error }, '商品已写入，操作日志记录失败');
+    logger.warn({ err: error }, '商品已写入，搜索索引刷新失败');
   }
 }

@@ -70,5 +70,6 @@ export const addressApi = {
   list: () => api.get<unknown, { addresses: ShippingAddress[] }>('/addresses'),
   create: (data: AddressCreationInput) => api.post<unknown, AddressCreationResult>('/addresses', data),
   update: (addressId: number, data: AddressInput) => api.put(`/addresses/${addressId}`, data),
+  setDefault: (addressId: number) => api.put(`/addresses/${addressId}/default`, {}),
   remove: (addressId: number) => api.delete(`/addresses/${addressId}`),
 };
