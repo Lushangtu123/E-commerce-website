@@ -117,6 +117,12 @@ describe('admin logs', () => {
     expect(res.json).toHaveBeenCalledWith({ logs: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
   });
 
+  it('bounds audit metadata by database characters without splitting Unicode', async () => {
+    answer({});
+    await logAdminAction(1, 'UPDATE', 'order', '9', '更新订单', '1'.repeat(51), '😀'.repeat(501));
+    expect(query.mock.calls[0][1]).toEqual([1, 'UPDATE', 'order', '9', '更新订单', '1'.repeat(50), '😀'.repeat(500)]);
+  });
+
   it('records an action with the request origin, and never throws', async () => {
     answer({});
     await logAdminAction(1, 'UPDATE', 'product', '9', '更新商品', '127.0.0.1', 'jest');

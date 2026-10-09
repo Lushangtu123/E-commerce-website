@@ -11,6 +11,7 @@ import { normalizeAddress } from '../models/address.model';
 import { getPaymentSettings } from '../utils/payment-settings';
 import { syncProductsToSearchIndex } from './product-search.service';
 import { PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
+import { AdminAuditMetadata, normalizeAdminAuditMetadata } from '../utils/admin-audit-metadata';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
@@ -241,7 +242,7 @@ function normalizeShipment(input: unknown): ShipmentInput {
 export async function transitionOrder(
   orderId: number,
   targetStatus: OrderStatus,
-  options: { userId?: number; timeoutOnly?: boolean; shipment?: unknown } = {}
+  options: { userId?: number; timeoutOnly?: boolean; shipment?: unknown; adminAudit?: AdminAuditMetadata & { adminId: number } } = {}
 ): Promise<OrderTransitionResult> {
   if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new OrderError('订单ID无效');
   if (!Number.isInteger(targetStatus) || targetStatus < OrderStatus.PENDING || targetStatus > OrderStatus.CANCELLED) {
@@ -357,6 +358,18 @@ export async function transitionOrder(
       [targetStatus, ...(shipment ? [shipment.shipping_company, shipment.tracking_number] : []), orderId, order.status]
     );
     if (updated.affectedRows !== 1) throw new OrderError('订单状态已改变');
+    if (options.adminAudit) {
+      // An admin transition and its audit either both commit or both roll back,
+      // including restored inventory/coupons and payment sales counters.
+      const metadata = normalizeAdminAuditMetadata(options.adminAudit);
+      const statusText = ['待支付', '已支付', '已发货', '已完成', '已取消'][targetStatus];
+      await connection.execute(
+        `INSERT INTO admin_logs (admin_id, action, resource_type, resource_id, description, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [options.adminAudit.adminId, 'UPDATE_ORDER_STATUS', 'order', String(orderId),
+          `更新订单状态: ${order.order_no} -> ${statusText}`, metadata.ip, metadata.userAgent]
+      );
+    }
     await connection.commit();
     return { orderNo: order.order_no, productIds, changed: true };
   } catch (error) {
