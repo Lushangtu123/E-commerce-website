@@ -1,7 +1,24 @@
-import { query } from '../database/mysql';
+import { getPool, query } from '../database/mysql';
+import { createHash } from 'crypto';
+import logger from '../utils/logger';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PRODUCT_SORTS, productCreateSchema, productQuerySchema, productUpdateSchema } from '../utils/product-validation';
 import { SpecsTranslation } from '../utils/product-i18n';
+
+export class ProductCreateError extends Error {
+  constructor(message: string, public statusCode = 400) { super(message); }
+}
+const createColumns = ['title', 'title_en', 'description', 'description_en', 'category_id', 'brand', 'price', 'original_price', 'stock', 'main_image', 'images', 'specs', 'specs_en', 'status'] as const;
+const createSql = `INSERT INTO products (${createColumns.join(', ')}) VALUES (${createColumns.map(() => '?').join(', ')})`;
+const creationValues = (product: Partial<Product>) => createColumns.map(column => {
+  const value = product[column] ?? null;
+  return value != null && ['images', 'specs', 'specs_en'].includes(column) ? JSON.stringify(value) : value;
+});
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, canonical(item)]));
+  return value;
+}
 
 export interface Product {
   product_id: number;
@@ -85,15 +102,38 @@ export class ProductModel {
   static async create(product: Partial<Product>): Promise<number> {
     const { error, value } = productCreateSchema.validate(product);
     if (error) throw error;
-    const { title, title_en, description, description_en, category_id, brand, price, original_price, stock, main_image, images, specs, specs_en, status } = value;
-    
-    const result = await query<ResultSetHeader>(
-      `INSERT INTO products (title, title_en, description, description_en, category_id, brand, price, original_price, stock, main_image, images, specs, specs_en, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, title_en ?? null, description ?? null, description_en ?? null, category_id ?? null, brand ?? null, price, original_price ?? null, stock, main_image ?? null,
-        images == null ? null : JSON.stringify(images), specs == null ? null : JSON.stringify(specs), specs_en == null ? null : JSON.stringify(specs_en), status]
-    );
+    const result = await query<ResultSetHeader>(createSql, creationValues(value));
     return result.insertId;
+  }
+
+  /** An administrator's retry returns the original receipt even after the product is edited or deleted. */
+  static async createForAdmin(product: Partial<Product>, adminId: number, createKey: string): Promise<{ productId: number; replayed: boolean }> {
+    if (!Number.isSafeInteger(adminId) || adminId < 1 || typeof createKey !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(createKey)) throw new ProductCreateError('商品新增请求号无效');
+    const { error, value } = productCreateSchema.validate(product);
+    if (error) throw new ProductCreateError('商品字段或值无效，标题、价格和分类必填');
+    const key = createKey.toLowerCase();
+    const fingerprint = createHash('sha256').update(JSON.stringify(canonical(Object.fromEntries(createColumns.map(column => [column, value[column] ?? null]))))).digest('hex');
+    const connection = await getPool().getConnection();
+    try {
+      await connection.beginTransaction();
+      // Lock before the first receipt read so concurrent retries see the preceding commit.
+      const [admins] = await connection.execute<RowDataPacket[]>('SELECT admin_id FROM admins WHERE admin_id = ? AND status = 1 FOR UPDATE', [adminId]);
+      if (!admins.length) throw new ProductCreateError('管理员不可用，请重新登录', 403);
+      const [receipts] = await connection.execute<RowDataPacket[]>('SELECT product_id,create_fingerprint FROM products WHERE created_by_admin_id = ? AND create_key = ?', [adminId, key]);
+      if (receipts.length) {
+        if (receipts[0].create_fingerprint !== fingerprint) throw new ProductCreateError('商品新增请求号已用于其他内容，请先确认原商品', 409);
+        await connection.commit();
+        return { productId: Number(receipts[0].product_id), replayed: true };
+      }
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO products (${createColumns.join(', ')},created_by_admin_id,create_key,create_fingerprint) VALUES (${createColumns.map(() => '?').join(', ')},?,?,?)`,
+        [...creationValues(value), adminId, key, fingerprint]);
+      await connection.commit();
+      return { productId: result.insertId, replayed: false };
+    } catch (error) {
+      try { await connection.rollback(); } catch (rollbackError) { logger.error({ err: rollbackError }, '商品新增事务回滚失败'); }
+      throw error;
+    } finally { connection.release(); }
   }
 
   // 获取商品列表

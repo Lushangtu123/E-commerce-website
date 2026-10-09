@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const mysql = require('mysql2/promise');
 const backend = path.resolve(__dirname, '..');
+// Migrations import load-env; the fixture must keep its explicit local configuration.
+require('dotenv').config = () => ({});
 const host = process.env.MYSQL_TEST_HOST || '127.0.0.1';
 if (!['127.0.0.1', 'localhost', '::1'].includes(host)) throw new Error('E2E fixture requires a loopback database host');
 const database = `ecommerce_e2e_${process.pid}`;
@@ -62,6 +64,7 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-account-security', 'migrateAccountSecurity'], ['migrate-fulfillment', 'migrateFulfillment'],
     ['migrate-after-sales-progress', 'migrateAfterSalesProgress'],
     ['migrate-product-i18n', 'migrateProductI18n'],
+    ['migrate-product-creations', 'migrateProductCreations'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
   await pool.query("INSERT INTO categories(category_id,name) VALUES(1,'浏览器测试分类')");

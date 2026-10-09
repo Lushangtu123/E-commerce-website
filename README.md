@@ -403,6 +403,10 @@ After-sales progress requires eight nullable columns. Before deploying, back up 
 
 Coupon claims accept an optional UUID `claim_key`. The storefront persists it before sending a claim, reuses it after an uncertain response or reload, and generates a new ID after confirmation. The same user/key/coupon returns the original receipt without consuming another allocation; changing the coupon with the same key returns 409. Before pushing this feature, back up `user_coupons`, build the backend and run `npm run schema:coupon-claims`. After authorization, run `npm run migrate:coupon-claims` if needed and check again. The repeatable migration adds only nullable `claim_key` and a unique `(user_id, claim_key)` index; preserve both when rolling code back. Legacy requests without a key remain supported.
 
+Admin product creation accepts an optional UUID `create_key`. The admin page saves the original public product input and key in per-tab, per-sign-in storage before submitting. After an uncertain response, use **Retry to confirm product**; a page reload preserves the same request. The API transaction locks the administrator, compares a canonical input fingerprint and returns the original product ID. Reusing a key for different content returns 409. Product edits and soft deletion do not remove the original receipt. Legacy clients without a key remain supported.
+
+Before pushing this feature (which triggers Preview), back up `products`, build the backend and run `npm run schema:product-creations`. With authorization, run `npm run migrate:product-creations` if needed, then check again. It only adds nullable `created_by_admin_id`, `create_key`, `create_fingerprint` and unique `(created_by_admin_id, create_key)`; historical products and stock stay intact. Keep these fields and the index when rolling back code. Builds and API requests do not migrate automatically.
+
 ### Review APIs
 - `POST /api/reviews` - Create a review
 - `GET /api/reviews/product/:id` - Reviews for a product

@@ -3,6 +3,15 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '商品新增请求号无效': 'Invalid product creation request ID.',
+  '管理员不可用，请重新登录': 'The administrator account is unavailable. Sign in again.',
+  '商品新增请求号已用于其他内容，请先确认原商品': 'This request ID belongs to different product details. Confirm the original product first.',
+  '新增商品结果尚未确认，请先重试确认': 'Product creation is unconfirmed. Retry to confirm the original product.',
+  '重试确认商品': 'Retry to confirm product',
+  '无法保存商品新增请求，请允许浏览器存储后重试': 'Unable to save the product creation request. Allow browser storage and try again.',
+  '商品已保存，但未能清除本地确认记录，请重试确认': 'The product was saved, but its local confirmation record could not be cleared. Retry to confirm.',
+  '无法读取商品新增记录，请检查浏览器存储后重试': 'Unable to read the pending product creation. Check browser storage and try again.',
+  '重新读取新增记录': 'Reload pending creation',
   '用户详情': 'User details',
   '获取用户订单失败': 'Unable to load user orders',
   '创建时间': 'Created at',
