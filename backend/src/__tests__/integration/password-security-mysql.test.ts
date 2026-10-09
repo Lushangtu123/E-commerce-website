@@ -88,27 +88,27 @@ integration('isolated MySQL password revocation and single-use reset', () => {
     const currentPassword = 'legacy-password'; const newPassword = 'new-http-password';
     await db.query('UPDATE users SET password_hash = ? WHERE user_id = 7', [await bcrypt.hash(currentPassword, 4)]);
     const legacy = jwt.sign({ userId: 7 }, process.env.JWT_SECRET!);
-    const login = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: currentPassword }).expect(200);
+    const login = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password: currentPassword }).expect(200);
     expect(login.body).not.toHaveProperty('token');
     await request(app).put('/api/users/password').set('Authorization', `Bearer ${sessionOf(login)}`)
       .send({ currentPassword, newPassword }).expect(200);
     for (const token of [legacy, sessionOf(login)]) {
       await request(app).get('/api/users/profile').set('Authorization', `Bearer ${token}`).expect(401);
     }
-    await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: currentPassword }).expect(401);
-    const newLogin = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: newPassword }).expect(200);
+    await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password: currentPassword }).expect(401);
+    const newLogin = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password: newPassword }).expect(200);
     expect(jwt.verify(sessionOf(newLogin), process.env.JWT_SECRET!)).toMatchObject({ type: 'user', userId: 7, authVersion: 1 });
     await request(app).get('/api/users/profile').set('Authorization', `Bearer ${sessionOf(newLogin)}`).expect(200);
   });
   test('HTTP reset consumes the bearer secret once, revokes the customer session, and leaves another account unchanged', async () => {
     const rawToken = 'c'.repeat(64); await model().issue(7, hash(rawToken));
     const oldSession = jwt.sign({ userId: 7, type: 'user', authVersion: 0 }, process.env.JWT_SECRET!);
-    const first = await request(app).post('/api/users/password/reset').send({ token: rawToken, newPassword: 'reset-http-password' }).expect(200);
+    const first = await request(app).post('/api/users/password/reset').set('X-Requested-With', 'XMLHttpRequest').send({ token: rawToken, newPassword: 'reset-http-password' }).expect(200);
     expect(first.body).toEqual({ message: '密码已重置，请重新登录', reauthenticate: true });
-    const repeated = await request(app).post('/api/users/password/reset').send({ token: rawToken, newPassword: 'another-password' }).expect(400);
+    const repeated = await request(app).post('/api/users/password/reset').set('X-Requested-With', 'XMLHttpRequest').send({ token: rawToken, newPassword: 'another-password' }).expect(400);
     expect(repeated.body.code).toBe('INVALID_RESET_TOKEN');
     await request(app).get('/api/users/profile').set('Authorization', `Bearer ${oldSession}`).expect(401);
-    const newLogin = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password: 'reset-http-password' }).expect(200);
+    const newLogin = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password: 'reset-http-password' }).expect(200);
     expect(jwt.verify(sessionOf(newLogin), process.env.JWT_SECRET!)).toMatchObject({ userId: 7, authVersion: 1 });
     const [other] = await db.query<RowDataPacket[]>('SELECT password_hash,auth_version FROM users WHERE user_id = 8');
     expect(other).toEqual([{ password_hash: 'other-hash', auth_version: 0 }]);

@@ -76,7 +76,7 @@ integration('MySQL customer disable and migration compatibility', () => {
   });
 
   test('disable rejects login and active cookie/bearer sessions; re-enable never revives old or legacy sessions', async () => {
-    const login = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password }).expect(200);
+    const login = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password }).expect(200);
     const cookie = cookieOf(login); const token = cookie.split('=')[1];
     const legacy = jwt.sign({ userId: 7 }, process.env.JWT_SECRET!);
     for (const session of [token, legacy]) await request(app).get('/api/users/profile').set('Authorization', `Bearer ${session}`).expect(200);
@@ -89,12 +89,12 @@ integration('MySQL customer disable and migration compatibility', () => {
     const current = jwt.sign({ userId: 7, type: 'user', authVersion: 1 }, process.env.JWT_SECRET!);
     for (const session of [token, legacy, current]) await request(app).get('/api/users/profile').set('Authorization', `Bearer ${session}`).expect(401);
     await request(app).get('/api/users/profile').set('Cookie', cookie).expect(401);
-    await request(app).post('/api/users/login').send({ email: 'customer@example.test', password }).expect(403);
+    await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password }).expect(403);
 
     await request(app).put('/admin/users/7/status').send({ status: 1 }).expect(200);
     for (const session of [token, legacy]) await request(app).get('/api/users/profile').set('Authorization', `Bearer ${session}`).expect(401);
     await request(app).get('/api/users/profile').set('Cookie', cookie).expect(401);
-    const freshLogin = await request(app).post('/api/users/login').send({ email: 'customer@example.test', password }).expect(200);
+    const freshLogin = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'customer@example.test', password }).expect(200);
     const freshCookie = cookieOf(freshLogin);
     expect(jwt.verify(freshCookie.split('=')[1], process.env.JWT_SECRET!)).toMatchObject({ authVersion: 1 });
     await request(app).get('/api/users/profile').set('Cookie', freshCookie).expect(200);

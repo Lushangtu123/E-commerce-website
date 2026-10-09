@@ -71,6 +71,7 @@ test_api "服务器健康检查" "GET" "/health" "" "false"
 echo "2. 用户登录"
 echo "--------------------------------------"
 login_response=$(curl -s -i -X POST "$API_BASE/users/login" \
+    -H "X-Requested-With: XMLHttpRequest" \
     -H "Content-Type: application/json" \
     -d '{"email":"test@example.com","password":"password123"}')
 
@@ -82,6 +83,7 @@ if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
 else
     echo -e "${YELLOW}⚠ 未找到测试用户，尝试注册...${NC}"
     register_response=$(curl -s -i -X POST "$API_BASE/users/register" \
+        -H "X-Requested-With: XMLHttpRequest" \
         -H "Content-Type: application/json" \
         -d '{"username":"testuser","email":"test@example.com","password":"password123","phone":"13800138000"}')
     TOKEN=$(echo $register_response | grep -o 'customer_session=[^;]*' | head -1 | cut -d= -f2)

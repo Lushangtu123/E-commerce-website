@@ -115,7 +115,7 @@ describe('login', () => {
     app.use(express.json());
     app.post('/api/admin/login', adminLogin);
 
-    const res = await request(app).post('/api/admin/login').send({ username: 'root', password: 'admin-password' }).expect(200);
+    const res = await request(app).post('/api/admin/login').set('X-Requested-With', 'XMLHttpRequest').send({ username: 'root', password: 'admin-password' }).expect(200);
     const [cookie] = res.headers['set-cookie'] as unknown as string[];
     const token = /^admin_session=([^;]+);/.exec(cookie)![1];
     expect(jwt.verify(token, SECRET)).toMatchObject({ adminId: 9, type: 'admin' });

@@ -1,11 +1,12 @@
 import type { CookieOptions, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { getCorsOrigins } from './validate-env';
 
 export const CUSTOMER_COOKIE = 'customer_session';
 export const ADMIN_COOKIE = 'admin_session';
 /**
- * A cross-site form cannot set a custom header, and a cross-origin script that sets one is
- * stopped by the CORS preflight, so its presence proves the request came from an allowed page.
+ * A cross-site form cannot set a custom header. Cookie-changing authentication entry points
+ * also validate Origin server-side: CORS alone only controls whether a response can be read.
  */
 export const CSRF_HEADER = 'X-Requested-With';
 
@@ -43,6 +44,32 @@ export function clearSessionCookie(res: Response, name: string): void {
 /** True when an unsafe request carries the header that a cross-site page cannot send. */
 export function hasCsrfHeader(req: Request): boolean {
   return SAFE_METHODS.has(req.method) || Boolean(req.get(CSRF_HEADER));
+}
+
+/** Browsers serialize Origin as a canonical HTTP(S) origin, without credentials or a path. */
+function canonicalOrigin(value: string): URL | undefined {
+  try {
+    const origin = new URL(value);
+    return ['http:', 'https:'].includes(origin.protocol) && origin.origin === value ? origin : undefined;
+  } catch { return undefined; }
+}
+
+/** Guard cookie issuance/clearing even when the request arrived without a session cookie. */
+export function hasTrustedSessionSource(req: Request): boolean {
+  if (!hasCsrfHeader(req)) return false;
+  const value = req.get('Origin');
+  // CLI/API clients must opt in with the header. A browser declaring cross-site cannot use
+  // that exception by dropping Origin; ordinary same-origin fetches may legitimately omit it.
+  if (value === undefined) return req.get('Sec-Fetch-Site') !== 'cross-site';
+  const origin = canonicalOrigin(value);
+  if (!origin) return false;
+  const allowed = getCorsOrigins();
+  if (allowed !== true && allowed.includes(value)) return true;
+  // Same-origin deployments (including Vercel previews) need no external CORS allowlist entry.
+  if (value === `${req.protocol}://${req.get('host')}`) return true;
+  // Local development commonly serves the frontend and API on different loopback ports.
+  const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
+  return process.env.NODE_ENV !== 'production' && loopback.has(origin.hostname) && loopback.has(req.hostname);
 }
 
 export type SessionToken =

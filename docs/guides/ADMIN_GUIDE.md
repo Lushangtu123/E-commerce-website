@@ -216,7 +216,7 @@ docker-compose restart frontend
 ### 管理员认证
 
 #### POST `/api/admin/login`
-管理员登录
+管理员登录；请求必须带 `X-Requested-With: XMLHttpRequest`。有 `Origin` 时须为当前部署或 `CORS_ORIGIN` 中明确允许的规范 HTTP(S) 来源。用户名为去除首尾空白后的 1 至 50 字符，密码为 1 至 1024 字符并保留原文；拒绝其他字段。无效来源返回 403，字段错误返回 400，均不查询账户。
 
 **请求体：**
 ```json
@@ -227,9 +227,9 @@ docker-compose restart frontend
 ```
 
 **响应：**
+服务器设置 httpOnly `admin_session` Cookie，响应体不返回令牌。CLI 可保存 Cookie，或从 Cookie 值构造后续 Bearer 请求。
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "admin": {
     "admin_id": 1,
     "username": "admin",

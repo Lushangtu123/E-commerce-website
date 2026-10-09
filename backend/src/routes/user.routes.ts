@@ -57,6 +57,9 @@ router.post('/password/forgot', passwordRecoveryLimiter, UserController.forgotPa
  *   post:
  *     tags: [用户]
  *     summary: 使用一次性凭据重置密码并撤销全部现有用户会话
+ *     description: 需携带 X-Requested-With 请求头；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源。无 Origin 的 API 客户端仍需请求头。来源无效时不消费凭据或清除 Cookie。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     requestBody:
  *       required: true
  *       content:
@@ -71,6 +74,7 @@ router.post('/password/forgot', passwordRecoveryLimiter, UserController.forgotPa
  *     responses:
  *       200: { description: 密码已更新，所有旧会话和重置链接失效，必须重新登录 }
  *       400: { description: 密码无效或重置凭据已过期、已使用 }
+ *       403: { description: 请求来源校验失败 }
  *       429: { description: 超过密码验证尝试限额 }
  *       503: { description: 密码重置暂不可用 }
  */
@@ -141,7 +145,9 @@ router.get('/stats', authMiddleware, UserController.getStats);
  *   post:
  *     tags: [用户]
  *     summary: 用户注册
- *     description: 带防刷限流；用户名和邮箱去除首尾空白，密码保留原文且最多72个UTF-8字节，拒绝额外字段
+ *     description: 带防刷限流；用户名和邮箱去除首尾空白，密码保留原文且最多72个UTF-8字节，拒绝额外字段。需携带 X-Requested-With；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     requestBody:
  *       required: true
  *       content:
@@ -162,6 +168,8 @@ router.get('/stats', authMiddleware, UserController.getStats);
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       403:
+ *         description: 请求来源校验失败
  *       409:
  *         description: 用户名或邮箱已被使用，包括并发注册冲突
  *       429:
@@ -175,7 +183,9 @@ router.post('/register', authLimiter, UserController.register);
  *   post:
  *     tags: [用户]
  *     summary: 用户登录
- *     description: 带防暴力破解限流；邮箱去除首尾空白，密码保留原文，不对旧账户套用新注册密码长度规则
+ *     description: 带防暴力破解限流；邮箱去除首尾空白，密码保留原文，不对旧账户套用新注册密码长度规则。需携带 X-Requested-With；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     requestBody:
  *       required: true
  *       content:
@@ -197,6 +207,8 @@ router.post('/register', authLimiter, UserController.register);
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       403:
+ *         description: 请求来源校验失败或账号已被禁用
  *       429:
  *         description: 触发登录防爆破限流
  */
@@ -208,14 +220,14 @@ router.post('/login', authLimiter, UserController.login);
  *   post:
  *     tags: [用户]
  *     summary: 退出登录
- *     description: 清除 httpOnly 会话 Cookie。需带 X-Requested-With 请求头，防止跨站页面强制退出。
+ *     description: 清除 httpOnly 会话 Cookie。需带 X-Requested-With 请求头；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。
  *     parameters:
  *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     responses:
  *       200:
  *         description: 已清除会话 Cookie
  *       403:
- *         description: 缺少 X-Requested-With 请求头
+ *         description: 请求来源校验失败，不清除 Cookie
  */
 router.post('/logout', UserController.logout);
 

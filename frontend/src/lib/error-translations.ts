@@ -161,6 +161,8 @@ export const errorTranslations: Record<string, string> = {
   '密码必须为字符串': 'Password must be a nonempty string',
   '注册字段或值无效': 'Invalid registration fields or values',
   '登录字段或值无效': 'Invalid sign-in fields or values',
+  '管理员登录字段或值无效': 'Invalid administrator sign-in fields or values',
+  '请求来源校验失败，请刷新页面后重试': 'The request source could not be verified. Refresh the page and try again.',
   '个人资料字段或值无效': 'Invalid profile fields or values',
   '请至少提供一项个人资料修改': 'Provide at least one profile change',
   '联系电话必须为不超过20个字符的字符串或空值': 'Phone must be a string of up to 20 characters or empty',
