@@ -40,8 +40,10 @@ module.exports = async function queuedPasswordAccount({ browser, localPlatformSc
     await pageA.getByRole('button', { name: '修改密码', exact: true }).click();
     await pageA.getByRole('button', { name: '处理中...', exact: true }).waitFor({ state: 'visible' });
     assert.equal(writes, 0, 'password change is waiting for the other tab cookie lock');
+    const switchedProfile = pageA.waitForResponse(response => response.request().method() === 'GET' && response.url() === `${api}/users/profile`);
     releaseLogin(); await pageB.waitForURL('http://127.0.0.1:3100/');
     await pageB.getByText(accounts[1].username, { exact: true }).waitFor({ state: 'visible' });
+    assert.equal((await switchedProfile).status(), 200, 'the switched account profile read succeeds before checking its form');
     await pageA.waitForFunction(username => document.querySelector('input[name="username"]')?.value === username, accounts[1].username);
     await pageA.waitForFunction(username => JSON.parse(localStorage.getItem('user'))?.username === username, accounts[1].username);
     // Await the queued callback, rather than ending the test while it still owns/waits on the lock.
