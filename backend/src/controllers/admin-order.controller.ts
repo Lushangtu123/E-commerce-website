@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { OrderStatus } from '../models/order.model';
 import { transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
-import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 import { orderPathId } from '../utils/order-id';
 import { AdminQueryError, adminDatesQuerySchema, adminOrdersQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
@@ -43,7 +42,7 @@ export const getAdminOrders = async (req: Request, res: Response) => {
         o.*,
         u.username,
         u.email,
-        (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
+        (SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) FROM order_items oi WHERE oi.order_id = o.order_id) as item_count
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.user_id
        WHERE ${whereClause}
@@ -145,20 +144,9 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
     const result = await transitionOrder(orderId, status as OrderStatus, {
       shipment: status === OrderStatus.SHIPPED ? { shipping_company, tracking_number } : undefined,
+      adminAudit: { adminId: req.admin!.adminId, ip: req.ip, userAgent: req.get('user-agent') },
     });
     await invalidateOrderProductCache(result.productIds);
-    const statusText = ['待支付', '已支付', '已发货', '已完成', '已取消'][status];
-
-    // 记录操作日志
-    await logAdminAction(
-      (req as any).admin.adminId,
-      'UPDATE_ORDER_STATUS',
-      'order',
-      String(orderId),
-      `更新订单状态: ${result.orderNo} -> ${statusText}`,
-      req.ip,
-      req.get('user-agent')
-    );
 
     res.json({ message: '更新成功', status });
   } catch (error) {

@@ -1,16 +1,20 @@
 import type { AuthSession } from '@/lib/api/account';
 import { requestFailure } from '@/lib/api-error';
-import { storedSessionId, useAuthStore, type User } from '@/store/useAuthStore';
+import { CUSTOMER_CLEANUP_KEY, CustomerSessionPublicationError, storedSessionId, useAuthStore, type User } from '@/store/useAuthStore';
 
 export interface CustomerAuthAttempt {
   current: () => boolean;
+  /** Storage becoming unavailable may be reported, but never authorizes sending credentials. */
+  reportable: () => boolean;
   forget: () => void;
   commit: (session: AuthSession) => void;
 }
 
 export class CustomerAuthAbandoned extends Error {}
 export class CustomerAuthUnconfirmed extends Error {
-  constructor(public readonly report: boolean) { super('Customer sign-in result is unconfirmed'); }
+  constructor(public readonly report: boolean, public readonly reason: 'unknown' | 'cleanup' | 'storage' = 'unknown') {
+    super('Customer sign-in result is unconfirmed');
+  }
 }
 export class CustomerSessionChanged extends Error {
   constructor() { super('登录状态已变化，请刷新后重试'); }
@@ -20,17 +24,16 @@ let writing = false;
 const waiting: (() => void)[] = [];
 let authRevision = 0;
 let cleanupPending = false;
-const CLEANUP_KEY = 'customer_session_cleanup_pending';
 
 function needsCleanup() {
-  return cleanupPending || (typeof window !== 'undefined' && localStorage.getItem(CLEANUP_KEY) === '1');
+  return cleanupPending || (typeof window !== 'undefined' && localStorage.getItem(CUSTOMER_CLEANUP_KEY) === '1');
 }
 
 function recordCleanup(pending: boolean) {
   cleanupPending = pending;
   if (typeof window !== 'undefined') {
-    if (pending) localStorage.setItem(CLEANUP_KEY, '1');
-    else localStorage.removeItem(CLEANUP_KEY);
+    if (pending) localStorage.setItem(CUSTOMER_CLEANUP_KEY, '1');
+    else localStorage.removeItem(CUSTOMER_CLEANUP_KEY);
   }
 }
 
@@ -88,26 +91,44 @@ export function customerAccountWrite<T>(write: () => Promise<T>, stillInvoked: (
 }
 
 /** Called inside the queue; invoking the public queued logout here would deadlock. */
-export async function clearCustomerCookie(clear: () => Promise<unknown>): Promise<void> {
-  recordCleanup(true);
-  await clear();
-  recordCleanup(false);
+export async function clearCustomerCookie(clear: () => Promise<unknown>, canFinishCleanup: () => boolean = () => true): Promise<void> {
+  try { recordCleanup(true); } catch { /* The in-memory marker remains set; always try server cleanup. */ }
+  const value = await clear();
+  if (!value || typeof value !== 'object' || !('message' in value) || value.message !== '已退出登录') {
+    throw new Error('Invalid customer logout acknowledgement');
+  }
+  // A confirmed server logout can still leave a local profile that is unsafe to restore.
+  // Keep the marker if its final check fails or cannot read browser storage.
+  if (canFinishCleanup()) recordCleanup(false);
+}
+
+/** Remember logout before a Web Lock or earlier cookie writer makes it wait. */
+export function customerSessionLogout(clear: () => Promise<unknown>): Promise<{ message: string }> {
+  try { recordCleanup(true); } catch { /* Cleanup must still run when storage is denied. */ }
+  return customerSessionWrite(async () => {
+    await clearCustomerCookie(clear, () => !!useAuthStore.getState().sessionId || !storedSessionId() || !localStorage.getItem('user'));
+    return { message: '已退出登录' };
+  });
 }
 
 /** Snapshot both this tab and browser storage; a later session can never inherit this submission. */
 export function customerAuthAttempt(alive: () => boolean, commit: (session: AuthSession) => void): CustomerAuthAttempt {
   const state = useAuthStore.getState();
   const sessionId = state.sessionId, userId = state.user?.user_id ?? null, revision = authRevision;
-  const sameIdentity = () => {
+  let storedId: string | null, storedUserId: number | null;
+  try { storedId = storedSessionId(); storedUserId = JSON.parse(localStorage.getItem('user') || 'null')?.user_id ?? null; }
+  catch { throw new CustomerAuthUnconfirmed(true, 'cleanup'); }
+  const sameIdentity = (allowUnavailableStorage = false) => {
+    const current = useAuthStore.getState();
+    if (current.sessionId !== sessionId || (current.user?.user_id ?? null) !== userId) return false;
     try {
-      const current = useAuthStore.getState();
-      return current.sessionId === sessionId && (current.user?.user_id ?? null) === userId &&
-        storedSessionId() === sessionId && (JSON.parse(localStorage.getItem('user') || 'null')?.user_id ?? null) === userId;
-    } catch { return false; }
+      return storedSessionId() === storedId && (JSON.parse(localStorage.getItem('user') || 'null')?.user_id ?? null) === storedUserId;
+    } catch { return allowUnavailableStorage; }
   };
   return {
     current: () => alive() && authRevision === revision && sameIdentity(),
-    forget: () => { if (sameIdentity()) useAuthStore.getState().logout(); },
+    reportable: () => alive() && authRevision === revision && sameIdentity(true),
+    forget: () => { if (sameIdentity(true)) useAuthStore.getState().logout(); },
     commit,
   };
 }
@@ -123,35 +144,55 @@ function validUser(value: unknown): value is User {
 export function customerSignIn(request: () => Promise<AuthSession>, clear: () => Promise<unknown>, attempt?: CustomerAuthAttempt): Promise<AuthSession> {
   return queueWrite(async () => {
     if (attempt && !attempt.current()) throw new CustomerAuthAbandoned();
-    if (needsCleanup()) {
-      try { await clearCustomerCookie(clear); }
-      catch { throw new CustomerAuthUnconfirmed(!attempt || attempt.current()); }
-    }
+    try { if (needsCleanup()) await clearCustomerCookie(clear); }
+    catch { throw new CustomerAuthUnconfirmed(!attempt || attempt.reportable(), 'cleanup'); }
     if (attempt && !attempt.current()) throw new CustomerAuthAbandoned();
+    // A reload may outlive this JS context. Never send credentials without recording its possible cookie.
+    try { recordCleanup(true); }
+    catch { throw new CustomerAuthUnconfirmed(!attempt || attempt.reportable(), 'cleanup'); }
     let data: AuthSession;
     try {
       data = await request();
     } catch (error) {
       const status = requestFailure(error).response?.status;
       // A definite form rejection did not set a cookie. A lost or incomplete reply may have.
-      if (status && status >= 400 && status < 500 && status !== 408) throw error;
-      const report = !attempt || attempt.current();
+      if (status && status >= 400 && status < 500 && status !== 408) {
+        try { recordCleanup(false); } catch { /* The next explicit attempt can reconcile this marker. */ }
+        throw error;
+      }
+      const report = !attempt || attempt.reportable();
       try { await clearCustomerCookie(clear); } catch { /* The next sign-in must clear it before sending credentials. */ }
-      const stillCurrent = !attempt || attempt.current();
+      const stillCurrent = !attempt || attempt.reportable();
       attempt?.forget();
       throw new CustomerAuthUnconfirmed(report && stillCurrent);
     }
     const valid = !!data && typeof data === 'object' && validUser(data.user);
     if (!valid || (attempt && !attempt.current())) {
-      const report = !attempt || attempt.current();
+      const report = !attempt || attempt.reportable();
       try { await clearCustomerCookie(clear); } catch { /* Keep cleanup pending across tabs and reloads. */ }
-      const stillCurrent = !attempt || attempt.current();
+      const stillCurrent = !attempt || attempt.reportable();
       attempt?.forget();
       if (!valid) throw new CustomerAuthUnconfirmed(report && stillCurrent);
+      if (report && stillCurrent) throw new CustomerAuthUnconfirmed(true, 'storage');
       throw new CustomerAuthAbandoned();
     }
     // Publishing the profile belongs to the same lock as Set-Cookie, before the next write starts.
-    attempt?.commit(data);
+    const report = !attempt || attempt.reportable();
+    try {
+      recordCleanup(false);
+      attempt?.commit(data);
+    } catch (error) {
+      const identity = () => { try { return storedSessionId(); } catch { return undefined; } };
+      const afterFailure = identity();
+      try { await clearCustomerCookie(clear); } catch { /* The next explicit sign-in must reconcile cleanup first. */ }
+      const stillOwned = afterFailure === identity();
+      if (stillOwned && error instanceof CustomerSessionPublicationError && !error.sessionReplaced && !error.storageInvalidated) {
+        // The cookie is gone, but a readable mixed pair must also stay signed out after reload.
+        try { recordCleanup(true); } catch { /* The in-memory marker still blocks a later credential write. */ }
+      }
+      attempt?.forget();
+      throw new CustomerAuthUnconfirmed(report && stillOwned && !(error instanceof CustomerSessionPublicationError && error.sessionReplaced), 'storage');
+    }
     return data;
   });
 }

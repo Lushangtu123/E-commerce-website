@@ -7,12 +7,12 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
   const addresses = (await (await context.request.get(`${api}/addresses`)).json()).addresses;
   const existing = (await (await context.request.get(`${api}/orders?limit=1`)).json()).total;
   const created = await adminContext.request.post(`${api}/admin/products`, { headers, data: {
-    title: '用户详情订单测试商品', price: 2, stock: 11, category_id: 1, status: 1,
+    title: '用户详情订单测试商品', price: 2, stock: 33, category_id: 1, status: 1,
   } });
   assert.equal(created.status(), 201); const productId = (await created.json()).product_id;
   for (let index = existing; index < 11; index++) {
     const order = await context.request.post(`${api}/orders`, { headers, data: {
-      items: [{ product_id: productId, quantity: 1 }], shipping_address_id: addresses[0].address_id, checkout_key: randomUUID(),
+      items: [{ product_id: productId, quantity: 3 }], shipping_address_id: addresses[0].address_id, checkout_key: randomUUID(),
     } });
     assert.equal(order.status(), 201);
   }
@@ -30,6 +30,16 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
   await admin.getByText(addresses[0].receiver_name, { exact: true }).waitFor({ state: 'visible' });
   const allOrders = () => admin.getByRole('table', { name: '全部订单', exact: true });
   await allOrders().waitFor({ state: 'visible' }); assert.equal(await allOrders().getByRole('row').count(), 11);
+  assert.equal(await allOrders().getByRole('row').nth(1).getByRole('cell').nth(2).textContent(), '3');
+  const newest = (await (await adminContext.request.get(`${api}/admin/users/${user.user_id}/orders`)).json()).orders[0];
+  assert.equal(newest.item_count, 3);
+  await admin.goto('http://127.0.0.1:3100/admin/orders');
+  const quantityRow = admin.getByRole('row').filter({ hasText: newest.order_no });
+  await quantityRow.waitFor({ state: 'visible' });
+  assert.equal(await quantityRow.getByRole('cell').nth(5).textContent(), '3');
+  await admin.goto(`http://127.0.0.1:3100/admin/users/${user.user_id}`);
+  await allOrders().waitFor({ state: 'visible' });
+  console.log('PASS browser both admin order tables count three purchased units in one order line');
   await admin.getByRole('button', { name: '下一页', exact: true }).click();
   await admin.getByText('第 2 页', { exact: true }).waitFor({ state: 'visible' });
   await admin.waitForFunction(() => document.querySelector('table[aria-label="全部订单"] tbody')?.children.length === 1);

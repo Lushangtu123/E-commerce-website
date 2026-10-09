@@ -30,11 +30,11 @@ export default function FavoritesPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const { user, isHydrated, rows: favorites, loading, page, total, totalPages, limit,
-    error: loadError, reload: fetchFavorites, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation } =
+    error: loadError, reload: fetchFavorites, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation, deletionRecovery } =
     useCustomerActivity<FavoriteProduct>('favorites', favoriteApi.list, '获取收藏列表失败');
 
   const handleRemove = (productId: number) => runMutation(() => favoriteApi.remove(productId), {
-    productId, refresh: true,
+    productId, refresh: true, deletion: 'remove',
     onSuccess: () => toast.success(translate("取消收藏成功")),
     onError: error => toast.error(translate(requestFailure(error).response?.data?.message || "取消收藏失败")),
   });
@@ -77,10 +77,11 @@ export default function FavoritesPage() {
           <p className="text-gray-600 mt-2">{t('共 {count} 个商品', { count: loadError ? '—' : total })}</p>
         </div>
 
+        {deletionRecovery?.checking && <p role="status" className="mb-4 text-gray-600">{t('删除结果未知，正在核对最新列表...')}</p>}
         {loadError ? (
           <div className="bg-white rounded-lg shadow-xs p-12 text-center" role="alert">
             <p className="text-red-600">{t(loadError)}</p>
-            <button onClick={fetchFavorites} className="mt-4 px-4 py-2 border rounded-lg">{t("重新加载")}</button>
+            <button onClick={fetchFavorites} className="mt-4 px-4 py-2 border rounded-lg">{t(deletionRecovery ? '重新核对列表' : '重新加载')}</button>
           </div>
         ) : favorites.length === 0 ? (
           <div className="bg-white rounded-lg shadow-xs p-12 text-center">

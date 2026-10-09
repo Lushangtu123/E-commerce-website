@@ -63,6 +63,8 @@ export const errorTranslations: Record<string, string> = {
   '无法确认用户更新结果，请重新读取当前状态后再操作': 'The user update is unconfirmed. Reload the current status before continuing.',
   '重新读取用户状态': 'Reload user status',
   '登录结果尚未确认，请重新登录': 'The sign-in result is unconfirmed. Please sign in again.',
+  '无法保存登录状态，请恢复浏览器存储后重新登录': 'Unable to save your sign-in. Restore browser storage and sign in again.',
+  '登录状态清理尚未确认，请恢复浏览器存储后重试': 'Sign-in cleanup is unconfirmed. Restore browser storage and try again.',
   '注册结果尚未确认，请先尝试登录或找回密码': 'The registration result is unconfirmed. Try signing in or recovering your password first.',
   '订单已变更，请核对实际状态': 'The order has changed. Review its current state.',
   '商品更新结果未知，正在重新加载当前数据...': 'The product update result is unknown. Reloading the current data...',

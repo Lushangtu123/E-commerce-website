@@ -23,7 +23,7 @@ async function setupApi(storage: Storage, apiUrl = 'http://localhost:3001/api') 
     requests.push(config);
     const data = config.method === 'post' && ['/users/login', '/users/register'].includes(config.url || '')
       ? { user: { user_id: 1, username: 'customer', email: 'customer@example.test' } }
-      : config.method === 'post' && config.url === '/admin/logout' ? { message: '已退出登录' } : { data: [] };
+      : config.method === 'post' && ['/admin/logout', '/users/logout'].includes(config.url || '') ? { message: '已退出登录' } : { data: [] };
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
   client.default.defaults.adapter = respond;

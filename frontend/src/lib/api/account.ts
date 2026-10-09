@@ -1,6 +1,6 @@
 import type { User } from '@/store/useAuthStore';
 import api from './client';
-import { clearCustomerCookie, customerAccountWrite, customerSessionWrite, customerSignIn, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
+import { customerSessionLogout, customerAccountWrite, customerSessionWrite, customerSignIn, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
 
 // 用户相关API
 export interface UserStats {
@@ -28,11 +28,7 @@ export const userApi = {
   login: (data: { email: string; password: string }, attempt?: CustomerAuthAttempt) =>
     customerSignIn(() => api.post<unknown, AuthSession>('/users/login', data), () => api.post('/users/logout'), attempt),
   /** Clears the httpOnly session cookie; the API needs no valid session to do so. */
-  logout: () => customerSessionWrite(async () => {
-    let data!: { message: string };
-    await clearCustomerCookie(async () => { data = await api.post<unknown, { message: string }>('/users/logout'); });
-    return data;
-  }),
+  logout: () => customerSessionLogout(() => api.post('/users/logout')),
   getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
   getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
   updateProfile: (data: ProfileInput) => api.put<unknown, { message: string; user: User }>('/users/profile', data),

@@ -17,7 +17,7 @@ interface AuthState {
   sessionId: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
-  login: (user: User, sessionId?: string) => void;
+  login: (user: User, sessionId?: string) => string;
   logout: () => void;
   updateUser: (user: Partial<User>, expectedSessionId?: string) => boolean;
   hydrate: () => void;
@@ -28,8 +28,15 @@ interface AuthState {
  * holds this sign-in's id and profile, so every tab can see when another one signs in or out.
  */
 export const SESSION_KEY = 'session';
+export const CUSTOMER_CLEANUP_KEY = 'customer_session_cleanup_pending';
 /** Where signed tokens used to be stored; such a session has no cookie and must sign in again. */
 const LEGACY_TOKEN_KEY = 'token';
+
+export class CustomerSessionPublicationError extends Error {
+  constructor(public readonly sessionReplaced: boolean, public readonly storageInvalidated: boolean) {
+    super('Unable to record customer sign-in');
+  }
+}
 
 export function storedSessionId(): string | null {
   return localStorage.getItem(SESSION_KEY);
@@ -40,6 +47,8 @@ const loadFromStorage = () => {
   if (typeof window === 'undefined') return { user: null, sessionId: null, isAuthenticated: false };
 
   try {
+    // A reload must not restore a profile from an unfinished cookie write or failed publication.
+    if (localStorage.getItem(CUSTOMER_CLEANUP_KEY) === '1') return { user: null, sessionId: null, isAuthenticated: false };
     if (localStorage.getItem(LEGACY_TOKEN_KEY) !== null) {
       localStorage.removeItem(LEGACY_TOKEN_KEY);
       if (storedSessionId() === null) localStorage.removeItem('user');
@@ -76,16 +85,51 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   
   // The server has already set the session cookie; this records which sign-in it was.
   login: (user, sessionId = newSessionId()) => {
-    localStorage.setItem(SESSION_KEY, sessionId);
-    localStorage.setItem('user', JSON.stringify(user));
-    useCartStore.getState().clearCart();
-    set({ user, sessionId, isAuthenticated: true, isHydrated: true });
+    const previous = get();
+    let previousStoredId: string | null = null;
+    let wroteSessionId = false;
+    try {
+      previousStoredId = storedSessionId();
+      localStorage.setItem(SESSION_KEY, sessionId);
+      wroteSessionId = true;
+      localStorage.setItem('user', JSON.stringify(user));
+      useCartStore.getState().clearCart();
+      set({ user, sessionId, isAuthenticated: true, isHydrated: true });
+      // Confirm publication inside the cookie writer, including changes from synchronous subscribers.
+      if (storedSessionId() !== sessionId || JSON.parse(localStorage.getItem('user') || 'null')?.user_id !== user.user_id ||
+          get().sessionId !== sessionId || get().user?.user_id !== user.user_id) throw new Error('Customer session publication changed');
+      return sessionId;
+    } catch {
+      let sessionReplaced = false;
+      let storageInvalidated = false;
+      try {
+        const current = storedSessionId();
+        sessionReplaced = current !== sessionId && (wroteSessionId || current !== previousStoredId);
+        if (!sessionReplaced) {
+          // The old cookie has already been replaced too: revoke either id still owned by this attempt.
+          try { localStorage.removeItem(SESSION_KEY); } catch { /* The profile removal can still invalidate the pair. */ }
+          const after = storedSessionId();
+          if (after === null || after === current) {
+            try { localStorage.removeItem('user'); } catch { /* Cookie cleanup remains required. */ }
+          } else sessionReplaced = true;
+          storageInvalidated = storedSessionId() === null || localStorage.getItem('user') === null;
+        }
+      } catch { /* Unavailable storage cannot prove ownership of a replacement. */ }
+      const current = get();
+      if (!sessionReplaced && ((current.sessionId === previous.sessionId && current.user?.user_id === previous.user?.user_id) ||
+          (current.sessionId === sessionId && current.user?.user_id === user.user_id))) {
+        useCartStore.getState().clearCart();
+        set({ user: null, sessionId: null, isAuthenticated: false, isHydrated: true });
+      }
+      throw new CustomerSessionPublicationError(sessionReplaced, storageInvalidated);
+    }
   },
 
   // Forgets this tab's sign-in; signOut also asks the server to clear the session cookie.
   logout: () => {
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem('user');
+    // Local storage failure must never prevent signOut from reaching the cookie-clearing API.
+    try { localStorage.removeItem(SESSION_KEY); } catch { /* Continue with the other key and in-memory state. */ }
+    try { localStorage.removeItem('user'); } catch { /* The server cookie is cleared separately. */ }
     useCartStore.getState().clearCart();
     set({ user: null, sessionId: null, isAuthenticated: false, isHydrated: true });
   },
