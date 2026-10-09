@@ -15,7 +15,7 @@ import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { validCartItems } from '@/lib/cart-contents';
 import { cartAddBlocksWrites, useCartAddRecovery } from '@/hooks/use-cart-add-recovery';
-import { subscribeCanonicalCartAdd } from '@/lib/cart-add';
+import { beginCartWrite, readCanonicalCart, subscribeCanonicalCart } from '@/lib/cart-sync';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 
 export default function CartPage() {
@@ -25,7 +25,7 @@ export default function CartPage() {
   const addRecovery = useCartAddRecovery();
   const hasPendingAdd = !!addRecovery.pending || addRecovery.busy || addRecovery.blocked;
   const addBlocksWrites = () => !!sessionId && !!user && cartAddBlocksWrites(sessionId, user.user_id);
-  const { items, setItems, updateQuantity, removeItem } = useCartStore();
+  const { items, updateQuantity, removeItem } = useCartStore();
   const [loading, setLoading] = useState(true);
   const [cartFailure, setCartFailure] = useState<{ key: string; message: string } | null>(null);
   const cartLoadRequest = useRef<{ key: string } | null>(null);
@@ -64,17 +64,20 @@ export default function CartPage() {
     return () => { mounted.current = false; };
   }, []);
 
-  useEffect(() => subscribeCanonicalCartAdd((confirmedSession, confirmedUser) => {
+  useEffect(() => subscribeCanonicalCart((confirmedSession, confirmedUser, confirmedItems) => {
     const auth = useAuthStore.getState();
     if (!mounted.current || confirmedSession !== sessionId || confirmedUser !== user?.user_id ||
       auth.sessionId !== sessionId || auth.user?.user_id !== user?.user_id ||
       cartRecovery.current === sessionKey || cartMutation.current || submittingRequest.current) return;
-    // A validated add read supersedes this page's initial/ordinary read. Retire that request
+    const initialRead = cartLoadRequest.current?.key === sessionKey ||
+      (cartFailure?.key === sessionKey && cartFailure.message === '加载购物车失败，请重试');
+    if (initialRead) setSelectedItems(confirmedItems.filter(isAvailable).map(cartItemKey));
+    // Any validated canonical read supersedes this page's initial/ordinary read. Retire that request
     // immediately so a delayed reply cannot hide the canonical cart behind loading or an old error.
     if (cartLoadRequest.current?.key === sessionKey) cartLoadRequest.current = null;
     setLoading(false);
     setCartFailure(previous => previous?.key === sessionKey && previous.message === '加载购物车失败，请重试' ? null : previous);
-  }), [sessionId, user?.user_id, sessionKey]);
+  }), [sessionId, user?.user_id, sessionKey, cartFailure]);
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('user_coupon_id');
@@ -97,6 +100,12 @@ export default function CartPage() {
       storedSessionId() === (sessionId ?? null);
   };
   const isCurrentSession = () => mounted.current && isSameCustomerSession();
+  const syncDepartedWrite = async () => {
+    if (mounted.current || !isSameCustomerSession()) return;
+    // Navigation retires page-local effects, while the same customer's global count still needs the result.
+    try { await readCanonicalCart(isSameCustomerSession, { fresh: true }); }
+    catch { /* The badge exposes its read-only retry if this canonical read fails. */ }
+  };
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -186,11 +195,10 @@ export default function CartPage() {
     try {
       setLoading(true);
       setCartFailure(null);
-      const data = await cartApi.list();
-      if (!isCurrentSession() || cartLoadRequest.current !== request || useCartStore.getState().items !== previousItems) return;
+      const data = await readCanonicalCart(isCurrentSession, { fresh: cartRecovery.current === sessionKey });
+      if (!isCurrentSession() || cartLoadRequest.current !== request || !data.accepted || useCartStore.getState().items !== data.items) return;
       const recovering = cartRecovery.current === sessionKey;
       if (recovering && !validCartItems(data.items)) throw new Error('invalid cart recovery');
-      setItems(data.items || []);
       const availableKeys = (data.items || []).filter(isAvailable).map(cartItemKey);
       setSelectedItems(previous => recovering ? previous.filter(key => availableKeys.includes(key)) : availableKeys);
       if (recovering) {
@@ -201,7 +209,11 @@ export default function CartPage() {
     } catch (error) {
       if (!isCurrentSession() || cartLoadRequest.current !== request || useCartStore.getState().items !== previousItems) return;
       const recovering = cartRecovery.current === sessionKey;
-      if (!recovering) { setItems([]); setSelectedItems([]); }
+      if (!recovering) {
+        // Forget stale display data without declaring a failed read to be a confirmed empty cart.
+        useCartStore.setState(state => ({ items: [], revision: state.revision + 1, syncStatus: 'error' }));
+        setSelectedItems([]);
+      }
       setCartFailure({ key: sessionKey, message: recovering ? '购物车操作结果尚未确认，请重新加载后再操作' : '加载购物车失败，请重试' });
       logger.error('加载购物车失败:', error);
       toast.error(translate('加载购物车失败'));
@@ -228,18 +240,23 @@ export default function CartPage() {
 
     const operation = {};
     cartMutation.current = operation;
+    const finishWrite = beginCartWrite();
     setUpdatingSession(sessionKey);
     try {
       await cartApi.updateQuantity({ product_id: item.product_id, quantity: newQuantity, ...(item.sku_id != null && { sku_id: item.sku_id }) });
       if (!isCurrentSession()) return;
       if (!isAvailable(item)) {
-        const refreshed = await cartApi.list();
+        const refreshed = await readCanonicalCart(isCurrentSession, { fresh: true });
         if (!isCurrentSession()) return;
-        setItems(refreshed.items || []);
+        if (!refreshed.accepted) throw new Error('Canonical cart superseded');
       } else updateQuantity(item.product_id, newQuantity, item.sku_id);
     } catch (error) {
+      const status = requestFailure(error).response?.status;
+      if (status !== undefined && status >= 400 && status < 500 && ![408, 409, 429].includes(status)) finishWrite(true);
       await handleCartFailure(error, '更新失败');
     } finally {
+      await syncDepartedWrite();
+      finishWrite();
       if (cartMutation.current === operation) {
         cartMutation.current = null;
         if (isCurrentSession()) setUpdatingSession(null);
@@ -251,6 +268,7 @@ export default function CartPage() {
     if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     const operation = {};
     cartMutation.current = operation;
+    const finishWrite = beginCartWrite();
     setUpdatingSession(sessionKey);
     try {
       await cartApi.remove(item.product_id, item.sku_id);
@@ -259,8 +277,12 @@ export default function CartPage() {
       setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
       toast.success(translate('已删除'));
     } catch (error) {
+      const status = requestFailure(error).response?.status;
+      if (status !== undefined && status >= 400 && status < 500 && ![408, 409, 429].includes(status)) finishWrite(true);
       await handleCartFailure(error, '删除失败');
     } finally {
+      await syncDepartedWrite();
+      finishWrite();
       if (cartMutation.current === operation) {
         cartMutation.current = null;
         if (isCurrentSession()) setUpdatingSession(null);
@@ -306,6 +328,7 @@ export default function CartPage() {
     submittingRequest.current = true;
     setSubmitting(true);
     pendingCheckout.current = attempt;
+    const finishWrite = beginCartWrite();
     try {
       const data = await orderApi.create(input);
       if (!isCurrentSession()) return;
@@ -314,10 +337,7 @@ export default function CartPage() {
       setUnconfirmedSession(null);
       if (recovering) {
         // The customer may have added new rows on another page after the original commit.
-        const previousItems = useCartStore.getState().items;
-        void cartApi.list().then(cart => {
-          if (isSameCustomerSession() && useCartStore.getState().items === previousItems) setItems(cart.items || []);
-        }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
+        void readCanonicalCart(undefined, { fresh: true }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
       } else input.items.forEach(item => removeItem(item.product_id, item.sku_id));
       setSelectedItems([]);
       toast.success(translate('订单创建成功'));
@@ -331,6 +351,7 @@ export default function CartPage() {
       if (status === undefined || status === 408 || status === 429 || status >= 500) {
         setUnconfirmedSession(sessionKey);
       } else {
+        finishWrite(true);
         clearPendingCheckout(sessionKey);
         pendingCheckout.current = null;
         setUnconfirmedSession(null);
@@ -339,6 +360,8 @@ export default function CartPage() {
         setAddressRevision(value => value + 1);
       }
     } finally {
+      await syncDepartedWrite();
+      finishWrite();
       if (isCurrentSession()) {
         submittingRequest.current = false;
         setSubmitting(false);

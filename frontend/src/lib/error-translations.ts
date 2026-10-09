@@ -3,6 +3,9 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '正在加载购物车...': 'Loading your cart...',
+  '重新加载购物车': 'Reload cart',
+  '购物车正在更新，请稍候': 'Your cart is updating. Please wait.',
   '购物车添加请求号无效': 'Invalid cart add request ID.',
   '购物车添加参数错误': 'Invalid cart add details.',
   '购物车添加请求号已用于其他内容，请先恢复原请求': 'This request ID belongs to a different cart add. Restore the original request first.',

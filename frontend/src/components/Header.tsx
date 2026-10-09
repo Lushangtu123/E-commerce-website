@@ -6,7 +6,7 @@ import { translate, useI18n } from '@/lib/i18n';
 import Link from 'next/link';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { signOut } from '@/lib/sign-out';
-import { useCartStore } from '@/store/useCartStore';
+import { useCartBadge } from '@/hooks/use-cart-badge';
 import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift, FiHeart, FiShoppingBag } from 'react-icons/fi';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 export default function Header() {
   const { t } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
-  const { getTotalCount } = useCartStore();
+  const cart = useCartBadge();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [history, setHistory] = useState<{ scope: string | null; rows: SearchKeyword[] }>({ scope: null, rows: [] });
   const [hotKeywords, setHotKeywords] = useState<HotKeyword[]>([]);
@@ -264,12 +264,15 @@ export default function Header() {
               className="relative flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
             >
               <FiShoppingCart size={20} />
-              {getTotalCount() > 0 && (
+              {cart.current && cart.status !== 'error' && (
                 <span className="absolute right-0.5 top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-600 px-1 text-[11px] font-semibold text-white ring-2 ring-white">
-                  {getTotalCount()}
+                  {cart.status === 'ready' ? cart.count : <><span aria-hidden="true">…</span><span className="sr-only">{t('正在加载购物车...')}</span></>}
                 </span>
               )}
             </Link>
+            {cart.current && cart.status === 'error' && <button type="button" onClick={cart.retry}
+              aria-label={t('重新加载购物车')} title={t('加载购物车失败，请重试')}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-red-600 hover:bg-red-50">!</button>}
 
             {isAuthenticated ? (
               <div className="flex flex-wrap items-center gap-1 sm:gap-2">

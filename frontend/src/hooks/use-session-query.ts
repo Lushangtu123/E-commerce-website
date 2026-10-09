@@ -6,8 +6,10 @@ import { useScopedQuery } from '@/hooks/use-scoped-query';
 /** True while the store and browser storage still hold the session a request was made for. */
 export function sessionIsCurrent(sessionId: string | null, userId: number | undefined) {
   const state = useAuthStore.getState();
-  return state.isHydrated && state.isAuthenticated && state.sessionId === sessionId && state.user?.user_id === userId &&
-    storedSessionId() === (sessionId ?? null);
+  try {
+    return state.isHydrated && state.isAuthenticated && state.sessionId === sessionId && state.user?.user_id === userId &&
+      storedSessionId() === (sessionId ?? null);
+  } catch { return false; }
 }
 
 interface SessionQueryOptions<T> {
