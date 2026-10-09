@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import logger from '../utils/logger';
-import { ProductModel } from '../models/product.model';
+import { ProductCreateError, ProductModel } from '../models/product.model';
 import { productCreateSchema, productUpdateSchema, positiveId } from '../utils/product-validation';
 import { afterProductWrite } from './admin-product-write';
 import { AdminQueryError, adminProductsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
@@ -160,19 +160,24 @@ export const batchUpdateProductStatus = async (req: Request, res: Response) => {
 // 创建商品
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const { error, value: product } = productCreateSchema.validate(normalizedProductBody(req.body));
+    const { create_key, ...fields } = req.body;
+    if (create_key !== undefined && (typeof create_key !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(create_key))) return res.status(400).json({ error: '商品新增请求号无效' });
+    const { error, value: product } = productCreateSchema.validate(normalizedProductBody(fields));
     if (error || !product.category_id) return res.status(400).json({ error: '商品字段或值无效，标题、价格和分类必填' });
     const { title } = product;
-    const productId = await ProductModel.create(product);
+    const { productId, replayed } = create_key === undefined ? { productId: await ProductModel.create(product), replayed: false }
+      : await ProductModel.createForAdmin(product, (req as any).admin?.adminId, create_key);
 
     // 记录操作日志
-    await afterProductWrite(req, [productId], 'CREATE_PRODUCT', 'product', String(productId), `创建商品: ${title}`);
+    if (!replayed) await afterProductWrite(req, [productId], 'CREATE_PRODUCT', 'product', String(productId), `创建商品: ${title}`);
 
     res.status(201).json({
       message: '创建成功',
-      product_id: productId
+      product_id: productId,
+      ...(create_key === undefined ? {} : { replayed })
     });
   } catch (error) {
+    if (error instanceof ProductCreateError) return res.status(error.statusCode).json({ error: error.message });
     logger.error({ err: error }, '创建商品失败');
     res.status(500).json({ error: '创建失败' });
   }

@@ -13,6 +13,8 @@
     "schema:checkout": "node dist/database/check-checkout-schema.js",
     "migrate:coupon-claims": "node dist/database/migrate-coupon-claims.js",
     "schema:coupon-claims": "node dist/database/migrate-coupon-claims.js --check",
+    "migrate:product-creations": "node dist/database/migrate-product-creations.js",
+    "schema:product-creations": "node dist/database/migrate-product-creations.js --check",
     "migrate:after-sales": "node dist/database/migrate-after-sales-progress.js",
     "schema:after-sales": "node dist/database/migrate-after-sales-progress.js --check",
     "migrate:account-security": "node dist/database/migrate-account-security.js",

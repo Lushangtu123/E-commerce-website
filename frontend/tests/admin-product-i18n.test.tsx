@@ -37,7 +37,7 @@ async function setup(source = product) {
       ? [{ category_id: 1, name: 'Category' }] : { products: [current], pagination: { total: 1 } };
     else {
       const body = JSON.parse(config.data) as Record<string, unknown>;
-      writes.push({ url: config.url, body }); current = { ...current, ...body }; data = {};
+      writes.push({ url: config.url, body }); current = { ...current, ...body }; data = config.method === 'post' ? { product_id: 2 } : {};
     }
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };

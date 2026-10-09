@@ -59,6 +59,7 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-account-security', 'migrateAccountSecurity'], ['migrate-fulfillment', 'migrateFulfillment'],
     ['migrate-after-sales-progress', 'migrateAfterSalesProgress'],
     ['migrate-product-i18n', 'migrateProductI18n'],
+    ['migrate-product-creations', 'migrateProductCreations'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
   await pool.query("INSERT INTO categories(category_id,name) VALUES(1,'浏览器测试分类')");

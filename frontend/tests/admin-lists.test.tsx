@@ -492,7 +492,7 @@ describe('admin product selection and creation', () => {
   const productFields = [/^商品标题/, /^商品描述/, /^价格/, /^库存/, /^分类/, /^品牌/, /^商品图片URL/, /^状态/];
 
   it('requires a title, price and category, then creates the product from every field and resets the form', async () => {
-    await setup('products', { categories: async () => [{ category_id: 1, name: 'Category' }, { category_id: 2, name: 'Other' }] });
+    await setup('products', { mutate: async () => ({ product_id: 41 }), categories: async () => [{ category_id: 1, name: 'Category' }, { category_id: 2, name: 'Other' }] });
     await click(button('添加商品'));
     expect(screen.getByRole('heading', { name: '添加商品' })).toBeInTheDocument();
     await click(createButton());
@@ -510,6 +510,7 @@ describe('admin product selection and creation', () => {
     expect(mutations).toEqual([expect.objectContaining({ method: 'post', path: '/admin/products', body: {
       title: 'Lamp', description: 'Warm light', price: 19.9, stock: 7, category_id: 2, brand: 'Acme',
       image_url: 'https://example.test/lamp.jpg', status: 0,
+      create_key: expect.stringMatching(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i),
     } })]);
     expect(notifications.at(-1)).toBe('商品添加成功');
     expect(screen.queryByRole('heading', { name: '添加商品' })).not.toBeInTheDocument();

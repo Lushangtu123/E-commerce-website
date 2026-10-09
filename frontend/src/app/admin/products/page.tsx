@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 import { localizedText } from '@/lib/product-content';
+import { clearPendingProductCreation, readPendingProductCreation, storePendingProductCreation, type PendingProductCreation } from '@/lib/pending-product-creation';
 
 type EditProductForm = ProductFormValues & { product_id: number; previous: ProductFormValues };
 
@@ -34,6 +35,11 @@ export default function AdminProductsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT_FORM);
   const [editProduct, setEditProduct] = useState<EditProductForm | null>(null);
+  const pendingCreation = useRef<{ sessionId: string; attempt: PendingProductCreation } | null>(null);
+  const [creation, setCreation] = useState<{ sessionId: string; attempt: PendingProductCreation } | null>(null);
+  const creationUnavailable = useRef<string | null>(null);
+  const [creationStorageError, setCreationStorageError] = useState<string | null>(null);
+  const pending = creation?.sessionId === sessionId ? creation.attempt : null;
 
   const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
   const currentScope = useRef(scopeKey);
@@ -70,6 +76,18 @@ export default function AdminProductsPage() {
   const reloadCategories = () => {
     if (formScope === scopeKey && isCurrentScope() && categoriesQuery.isCurrentSession()) void categoriesQuery.refetch();
   };
+  const restoreCreation = () => {
+    if (!sessionId || !query.isCurrentSession() || mutation.current) return;
+    try {
+      const attempt = readPendingProductCreation(sessionId);
+      pendingCreation.current = attempt ? { sessionId, attempt } : null;
+      setCreation(pendingCreation.current);
+      creationUnavailable.current = null; setCreationStorageError(null);
+    } catch {
+      pendingCreation.current = null; setCreation(null);
+      creationUnavailable.current = sessionId; setCreationStorageError(sessionId);
+    }
+  };
 
   const selectableProducts = products.filter(product => product.status === 0 || product.status === 1);
   const selectedIds = shown && selection?.key === scopeKey ? selection.ids.filter(id => selectableProducts.some(product => product.product_id === id)) : [];
@@ -87,6 +105,9 @@ export default function AdminProductsPage() {
     setShowEditModal(false);
     setEditProduct(null);
     setNewProduct(EMPTY_PRODUCT_FORM);
+    pendingCreation.current = null; setCreation(null);
+    creationUnavailable.current = null; setCreationStorageError(null);
+    restoreCreation();
   }, [sessionId]);
 
   // A selection belongs to the page and filters it was made on, even when they are visited again.
@@ -192,14 +213,47 @@ export default function AdminProductsPage() {
   };
 
   const updateNewProduct = (next: ProductFormValues) => {
-    if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setNewProduct(next);
+    if (formScope === scopeKey && isDisplayedScope() && !mutation.current && pendingCreation.current?.sessionId !== sessionId) setNewProduct(next);
   };
   const updateEditProduct = (next: EditProductForm) => {
     if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setEditProduct(next);
   };
 
+  const submitCreation = async (attempt: PendingProductCreation) => {
+    if (!sessionId || !query.isCurrentSession() || mutation.current || creationUnavailable.current === sessionId) return;
+    const recovering = pendingCreation.current?.sessionId === sessionId;
+    if (!storePendingProductCreation(sessionId, attempt)) {
+      toast.error(translate('无法保存商品新增请求，请允许浏览器存储后重试')); return;
+    }
+    const operation = {}; mutation.current = operation; setPendingSessionId(sessionId);
+    pendingCreation.current = { sessionId, attempt }; setCreation(pendingCreation.current);
+    const active = () => query.isCurrentSession() && mutation.current === operation;
+    try {
+      const data = await api.post<unknown, { product_id: number }>('/admin/products', { ...attempt.input, create_key: attempt.key });
+      if (!active()) return;
+      if (!data || !Number.isSafeInteger(data.product_id) || data.product_id <= 0) throw new Error('Invalid product creation response');
+      if (clearPendingProductCreation(sessionId, attempt.key)) {
+        pendingCreation.current = null; setCreation(null);
+        setNewProduct(EMPTY_PRODUCT_FORM); toast.success(translate('商品添加成功'));
+      } else toast.error(translate('商品已保存，但未能清除本地确认记录，请重试确认'));
+      setShowAddModal(false);
+      void query.invalidate();
+    } catch (error) {
+      if (!active()) return;
+      const failure = requestFailure(error), status = failure.response?.status;
+      // A rejection on a recovery retry cannot prove that an earlier lost reply did not commit.
+      const definitive = !recovering && status !== undefined && status >= 400 && status < 500 && ![408, 409, 429].includes(status);
+      if (definitive && clearPendingProductCreation(sessionId, attempt.key)) {
+        pendingCreation.current = null; setCreation(null);
+      } else setShowAddModal(false);
+      toast.error(translate(failure.response?.data?.error || (definitive ? '添加商品失败' : '新增商品结果尚未确认，请先重试确认')));
+    } finally {
+      if (mutation.current === operation) { mutation.current = null; setPendingSessionId(null); }
+    }
+  };
+
   const handleAddProduct = () => {
-    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || mutation.current) return;
+    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || mutation.current || pendingCreation.current?.sessionId === sessionId || creationUnavailable.current === sessionId || !sessionId) return;
     if (!isProductFormComplete(newProduct)) {
       toast.error(translate('请填写商品标题、价格和分类'));
       return;
@@ -207,10 +261,10 @@ export default function AdminProductsPage() {
     let payload;
     try { payload = toProductPayload(newProduct); }
     catch (error) { toast.error(translate((error as Error).message)); return; }
-    return runMutation(() => api.post('/admin/products', payload), '商品添加成功', '添加商品失败', () => {
-      setShowAddModal(false);
-      setNewProduct(EMPTY_PRODUCT_FORM);
-    });
+    let key: string;
+    try { key = crypto.randomUUID(); }
+    catch { toast.error(translate('无法保存商品新增请求，请允许浏览器存储后重试')); return; }
+    return submitCreation({ key, input: payload });
   };
 
   const openEditModal = (product: AdminProductRow) => {
@@ -269,8 +323,8 @@ export default function AdminProductsPage() {
             <p className="text-gray-600 mt-1">{t("管理商品的上下架和信息")}</p>
           </div>
           <button 
-            onClick={() => { if (isDisplayedScope() && !mutation.current) { setFormScope(scopeKey); setShowAddModal(true); } }}
-            disabled={busy || loading || !!loadError}
+            onClick={() => { if (isDisplayedScope() && !mutation.current && pendingCreation.current?.sessionId !== sessionId && creationUnavailable.current !== sessionId) { setFormScope(scopeKey); setShowAddModal(true); } }}
+            disabled={busy || !!pending || creationStorageError === sessionId || loading || !!loadError}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             <span className="flex items-center">
@@ -281,6 +335,19 @@ export default function AdminProductsPage() {
             </span>
           </button>
         </div>
+
+        {pending && <div className="card p-4 space-y-3" role="alert">
+          <p>{t('新增商品结果尚未确认，请先重试确认')}</p>
+          <p className="font-medium">{localizedText(String(pending.input.title), typeof pending.input.title_en === 'string' ? pending.input.title_en : undefined, locale)}</p>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => {
+            const current = pendingCreation.current;
+            if (current?.sessionId === sessionId) void submitCreation(current.attempt);
+          }}>{t('重试确认商品')}</button>
+        </div>}
+        {creationStorageError === sessionId && <div className="card p-4 space-y-3" role="alert">
+          <p>{t('无法读取商品新增记录，请检查浏览器存储后重试')}</p>
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={restoreCreation}>{t('重新读取新增记录')}</button>
+        </div>}
 
         {/* 搜索和筛选 */}
         <div className="bg-white rounded-lg shadow-sm p-4">
