@@ -210,7 +210,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     expect(button(statusAction[kind])).toBeDisabled();
     if (kind === 'products') expect(button('添加商品')).toBeDisabled();
 
-    await act(async () => write.resolve(kind === 'products' ? { message: '更新成功', status: 0 } : {}));
+    await act(async () => write.resolve({ message: '更新成功', status: 0 }));
     await settle();
     expect(requests).toHaveLength(2);
     expect(notifications).toHaveLength(1);
@@ -225,7 +225,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
         const rows = Array.from({ length: total }, (_, index) => row(kind, index + 1));
         return result(kind, rows.slice((params.page - 1) * 20, params.page * 20), total);
       },
-      mutate: async () => { total = 20; },
+      mutate: async () => { total = 20; return { message: '更新成功', status: 0 }; },
     });
     await type(statusFilter(), '1');
     await click(button('下一页'));
@@ -309,7 +309,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     await old();
     expect(mutations).toHaveLength(1);
 
-    await act(async () => write.resolve(kind === 'products' ? { message: '更新成功', status: 0 } : {}));
+    await act(async () => write.resolve({ message: '更新成功', status: 0 }));
     await operation;
     await settle();
     expect(screen.getByText('Row 21')).toBeInTheDocument();

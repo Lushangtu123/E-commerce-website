@@ -4,17 +4,24 @@ import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
 
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import api from '@/lib/api';
 import type { AdminPage, AdminUserRow } from '@/lib/api';
+import { adminUserApi } from '@/lib/api/admin';
+import { unknownUserStatusWrite, userStatusAcknowledged, validAdminUserDetail, validAdminUserSnapshot } from '@/lib/admin-user-read';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 
+type Recovery = { sessionId: string | null; userId: number; checking: boolean };
+
 export default function AdminUsersPage() {
   const { t, formatDate } = useI18n();
   const sessionId = useAdminSessionId();
+  const queryClient = useQueryClient();
   // The page and filters belong to the administrator who chose them; another one starts unfiltered on page one.
   const [view, setView] = useState({ sessionId, page: 1, filters: { keyword: '', status: '' } });
   const ownsView = view.sessionId === sessionId;
@@ -26,6 +33,9 @@ export default function AdminUsersPage() {
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
+  const recovery = useRef<Recovery | null>(null);
+  const [recovering, setRecovering] = useState<Recovery | null>(null);
+  const latestRead = useRef<((actualStatus: number, userId: number) => Promise<boolean>) | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const query = useAdminQuery({
     name: 'users',
@@ -46,14 +56,35 @@ export default function AdminUsersPage() {
   const total = Number(shown?.pagination?.total) || 0;
   const loadError = query.error ? requestFailure(query.error).response?.data?.error || '获取用户列表失败' : undefined;
   const loading = !shown && !loadError;
-  const busy = !!sessionId && pendingSessionId === sessionId;
+  const unresolved = recovering?.sessionId === sessionId && query.isCurrentSession() ? recovering : null;
+  const busy = !!sessionId && (pendingSessionId === sessionId || !!unresolved);
+  const writeLocked = () => !!mutation.current || recovery.current?.sessionId === sessionId;
   const isCurrentScope = () => query.isCurrentSession() && currentScope.current === scopeKey;
   const isDisplayedScope = () => isCurrentScope() && shown !== undefined && displayed.current === shown;
   const reload = () => { if (isCurrentScope()) void query.refetch(); };
 
+  // A recovery read replaces only the current administrator's current page. A scope change
+  // leaves the lock in place and offers an explicit retry, without chasing changing filters.
+  latestRead.current = async (actualStatus, userId) => {
+    if (!isCurrentScope()) return false;
+    await queryClient.cancelQueries({ queryKey: ['admin', 'users', sessionId] });
+    if (!isCurrentScope()) return false;
+    const actual = await api.get<unknown, unknown>('/admin/users', { params: {
+      page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
+    } });
+    if (!isCurrentScope()) return false;
+    if (!validAdminUserSnapshot(actual, page) || actual.users.some(row => row.user_id === userId && row.status !== actualStatus)) {
+      throw new Error('Invalid user snapshot');
+    }
+    queryClient.setQueryData(['admin', 'users', sessionId, page, filters.keyword, filters.status], actual);
+    return true;
+  };
+
   // A pending action belongs to the administrator who started it; the next one may act at once.
   useEffect(() => {
     mutation.current = null;
+    recovery.current = null;
+    setRecovering(null);
     setPendingSessionId(null);
   }, [sessionId]);
 
@@ -66,19 +97,56 @@ export default function AdminUsersPage() {
     if (query.error) logger.error('获取用户列表失败:', query.error);
   }, [query.error]);
 
-  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string) => {
-    if (!isDisplayedScope() || mutation.current) return;
+  const checkUserStatus = async (record: Recovery) => {
+    if (!query.isCurrentSession() || recovery.current !== record || record.checking) return;
+    const readScope = currentScope.current;
+    const checking = { ...record, checking: true };
+    recovery.current = checking;
+    setRecovering(checking);
+    try {
+      const actual = await adminUserApi.detail(record.userId);
+      if (!query.isCurrentSession() || recovery.current !== checking) return;
+      if (currentScope.current !== readScope) throw new Error('User view changed during verification');
+      if (!validAdminUserDetail(actual, record.userId)) throw new Error('Invalid user detail');
+      const refreshed = await latestRead.current?.(actual.user.status, record.userId);
+      if (!query.isCurrentSession() || recovery.current !== checking) return;
+      if (!refreshed) {
+        const failed = { ...checking, checking: false }; recovery.current = failed; setRecovering(failed);
+        return;
+      }
+      recovery.current = null; setRecovering(null);
+      toast.error(translate('已重新加载当前用户状态，请核对后再操作；此前提交结果仍无法确认'));
+    } catch {
+      if (query.isCurrentSession() && recovery.current === checking) {
+        const failed = { ...checking, checking: false }; recovery.current = failed; setRecovering(failed);
+      }
+    }
+  };
+
+  const startRecovery = async (userId: number) => {
+    if (!query.isCurrentSession()) return;
+    const record = { sessionId, userId, checking: false };
+    recovery.current = record; setRecovering(record);
+    await checkUserStatus(record);
+  };
+
+  const runMutation = async (userId: number, status: number) => {
+    if (!isDisplayedScope() || writeLocked()) return;
     const operation = {};
     mutation.current = operation;
     setPendingSessionId(sessionId);
     try {
-      await perform();
-      if (isDisplayedScope()) toast.success(translate(success));
+      const response = await api.put(`/admin/users/${userId}/status`, { status });
+      if (!query.isCurrentSession() || mutation.current !== operation) return;
+      if (!userStatusAcknowledged(response, status)) { await startRecovery(userId); return; }
+      if (isDisplayedScope()) toast.success(translate(status === 1 ? '用户已启用' : '用户已禁用'));
       // The page or filters may have changed meanwhile; this reloads whichever rows are displayed now.
       // After a session change it sends nothing: the old administrator's queries are gone or fail their session check.
       await query.invalidate();
     } catch (error) {
-      if (isDisplayedScope()) toast.error(translate(requestFailure(error).response?.data?.error || failure));
+      if (!query.isCurrentSession() || mutation.current !== operation) return;
+      if (unknownUserStatusWrite(error)) await startRecovery(userId);
+      else if (isDisplayedScope()) toast.error(translate(requestFailure(error).response?.data?.error || '更新状态失败'));
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
@@ -116,8 +184,7 @@ export default function AdminUsersPage() {
 
   const handleStatusChange = (userId: number, newStatus: number) => {
     if (!users.some(row => row.user_id === userId)) return;
-    return runMutation(() => api.put(`/admin/users/${userId}/status`, { status: newStatus }),
-      newStatus === 1 ? '用户已启用' : '用户已禁用', '更新状态失败');
+    return runMutation(userId, newStatus);
   };
 
   return (
@@ -128,6 +195,14 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t("用户管理")}</h1>
           <p className="text-gray-600 mt-1">{t("查看和管理所有用户")}</p>
         </div>
+
+        {unresolved && (
+          <div role={unresolved.checking ? 'status' : 'alert'} className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+            <p>{t(unresolved.checking ? '用户更新结果未知，正在核对当前状态...' : '无法确认用户更新结果，请重新读取当前状态后再操作')}</p>
+            <button disabled={unresolved.checking} onClick={() => { if (isCurrentScope()) void checkUserStatus(unresolved); }}
+              className="mt-3 rounded-lg border border-amber-400 px-4 py-2 disabled:opacity-50">{t('重新读取用户状态')}</button>
+          </div>
+        )}
 
         {/* 搜索和筛选 */}
         <div className="bg-white rounded-lg shadow-sm p-4">
@@ -241,9 +316,11 @@ export default function AdminUsersPage() {
                             {t("启用")}
                           </button>
                         )}
-                        <button className="text-primary-600 hover:text-primary-800">
+                        <Link href={`/admin/users/${user.user_id}`} prefetch={false}
+                          onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}
+                          className="text-primary-600 hover:text-primary-800">
                           {t("详情")}
-                        </button>
+                        </Link>
                       </td>
                     </tr>
                   ))}

@@ -54,9 +54,31 @@ export interface AdminUserRow {
   phone?: string | null;
   status: number;
   created_at: string;
+  updated_at?: string | null;
   order_count?: number;
   total_spent?: Money | null;
 }
+export interface AdminUserAddress {
+  address_id: number;
+  user_id?: number;
+  receiver_name: string;
+  phone: string;
+  province?: string | null;
+  city?: string | null;
+  district?: string | null;
+  detail_address?: string | null;
+  is_default?: boolean | 0 | 1;
+}
+export interface AdminUserDetail {
+  user: AdminUserRow;
+  recent_orders: RecentOrder[];
+  addresses: AdminUserAddress[];
+}
+export interface AdminUserOrders extends AdminPage { orders: AdminOrderRow[] }
+export const adminUserApi = {
+  detail: (userId: number) => api.get<unknown, unknown>(`/admin/users/${userId}`),
+  orders: (userId: number, page = 1) => api.get<unknown, unknown>(`/admin/users/${userId}/orders`, { params: { page, limit: 10 } }),
+};
 export interface AdminLog {
   log_id: number;
   action: string;
