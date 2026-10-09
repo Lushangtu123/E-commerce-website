@@ -94,6 +94,24 @@ integration('真实 MySQL 地址新增收据', () => {
     await request(app).put('/api/addresses/1').set(auth()).send({ ...fields, create_key: key }).expect(400);
     expect(await rows('address_creation_receipts')).toHaveLength(0);
   });
+  test('云库要求主键时仍可新建收据表并通过结构检查', async () => {
+    const connection = await db.getConnection();
+    try {
+      await connection.query('DROP TABLE address_creation_receipts');
+      await connection.query('SET SESSION sql_require_primary_key = ON');
+      await migrateAddressCreations(connection as unknown as Pool);
+      await migrateAddressCreations(connection as unknown as Pool, true);
+    } finally {
+      try {
+        await connection.query('SET SESSION sql_require_primary_key = OFF');
+        await migrateAddressCreations(connection as unknown as Pool);
+      } finally { connection.release(); }
+    }
+    const created = await post().expect(201);
+    const replay = await post().expect(200);
+    expect(replay.body.address_id).toBe(created.body.address_id);
+    expect(await rows('shipping_addresses')).toHaveLength(1);
+  });
   test('迁移可重跑且原地址/收据不变，--check识别缺失表和不兼容索引', async () => {
     await post().expect(201);
     const addresses = await rows('shipping_addresses'), receipts = await rows('address_creation_receipts');

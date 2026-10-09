@@ -18,6 +18,7 @@ export async function migrateAddressCreations(pool: Pool, checkOnly = false): Pr
       payload_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
       address_id BIGINT NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, create_key),
       UNIQUE KEY unique_user_create_key (user_id, create_key)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
   } else if (table.ENGINE !== 'InnoDB') throw new Error('地址新增收据表必须使用 InnoDB');
