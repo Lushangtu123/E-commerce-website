@@ -12,6 +12,9 @@ export class CustomerAuthAbandoned extends Error {}
 export class CustomerAuthUnconfirmed extends Error {
   constructor(public readonly report: boolean) { super('Customer sign-in result is unconfirmed'); }
 }
+export class CustomerSessionChanged extends Error {
+  constructor() { super('登录状态已变化，请刷新后重试'); }
+}
 
 let writing = false;
 const waiting: (() => void)[] = [];
@@ -62,6 +65,26 @@ function queueWrite<T>(write: () => Promise<T>): Promise<T> {
 export function customerSessionWrite<T>(write: () => Promise<T>): Promise<T> {
   authRevision += 1;
   return queueWrite(write);
+}
+
+/** Bind account-scoped writes before waiting; the cookie may belong to another sign-in afterwards. */
+export function customerAccountWrite<T>(write: () => Promise<T>, stillInvoked: () => boolean = () => true): Promise<T> {
+  const { sessionId, user } = useAuthStore.getState();
+  const userId = user?.user_id;
+  const current = () => {
+    try {
+      const state = useAuthStore.getState();
+      return stillInvoked() && state.isHydrated && state.isAuthenticated && !!sessionId &&
+        Number.isSafeInteger(userId) && Number(userId) > 0 && state.sessionId === sessionId &&
+        state.user?.user_id === userId && storedSessionId() === sessionId &&
+        JSON.parse(localStorage.getItem('user') || 'null')?.user_id === userId;
+    } catch { return false; }
+  };
+  if (!current()) return Promise.reject(new CustomerSessionChanged());
+  return customerSessionWrite(async () => {
+    if (!current()) throw new CustomerSessionChanged();
+    return write();
+  });
 }
 
 /** Called inside the queue; invoking the public queued logout here would deadlock. */

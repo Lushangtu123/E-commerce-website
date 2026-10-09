@@ -7,6 +7,7 @@ import { passwordError } from '@/lib/password-validation';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
+import { CustomerSessionChanged } from '@/lib/customer-auth-flow';
 
 export default function ChangePassword({ onPasswordChanged, onPasswordUnconfirmed }: { onPasswordChanged?: () => void; onPasswordUnconfirmed?: () => void } = {}) {
   const { t } = useI18n(), router = useRouter();
@@ -43,11 +44,13 @@ export default function ChangePassword({ onPasswordChanged, onPasswordUnconfirme
       router.push(confirmed ? '/login?passwordChanged=1' : '/login?passwordChangeUnconfirmed=1');
     };
     try {
-      const data: unknown = await userApi.changePassword({ currentPassword: values.current, newPassword: values.next });
+      const data: unknown = await userApi.changePassword({ currentPassword: values.current, newPassword: values.next },
+        () => active() && mutation.current === operation);
       if (!active() || mutation.current !== operation) return;
       finish(!!data && typeof data === 'object' && 'reauthenticate' in data && data.reauthenticate === true);
     } catch (error) {
       if (active() && mutation.current === operation) {
+        if (error instanceof CustomerSessionChanged) { setNotice({ key, error: error.message }); return; }
         const failure = requestFailure(error), status = failure.response?.status;
         // A password write can commit before its reply is lost. Never resend these credentials
         // to find out: forget this sign-in and let the customer sign in or recover the password.
