@@ -804,8 +804,14 @@ async function localPlatformScripts(context) {
   const createdRows = await (await adminContext.request.get(editorWritesEndpoint, { params: { keyword: 'Browser lost-create product' } })).json();
   assert.equal(createdRows.pagination.total, 1);
   assert.equal(createdRows.products[0].product_id, creationIds[0]); assert.equal(createdRows.products[0].stock, 7);
+  const publicCreatedResponse = await fetch(`http://127.0.0.1:3101/api/products/${creationIds[0]}`);
+  assert.equal(publicCreatedResponse.status, 200);
+  const publicCreatedProduct = (await publicCreatedResponse.json()).product;
+  for (const column of ['created_by_admin_id', 'create_key', 'create_fingerprint']) assert.equal(Object.hasOwn(publicCreatedProduct, column), false);
+  assert.equal(publicCreatedProduct.title, 'Browser lost-create product'); assert.equal(publicCreatedProduct.stock, 7);
   await admin.unroute(editorWritesEndpoint, loseFirstCreationReply); expectedRecoveryWrite = undefined;
   console.log('PASS browser lost product creation reply survives reload and retry creates one real MySQL product');
+  console.log('PASS anonymous product details exclude internal creation receipts');
   const adminCouponsEndpoint = 'http://127.0.0.1:3101/api/admin/coupons';
   let adminCouponAttempts = 0;
   const adminCouponFault = async route => {

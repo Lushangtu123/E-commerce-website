@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const mysql = require('mysql2/promise');
 const backend = path.resolve(__dirname, '..');
+// Migrations import load-env; the fixture must keep its explicit local configuration.
+require('dotenv').config = () => ({});
 const host = process.env.MYSQL_TEST_HOST || '127.0.0.1';
 if (!['127.0.0.1', 'localhost', '::1'].includes(host)) throw new Error('E2E fixture requires a loopback database host');
 const database = `ecommerce_e2e_${process.pid}`;
