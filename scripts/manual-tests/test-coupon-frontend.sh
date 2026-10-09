@@ -48,6 +48,7 @@ echo "────────────────────────�
 
 # 2. 用户登录
 LOGIN_RESPONSE=$(curl -s -i -X POST "$BASE_URL/users/login" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"123456"}')
 

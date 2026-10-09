@@ -22,6 +22,7 @@ echo ""
 # 1. 用户注册登录
 echo -e "${BLUE}[1/10] 测试用户注册和登录${NC}"
 REGISTER_RESPONSE=$(curl -s -i -X POST "${BASE_URL}/users/register" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "testuser_es",
@@ -36,6 +37,7 @@ if echo "$REGISTER_RESPONSE" | grep -q "customer_session="; then
 else
   # 尝试登录
   LOGIN_RESPONSE=$(curl -s -i -X POST "${BASE_URL}/users/login" \
+    -H "X-Requested-With: XMLHttpRequest" \
     -H "Content-Type: application/json" \
     -d '{
       "username": "testuser_es",
@@ -75,6 +77,7 @@ echo -e "${BLUE}[3/10] 测试优惠券系统${NC}"
 # 3.1 管理员登录
 echo "  • 管理员登录..."
 ADMIN_LOGIN=$(curl -s -i -X POST "${BASE_URL}/admin/login" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",

@@ -13,7 +13,9 @@ const router = express.Router();
  *   post:
  *     tags: [管理后台]
  *     summary: 管理员登录
- *     description: 登录接口带防暴力破解限流；会话写入 httpOnly Cookie admin_session，响应体不含令牌
+ *     description: 登录接口带防暴力破解限流；会话写入 httpOnly Cookie admin_session，响应体不含令牌。需携带 X-Requested-With；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。用户名去除首尾空白，密码保留原文并兼容旧短密码，拒绝未知字段。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     requestBody:
  *       required: true
  *       content:
@@ -21,14 +23,19 @@ const router = express.Router();
  *           schema:
  *             type: object
  *             required: [username, password]
+ *             additionalProperties: false
  *             properties:
- *               username: { type: string }
- *               password: { type: string, format: password }
+ *               username: { type: string, minLength: 1, maxLength: 50 }
+ *               password: { type: string, format: password, minLength: 1, maxLength: 1024, description: 保留原文，不套用新密码长度规则 }
  *     responses:
  *       200:
  *         description: 登录成功，返回管理员信息并设置 admin_session Cookie
+ *       400:
+ *         description: 管理员登录字段或值无效
+ *       403:
+ *         description: 请求来源校验失败或账号已被禁用
  *       401:
- *         description: 用户名或密码错误 / 账号被禁用
+ *         description: 用户名或密码错误
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -43,14 +50,14 @@ router.post('/login', authLimiter, adminLogin);
  *   post:
  *     tags: [管理后台]
  *     summary: 管理员退出登录
- *     description: 清除管理员 httpOnly 会话 Cookie，并撤销有效令牌所属管理员的全部会话；同时携带 Bearer 与 Cookie 时以 Bearer 为准。令牌过期后也能调用。需带 X-Requested-With 请求头。
+ *     description: 清除管理员 httpOnly 会话 Cookie，并撤销有效令牌所属管理员的全部会话；同时携带 Bearer 与 Cookie 时以 Bearer 为准。令牌过期后也能调用。需带 X-Requested-With；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。
  *     parameters:
  *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     responses:
  *       200:
  *         description: 已清除会话 Cookie
  *       403:
- *         description: 缺少 X-Requested-With 请求头
+ *         description: 请求来源校验失败，不清除 Cookie 或撤销会话
  *       503:
  *         description: 已清除本设备 Cookie，但未能撤销其他会话，请重试
  */

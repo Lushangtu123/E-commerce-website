@@ -13,7 +13,8 @@ function response() {
   res.cookie = jest.fn().mockReturnValue(res); res.clearCookie = jest.fn().mockReturnValue(res);
   return res;
 }
-const req = (body: unknown) => ({ body, userId: 7 }) as any;
+const req = (body: unknown) => ({ body, userId: 7, method: 'POST',
+  get: (name: string) => name.toLowerCase() === 'x-requested-with' ? 'XMLHttpRequest' : undefined }) as any;
 beforeEach(() => {
   jest.clearAllMocks();
   (query as jest.Mock).mockImplementation(async (sql: string) => {

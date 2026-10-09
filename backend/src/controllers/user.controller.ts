@@ -4,7 +4,7 @@ import { UserModel } from '../models/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
-import { CSRF_ERROR, CUSTOMER_COOKIE, clearSessionCookie, hasCsrfHeader, setSessionCookie } from '../utils/session-cookie';
+import { CSRF_ERROR, CUSTOMER_COOKIE, clearSessionCookie, hasTrustedSessionSource, setSessionCookie } from '../utils/session-cookie';
 import { normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
 import { passwordMailConfig } from '../services/password-mail.service';
 import { PasswordResetModel } from '../models/password-reset.model';
@@ -52,6 +52,7 @@ export class UserController {
   }
 
   static async resetPassword(req: AuthRequest, res: Response) {
+    if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
     try {
       const { token, newPassword } = normalizePasswordReset(req.body);
       const hash = await bcrypt.hash(newPassword, 12);
@@ -78,6 +79,7 @@ export class UserController {
 
   // 注册
   static async register(req: AuthRequest, res: Response) {
+    if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
     try {
       const { username, email, password } = normalizeRegistration(req.body);
 
@@ -122,13 +124,14 @@ export class UserController {
 
   // 退出登录：清除会话 Cookie。令牌本身无状态，Bearer 客户端自行丢弃即可。
   static logout(req: AuthRequest, res: Response) {
-    if (!hasCsrfHeader(req)) return res.status(403).json({ error: CSRF_ERROR });
+    if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
     clearSessionCookie(res, CUSTOMER_COOKIE);
     return res.json({ message: '已退出登录' });
   }
 
   // 登录
   static async login(req: AuthRequest, res: Response) {
+    if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
     try {
       const { email, password } = normalizeLogin(req.body);
 

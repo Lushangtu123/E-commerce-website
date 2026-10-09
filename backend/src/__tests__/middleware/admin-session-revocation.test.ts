@@ -54,13 +54,13 @@ const cookieOf = (res: request.Response) => (res.headers['set-cookie'] as unknow
 
 test('登录令牌携带当前 auth_version', async () => {
   authVersion = 4;
-  const res = await request(app()).post('/api/admin/login').send({ username: 'root', password: 'admin-password' }).expect(200);
+  const res = await request(app()).post('/api/admin/login').set('X-Requested-With', 'XMLHttpRequest').send({ username: 'root', password: 'admin-password' }).expect(200);
   const issued = jwt.verify(cookieOf(res).split('=')[1], SECRET) as jwt.JwtPayload;
   expect(issued.authVersion).toBe(4);
 });
 
 test('退出登录后，同一令牌的其他副本立即失效', async () => {
-  const login = await request(app()).post('/api/admin/login').send({ username: 'root', password: 'admin-password' }).expect(200);
+  const login = await request(app()).post('/api/admin/login').set('X-Requested-With', 'XMLHttpRequest').send({ username: 'root', password: 'admin-password' }).expect(200);
   const cookie = cookieOf(login);
   await request(app()).get('/api/admin/profile').set('Cookie', cookie).expect(200);
 

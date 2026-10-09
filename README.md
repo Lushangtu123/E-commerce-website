@@ -323,6 +323,8 @@ Password-reset mail supports two backend providers. Gmail uses `EMAIL_PROVIDER=g
 
 Registration accepts only a username, email and password. The username is 1–50 characters after trimming surrounding whitespace, the email must be a valid address of at most 100 characters, and the password must be at least 12 characters and at most 72 UTF-8 bytes, with whitespace preserved. Whitespace-only passwords are rejected. Successful registration returns `201`; a username or email conflict, including one caused by concurrent registration, returns `409`. Sign-in keeps accepting the password lengths of existing accounts.
 
+Cookie-changing authentication endpoints (customer login, registration, reset and logout; administrator login and logout) require `X-Requested-With: XMLHttpRequest`, including requests without an existing session. A present `Origin` must be a canonical HTTP(S) origin matching this deployment or the explicit `CORS_ORIGIN` allowlist; API clients without `Origin` still send the header. Invalid sources return `403` before account/password work.
+
 Customer login, registration, logout and password requests share a cookie-write queue. An abandoned login cannot publish its profile after navigation; its cookie is cleared before the next sign-in starts. Failed cleanup must succeed before another sign-in sends credentials. Web Locks extend this ordering to cooperating tabs on the same origin where supported; the fallback orders requests within one tab. Credentials and account creation are never retried automatically.
 
 Profile updates accept only `username`, `phone` and `avatar_url`, and at least one must be provided. The phone number is at most 20 characters and the avatar is an HTTP(S) URL of at most 255 characters; both can be cleared with an empty string or `null`. Re-submitting existing values also succeeds. The public profile never includes the password hash, and error messages are available in Chinese and English.
@@ -453,6 +455,8 @@ Product content is stored separately from interface translations: `title_en`, `d
 - `POST /api/admin/login` - Administrator sign-in
 - `POST /api/admin/logout` - Sign out and invalidate every session of this administrator
 - `GET /api/admin/profile` - Administrator profile and permissions
+
+Administrator sign-in accepts only string `username` and `password` fields. The trimmed username is 1–50 characters; the original password is preserved, allows historical short passwords and is limited to 1024 characters. Invalid fields return `400` before database lookup.
 
 **Statistics:**
 - `GET /api/admin/dashboard/stats` - Statistics

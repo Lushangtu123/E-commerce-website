@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 test('超过 1MB 的请求体返回 413，不进入业务逻辑', async () => {
-  const res = await request(app).post('/api/users/login').set('Content-Type', 'application/json')
+  const res = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').set('Content-Type', 'application/json')
     .send(JSON.stringify({ email: 'a@example.test', password: 'x'.repeat(1024 * 1024 + 1) }));
   expect(res.status).toBe(413);
   expect(res.body.error).toBe('请求体过大');
@@ -26,14 +26,14 @@ test('超过 1MB 的请求体返回 413，不进入业务逻辑', async () => {
 });
 
 test('格式错误的 JSON 返回 400 而不是 500', async () => {
-  const res = await request(app).post('/api/users/login').set('Content-Type', 'application/json').send('{"email":');
+  const res = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').set('Content-Type', 'application/json').send('{"email":');
   expect(res.status).toBe(400);
   expect(res.body.error).toBe('请求格式无效');
   expect(query).not.toHaveBeenCalled();
 });
 
 test('1MB 以内的正常请求体照常处理', async () => {
-  const res = await request(app).post('/api/users/login').set('Content-Type', 'application/json')
+  const res = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').set('Content-Type', 'application/json')
     .send(JSON.stringify({ email: 'a@example.test', password: 'x'.repeat(500 * 1024) }));
   expect(res.status).toBe(401);
 });

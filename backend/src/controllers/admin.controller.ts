@@ -4,19 +4,18 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Admin } from '../models/admin.model';
 import logger from '../utils/logger';
-import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasCsrfHeader, sessionToken, setSessionCookie } from '../utils/session-cookie';
+import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasTrustedSessionSource, sessionToken, setSessionCookie } from '../utils/session-cookie';
+import { normalizeAdminLogin } from '../utils/admin-login-validation';
+import { UserValidationError } from '../utils/user-validation';
 import { logAdminAction } from './admin-log.controller';
 import { jwtSecret } from '../utils/jwt-secret';
 
 // 管理员登录
 export const adminLogin = async (req: Request, res: Response) => {
+  if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
   try {
+    const { username, password } = normalizeAdminLogin(req.body);
     const pool = getPool();
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ error: '用户名和密码不能为空' });
-    }
 
     // 查询管理员
     const [admins] = await pool.query(
@@ -91,6 +90,7 @@ export const adminLogin = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
     logger.error({ err: error }, '管理员登录失败');
     res.status(500).json({ error: '登录失败' });
   }
@@ -140,7 +140,7 @@ export const getAdminProfile = async (req: Request, res: Response) => {
  * 即使令牌已过期也能退出，所以不经过管理员认证；只有有效且版本仍为当前值的令牌才会触发撤销。
  */
 export const adminLogout = async (req: Request, res: Response) => {
-  if (!hasCsrfHeader(req)) return res.status(403).json({ error: CSRF_ERROR });
+  if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
   clearSessionCookie(res, ADMIN_COOKIE);
 
   let session: jwt.JwtPayload | undefined;

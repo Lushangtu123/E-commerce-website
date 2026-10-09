@@ -55,13 +55,13 @@ integration('真实 MySQL 账户HTTP契约', () => {
   });
 
   test('注册和登录保存完整密码并返回公开资料', async () => {
-    const created = await request(app).post('/api/users/register').send({ ...registration, username: '  单 ', email: ' new@example.test ' });
+    const created = await request(app).post('/api/users/register').set('X-Requested-With', 'XMLHttpRequest').send({ ...registration, username: '  单 ', email: ' new@example.test ' });
     expect(created.status).toBe(201);
     expect(created.body.user).toMatchObject({ username: '单', email: 'new@example.test' });
     expect(created.body.user.password_hash).toBeUndefined();
     const [users] = await db.query<RowDataPacket[]>('SELECT * FROM users WHERE email = ?', [registration.email]);
     expect(await bcrypt.compare(registration.password, users[0].password_hash)).toBe(true);
-    const login = await request(app).post('/api/users/login').send({ email: ' new@example.test ', password: registration.password });
+    const login = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: ' new@example.test ', password: registration.password });
     expect(login.status).toBe(200);
     expect(login.body.user.user_id).toBe(users[0].user_id);
     expect(login.body.user.password_hash).toBeUndefined();
@@ -69,8 +69,8 @@ integration('真实 MySQL 账户HTTP契约', () => {
 
   test('并发注册同一账户仅成功一次，冲突返回409', async () => {
     const results = await Promise.all([
-      request(app).post('/api/users/register').send(registration),
-      request(app).post('/api/users/register').send(registration),
+      request(app).post('/api/users/register').set('X-Requested-With', 'XMLHttpRequest').send(registration),
+      request(app).post('/api/users/register').set('X-Requested-With', 'XMLHttpRequest').send(registration),
     ]);
     expect(results.map(result => result.status).sort()).toEqual([201, 409]);
     expect(results.find(result => result.status === 409)?.body.error).toMatch(/已被/);
@@ -79,7 +79,7 @@ integration('真实 MySQL 账户HTTP契约', () => {
 
   test('无效注册和资料更新均不改变数据库记录', async () => {
     const [before] = await db.query<RowDataPacket[]>('SELECT * FROM users ORDER BY user_id');
-    expect((await request(app).post('/api/users/register').send({ ...registration, password: '汉'.repeat(25) })).status).toBe(400);
+    expect((await request(app).post('/api/users/register').set('X-Requested-With', 'XMLHttpRequest').send({ ...registration, password: '汉'.repeat(25) })).status).toBe(400);
     expect((await request(app).put('/api/users/profile').set('Authorization', auth(1)).send({})).status).toBe(400);
     expect((await request(app).put('/api/users/profile').set('Authorization', auth(1)).send({ email: 'other@example.test' })).status).toBe(400);
     expect((await db.query<RowDataPacket[]>('SELECT * FROM users ORDER BY user_id'))[0]).toEqual(before);
@@ -100,10 +100,10 @@ integration('真实 MySQL 账户HTTP契约', () => {
   test.each([' 1 ', 'x'.repeat(80)])('旧账户密码长度保持兼容，原密码必须匹配', async password => {
     const password_hash = await bcrypt.hash(password, 4);
     await db.query('UPDATE users SET email = ?, password_hash = ? WHERE user_id = 1', ['legacy-email', password_hash]);
-    const login = await request(app).post('/api/users/login').send({ email: ' legacy-email ', password });
+    const login = await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: ' legacy-email ', password });
     expect(login.status).toBe(200);
     expect(login.body.user.user_id).toBe(1);
-    expect((await request(app).post('/api/users/login').send({ email: 'legacy-email', password: 'incorrect' })).status).toBe(401);
+    expect((await request(app).post('/api/users/login').set('X-Requested-With', 'XMLHttpRequest').send({ email: 'legacy-email', password: 'incorrect' })).status).toBe(401);
   });
 
   test('资料读取和更新要求有效用户令牌，已删除账户撤销会话返回401', async () => {

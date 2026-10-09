@@ -22,6 +22,7 @@ echo ""
 # 1. 管理员登录
 echo -e "${BLUE}[1/8] 管理员登录...${NC}"
 ADMIN_LOGIN=$(curl -s -i -X POST "${BASE_URL}/admin/login" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}')
 
@@ -128,6 +129,7 @@ echo -e "${BLUE}[4/8] 用户注册/登录...${NC}"
 
 # 尝试注册
 REGISTER=$(curl -s -i -X POST "${BASE_URL}/users/register" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "coupon_test_user",
@@ -138,6 +140,7 @@ REGISTER=$(curl -s -i -X POST "${BASE_URL}/users/register" \
 
 # 登录
 USER_LOGIN=$(curl -s -i -X POST "${BASE_URL}/users/login" \
+  -H "X-Requested-With: XMLHttpRequest" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "coupon_test_user",
