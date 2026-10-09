@@ -5,10 +5,8 @@ import { getPool } from '../../database/mysql';
 import { migrateCouponTables } from '../../database/migrate-coupon';
 import { CouponModel } from '../../models/coupon.model';
 import { AdminCouponController } from '../../controllers/admin-coupon.controller';
-import { logAdminAction } from '../../controllers/admin-log.controller';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
-jest.mock('../../controllers/admin-log.controller', () => ({ logAdminAction: jest.fn() }));
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
 
 integration('管理员优惠券创建冲突（真实 MySQL）', () => {
@@ -29,8 +27,13 @@ integration('管理员优惠券创建冲突（真实 MySQL）', () => {
       if (['users', 'orders'].includes(match[2])) await db.query(match[1]);
     }
     await migrateCouponTables(db);
+    const adminSource = fs.readFileSync(path.join(__dirname, '../../database/admin-migrate.ts'), 'utf8');
+    for (const match of adminSource.matchAll(/`(\s*CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
+      if (['roles', 'admins', 'admin_logs'].includes(match[2])) await db.query(match[1]);
+    }
+    await db.query("INSERT INTO admins(admin_id,username,password_hash) VALUES(1,'first','fixture'),(2,'second','fixture')");
   });
-  beforeEach(async () => { jest.clearAllMocks(); await db.query('DELETE FROM coupons'); });
+  beforeEach(async () => { jest.clearAllMocks(); await db.query('DELETE FROM admin_logs'); await db.query('DELETE FROM coupons'); });
   afterEach(() => jest.restoreAllMocks());
   afterAll(async () => {
     if (db) await db.end();
@@ -67,7 +70,7 @@ integration('管理员优惠券创建冲突（真实 MySQL）', () => {
     expect([first.statusCode, second.statusCode].sort()).toEqual([200, 409]);
     const rejected = first.statusCode === 409 ? first : second;
     expect(rejected.body).toEqual({ success: false, message: '优惠券代码已存在' });
-    expect(logAdminAction).toHaveBeenCalledTimes(1);
+    expect((await db.query<RowDataPacket[]>('SELECT action FROM admin_logs'))[0]).toEqual([{ action: 'CREATE_COUPON' }]);
   });
 
   test('顺序重复创建同样返回 409，不同代码正常创建', async () => {
@@ -79,6 +82,6 @@ integration('管理员优惠券创建冲突（真实 MySQL）', () => {
     expect(repeated.body.message).toBe('优惠券代码已存在');
     const [rows] = await db.query<RowDataPacket[]>('SELECT code, name FROM coupons ORDER BY code');
     expect(rows).toEqual([{ code: 'ONE', name: 'first coupon' }, { code: 'TWO', name: 'other coupon' }]);
-    expect(logAdminAction).toHaveBeenCalledTimes(2);
+    expect((await db.query<RowDataPacket[]>('SELECT action FROM admin_logs'))[0]).toEqual([{ action: 'CREATE_COUPON' }, { action: 'CREATE_COUPON' }]);
   });
 });

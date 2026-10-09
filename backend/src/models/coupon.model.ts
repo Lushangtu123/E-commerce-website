@@ -7,6 +7,7 @@ import { PoolConnection } from 'mysql2/promise';
 import { calculateDiscountCents, couponMoneyToCents } from '../utils/coupon-discount';
 import logger from '../utils/logger';
 import { CouponClaimError, normalizeCouponClaimKey } from '../utils/coupon-claim';
+import { AdminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
 
 // 优惠券类型
 export enum CouponType {
@@ -63,30 +64,35 @@ export class CouponModel {
    * 创建优惠券
    */
   static async create(
-    coupon: Partial<Coupon> & Pick<Coupon, 'code' | 'name' | 'type' | 'discount_value' | 'total_quantity' | 'start_time' | 'end_time'>
+    coupon: Partial<Coupon> & Pick<Coupon, 'code' | 'name' | 'type' | 'discount_value' | 'total_quantity' | 'start_time' | 'end_time'>,
+    audit?: AdminAuditContext
   ): Promise<number> {
-    const [result] = await getPool().execute<ResultSetHeader>(
-      `INSERT INTO coupons 
-       (code, name, description, type, discount_value, min_amount, max_discount,
-        total_quantity, remain_quantity, per_user_limit, start_time, end_time, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        coupon.code,
-        coupon.name,
-        coupon.description ?? null,
-        coupon.type,
-        coupon.discount_value,
-        coupon.min_amount ?? 0,
-        coupon.max_discount ?? null,
-        coupon.total_quantity,
-        coupon.remain_quantity ?? coupon.total_quantity,
-        coupon.per_user_limit ?? 1,
-        coupon.start_time,
-        coupon.end_time,
-        coupon.status ?? CouponStatus.ENABLED,
-      ]
-    );
-    return result.insertId;
+    const insert = async (connection: Pick<PoolConnection, 'execute'>) => {
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO coupons
+         (code, name, description, type, discount_value, min_amount, max_discount,
+          total_quantity, remain_quantity, per_user_limit, start_time, end_time, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          coupon.code,
+          coupon.name,
+          coupon.description ?? null,
+          coupon.type,
+          coupon.discount_value,
+          coupon.min_amount ?? 0,
+          coupon.max_discount ?? null,
+          coupon.total_quantity,
+          coupon.remain_quantity ?? coupon.total_quantity,
+          coupon.per_user_limit ?? 1,
+          coupon.start_time,
+          coupon.end_time,
+          coupon.status ?? CouponStatus.ENABLED,
+        ]
+      );
+      if (audit) await writeAdminAudit(connection, audit, 'CREATE_COUPON', 'coupon', String(result.insertId), `创建优惠券: ${coupon.name} (${coupon.code})`);
+      return result.insertId;
+    };
+    return audit ? adminWriteTransaction(insert) : insert(getPool());
   }
 
   /**
@@ -359,7 +365,15 @@ export class CouponModel {
   /**
    * 更新优惠券状态（启用/禁用）
    */
-  static async updateStatus(couponId: number, status: CouponStatus): Promise<boolean> {
+  static async updateStatus(couponId: number, status: CouponStatus, audit?: AdminAuditContext): Promise<boolean> {
+    if (audit) return adminWriteTransaction(async connection => {
+      const [coupons] = await connection.execute<RowDataPacket[]>('SELECT name, code FROM coupons WHERE coupon_id = ? FOR UPDATE', [couponId]);
+      if (!coupons.length) return false;
+      await connection.execute('UPDATE coupons SET status = ?, updated_at = NOW() WHERE coupon_id = ?', [status, couponId]);
+      await writeAdminAudit(connection, audit, 'UPDATE_COUPON_STATUS', 'coupon', String(couponId),
+        `${status === CouponStatus.ENABLED ? '启用' : '停用'}优惠券: ${coupons[0].name} (${coupons[0].code})`);
+      return true;
+    });
     const [result] = await getPool().execute<ResultSetHeader>(
       'UPDATE coupons SET status = ?, updated_at = NOW() WHERE coupon_id = ?',
       [status, couponId]

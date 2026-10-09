@@ -11,7 +11,6 @@ import { updateUserStatus } from '../../controllers/admin-user.controller';
 import userRoutes from '../../routes/user.routes';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
-jest.mock('../../controllers/admin-log.controller', () => ({ logAdminAction: jest.fn() }));
 
 // Own a disposable test database only; never use the application's DB_NAME.
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
@@ -41,6 +40,8 @@ integration('MySQL customer disable and migration compatibility', () => {
       .replace(/\s*auth_version INT UNSIGNED NOT NULL DEFAULT 0,/, ''));
     await db.query('CREATE TABLE admins (admin_id BIGINT PRIMARY KEY, password_hash VARCHAR(255) NOT NULL)');
     await db.query("INSERT INTO admins VALUES (1, 'legacy-admin-hash')");
+    const adminSource = fs.readFileSync(path.join(__dirname, '../../database/admin-migrate.ts'), 'utf8');
+    await db.query(adminSource.match(/`(\s*CREATE TABLE IF NOT EXISTS admin_logs[\s\S]*?)`/)![1]);
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (99,'legacy','legacy@example.test','legacy-customer-hash')");
     await migrateAccountSecurity(db); await migrateAccountSecurity(db);
     const [legacy] = await db.query<RowDataPacket[]>('SELECT password_hash,status,auth_version FROM users WHERE user_id = 99');
@@ -61,6 +62,7 @@ integration('MySQL customer disable and migration compatibility', () => {
     if (server) { try { if (created) await server.query(`DROP DATABASE ${database}`); } finally { await server.end(); } }
   });
   beforeEach(async () => {
+    await db.query('DELETE FROM admin_logs');
     await db.query('DELETE FROM users');
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (7,'customer','customer@example.test',?)", [passwordHash]);
   });

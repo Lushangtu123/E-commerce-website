@@ -4,6 +4,8 @@ import logger from '../utils/logger';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PRODUCT_SORTS, productCreateSchema, productQuerySchema, productUpdateSchema } from '../utils/product-validation';
 import { SpecsTranslation } from '../utils/product-i18n';
+import { AdminAuditMetadata } from '../utils/admin-audit-metadata';
+import { AdminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
 
 export class ProductCreateError extends Error {
   constructor(message: string, public statusCode = 400) { super(message); }
@@ -99,15 +101,20 @@ export class ProductModel {
   }
 
   // 创建商品
-  static async create(product: Partial<Product>): Promise<number> {
+  static async create(product: Partial<Product>, audit?: AdminAuditContext): Promise<number> {
     const { error, value } = productCreateSchema.validate(product);
     if (error) throw error;
+    if (audit) return adminWriteTransaction(async connection => {
+      const [result] = await connection.execute<ResultSetHeader>(createSql, creationValues(value));
+      await writeAdminAudit(connection, audit, 'CREATE_PRODUCT', 'product', String(result.insertId), `创建商品: ${value.title}`);
+      return result.insertId;
+    });
     const result = await query<ResultSetHeader>(createSql, creationValues(value));
     return result.insertId;
   }
 
   /** An administrator's retry returns the original receipt even after the product is edited or deleted. */
-  static async createForAdmin(product: Partial<Product>, adminId: number, createKey: string): Promise<{ productId: number; replayed: boolean }> {
+  static async createForAdmin(product: Partial<Product>, adminId: number, createKey: string, metadata: AdminAuditMetadata = {}): Promise<{ productId: number; replayed: boolean }> {
     if (!Number.isSafeInteger(adminId) || adminId < 1 || typeof createKey !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(createKey)) throw new ProductCreateError('商品新增请求号无效');
     const { error, value } = productCreateSchema.validate(product);
     if (error) throw new ProductCreateError('商品字段或值无效，标题、价格和分类必填');
@@ -128,6 +135,7 @@ export class ProductModel {
       const [result] = await connection.execute<ResultSetHeader>(
         `INSERT INTO products (${createColumns.join(', ')},created_by_admin_id,create_key,create_fingerprint) VALUES (${createColumns.map(() => '?').join(', ')},?,?,?)`,
         [...creationValues(value), adminId, key, fingerprint]);
+      await writeAdminAudit(connection, { ...metadata, adminId }, 'CREATE_PRODUCT', 'product', String(result.insertId), `创建商品: ${value.title}`);
       await connection.commit();
       return { productId: result.insertId, replayed: false };
     } catch (error) {
@@ -208,13 +216,21 @@ export class ProductModel {
   }
 
   // 更新商品
-  static async update(productId: number, updates: Partial<Product>): Promise<boolean> {
+  static async update(productId: number, updates: Partial<Product>, audit?: AdminAuditContext): Promise<boolean> {
     const { error, value } = productUpdateSchema.validate(updates);
     if (error) throw error;
     const keys = Object.keys(value);
     const fields = keys.map(key => `${key} = ?`).join(', ');
     const values = [...keys.map(key => ['images', 'specs', 'specs_en'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), productId];
     
+    if (audit) return adminWriteTransaction(async connection => {
+      const [result] = await connection.execute<ResultSetHeader>(
+        `UPDATE products SET ${fields} WHERE product_id = ? AND status IN (0, 1)`, values
+      );
+      if (!result.affectedRows) return false;
+      await writeAdminAudit(connection, audit, 'UPDATE_PRODUCT', 'product', String(productId), `更新商品: ${value.title || ''}`);
+      return true;
+    });
     const result = await query<ResultSetHeader>(
       `UPDATE products SET ${fields} WHERE product_id = ? AND status IN (0, 1)`,
       values

@@ -3,6 +3,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { skuCreateSchema, skuUpdateSchema, validSKUId } from '../utils/sku-validation';
 import { SpecsTranslation } from '../utils/product-i18n';
+import { AdminAuditContext, writeAdminAudit } from '../utils/admin-write-audit';
 
 export class SKUError extends Error {
   constructor(message: string, public readonly statusCode: number = 400) { super(message); }
@@ -90,7 +91,7 @@ export class SKUModel {
     stock: number;
     image?: string;
     status?: number;
-  }): Promise<number> {
+  }, audit?: AdminAuditContext): Promise<number> {
     const fields = validateCreate(data);
     return skuTransaction(async connection => {
       await lockProductSKUs(connection, fields.product_id);
@@ -100,12 +101,13 @@ export class SKUModel {
         [fields.product_id, fields.sku_code, JSON.stringify(fields.specs), fields.specs_en == null ? null : JSON.stringify(fields.specs_en), fields.price,
           fields.original_price ?? null, fields.stock, fields.image ?? null, fields.status]
       );
+      if (audit) await writeAdminAudit(connection, audit, 'CREATE_SKU', 'sku', String(result.insertId), `为商品${fields.product_id}创建SKU: ${fields.sku_code}`);
       return result.insertId;
     });
   }
 
   // 批量创建SKU
-  static async createBatch(skus: any[]): Promise<void> {
+  static async createBatch(skus: any[], audit?: AdminAuditContext): Promise<void> {
     if (!Array.isArray(skus) || skus.length === 0 || skus.length > 100) throw new SKUError('SKU列表无效');
     const fields = skus.map(validateCreate);
     const codes = new Set(fields.map(sku => sku.sku_code));
@@ -121,6 +123,7 @@ export class SKUModel {
             sku.original_price ?? null, sku.stock, sku.image ?? null, sku.status]
         );
       }
+      if (audit) await writeAdminAudit(connection, audit, 'BATCH_CREATE_SKU', 'sku', String(fields[0].product_id), `为商品${fields[0].product_id}批量创建${fields.length}个SKU`);
     });
   }
 
@@ -160,7 +163,7 @@ export class SKUModel {
   }
 
   // 更新SKU
-  static async update(skuId: number, data: Partial<ProductSKU>, productId?: number): Promise<boolean> {
+  static async update(skuId: number, data: Partial<ProductSKU>, productId?: number, audit?: AdminAuditContext): Promise<boolean> {
     const { error, value } = skuUpdateSchema.validate(data);
     if (error) throw new SKUError('SKU字段或值无效');
     const parentId = await resolveParentId(skuId, productId);
@@ -176,6 +179,7 @@ export class SKUModel {
         `UPDATE product_skus SET ${keys.map(key => `${key} = ?`).join(', ')} WHERE sku_id = ? AND product_id = ?`,
         [...keys.map(key => ['specs', 'specs_en'].includes(key) && value[key] != null ? JSON.stringify(value[key]) : value[key]), skuId, parentId]
       );
+      if (result.affectedRows && audit) await writeAdminAudit(connection, audit, 'UPDATE_SKU', 'sku', String(skuId), '更新SKU');
       return result.affectedRows > 0;
     });
   }
@@ -199,7 +203,7 @@ export class SKUModel {
   }
 
   // 删除SKU
-  static async delete(skuId: number, productId?: number): Promise<boolean> {
+  static async delete(skuId: number, productId?: number, audit?: AdminAuditContext): Promise<boolean> {
     const parentId = await resolveParentId(skuId, productId);
     if (parentId === undefined) return false;
     return skuTransaction(async connection => {
@@ -211,6 +215,7 @@ export class SKUModel {
       const [result] = await connection.execute<ResultSetHeader>(
         'UPDATE product_skus SET status = 0 WHERE sku_id = ? AND product_id = ?', [skuId, parentId]
       );
+      if (result.affectedRows && audit) await writeAdminAudit(connection, audit, 'DELETE_SKU', 'sku', String(skuId), '删除SKU');
       return result.affectedRows > 0;
     });
   }
