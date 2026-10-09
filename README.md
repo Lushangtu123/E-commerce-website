@@ -347,6 +347,7 @@ A complete address has six non-empty strings, `receiver_name`, `phone`, `provinc
 - `POST /api/products`, `PUT /api/products/:id` - Create or update a product (administrators with `product:create` / `product:edit`)
 
 Keyword search uses `GET /api/products?keyword=...` (MySQL) or `GET /api/search/es` (Elasticsearch with MySQL fallback).
+MySQL search splits keywords on whitespace and requires every term to appear in the brand, title or description (including English translations). Terms can match different fields, so `Acme headphones` finds an Acme product whose English title contains “headphones”. `%` and `_` are searched as literal characters. Existing filters, sorting and pagination apply to the matching products.
 
 ### Favourites APIs
 - `POST /api/favorites` - Add a favourite; body `{ product_id }`, the product must exist and be on sale

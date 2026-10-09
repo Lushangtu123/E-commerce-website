@@ -152,8 +152,11 @@ export class ProductModel {
     }
 
     if (keyword) {
-      whereClauses.push('(title LIKE ? OR description LIKE ? OR title_en LIKE ? OR description_en LIKE ?)');
-      queryParams.push(...Array(4).fill(`%${keyword}%`));
+      // Every word must match a searchable field; LIKE metacharacters are literal search text.
+      for (const term of new Set<string>(keyword.split(/\s+/))) {
+        whereClauses.push("(title LIKE ? ESCAPE '!' OR description LIKE ? ESCAPE '!' OR title_en LIKE ? ESCAPE '!' OR description_en LIKE ? ESCAPE '!' OR brand LIKE ? ESCAPE '!')");
+        queryParams.push(...Array(5).fill(`%${term.replace(/[!%_]/g, '!$&')}%`));
+      }
     }
 
     if (brand) {

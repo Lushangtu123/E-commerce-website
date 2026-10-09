@@ -541,6 +541,22 @@ async function localPlatformScripts(context) {
   await page.waitForFunction(() => document.title === '浏览器交易测试商品 | 电商平台');
   console.log('PASS browser product titles follow language, reload and product navigation');
   console.log('PASS browser bilingual product name, description, attributes and English search');
+  for (const keyword of ['BrowserBrand', 'BrowserBrand 交易', 'BrowserBrand checkout']) {
+    const headerSearch = page.getByRole('search');
+    await headerSearch.getByRole('textbox', { name: '搜索商品', exact: true }).fill(keyword);
+    await headerSearch.getByRole('button', { name: '搜索', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/products' && url.searchParams.get('keyword') === keyword);
+    await page.getByRole('heading', { name: '浏览器交易测试商品', exact: true }).waitFor({ state: 'visible' });
+    await visibleText(page, '共找到 1 件商品');
+  }
+  const missingBrandSearch = page.getByRole('search');
+  await missingBrandSearch.getByRole('textbox', { name: '搜索商品', exact: true }).fill('BrowserBrand 不存在的词');
+  await missingBrandSearch.getByRole('button', { name: '搜索', exact: true }).click();
+  await visibleText(page, '共找到 0 件商品');
+  await page.getByRole('heading', { name: '暂无商品', exact: true }).waitFor({ state: 'visible' });
+  await page.goto('http://127.0.0.1:3100/products/1');
+  await page.getByRole('button', { name: '加入购物车', exact: true }).click({ trial: true });
+  console.log('PASS browser Header keyword search matches brand and terms across Chinese/English fields with a missing-term control');
   await page.getByRole('button', { name: '加入购物车', exact: true }).click();
   await visibleText(page, '已加入购物车');
   const cartEndpoint = 'http://127.0.0.1:3101/api/cart';
