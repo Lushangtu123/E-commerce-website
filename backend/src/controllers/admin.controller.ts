@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Admin } from '../models/admin.model';
 import logger from '../utils/logger';
-import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasCsrfHeader, readCookie, setSessionCookie } from '../utils/session-cookie';
+import { ADMIN_COOKIE, CSRF_ERROR, clearSessionCookie, hasCsrfHeader, sessionToken, setSessionCookie } from '../utils/session-cookie';
 import { logAdminAction } from './admin-log.controller';
 import { jwtSecret } from '../utils/jwt-secret';
 
@@ -145,8 +145,8 @@ export const adminLogout = async (req: Request, res: Response) => {
 
   let session: jwt.JwtPayload | undefined;
   try {
-    const verified = jwt.verify(readCookie(req, ADMIN_COOKIE) || '', jwtSecret());
-    if (typeof verified === 'object' && verified.type === 'admin' && Number.isSafeInteger(verified.adminId)) session = verified;
+    const verified = jwt.verify(sessionToken(req, ADMIN_COOKIE).token || '', jwtSecret());
+    if (typeof verified === 'object' && verified.type === 'admin' && Number.isSafeInteger(verified.adminId) && verified.adminId > 0) session = verified;
   } catch {
     // 过期或无效的令牌已无法使用，只需清除 Cookie
   }

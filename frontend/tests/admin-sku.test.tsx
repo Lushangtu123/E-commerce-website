@@ -44,7 +44,7 @@ interface Setup {
  * Signs administrator one in beside a customer session, answers the real API client at the
  * transport layer and renders the SKU manager for the product in `params.id`.
  */
-async function setup({ list = async () => ({ product, skus: [sku] }), mutate = async () => ({ sku_id: 12 }), locale = 'zh-CN', page = () => <SkuPage />, before }: Setup = {}) {
+async function setup({ list = async () => ({ product, skus: [sku] }), mutate = async () => ({ sku_id: 12, message: '更新成功' }), locale = 'zh-CN', page = () => <SkuPage />, before }: Setup = {}) {
   localStorage.setItem('session', 'customer-session');
   localStorage.setItem('admin_session', 'admin-one');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: '测试管理员' }));
@@ -342,7 +342,7 @@ describe('admin SKU management', () => {
   it('keeps the draft after a failed save for a retry, and old handlers can neither submit twice nor toggle meanwhile', async () => {
     const pending = deferred();
     let attempt = 0;
-    await setup({ mutate: () => ++attempt === 1 ? pending.promise : Promise.resolve({}) });
+    await setup({ mutate: () => ++attempt === 1 ? pending.promise : Promise.resolve({ message: '更新成功' }) });
     const toggle = captureHandler(button('停用规格')!);
     await click('编辑规格');
     await edit({ price: '19' });

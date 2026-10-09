@@ -4,6 +4,7 @@ import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
 
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import type { AdminPage, AdminProductRow, Category } from '@/lib/api';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
@@ -16,12 +17,15 @@ import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 import { localizedText } from '@/lib/product-content';
 import { clearPendingProductCreation, readPendingProductCreation, storePendingProductCreation, type PendingProductCreation } from '@/lib/pending-product-creation';
+import { inventoryUpdateAcknowledged, unknownInventoryWrite, validProductSnapshot } from '@/lib/admin-inventory-write';
 
 type EditProductForm = ProductFormValues & { product_id: number; previous: ProductFormValues };
+type Recovery = { sessionId: string | null; checking: boolean };
 
 export default function AdminProductsPage() {
   const { t, locale } = useI18n();
   const sessionId = useAdminSessionId();
+  const queryClient = useQueryClient();
   // The page and filters belong to the administrator who chose them; another one starts unfiltered on page one.
   const [view, setView] = useState({ sessionId, page: 1, filters: { keyword: '', status: '' } });
   const ownsView = view.sessionId === sessionId;
@@ -45,6 +49,9 @@ export default function AdminProductsPage() {
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
+  const recovery = useRef<Recovery | null>(null);
+  const [recovering, setRecovering] = useState<Recovery | null>(null);
+  const latestRead = useRef<(() => Promise<boolean>) | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const query = useAdminQuery({
     name: 'products',
@@ -69,7 +76,9 @@ export default function AdminProductsPage() {
   const total = Number(shown?.pagination?.total) || 0;
   const loadError = query.error ? requestFailure(query.error).response?.data?.error || '获取商品列表失败' : undefined;
   const loading = !shown && !loadError;
-  const busy = !!sessionId && pendingSessionId === sessionId;
+  const unresolved = recovering?.sessionId === sessionId && query.isCurrentSession() ? recovering : null;
+  const busy = !!sessionId && (pendingSessionId === sessionId || !!unresolved);
+  const writeLocked = () => !!mutation.current || recovery.current?.sessionId === sessionId;
   const isCurrentScope = () => query.isCurrentSession() && currentScope.current === scopeKey;
   const isDisplayedScope = () => isCurrentScope() && shown !== undefined && displayed.current === shown;
   const reload = () => { if (isCurrentScope()) void query.refetch(); };
@@ -77,7 +86,7 @@ export default function AdminProductsPage() {
     if (formScope === scopeKey && isCurrentScope() && categoriesQuery.isCurrentSession()) void categoriesQuery.refetch();
   };
   const restoreCreation = () => {
-    if (!sessionId || !query.isCurrentSession() || mutation.current) return;
+    if (!sessionId || !query.isCurrentSession() || writeLocked()) return;
     try {
       const attempt = readPendingProductCreation(sessionId);
       pendingCreation.current = attempt ? { sessionId, attempt } : null;
@@ -87,6 +96,21 @@ export default function AdminProductsPage() {
       pendingCreation.current = null; setCreation(null);
       creationUnavailable.current = sessionId; setCreationStorageError(sessionId);
     }
+  };
+
+  // Cancel earlier list reads before replacing the cache with this recovery snapshot.
+  // A filter change during the read is checked again through the latest render's loader.
+  latestRead.current = async () => {
+    if (!isCurrentScope()) return false;
+    await queryClient.cancelQueries({ queryKey: ['admin', 'products', sessionId] });
+    if (!isCurrentScope()) return false;
+    const actual = await api.get<unknown, unknown>('/admin/products', { params: {
+      page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
+    } });
+    if (!isCurrentScope()) return false;
+    if (!validProductSnapshot(actual)) throw new Error('Invalid product snapshot');
+    queryClient.setQueryData(['admin', 'products', sessionId, page, filters.keyword, filters.status], actual);
+    return true;
   };
 
   const selectableProducts = products.filter(product => product.status === 0 || product.status === 1);
@@ -100,6 +124,8 @@ export default function AdminProductsPage() {
   // Open forms and a pending action belong to the administrator who started them.
   useEffect(() => {
     mutation.current = null;
+    recovery.current = null;
+    setRecovering(null);
     setPendingSessionId(null);
     setShowAddModal(false);
     setShowEditModal(false);
@@ -128,13 +154,43 @@ export default function AdminProductsPage() {
     if (categoriesQuery.error) logger.error('获取分类失败:', categoriesQuery.error);
   }, [categoriesQuery.error]);
 
-  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string, afterSuccess?: () => void) => {
-    if (!isDisplayedScope() || mutation.current) return;
+  const checkProducts = async (record: Recovery) => {
+    if (!query.isCurrentSession() || recovery.current !== record || record.checking) return;
+    const checking = { ...record, checking: true }; recovery.current = checking; setRecovering(checking);
+    try {
+      const refreshed = await latestRead.current?.();
+      if (!query.isCurrentSession() || recovery.current !== checking) return;
+      if (!refreshed) {
+        const failed = { ...checking, checking: false }; recovery.current = failed; setRecovering(failed);
+        return;
+      }
+      // Inventory can change through sales during recovery; never infer the write result or replay its draft.
+      setShowEditModal(false); setEditProduct(null); setSelection(null);
+      recovery.current = null; setRecovering(null);
+      toast.error(translate('已重新加载当前商品数据，请核对后重新编辑；此前提交结果仍无法确认'));
+    } catch {
+      if (query.isCurrentSession() && recovery.current === checking) {
+        const failed = { ...checking, checking: false }; recovery.current = failed; setRecovering(failed);
+      }
+    }
+  };
+  const startRecovery = async () => {
+    if (!query.isCurrentSession()) return;
+    const record = { sessionId, checking: false }; recovery.current = record; setRecovering(record);
+    // Retire the modal immediately so its blocking dialog cannot hide the read-only recovery control.
+    setShowEditModal(false); setEditProduct(null); setSelection(null);
+    await checkProducts(record);
+  };
+  const runMutation = async (perform: () => Promise<unknown>, success: string, failure: string, afterSuccess?: () => void,
+    acknowledged?: (value: unknown) => boolean) => {
+    if (!isDisplayedScope() || writeLocked()) return;
     const operation = {};
     mutation.current = operation;
     setPendingSessionId(sessionId);
     try {
-      await perform();
+      const response = await perform();
+      if (!query.isCurrentSession() || mutation.current !== operation) return;
+      if (acknowledged && !acknowledged(response)) { await startRecovery(); return; }
       if (isDisplayedScope()) {
         afterSuccess?.();
         toast.success(translate(success));
@@ -143,7 +199,9 @@ export default function AdminProductsPage() {
       // After a session change it sends nothing: the old administrator's queries are gone or fail their session check.
       await query.invalidate();
     } catch (error) {
-      if (isDisplayedScope()) toast.error(translate(requestFailure(error).response?.data?.error || failure));
+      if (!query.isCurrentSession() || mutation.current !== operation) return;
+      if (acknowledged && unknownInventoryWrite(error)) await startRecovery();
+      else if (isDisplayedScope()) toast.error(translate(requestFailure(error).response?.data?.error || failure));
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;
@@ -182,20 +240,21 @@ export default function AdminProductsPage() {
   const handleStatusChange = (productId: number, newStatus: number) => {
     if (!selectableProducts.some(row => row.product_id === productId)) return;
     return runMutation(() => api.put(`/admin/products/${productId}/status`, { status: newStatus }),
-      newStatus === 1 ? '商品已上架' : '商品已下架', '更新状态失败');
+      newStatus === 1 ? '商品已上架' : '商品已下架', '更新状态失败', undefined,
+      value => inventoryUpdateAcknowledged(value) && 'status' in value && value.status === newStatus);
   };
 
   const handleBatchStatusChange = (newStatus: number) => {
-    if (!isDisplayedScope() || mutation.current) return;
+    if (!isDisplayedScope() || writeLocked()) return;
     const ids = [...selectedIds];
     if (ids.length === 0) { toast.error(translate('请先选择商品')); return; }
     return runMutation(() => api.put('/admin/products/batch/status', { productIds: ids, status: newStatus }),
       t(newStatus === 1 ? '已上架{count}个商品' : '已下架{count}个商品', { count: ids.length }), '批量操作失败',
-      () => setSelectedIds([]));
+      () => setSelectedIds([]), value => !!value && typeof value === 'object' && 'message' in value && value.message === '批量更新成功' && 'count' in value && value.count === ids.length);
   };
 
   const toggleSelect = (productId: number) => {
-    if (mutation.current || !isDisplayedScope() || !selectableProducts.some(product => product.product_id === productId)) return;
+    if (writeLocked() || !isDisplayedScope() || !selectableProducts.some(product => product.product_id === productId)) return;
     setSelectedIds(prev => 
       prev.includes(productId)
         ? prev.filter(id => id !== productId)
@@ -204,7 +263,7 @@ export default function AdminProductsPage() {
   };
 
   const toggleSelectAll = () => {
-    if (mutation.current || !isDisplayedScope()) return;
+    if (writeLocked() || !isDisplayedScope()) return;
     if (allSelected) {
       setSelectedIds([]);
     } else {
@@ -213,14 +272,14 @@ export default function AdminProductsPage() {
   };
 
   const updateNewProduct = (next: ProductFormValues) => {
-    if (formScope === scopeKey && isDisplayedScope() && !mutation.current && pendingCreation.current?.sessionId !== sessionId) setNewProduct(next);
+    if (formScope === scopeKey && isDisplayedScope() && !writeLocked() && pendingCreation.current?.sessionId !== sessionId) setNewProduct(next);
   };
   const updateEditProduct = (next: EditProductForm) => {
-    if (formScope === scopeKey && isDisplayedScope() && !mutation.current) setEditProduct(next);
+    if (formScope === scopeKey && isDisplayedScope() && !writeLocked()) setEditProduct(next);
   };
 
   const submitCreation = async (attempt: PendingProductCreation) => {
-    if (!sessionId || !query.isCurrentSession() || mutation.current || creationUnavailable.current === sessionId) return;
+    if (!sessionId || !query.isCurrentSession() || writeLocked() || creationUnavailable.current === sessionId) return;
     const recovering = pendingCreation.current?.sessionId === sessionId;
     if (!storePendingProductCreation(sessionId, attempt)) {
       toast.error(translate('无法保存商品新增请求，请允许浏览器存储后重试')); return;
@@ -253,7 +312,7 @@ export default function AdminProductsPage() {
   };
 
   const handleAddProduct = () => {
-    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || mutation.current || pendingCreation.current?.sessionId === sessionId || creationUnavailable.current === sessionId || !sessionId) return;
+    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || writeLocked() || pendingCreation.current?.sessionId === sessionId || creationUnavailable.current === sessionId || !sessionId) return;
     if (!isProductFormComplete(newProduct)) {
       toast.error(translate('请填写商品标题、价格和分类'));
       return;
@@ -268,7 +327,7 @@ export default function AdminProductsPage() {
   };
 
   const openEditModal = (product: AdminProductRow) => {
-    if (!isDisplayedScope() || mutation.current || !selectableProducts.some(row => row.product_id === product.product_id)) return;
+    if (!isDisplayedScope() || writeLocked() || !selectableProducts.some(row => row.product_id === product.product_id)) return;
     setFormScope(scopeKey);
     const values: ProductFormValues = {
       title: product.title,
@@ -289,7 +348,7 @@ export default function AdminProductsPage() {
   };
 
   const handleEditProduct = () => {
-    if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || !categoriesReady || mutation.current ||
+    if (formScope !== scopeKey || !editProduct || !isDisplayedScope() || !categoriesReady || writeLocked() ||
       !selectableProducts.some(product => product.product_id === editProduct.product_id)) return;
     if (!isProductFormComplete(editProduct)) {
       toast.error(translate('请填写商品标题、价格和分类'));
@@ -302,7 +361,7 @@ export default function AdminProductsPage() {
     return runMutation(() => api.put(`/admin/products/${editProduct.product_id}`, payload), '商品更新成功', '更新商品失败', () => {
       setShowEditModal(false);
       setEditProduct(null);
-    });
+    }, inventoryUpdateAcknowledged);
   };
 
   const getStatusBadge = (status: number) => {
@@ -323,7 +382,7 @@ export default function AdminProductsPage() {
             <p className="text-gray-600 mt-1">{t("管理商品的上下架和信息")}</p>
           </div>
           <button 
-            onClick={() => { if (isDisplayedScope() && !mutation.current && pendingCreation.current?.sessionId !== sessionId && creationUnavailable.current !== sessionId) { setFormScope(scopeKey); setShowAddModal(true); } }}
+            onClick={() => { if (isDisplayedScope() && !writeLocked() && pendingCreation.current?.sessionId !== sessionId && creationUnavailable.current !== sessionId) { setFormScope(scopeKey); setShowAddModal(true); } }}
             disabled={busy || !!pending || creationStorageError === sessionId || loading || !!loadError}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
@@ -347,6 +406,12 @@ export default function AdminProductsPage() {
         {creationStorageError === sessionId && <div className="card p-4 space-y-3" role="alert">
           <p>{t('无法读取商品新增记录，请检查浏览器存储后重试')}</p>
           <button type="button" className="btn btn-secondary" disabled={busy} onClick={restoreCreation}>{t('重新读取新增记录')}</button>
+        </div>}
+
+        {unresolved && <div role="alert" className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+          <p>{t(unresolved.checking ? '商品更新结果未知，正在重新加载当前数据...' : '商品更新结果尚未确认，请重新加载核对；确认前不会再次提交')}</p>
+          <button type="button" className="btn btn-outline" disabled={unresolved.checking || pendingSessionId === sessionId}
+            onClick={() => void checkProducts(unresolved)}>{t('重新核对商品')}</button>
         </div>}
 
         {/* 搜索和筛选 */}

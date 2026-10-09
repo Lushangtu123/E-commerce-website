@@ -1111,6 +1111,14 @@ async function localPlatformScripts(context) {
   await page.waitForURL('http://127.0.0.1:3100/');
   assert.equal(passwordWrites, 1);
   console.log('PASS browser committed password change with lost reply clears inputs and recovers by signing in');
+  await require('./customer-order-recovery.cjs')({ page, context, adminContext,
+    setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./admin-inventory-recovery.cjs')({ admin, context, adminContext,
+    setExpectedWrite: value => { expectedRecoveryWrite = value; } });
+  await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
+  await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
+  await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,
+    setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   assert.deepEqual(errors, [], 'browser runtime errors');
   assert.deepEqual(consoleErrors, [], 'browser console errors');
   console.log('PASS browser console has no unexpected errors');

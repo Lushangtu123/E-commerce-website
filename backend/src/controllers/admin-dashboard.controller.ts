@@ -122,23 +122,46 @@ export const getTopProducts = async (req: Request, res: Response) => {
     const {days, limit} = parseAdminQuery(req.query, adminTopProductsQuerySchema);
     const pool = getPool();
 
+    // Allocate exact paid cents over all historical lines before selecting live products.
+    // Largest fractional remainders receive the spare cents; item_id breaks ties.
+    // Legacy zero-value lines use equal weights, avoiding division by zero or lost revenue.
     const [products] = await pool.query(
-      `SELECT 
+      `WITH line_values AS (
+         SELECT oi.item_id, oi.order_id, oi.product_id, oi.quantity,
+                o.total_amount * 100 AS paid_cents,
+                oi.price * 100 * oi.quantity AS line_cents,
+                SUM(oi.price * 100 * oi.quantity) OVER (PARTITION BY oi.order_id) AS order_line_cents,
+                COUNT(*) OVER (PARTITION BY oi.order_id) AS line_count
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.order_id
+         WHERE o.status IN (1,2,3) AND (o.payment_method IS NULL OR o.payment_method <> 'demo')
+           AND o.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+       ), line_shares AS (
+         SELECT item_id, order_id, product_id, quantity, paid_cents,
+                (paid_cents * CASE WHEN order_line_cents = 0 THEN 1 ELSE line_cents END)
+                  DIV (CASE WHEN order_line_cents = 0 THEN line_count ELSE order_line_cents END) AS base_cents,
+                MOD(paid_cents * CASE WHEN order_line_cents = 0 THEN 1 ELSE line_cents END,
+                    CASE WHEN order_line_cents = 0 THEN line_count ELSE order_line_cents END) AS remainder
+         FROM line_values
+       ), ranked_shares AS (
+         SELECT order_id, product_id, quantity, base_cents,
+                paid_cents - SUM(base_cents) OVER (PARTITION BY order_id) AS spare_cents,
+                ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY remainder DESC, item_id ASC) AS remainder_rank
+         FROM line_shares
+       )
+       SELECT
         p.product_id,
         p.title,
         p.title_en,
         p.price,
         p.main_image,
-        COUNT(DISTINCT oi.order_id) as order_count,
-        SUM(oi.quantity) as total_sales,
-        SUM(oi.quantity * oi.price) as total_revenue
+        COUNT(DISTINCT shares.order_id) as order_count,
+        SUM(shares.quantity) as total_sales,
+        CAST(SUM(shares.base_cents + CASE WHEN shares.remainder_rank <= shares.spare_cents THEN 1 ELSE 0 END) / 100 AS DECIMAL(42,2)) as total_revenue
        FROM products p
-       LEFT JOIN order_items oi ON p.product_id = oi.product_id
-       LEFT JOIN orders o ON oi.order_id = o.order_id
-       WHERE o.status IN (1,2,3) AND (o.payment_method IS NULL OR o.payment_method <> 'demo')
-         AND o.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+       JOIN ranked_shares shares ON p.product_id = shares.product_id
        GROUP BY p.product_id
-       ORDER BY total_sales DESC
+       ORDER BY total_sales DESC, p.product_id ASC
        LIMIT ?`,
       [days, limit]
     );
