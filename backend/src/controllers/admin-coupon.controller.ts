@@ -34,7 +34,7 @@ export class AdminCouponController {
       // 检查代码是否已存在
       const existingCoupon = await CouponModel.findByCode(code);
       if (existingCoupon) {
-        return res.status(400).json({
+        return res.status(409).json({
           success: false,
           message: '优惠券代码已存在',
         });
@@ -73,6 +73,11 @@ export class AdminCouponController {
         req.get('user-agent')
       );
     } catch (error) {
+      // Another creator can take the code after the precheck. The unique index
+      // decides ownership; report that conflict without starting failure recovery.
+      if ((error as { code?: string })?.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ success: false, message: '优惠券代码已存在' });
+      }
       logger.error({ err: error }, '创建优惠券失败');
       res.status(500).json({
         success: false,
