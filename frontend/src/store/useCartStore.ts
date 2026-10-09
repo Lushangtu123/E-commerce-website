@@ -24,6 +24,10 @@ export const cartItemKey = (item: { product_id: number; sku_id?: number | null }
 
 interface CartState {
   items: CartItem[];
+  /** Every cart change invalidates reads started before it, including writes awaiting a receipt. */
+  revision: number;
+  syncStatus: 'idle' | 'loading' | 'ready' | 'error';
+  pendingWrites: number;
   setItems: (items: CartItem[]) => void;
   addItem: (item: CartItem) => void;
   updateQuantity: (productId: number, quantity: number, skuId?: number | null) => void;
@@ -35,13 +39,17 @@ interface CartState {
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
-  setItems: (items) => set({ items }),
+  revision: 0,
+  syncStatus: 'idle',
+  pendingWrites: 0,
+  setItems: (items) => set(state => ({ items, revision: state.revision + 1, syncStatus: 'ready' })),
   addItem: (item) =>
     set((state) => {
       const key = cartItemKey(item);
       const existingItem = state.items.find((i) => cartItemKey(i) === key);
       if (existingItem) {
         return {
+          revision: state.revision + 1, syncStatus: 'ready',
           items: state.items.map((i) =>
             cartItemKey(i) === key
               ? { ...i, quantity: i.quantity + item.quantity }
@@ -49,19 +57,21 @@ export const useCartStore = create<CartState>((set, get) => ({
           ),
         };
       }
-      return { items: [...state.items, item] };
+      return { items: [...state.items, item], revision: state.revision + 1, syncStatus: 'ready' };
     }),
   updateQuantity: (productId, quantity, skuId) =>
     set((state) => ({
+      revision: state.revision + 1, syncStatus: 'ready',
       items: state.items.map((item) =>
         cartItemKey(item) === cartItemKey({ product_id: productId, sku_id: skuId }) ? { ...item, quantity } : item
       ),
     })),
   removeItem: (productId, skuId) =>
     set((state) => ({
+      revision: state.revision + 1, syncStatus: 'ready',
       items: state.items.filter((item) => cartItemKey(item) !== cartItemKey({ product_id: productId, sku_id: skuId })),
     })),
-  clearCart: () => set({ items: [] }),
+  clearCart: () => set(state => ({ items: [], revision: state.revision + 1, syncStatus: 'idle', pendingWrites: 0 })),
   getTotalPrice: () => {
     const state = get();
     return state.items.reduce((total, item) => total + Number(item.price) * item.quantity, 0);

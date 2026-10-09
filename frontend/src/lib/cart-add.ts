@@ -1,6 +1,6 @@
 import { cartApi, type CartInput } from '@/lib/api';
 import { requestFailure } from '@/lib/api-error';
-import { validCartItems } from '@/lib/cart-contents';
+import { beginCartWrite, readCanonicalCart } from '@/lib/cart-sync';
 import { clearPendingCartAdd, notifyCartAddChanged, readPendingCartAdd, storePendingCartAdd, type PendingCartAdd } from '@/lib/pending-cart-add';
 import { storedSessionId, useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
@@ -28,6 +28,7 @@ async function runCartAdd(input: CartInput | null, isActive: () => boolean): Pro
     } catch { return false; }
   };
   if (!current()) return false;
+  if (useCartStore.getState().pendingWrites > 0) throw new Error('购物车正在更新，请稍候');
   if (activeAdds.has(scope)) throw new Error('购物车添加正在处理中，请稍候');
   let attempt: PendingCartAdd | null;
   try { attempt = readPendingCartAdd(sessionId, userId); } catch { throw storageError(); }
@@ -40,6 +41,7 @@ async function runCartAdd(input: CartInput | null, isActive: () => boolean): Pro
   // Persist before dispatch, including on retry. A refresh can interrupt after the server commits.
   if (!storePendingCartAdd(sessionId, userId, attempt)) throw storageError();
   activeAdds.add(scope); notifyCartAddChanged();
+  const finishWrite = beginCartWrite();
   let acknowledged = false;
   try {
     if (!current()) return false;
@@ -47,10 +49,9 @@ async function runCartAdd(input: CartInput | null, isActive: () => boolean): Pro
     if (!current()) return false;
     if (!result || result.add_key !== attempt.key || typeof result.replayed !== 'boolean') throw new Error('Invalid cart add receipt');
     acknowledged = true;
-    const data = await cartApi.list();
+    const data = await readCanonicalCart(current, { fresh: true });
     if (!current()) return false;
-    if (!validCartItems(data?.items)) throw new Error('Invalid canonical cart');
-    useCartStore.getState().setItems(data.items);
+    if (!data.accepted) throw new Error('Canonical cart superseded');
     canonicalReadListeners.forEach(listener => listener(sessionId, userId));
     if (!clearPendingCartAdd(sessionId, userId, attempt.key)) throw storageError();
     return true;
@@ -61,10 +62,11 @@ async function runCartAdd(input: CartInput | null, isActive: () => boolean): Pro
     // keeps its receipt on retry failures, including 409, because its original commit may exist.
     if (input && !acknowledged && status !== undefined && status >= 400 && status < 500 && ![408, 409, 429].includes(status)) {
       if (!clearPendingCartAdd(sessionId, userId, attempt.key)) throw storageError();
+      finishWrite(true);
       throw error;
     }
     throw new Error('购物车添加结果尚未确认，请重试原请求');
-  } finally { activeAdds.delete(scope); notifyCartAddChanged(); }
+  } finally { finishWrite(); activeAdds.delete(scope); notifyCartAddChanged(); }
 }
 
 export const addToCart = (input: CartInput, isActive: () => boolean = () => true) => runCartAdd(input, isActive);
