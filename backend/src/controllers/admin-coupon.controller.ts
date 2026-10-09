@@ -4,7 +4,7 @@
 import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/admin-auth';
 import { CouponModel, CouponStatus } from '../models/coupon.model';
-import { adminCouponListSchema, couponCreateSchema, couponIdSchema, couponStatusSchema } from '../utils/coupon-validation';
+import { adminCouponListSchema, couponCodeSchema, couponCreateSchema, couponIdSchema, couponStatusSchema } from '../utils/coupon-validation';
 import { logAdminAction } from './admin-log.controller';
 import logger from '../utils/logger';
 
@@ -143,6 +143,19 @@ export class AdminCouponController {
         success: false,
         message: '获取优惠券详情失败',
       });
+    }
+  }
+
+  /** A read by unique code can reconcile a creation whose response was lost. */
+  static async getCouponByCode(req: AdminAuthRequest, res: Response) {
+    try {
+      const { error, value } = couponCodeSchema.validate(req.params);
+      if (error) return res.status(400).json({ success: false, message: '优惠券代码无效' });
+      const coupon = await CouponModel.findByCode(value.code);
+      res.json({ success: true, data: coupon });
+    } catch (error) {
+      logger.error({ err: error }, '获取优惠券详情失败');
+      res.status(500).json({ success: false, message: '获取优惠券详情失败' });
     }
   }
 
