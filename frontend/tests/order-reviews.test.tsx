@@ -165,7 +165,8 @@ describe('order reviews', () => {
     act(() => useLocaleStore.getState().setLocale('en'));
     await act(async () => pending.reject(failure(500, '创建评论失败')));
     await settle();
-    expect(screen.getByRole('alert')).toHaveTextContent('Unable to submit your review');
+    expect(screen.getByRole('alert')).toHaveTextContent('Your review has not been saved. Your draft was kept; check it before trying again.');
+    expect(gets()).toHaveLength(2);
     expect(contentOf(forms()[0])).toHaveValue('需要保留的草稿');
     expect(screen.getAllByRole('button', { name: 'Submit review' })[0]).toBeEnabled();
   });

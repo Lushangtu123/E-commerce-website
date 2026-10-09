@@ -18,8 +18,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuthStore();
-  const [passwordChanged, setPasswordChanged] = useState(false);
-  useEffect(() => { setPasswordChanged(new URLSearchParams(window.location.search).get('passwordChanged') === '1'); }, []);
+  const [passwordNotice, setPasswordNotice] = useState<'changed' | 'unconfirmed' | null>(null);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    setPasswordNotice(query.get('passwordChangeUnconfirmed') === '1' ? 'unconfirmed' : query.get('passwordChanged') === '1' ? 'changed' : null);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +55,8 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-8">
-          {passwordChanged && <p role="status" className="mb-6 text-green-700">{t('密码已修改，请使用新密码登录')}</p>}
+          {passwordNotice === 'changed' && <p role="status" className="mb-6 text-green-700">{t('密码已修改，请使用新密码登录')}</p>}
+          {passwordNotice === 'unconfirmed' && <p role="alert" className="mb-6 text-amber-700">{t('修改密码结果尚未确认，请先尝试用新密码登录；若无法登录，请使用密码找回')}</p>}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-2">

@@ -21,6 +21,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
   const mounted = useRef(true);
   const request = useRef(0);
   const mutation = useRef<object | null>(null);
+  const recovery = useRef<{ key: string; productId: number; conflict?: string } | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const currentReviews = useRef<PurchaseReview[] | null>(null);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
@@ -61,13 +62,21 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       }
       currentReviews.current = all;
       setResult({ key, reviews: all });
+      const attempt = recovery.current;
+      if (attempt?.key === key) {
+        recovery.current = null;
+        const saved = all.some(review => review.product_id === attempt.productId);
+        setNotice({ key, productId: attempt.productId, ...(attempt.conflict ? { error: attempt.conflict }
+          : saved ? { success: '评论成功' } : { error: '评价尚未保存，已保留草稿，请检查后重试' }) });
+      }
     } catch (error) {
-      if (isCurrent() && generation === request.current) setResult({ key, error: requestFailure(error).response?.data?.error || '加载订单评价失败，请重试' });
+      if (isCurrent() && generation === request.current) setResult({ key, error: recovery.current?.key === key
+        ? '评价结果尚未确认，请重新加载评价后再操作' : requestFailure(error).response?.data?.error || '加载订单评价失败，请重试' });
     }
   };
 
   useEffect(() => {
-    request.current++; mutation.current = null; currentReviews.current = null;
+    request.current++; mutation.current = null; currentReviews.current = null; recovery.current = null;
     draftRef.current = {}; setDrafts({}); setResult(null); setBusy(null); setNotice(null);
     if (isHydrated && isAuthenticated && products.length) load();
     return () => { request.current++; };
@@ -95,8 +104,8 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       const data = await reviewApi.create({ order_id: orderId, product_id: productId, rating, content });
       if (!active()) return;
       if (!Number.isSafeInteger(data.review_id) || data.review_id <= 0) {
+        recovery.current = { key, productId };
         await load(true);
-        if (active()) setNotice({ key, productId, error: '评价响应无效，请重新加载' });
         return;
       }
       const reviews = [...(currentReviews.current ?? []), { review_id: data.review_id, user_id: user!.user_id, order_id: orderId, product_id: productId, rating, content }];
@@ -104,8 +113,11 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       setNotice({ key, productId, success: '评论成功' });
     } catch (error) {
       if (!active()) return;
-      if (requestFailure(error).response?.status === 409) await load(true);
-      if (active()) setNotice({ key, productId, error: requestFailure(error).response?.data?.error || '创建评论失败' });
+      const failure = requestFailure(error), status = failure.response?.status;
+      if (status === undefined || status === 408 || status === 429 || status === 409 || status >= 500) {
+        recovery.current = { key, productId, ...(status === 409 ? { conflict: failure.response?.data?.error || '评论已存在，请勿重复提交' } : {}) };
+        await load(true);
+      } else setNotice({ key, productId, error: failure.response?.data?.error || '创建评论失败' });
     } finally {
       if (mutation.current === operation) {
         mutation.current = null;

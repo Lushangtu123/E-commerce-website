@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ForgotPasswordPage from '@/app/forgot-password/page';
 import SettingsPage from '@/app/profile/settings/page';
 import ResetPasswordPage from '@/app/reset-password/page';
+import LoginPage from '@/app/login/page';
 import ChangePassword from '@/components/ChangePassword';
 import api, { paymentApi, userApi } from '@/lib/api';
 import { passwordError } from '@/lib/password-validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { CommitLog, apiError, captureHandler, deferred, render, settle, submitTogether } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -26,6 +28,9 @@ type Handler = (body: Record<string, unknown>) => unknown;
 const customer = { user_id: 1, username: 'Customer', email: 'customer@test' };
 const replacement = { user_id: 2, username: 'Replacement', email: 'replacement@test' };
 const resetToken = 'a'.repeat(64);
+const changed = { message: '密码已修改，请重新登录', reauthenticate: true };
+const unconfirmedLogin = '/login?passwordChangeUnconfirmed=1';
+const unconfirmedMessage = '修改密码结果尚未确认，请先尝试用新密码登录；若无法登录，请使用密码找回';
 const originalAdapter = api.defaults.adapter;
 let requests: InternalAxiosRequestConfig[] = [];
 let payloads: Record<string, unknown>[] = [];
@@ -59,7 +64,7 @@ afterEach(() => {
 });
 
 describe('change password', () => {
-  async function setup(change: Handler = async () => ({})) {
+  async function setup(change: Handler = async () => changed) {
     signInCustomer();
     serve({ 'PUT /users/password': change });
     const commits: HTMLElement[] = [];
@@ -84,12 +89,81 @@ describe('change password', () => {
     for (const input of passwordFields()) expect(input).toBeDisabled();
     expect(useAuthStore.getState().sessionId).toBe('session-a');
 
-    await act(async () => pending.resolve({}));
+    await act(async () => pending.resolve(changed));
     await settle();
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(localStorage.getItem('session')).toBeNull();
     expect(useCartStore.getState().getTotalCount()).toBe(0);
     expect(router.push.mock.calls).toEqual([['/login?passwordChanged=1']]);
+  });
+
+  it.each([undefined, 408, 409, 429, 500, 503])('ends the invoking session without retrying when the password result is unknown (status %s)', async status => {
+    const pending = deferred();
+    await setup(() => pending.promise);
+    localStorage.setItem('admin_session', 'admin-a');
+    useCartStore.getState().setItems([{ cart_id: 1, product_id: 1, title: 'Item', quantity: 1, stock: 2, price: 10 }]);
+    fill();
+    const obsoleteSubmit = captureHandler(form()!, 'onSubmit');
+    submitTogether(form()!, form()!);
+    expect(payloads).toHaveLength(1);
+
+    // The server may have committed the new password before the reply was lost.
+    await act(async () => pending.reject(status ? Object.assign(new Error('Unavailable'), { response: { status, data: { error: '服务暂不可用' } } }) : new Error('Lost reply')));
+    await settle();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(localStorage.getItem('session')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(localStorage.getItem('admin_session')).toBe('admin-a');
+    expect(useCartStore.getState().getTotalCount()).toBe(0);
+    expect(passwordFields()).toHaveLength(0);
+    expect(router.push.mock.calls).toEqual([[unconfirmedLogin]]);
+    await obsoleteSubmit();
+    expect(requests.map(request => `${request.method} ${request.url}`)).toEqual(['put /users/password']);
+
+    act(() => useAuthStore.getState().login(customer, 'session-new'));
+    await settle();
+    for (const input of passwordFields()) expect(input).toHaveValue('');
+  });
+
+  it.each([{}, null, { reauthenticate: false }, { reauthenticate: 'true' }])('requires an explicit success acknowledgement and recovers from a malformed body %j', async body => {
+    await setup(() => body);
+    fill();
+    fireEvent.submit(form()!);
+    await settle();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(passwordFields()).toHaveLength(0);
+    expect(router.push.mock.calls).toEqual([[unconfirmedLogin]]);
+    expect(payloads).toHaveLength(1);
+  });
+
+  it('keeps drafts and the current session when the server definitely rejects the current password', async () => {
+    await setup(() => { throw apiError('当前密码错误'); });
+    fill();
+    fireEvent.submit(form()!);
+    await settle();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('当前密码错误');
+    expect(field('current')).toHaveValue(' previous password ');
+    expect(field('next')).toHaveValue(' next password 123 ');
+    expect(field('confirm')).toHaveValue(' next password 123 ');
+    expect(useAuthStore.getState().sessionId).toBe('session-a');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('does not turn the API client session-expired response into a successful or unknown password change', async () => {
+    await setup();
+    api.defaults.adapter = async config => {
+      throw Object.assign(new Error('Expired'), { config, response: { config, status: 401, data: { error: '登录已失效' } } });
+    };
+    fill();
+    fireEvent.submit(form()!);
+    await settle();
+
+    expect(localStorage.getItem('session')).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.queryByText('密码已修改，请使用新密码登录')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -123,8 +197,8 @@ describe('change password', () => {
     for (const input of passwordFields()) expect(input).toHaveValue('');
   });
 
-  const lateCases = (['account', 'storage', 'unmount'] as const).flatMap(change =>
-    (['success', 'failure'] as const).map(outcome => ({ change, outcome })));
+  const lateCases = (['account', 'same-customer-session', 'storage', 'stored-account', 'unmount'] as const).flatMap(change =>
+    (['success', 'failure', 'unknown'] as const).map(outcome => ({ change, outcome })));
 
   it.each(lateCases)('neither signs out, navigates nor reports a late $outcome after a $change change', async ({ change, outcome }) => {
     const pending = deferred();
@@ -136,16 +210,24 @@ describe('change password', () => {
       act(() => useAuthStore.getState().login(replacement, 'session-b'));
       await settle();
     }
+    if (change === 'same-customer-session') {
+      act(() => useAuthStore.getState().login(customer, 'session-b'));
+      await settle();
+    }
     if (change === 'storage') localStorage.setItem('session', 'session-b');
+    if (change === 'stored-account') localStorage.setItem('user', JSON.stringify(replacement));
     if (change === 'unmount') view.unmount();
+    useCartStore.getState().setItems([{ cart_id: 2, product_id: 2, title: 'Current cart', quantity: 2, stock: 3, price: 10 }]);
     await act(async () => {
-      if (outcome === 'success') pending.resolve({});
+      if (outcome === 'success') pending.resolve(changed);
+      else if (outcome === 'unknown') pending.reject(new Error('Lost reply'));
       else pending.reject(apiError('当前密码错误'));
     });
     await settle();
 
     expect(router.push).not.toHaveBeenCalled();
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useCartStore.getState().getTotalCount()).toBe(2);
     expect(screen.queryByText('当前密码错误')).not.toBeInTheDocument();
   });
 });
@@ -293,9 +375,9 @@ describe('password rules and credentials', () => {
 });
 
 describe('settings page password change', () => {
-  async function setup() {
+  async function setup(change: Handler = () => changed) {
     signInCustomer();
-    serve({ 'GET /users/profile': () => ({ user: customer }), 'PUT /users/password': () => ({ reauthenticate: true }) });
+    serve({ 'GET /users/profile': () => ({ user: customer }), 'PUT /users/password': change });
     render(<SettingsPage />);
     await settle();
   }
@@ -315,17 +397,77 @@ describe('settings page password change', () => {
     for (const [path] of router.push.mock.calls) expect(path, 'the page redirect must keep the password change notice').toBe('/login?passwordChanged=1');
   });
 
-  it.each(['session-loss', 'replacement'] as const)('still redirects to plain login after %s, even if an obsolete callback reports a change', async (scenario) => {
+  it.each(['lost reply', 'malformed acknowledgement'])('keeps the unknown-result notice when logout rerenders the real settings page after a %s', async outcome => {
+    await setup(() => {
+      if (outcome === 'lost reply') throw new Error('Lost reply');
+      return {};
+    });
+    fireEvent.change(field('current'), { target: { value: ' previous password ' } });
+    fireEvent.change(field('next'), { target: { value: ' next password 123 ' } });
+    fireEvent.change(field('confirm'), { target: { value: ' next password 123 ' } });
+    fireEvent.submit(field('current').closest('form')!);
+    await settle();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(router.push).toHaveBeenCalled();
+    for (const [path] of router.push.mock.calls) expect(path).toBe(unconfirmedLogin);
+    expect(requests.filter(request => request.method === 'put')).toHaveLength(1);
+  });
+
+  const staleCallbacks = (['session-loss', 'replacement'] as const).flatMap(scenario =>
+    (['onPasswordChanged', 'onPasswordUnconfirmed'] as const).map(callback => ({ scenario, callback })));
+  it.each(staleCallbacks)('still redirects to plain login after $scenario, even if an obsolete $callback callback reports a result', async ({ scenario, callback }) => {
     await setup();
     const oldProps = vi.mocked(ChangePassword).mock.lastCall![0];
 
     if (scenario === 'replacement') {
       act(() => useAuthStore.getState().login(replacement, 'session-b'));
-      act(() => oldProps?.onPasswordChanged?.());
+      act(() => oldProps?.[callback]?.());
     }
     act(() => useAuthStore.getState().logout());
+    if (scenario === 'session-loss') act(() => oldProps?.[callback]?.());
     await settle();
 
     expect(router.push.mock.lastCall).toEqual(['/login']);
+  });
+});
+
+describe('login after an unconfirmed password change', () => {
+  it.each(['?passwordChangeUnconfirmed=1', '?passwordChanged=1&passwordChangeUnconfirmed=1'])('shows clear recovery guidance for %s without sending credentials', async query => {
+    window.history.replaceState(null, '', `/login${query}`);
+    serve({});
+    render(<LoginPage />);
+    await settle();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(unconfirmedMessage);
+    expect(screen.queryByText('密码已修改，请使用新密码登录')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/forgot-password');
+    expect(requests).toHaveLength(0);
+    expect(document.querySelector('input[type="password"]')).toHaveValue('');
+  });
+
+  it('updates the recovery guidance when the customer switches between Chinese and English', async () => {
+    window.history.replaceState(null, '', unconfirmedLogin);
+    serve({});
+    render(<LoginPage />);
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent(unconfirmedMessage);
+
+    act(() => useLocaleStore.getState().setLocale('en'));
+    expect(screen.getByRole('alert')).toHaveTextContent('The password change result is unconfirmed. Try signing in with your new password first. If that fails, use password recovery.');
+    expect(screen.queryByText(unconfirmedMessage)).not.toBeInTheDocument();
+
+    act(() => useLocaleStore.getState().setLocale('zh-CN'));
+    expect(screen.getByRole('alert')).toHaveTextContent(unconfirmedMessage);
+    expect(requests).toHaveLength(0);
+  });
+
+  it('does not render a query value as the recovery message or treat an arbitrary value as confirmation', async () => {
+    window.history.replaceState(null, '', '/login?passwordChangeUnconfirmed=%3Cscript%3Esecret%3C%2Fscript%3E');
+    render(<LoginPage />);
+    await settle();
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('secret');
   });
 });

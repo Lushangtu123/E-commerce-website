@@ -46,7 +46,7 @@ interface Setup {
 }
 
 /** Signs administrator A in, answers the real API client at the transport layer and renders the page. */
-async function setup(kind: keyof typeof pages, { list, mutate = async () => ({}) }: Setup = {}) {
+async function setup(kind: keyof typeof pages, { list, mutate = async () => kind === 'orders' ? { message: '更新成功', status: 2 } : {} }: Setup = {}) {
   localStorage.setItem('admin_session', 'admin-a');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin A' }));
   vi.stubGlobal('confirm', () => true);
@@ -126,7 +126,7 @@ describe('admin fulfillment', () => {
       await settle();
       expect(screen.getByRole('button', { name: '确认发货' })).toBeDisabled();
 
-      await act(async () => pending.resolve({}));
+      await act(async () => pending.resolve({ message: '更新成功', status: 2 }));
       await settle();
       expect(notices).toContain('订单状态已更新');
     });
@@ -161,7 +161,7 @@ describe('admin fulfillment', () => {
       else view.unmount();
       const readCount = reads.length;
       await act(async () => {
-        if (outcome === 'success') pending.resolve({});
+        if (outcome === 'success') pending.resolve({ message: '更新成功', status: 2 });
         else pending.reject(apiError('Old shipping failure'));
       });
       await settle();
