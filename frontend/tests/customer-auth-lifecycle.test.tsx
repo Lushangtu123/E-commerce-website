@@ -63,6 +63,11 @@ beforeEach(() => {
 afterEach(async () => {
   finishPending.forEach(finish => finish());
   await settle();
+  vi.restoreAllMocks();
+  // Clear this fixture's in-memory cleanup marker through the public queue even after a failed assertion.
+  act(() => useAuthStore.getState().logout());
+  api.defaults.adapter = async config => ({ data: { message: '已退出登录' }, status: 200, statusText: 'OK', headers: {}, config });
+  await userApi.logout();
   api.defaults.adapter = originalAdapter;
 });
 
@@ -164,9 +169,204 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
     expect(notices.error).not.toHaveBeenCalled();
     expect(routing.pushes).toEqual([]);
   });
+
+  it.each([false, true].flatMap(previous => (['session', 'user'] as const).map(key => ({ previous, key }))))('clears the cookie and its partial publication when $key storage fails (previous account: $previous)', async ({ previous, key: failedKey }) => {
+    if (previous) act(() => useAuthStore.getState().login(userB, 'previous-b'));
+    const setItem = localStorage.setItem.bind(localStorage);
+    const write = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === failedKey) throw new DOMException('Full storage', 'QuotaExceededError');
+      setItem(key, value);
+    });
+    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    render(<Page />); await settle(); fill(route);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint, 'POST /users/logout']);
+    expect(cookieUser).toBeNull();
+    expect(localStorage.getItem('session')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(useAuthStore.getState()).toMatchObject({ user: null, sessionId: null, isAuthenticated: false });
+    expect(notices.success).not.toHaveBeenCalled(); expect(routing.pushes).toEqual([]);
+    expect(notices.error).toHaveBeenCalledWith('无法保存登录状态，请恢复浏览器存储后重新登录');
+    write.mockRestore();
+  });
+
+  it('reports unavailable storage before sending credentials and permits explicit retry after it recovers', async () => {
+    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    render(<Page />); await settle(); fill(route);
+    const read = vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new DOMException('Storage denied', 'SecurityError'); });
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([]);
+    expect(notices.error).toHaveBeenCalledWith('登录状态清理尚未确认，请恢复浏览器存储后重试');
+    expect(screen.getByRole('button', { name: route === 'login' ? '登录' : '注册' })).toBeEnabled();
+    read.mockRestore();
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint]);
+    expect(useAuthStore.getState().user).toEqual(userA);
+  });
+
+  it('cleans a published cookie when storage reads fail immediately after the new profile reaches the store', async () => {
+    let read: ReturnType<typeof vi.spyOn> | undefined;
+    const unsubscribe = useAuthStore.subscribe(state => {
+      if (state.user?.user_id === userA.user_id) {
+        unsubscribe();
+        read = vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new DOMException('Storage denied', 'SecurityError'); });
+      }
+    });
+    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    render(<Page />); await settle(); fill(route); fireEvent.submit(document.querySelector('form')!); await settle();
+    try {
+      expect(requests).toEqual([endpoint, 'POST /users/logout']);
+      expect(cookieUser).toBeNull(); expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(notices.error).toHaveBeenCalledWith('无法保存登录状态，请恢复浏览器存储后重新登录');
+      expect(notices.success).not.toHaveBeenCalled(); expect(routing.pushes).toEqual([]);
+    } finally { read?.mockRestore(); unsubscribe(); }
+    act(() => useAuthStore.getState().hydrate());
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it('still clears the server cookie when storage becomes wholly unavailable after the reply', async () => {
+    let storage: ReturnType<typeof vi.spyOn>[] = [];
+    serve({ [endpoint]: () => {
+      storage = (['getItem', 'setItem', 'removeItem'] as const).map(method => vi.spyOn(localStorage, method)
+        .mockImplementation(() => { throw new DOMException('Storage denied', 'SecurityError'); }));
+      return { user: userA };
+    }, 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    render(<Page />); await settle(); fill(route);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    try {
+      expect(requests).toEqual([endpoint, 'POST /users/logout']);
+      expect(cookieUser).toBeNull(); expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(notices.error).toHaveBeenCalledTimes(1);
+      expect(notices.success).not.toHaveBeenCalled(); expect(routing.pushes).toEqual([]);
+    } finally { storage.forEach(mock => mock.mockRestore()); }
+  });
+
+  it('retains failed cleanup and blocks another credential request until explicit cleanup succeeds', async () => {
+    let fails = true, clears = 0;
+    const setItem = localStorage.setItem.bind(localStorage);
+    const write = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'user' && fails) throw new DOMException('Full storage', 'QuotaExceededError');
+      setItem(key, value);
+    });
+    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => {
+      if (++clears < 3) throw new Error('Cleanup unavailable'); return { message: '已退出登录' };
+    } });
+    render(<Page />); await settle(); fill(route);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint, 'POST /users/logout']);
+    expect(localStorage.getItem('customer_session_cleanup_pending')).toBe('1');
+    expect(notices.error).toHaveBeenCalledTimes(1);
+    fails = false; write.mockRestore();
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint, 'POST /users/logout', 'POST /users/logout']);
+    expect(notices.error).toHaveBeenLastCalledWith('登录状态清理尚未确认，请恢复浏览器存储后重试');
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint, 'POST /users/logout', 'POST /users/logout', 'POST /users/logout', endpoint]);
+    expect(cookieUser).toBe(1); expect(useAuthStore.getState().user).toEqual(userA);
+  });
 });
 
 describe('customer cookie mutation order across actual routed pages', () => {
+  it('records an unfinished login before sending credentials so a reload cannot forget its cookie', async () => {
+    const answer = pending();
+    serve({ 'POST /users/login': () => answer.promise });
+    render(<LoginPage />); await settle(); fill('login');
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    try { expect(localStorage.getItem('customer_session_cleanup_pending')).toBe('1'); }
+    finally { answer.resolve({ user: userA }); await settle(); }
+    expect(localStorage.getItem('customer_session_cleanup_pending')).toBeNull();
+  });
+
+  it('does not announce or navigate for a publication immediately replaced by logout', async () => {
+    serve({ 'POST /users/login': () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    let done: Promise<void> | undefined;
+    const unsubscribe = useAuthStore.subscribe(state => {
+      if (state.isAuthenticated) { unsubscribe(); done = signOut(); }
+    });
+    render(<LoginPage />); await settle(); fill('login');
+    fireEvent.submit(document.querySelector('form')!); await settle(); await done;
+    expect(useAuthStore.getState().isAuthenticated).toBe(false); expect(cookieUser).toBeNull();
+    expect(notices.success).not.toHaveBeenCalled(); expect(routing.pushes).toEqual([]);
+  });
+
+  it('preserves a replacement session that appears while a failed publication is rolled back', async () => {
+    const setItem = localStorage.setItem.bind(localStorage);
+    vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'user' && JSON.parse(value).user_id === userA.user_id) {
+        act(() => useAuthStore.getState().login(userB, 'replacement-b'));
+        throw new DOMException('Full storage', 'QuotaExceededError');
+      }
+      setItem(key, value);
+    });
+    serve({ 'POST /users/login': () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    render(<LoginPage />); await settle(); fill('login');
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(localStorage.getItem('session')).toBe('replacement-b');
+    expect(JSON.parse(localStorage.getItem('user')!)).toEqual(userB);
+    expect(useAuthStore.getState().user).toEqual(userB);
+    expect(notices.error).not.toHaveBeenCalled(); expect(notices.success).not.toHaveBeenCalled(); expect(routing.pushes).toEqual([]);
+  });
+
+  it('rejects an invalid cleanup acknowledgement without resending credentials', async () => {
+    localStorage.setItem('customer_session_cleanup_pending', '1');
+    serve({ 'POST /users/logout': () => ({}), 'POST /users/login': () => ({ user: userA }) });
+    render(<LoginPage />); await settle(); fill('login');
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual(['POST /users/logout']);
+    expect(localStorage.getItem('customer_session_cleanup_pending')).toBe('1');
+    expect(notices.error).toHaveBeenCalledWith('登录状态清理尚未确认，请恢复浏览器存储后重试');
+    // End this fixture's pending cleanup without leaving the module queue dirty for the next case.
+    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }) }); await userApi.logout();
+  });
+
+  it('signs out locally and calls cookie cleanup even when both session storage removals fail', async () => {
+    act(() => useAuthStore.getState().login(userA, 'session-a')); cookieUser = 1;
+    const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(() => { throw new DOMException('Storage denied', 'SecurityError'); });
+    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    try {
+      await expect(signOut()).resolves.toBeUndefined();
+      expect(requests).toEqual(['POST /users/logout']); expect(cookieUser).toBeNull();
+      expect(useAuthStore.getState()).toMatchObject({ user: null, sessionId: null, isAuthenticated: false });
+    } finally { remove.mockRestore(); }
+  });
+
+  it('cannot rehydrate a mixed profile after publication and both local rollback removals fail', async () => {
+    act(() => useAuthStore.getState().login(userB, 'previous-b'));
+    const setItem = localStorage.setItem.bind(localStorage), removeItem = localStorage.removeItem.bind(localStorage);
+    const write = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'user') throw new DOMException('Full storage', 'QuotaExceededError'); setItem(key, value);
+    });
+    const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+      if (key === 'user' || key === 'session') throw new DOMException('Storage denied', 'SecurityError'); removeItem(key);
+    });
+    serve({ 'POST /users/login': () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    render(<LoginPage />); await settle(); fill('login'); fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(cookieUser).toBeNull();
+    act(() => useAuthStore.getState().hydrate());
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    write.mockRestore(); remove.mockRestore();
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(useAuthStore.getState().user).toEqual(userA); expect(cookieUser).toBe(1);
+  });
+
+  it('keeps a failed local logout signed out after reload until storage recovers', async () => {
+    act(() => useAuthStore.getState().login(userA, 'session-a')); cookieUser = 1;
+    const removeItem = localStorage.removeItem.bind(localStorage);
+    const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+      if (key === 'session' || key === 'user') throw new DOMException('Storage denied', 'SecurityError');
+      removeItem(key);
+    });
+    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
+    await signOut();
+    expect(cookieUser).toBeNull();
+    act(() => useAuthStore.getState().hydrate());
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    remove.mockRestore();
+    render(<LoginPage />); await settle(); fill('login', userB);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(useAuthStore.getState().user).toEqual(userB); expect(cookieUser).toBe(2);
+  });
+
   it('clears a lost sign-in result without resending credentials', async () => {
     serve({ 'POST /users/login': () => { cookieUser = 1; throw new Error('Lost reply'); },
       'POST /users/logout': () => ({ message: '已退出登录' }) });
