@@ -1053,7 +1053,8 @@ async function localPlatformScripts(context) {
   const lostShipmentReply = async route => {
     if (route.request().method() !== 'PUT') return route.continue();
     shipmentWrites++;
-    const response = await route.fetch(); assert.equal(response.status(), 200);
+    const response = await route.fetch({ headers: { ...route.request().headers(), 'user-agent': 'x'.repeat(501) } });
+    assert.equal(response.status(), 200);
     return route.abort('failed');
   };
   expectedRecoveryWrite = { endpoint: shipmentEndpoint }; await admin.route(shipmentEndpoint, lostShipmentReply);
@@ -1063,6 +1064,11 @@ async function localPlatformScripts(context) {
   assert.equal(shipmentWrites, 1);
   assert.equal(await admin.getByRole('button', { name: '确认发货', exact: true }).count(), 0);
   await admin.unroute(shipmentEndpoint, lostShipmentReply); expectedRecoveryWrite = undefined;
+  const shipmentAudits = (await (await adminContext.request.get('http://127.0.0.1:3101/api/admin/logs?action=UPDATE_ORDER_STATUS&limit=100')).json()).logs
+    .filter(log => log.resource_id === orderUrl.split('/').pop());
+  assert.equal(shipmentAudits.length, 1);
+  assert.ok(shipmentAudits[0].user_agent.length <= 500);
+  console.log('PASS browser shipment with an oversized request header keeps one real MySQL audit despite a lost response');
   console.log('PASS browser lost shipment reply reads actual shipped state without repeating PUT');
   await page.goto(orderUrl);
   await visibleText(page, 'E2E-TRACK-123');
@@ -1279,6 +1285,8 @@ async function localPlatformScripts(context) {
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
+  await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,
+    setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, errors });
