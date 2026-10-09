@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import ProductImage from '@/components/ProductImage';
 import ModalDialog from '@/components/ModalDialog';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import Link from 'next/link';
 
 /** The product form keeps numbers as strings while the administrator types. */
 export interface ProductFormValues {
@@ -93,6 +94,8 @@ interface Props {
   categoriesFailed: boolean;
   onRetryCategories: () => void;
   busy: boolean;
+  /** Variant price and inventory are edited in the variant manager. */
+  variantProductId?: number;
   onChange: (values: ProductFormValues) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -102,10 +105,13 @@ const inputClass = 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:rin
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
 
 /** The modal used to add a product and to edit one. */
-export default function AdminProductForm({ idPrefix, heading, submitLabel, values, categories, categoriesLoading, categoriesFailed, onRetryCategories, busy, onChange, onClose, onSubmit }: Props) {
+export default function AdminProductForm({ idPrefix, heading, submitLabel, values, categories, categoriesLoading, categoriesFailed, onRetryCategories, busy, variantProductId, onChange, onClose, onSubmit }: Props) {
   const { t } = useI18n();
   const id = (field: string) => `${idPrefix}-${field}`;
-  const set = <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => onChange({ ...values, [field]: value });
+  const set = <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => {
+    if (variantProductId && (field === 'price' || field === 'stock')) return;
+    onChange({ ...values, [field]: value });
+  };
   const setSpec = (key: string, field: 'name' | 'value', value: string) => set('specs_en', {
     ...values.specs_en, [key]: { ...(values.specs_en && Object.hasOwn(values.specs_en, key) ? values.specs_en[key] : {}), [field]: value },
   });
@@ -174,16 +180,21 @@ export default function AdminProductForm({ idPrefix, heading, submitLabel, value
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor={id('price')} className={labelClass}>{t('价格 (元)')} {required}</label>
-                <input id={id('price')} type="number" step="0.01" value={values.price} onChange={e => set('price', e.target.value)}
+                <label htmlFor={id('price')} className={labelClass}>{t(variantProductId ? '基础价格 (元)' : '价格 (元)')} {required}</label>
+                <input id={id('price')} type="number" step="0.01" disabled={!!variantProductId} value={values.price} onChange={e => set('price', e.target.value)}
                   className={inputClass} placeholder="0.00" />
               </div>
               <div>
-                <label htmlFor={id('stock')} className={labelClass}>{t('库存')}</label>
-                <input id={id('stock')} type="text" inputMode="numeric" value={values.stock} onChange={e => set('stock', e.target.value)}
+                <label htmlFor={id('stock')} className={labelClass}>{t(variantProductId ? '基础库存' : '库存')}</label>
+                <input id={id('stock')} type="text" inputMode="numeric" disabled={!!variantProductId} value={values.stock} onChange={e => set('stock', e.target.value)}
                   className={inputClass} placeholder="0" />
               </div>
             </div>
+
+            {variantProductId && <p className="text-sm text-gray-600">
+              {t('此商品按规格销售，请在规格管理中调整价格和库存。')}{' '}
+              <Link href={`/admin/products/${variantProductId}/skus`} className="text-primary-600 underline">{t('管理规格')}</Link>
+            </p>}
 
             <div className="grid grid-cols-2 gap-4">
               <div>

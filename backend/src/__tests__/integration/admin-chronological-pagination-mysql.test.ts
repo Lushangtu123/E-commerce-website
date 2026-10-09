@@ -42,7 +42,7 @@ integration('admin chronological lists with tied timestamps', () => {
     await server.query(`CREATE DATABASE ${database} CHARACTER SET utf8mb4`); created = true;
     db = mysql.createPool({ ...options, database });
     (getPool as jest.Mock).mockReturnValue(db);
-    await createTables('migrate.ts', ['users', 'categories', 'products', 'orders', 'order_items', 'shipping_addresses']);
+    await createTables('migrate.ts', ['users', 'categories', 'products', 'orders', 'order_items', 'shipping_addresses', 'product_skus']);
     await createTables('admin-migrate.ts', ['roles', 'admins', 'admin_logs']);
     await db.query("INSERT INTO categories(category_id,name) VALUES(1,'Fixture category'),(2,'Excluded category')");
     await db.query("INSERT INTO admins(admin_id,username,password_hash,real_name) VALUES(1,'fixture','test','Fixture admin'),(2,'excluded','test','Excluded admin')");

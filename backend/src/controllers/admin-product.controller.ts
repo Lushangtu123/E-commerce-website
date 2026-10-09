@@ -38,9 +38,18 @@ export const getAdminProducts = async (req: Request, res: Response) => {
       `SELECT 
         p.*,
         c.name as category_name,
+        (sku.product_id IS NOT NULL) AS has_sku,
+        CAST(CASE WHEN sku.product_id IS NULL THEN p.stock ELSE COALESCE(sku.sellable_stock, 0) END AS UNSIGNED) AS sellable_stock,
+        sku.sku_min_price,
         (SELECT COUNT(*) FROM order_items oi WHERE oi.product_id = p.product_id) as total_sales
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.category_id
+       LEFT JOIN (
+         SELECT product_id,
+           SUM(CASE WHEN status = 1 THEN stock ELSE 0 END) AS sellable_stock,
+           MIN(CASE WHEN status = 1 THEN price END) AS sku_min_price
+         FROM product_skus GROUP BY product_id
+       ) sku ON sku.product_id = p.product_id
        WHERE ${whereClause}
        ORDER BY p.created_at DESC, p.product_id DESC
        LIMIT ? OFFSET ?`,
