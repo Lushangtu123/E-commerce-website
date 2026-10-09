@@ -8,7 +8,7 @@ import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 
-export default function ChangePassword({ onPasswordChanged }: { onPasswordChanged?: () => void } = {}) {
+export default function ChangePassword({ onPasswordChanged, onPasswordUnconfirmed }: { onPasswordChanged?: () => void; onPasswordUnconfirmed?: () => void } = {}) {
   const { t } = useI18n(), router = useRouter();
   const { sessionId, user, isAuthenticated, isHydrated } = useAuthStore();
   const key = JSON.stringify([sessionId, user?.user_id]);
@@ -20,7 +20,7 @@ export default function ChangePassword({ onPasswordChanged }: { onPasswordChange
   const [notice, setNotice] = useState<{ key: string; error?: string } | null>(null);
   const active = () => {
     const state = useAuthStore.getState();
-    try { return mounted.current && currentKey.current === key && state.isAuthenticated && state.sessionId === sessionId && state.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null); }
+    try { return mounted.current && currentKey.current === key && state.isHydrated && state.isAuthenticated && state.sessionId === sessionId && state.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null) && JSON.parse(localStorage.getItem('user') || 'null')?.user_id === user?.user_id; }
     catch { return false; }
   };
   useEffect(() => {
@@ -33,14 +33,27 @@ export default function ChangePassword({ onPasswordChanged }: { onPasswordChange
     const error = !values.current ? '请输入当前密码' : passwordError(values.next) || (values.next !== values.confirm ? '两次输入的新密码不一致' : null);
     if (error) { setNotice({ key, error }); return; }
     const operation = {}; mutation.current = operation; setBusy(true); setNotice(null);
-    try {
-      await userApi.changePassword({ currentPassword: values.current, newPassword: values.next });
+    const finish = (confirmed: boolean) => {
       if (!active() || mutation.current !== operation) return;
       setValues({ current: '', next: '', confirm: '' });
-      onPasswordChanged?.();
-      useAuthStore.getState().logout(); router.push('/login?passwordChanged=1');
+      if (confirmed) onPasswordChanged?.();
+      else onPasswordUnconfirmed?.();
+      if (!active() || mutation.current !== operation) return;
+      useAuthStore.getState().logout();
+      router.push(confirmed ? '/login?passwordChanged=1' : '/login?passwordChangeUnconfirmed=1');
+    };
+    try {
+      const data: unknown = await userApi.changePassword({ currentPassword: values.current, newPassword: values.next });
+      if (!active() || mutation.current !== operation) return;
+      finish(!!data && typeof data === 'object' && 'reauthenticate' in data && data.reauthenticate === true);
     } catch (error) {
-      if (active() && mutation.current === operation) setNotice({ key, error: requestFailure(error).response?.data?.error || '修改密码失败，请重试' });
+      if (active() && mutation.current === operation) {
+        const failure = requestFailure(error), status = failure.response?.status;
+        // A password write can commit before its reply is lost. Never resend these credentials
+        // to find out: forget this sign-in and let the customer sign in or recover the password.
+        if (!status || status === 408 || status === 409 || status === 429 || status >= 500) finish(false);
+        else setNotice({ key, error: failure.response?.data?.error || '修改密码失败，请重试' });
+      }
     } finally {
       if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); }
     }

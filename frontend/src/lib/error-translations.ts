@@ -3,6 +3,7 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '修改密码结果尚未确认，请先尝试用新密码登录；若无法登录，请使用密码找回': 'The password change result is unconfirmed. Try signing in with your new password first. If that fails, use password recovery.',
   '评价结果尚未确认，请重新加载评价后再操作': 'Your review result is unconfirmed. Reload reviews before continuing.',
   '评价尚未保存，已保留草稿，请检查后重试': 'Your review has not been saved. Your draft was kept; check it before trying again.',
   '购物车操作结果尚未确认，请重新加载后再操作': 'The cart update is unconfirmed. Reload your cart before continuing.',
