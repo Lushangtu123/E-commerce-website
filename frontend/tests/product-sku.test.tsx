@@ -21,7 +21,7 @@ vi.mock('react-hot-toast', () => {
 vi.mock('@/components/ProductCard', () => ({ default: () => null }));
 vi.mock('@/lib/api', () => ({
   productApi: { getDetail: vi.fn() },
-  cartApi: { add: vi.fn(async () => ({})) },
+  cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false })), list: vi.fn() },
   reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [] })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
   favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功' })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
@@ -41,7 +41,16 @@ const product: Product = { ...base, has_sku: true, skus: [
 async function setup({ detail = async () => ({ product }), authenticated = true }: { detail?: (id: number) => Promise<Detail>; authenticated?: boolean } = {}) {
   if (authenticated) useAuthStore.getState().login(firstUser, 'first-session');
   else useAuthStore.getState().hydrate();
-  vi.mocked(productApi.getDetail).mockImplementation(detail);
+  let canonicalProduct = product;
+  vi.mocked(productApi.getDetail).mockImplementation(async id => { const data = await detail(id); canonicalProduct = data.product; return data; });
+  vi.mocked(cartApi.list).mockImplementation(async () => {
+    const input = vi.mocked(cartApi.add).mock.calls.at(-1)![0];
+    const selected = canonicalProduct.skus?.find(row => row.sku_id === input.sku_id);
+    return { items: [{ cart_id: 7, product_id: input.product_id, quantity: input.quantity, title: canonicalProduct.title,
+      title_en: canonicalProduct.title_en, price: Number(selected?.price ?? canonicalProduct.price), stock: Number(selected?.stock ?? canonicalProduct.stock),
+      main_image: selected?.image || canonicalProduct.main_image,
+      ...(selected && { sku_id: selected.sku_id, sku_code: selected.sku_code, sku_specs: selected.specs, sku_specs_en: selected.specs_en }) }] };
+  });
   const view = render(<ProductDetailPage />);
   await settle();
   return { view, rerender: () => act(() => view.rerender(<ProductDetailPage />)) };
@@ -112,7 +121,7 @@ describe('product SKU purchase', () => {
     expect(screen.getByLabelText('Product options')).toHaveValue('101');
     expect(screen.getByText('Cotton', { exact: true })).toBeVisible();
     await click('Add to cart');
-    expect(additions()).toEqual([{ product_id: 1, sku_id: 101, quantity: 1 }]);
+    expect(additions()).toEqual([{ product_id: 1, sku_id: 101, quantity: 1, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) }]);
     expect(useCartStore.getState().items[0]).toMatchObject({ title: '棉质衬衫', title_en: 'Cotton shirt', sku_specs: { 颜色: '红色', 尺寸: 42 }, sku_specs_en: detail.skus![0].specs_en });
     act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
     expect(screen.getByRole('heading', { name: '棉质衬衫' })).toBeVisible();
@@ -191,7 +200,7 @@ describe('product SKU purchase', () => {
     expect(quantity).toHaveValue(2);
 
     await click('立即购买');
-    expect(additions()).toEqual([{ product_id: 1, quantity: 2, sku_id: 101 }]);
+    expect(additions()).toEqual([{ product_id: 1, quantity: 2, sku_id: 101, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) }]);
     expect(useCartStore.getState().items[0]).toMatchObject({ sku_id: 101, price: 20, main_image: '/red.jpg', sku_specs: { Color: 'Red', Size: 'M' }, sku_code: 'RED' });
     expect(router.push.mock.calls).toEqual([['/cart']]);
   });

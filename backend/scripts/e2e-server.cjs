@@ -62,6 +62,7 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-coupon', 'migrateCouponTables'], ['migrate-sku', 'migrateSkuTables'],
     ['migrate-address', 'migrateAddressTables'], ['migrate-review', 'migrateReviewTables'],
     ['migrate-address-creations', 'migrateAddressCreations'],
+    ['migrate-cart-adds', 'migrateCartAdds'],
     ['migrate-account-security', 'migrateAccountSecurity'], ['migrate-fulfillment', 'migrateFulfillment'],
     ['migrate-after-sales-progress', 'migrateAfterSalesProgress'],
     ['migrate-product-i18n', 'migrateProductI18n'],

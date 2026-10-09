@@ -22,7 +22,7 @@ vi.mock('@/lib/api', () => ({
   favoriteApi: { list: vi.fn(), remove: vi.fn() },
   browseApi: { getHistory: vi.fn(), deleteRecord: vi.fn(), clearHistory: vi.fn() },
   productApi: { getDetail: vi.fn() },
-  cartApi: { add: vi.fn() },
+  cartApi: { add: vi.fn(), list: vi.fn(async () => ({ items: [] })) },
 }));
 
 type Kind = 'favorites' | 'history';
@@ -67,7 +67,7 @@ async function setup(kind: Kind, { list, remove = async () => ({}), clear = asyn
   vi.mocked(browseApi.deleteRecord).mockImplementation(deleting);
   vi.mocked(browseApi.clearHistory).mockImplementation(async () => { mutations.push(['clear']); return (await clear()) as never; });
   vi.mocked(productApi.getDetail).mockImplementation(detail as never);
-  vi.mocked(cartApi.add).mockImplementation(add as never);
+  vi.mocked(cartApi.add).mockImplementation(async input => { await add(); return { message: '添加成功', add_key: input.add_key, replayed: false }; });
   const Page = pages[kind];
   const commits: HTMLElement[] = [];
   const view = render(<CommitLog commits={commits}><Page /></CommitLog>);

@@ -28,16 +28,24 @@ export class CartController {
   // 添加到购物车
   static async add(req: AuthRequest, res: Response) {
     try {
-      const { product_id, quantity = 1, sku_id } = req.body;
+      const { product_id, quantity = 1, sku_id, add_key } = req.body;
+      if (Object.keys(req.body).some(key => !['product_id', 'quantity', 'sku_id', 'add_key'].includes(key))) {
+        return res.status(400).json({ error: '购物车添加参数错误' });
+      }
+      if (add_key !== undefined && (typeof add_key !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(add_key))) {
+        return res.status(400).json({ error: '购物车添加请求号无效' });
+      }
 
       if (!validItem(product_id, quantity) || (sku_id != null && !validSKUId(sku_id))) {
         return res.status(400).json({ error: '商品ID和数量必须为正整数' });
       }
 
-      const success = await CartModel.add(req.userId!, product_id, quantity, sku_id ?? undefined);
+      const success = add_key === undefined
+        ? await CartModel.add(req.userId!, product_id, quantity, sku_id ?? undefined)
+        : await CartModel.add(req.userId!, product_id, quantity, sku_id ?? undefined, add_key);
 
       if (success) {
-        res.json({ message: '添加成功' });
+        res.json({ message: '添加成功', ...(typeof success === 'object' ? success : {}) });
       } else {
         res.status(400).json({ error: '添加失败' });
       }

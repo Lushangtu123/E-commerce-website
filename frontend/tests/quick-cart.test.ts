@@ -3,9 +3,9 @@ import { cartApi, productApi, type Product } from '@/lib/api';
 import { quickAddToCart } from '@/lib/quick-cart';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import { deferred } from './helpers';
+import { apiError, deferred } from './helpers';
 
-vi.mock('@/lib/api', () => ({ productApi: { getDetail: vi.fn() }, cartApi: { add: vi.fn(async () => ({})) } }));
+vi.mock('@/lib/api', () => ({ productApi: { getDetail: vi.fn() }, cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false })), list: vi.fn(async () => ({ items: [{ cart_id: 7, product_id: 1, quantity: 1, title: 'Shirt', price: 15, stock: 3 }] })) } }));
 
 type Detail = Awaited<ReturnType<typeof productApi.getDetail>>;
 const product = (overrides: Partial<Product> = {}): Product =>
@@ -37,7 +37,7 @@ describe('quick add to cart', () => {
   it('leaves the local cart alone when the server refuses the add', async () => {
     signIn();
     vi.mocked(productApi.getDetail).mockResolvedValue({ product: product() });
-    vi.mocked(cartApi.add).mockRejectedValue(new Error('Stock changed'));
+    vi.mocked(cartApi.add).mockRejectedValue(apiError('Stock changed'));
 
     await expect(quickAddToCart(1)).rejects.toThrow('Stock changed');
     expect(cartItems()).toHaveLength(0);

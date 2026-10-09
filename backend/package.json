@@ -17,6 +17,8 @@
     "schema:product-creations": "node dist/database/migrate-product-creations.js --check",
     "migrate:address-creations": "node dist/database/migrate-address-creations.js",
     "schema:address-creations": "node dist/database/migrate-address-creations.js --check",
+    "migrate:cart-adds": "node dist/database/migrate-cart-adds.js",
+    "schema:cart-adds": "node dist/database/migrate-cart-adds.js --check",
     "migrate:after-sales": "node dist/database/migrate-after-sales-progress.js",
     "schema:after-sales": "node dist/database/migrate-after-sales-progress.js --check",
     "migrate:account-security": "node dist/database/migrate-account-security.js",

@@ -12,6 +12,7 @@ import { migrateFulfillment } from './migrate-fulfillment';
 import { migrateAfterSalesProgress } from './migrate-after-sales-progress';
 import { migrateProductI18n } from './migrate-product-i18n';
 import { migrateProductCreations } from './migrate-product-creations';
+import { migrateCartAdds } from './migrate-cart-adds';
 
 const migrations = [
   // 用户表
@@ -239,6 +240,7 @@ async function runMigrations() {
     await migrateOrderCheckout(pool);
     await migrateProductI18n(pool);
     await migrateProductCreations(pool);
+    await migrateCartAdds(pool);
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

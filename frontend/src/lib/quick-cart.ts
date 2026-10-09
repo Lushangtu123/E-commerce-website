@@ -1,6 +1,6 @@
-import { productApi, cartApi } from '@/lib/api';
+import { productApi } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
-import { useCartStore } from '@/store/useCartStore';
+import { addToCart } from '@/lib/cart-add';
 
 /** Shared by cards, favorites and history; SKU choices always happen on the detail page. */
 export async function quickAddToCart(productId: number, isActive: () => boolean = () => true): Promise<'select' | 'added' | null> {
@@ -18,11 +18,8 @@ export async function quickAddToCart(productId: number, isActive: () => boolean 
     const product = data.product;
     if (product.has_sku) return 'select';
     if (Number(product.stock) <= 0) throw new Error('商品已售罄');
-    await cartApi.add({ product_id: productId, quantity: 1 });
+    if (!await addToCart({ product_id: productId, quantity: 1 }, current)) return null;
     if (!current()) return null;
-    useCartStore.getState().addItem({ cart_id: Date.now(), product_id: productId, quantity: 1,
-      title: product.title, title_en: product.title_en, price: Number(product.price), main_image: product.main_image ?? undefined,
-      stock: Number(product.stock), available: true });
     return 'added';
   } catch (error) {
     if (current()) throw error;

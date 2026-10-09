@@ -12,7 +12,7 @@ export interface CartInput {
 
 export const cartApi = {
   list: () => api.get<unknown, { items: CartItem[] }>('/cart'),
-  add: (data: CartInput) => api.post('/cart', data),
+  add: (data: CartInput & { add_key: string }) => api.post<unknown, { message: string; add_key: string; replayed: boolean }>('/cart', data),
   updateQuantity: (data: CartInput) => api.put('/cart', data),
   remove: (productId: number, skuId?: number | null) =>
     api.delete(`/cart/${productId}`, { params: skuId == null ? undefined : { sku_id: skuId } }),

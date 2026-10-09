@@ -4,7 +4,7 @@ import ProductCard from '@/components/ProductCard';
 import api, { cartApi, productApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import { captureHandler, clickTogether, deferred, render, settle } from './helpers';
+import { apiError, captureHandler, clickTogether, deferred, render, settle } from './helpers';
 const navigation = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
@@ -14,7 +14,8 @@ beforeEach(() => {
   useAuthStore.getState().login({ user_id: 1, username: 'Synthetic', email: 'synthetic@example.test' }, 'first-session');
   vi.spyOn(api, 'get').mockRejectedValue(new Error('Unexpected outbound request'));
   vi.spyOn(productApi, 'getDetail').mockImplementation(async id => ({ product: { ...product, product_id: id } }));
-  vi.spyOn(cartApi, 'add').mockResolvedValue({} as never);
+  vi.spyOn(cartApi, 'add').mockImplementation(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false }));
+  vi.spyOn(cartApi, 'list').mockResolvedValue({ items: [{ cart_id: 7, product_id: 1, quantity: 1, title: 'Fixture', price: 10, stock: 3 }] });
 });
 describe('card add operation lock', () => {
   it('blocks repeated events in the same render before the detail request completes', async () => {
@@ -23,7 +24,7 @@ describe('card add operation lock', () => {
     clickTogether(button, button); await settle();
     expect(productApi.getDetail).toHaveBeenCalledTimes(1);
     await act(async () => read.resolve({ product })); await settle();
-    expect(cartApi.add).toHaveBeenCalledExactlyOnceWith({ product_id: 1, quantity: 1 });
+    expect(cartApi.add).toHaveBeenCalledExactlyOnceWith({ product_id: 1, quantity: 1, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) });
     expect(useCartStore.getState().items[0].quantity).toBe(1);
   });
   it('retains the synchronous lock while the cart write is still pending', async () => {
@@ -31,11 +32,11 @@ describe('card add operation lock', () => {
     render(<ProductCard product={product} />); const action = captureHandler(screen.getByRole('button', { name: '加入' }));
     const first = action(); await settle(); const second = action(); await settle();
     expect(cartApi.add).toHaveBeenCalledTimes(1);
-    await act(async () => write.resolve({})); await Promise.all([first, second]); await settle();
+    await act(async () => write.resolve({ message: '添加成功', add_key: vi.mocked(cartApi.add).mock.calls[0][0].add_key, replayed: false })); await Promise.all([first, second]); await settle();
     expect(screen.getByRole('button', { name: '加入' })).toBeEnabled();
   });
   it('unlocks after a failure so a deliberate retry can succeed', async () => {
-    vi.mocked(cartApi.add).mockRejectedValueOnce(new Error('Refused'));
+    vi.mocked(cartApi.add).mockRejectedValueOnce(apiError('Refused'));
     render(<ProductCard product={product} />);
     fireEvent.click(screen.getByRole('button', { name: '加入' })); await settle();
     expect(useCartStore.getState().items).toHaveLength(0);
@@ -54,7 +55,7 @@ describe('card add operation lock', () => {
     expect(screen.getByRole('button', { name: '处理中...' })).toBeDisabled();
     await nextAction(); expect(productApi.getDetail).toHaveBeenCalledTimes(2);
     await act(async () => fresh.resolve({ product: { ...product, product_id: 2 } })); await next; await settle();
-    expect(cartApi.add).toHaveBeenCalledExactlyOnceWith({ product_id: 2, quantity: 1 });
+    expect(cartApi.add).toHaveBeenCalledExactlyOnceWith({ product_id: 2, quantity: 1, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) });
   });
   it('a captured old account action cannot write for the new account', async () => {
     render(<ProductCard product={product} />); const old = captureHandler(screen.getByRole('button', { name: '加入' }));

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { getPool, query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
@@ -42,36 +43,61 @@ export class CartModel {
     } finally { connection.release(); }
   }
 
-  private static async write(userId: number, productId: number, quantity: number, skuId: number | undefined, add: boolean): Promise<boolean> {
+  private static async mutate(connection: PoolConnection, userId: number, productId: number, quantity: number, skuId: number | undefined, add: boolean): Promise<boolean> {
     const [item] = normalizePurchaseItems([{ product_id: productId, sku_id: skuId, quantity }]);
-    return this.transaction(userId, async connection => {
-      const { orderItems } = await pricePurchaseItems(connection, [item], true);
-      // First consistent read after the user mutex; missing rows must not take gap locks.
-      const [existing] = await connection.execute<RowDataPacket[]>(
-        'SELECT quantity FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ?',
-        [userId, productId, skuId ?? 0]
+    const { orderItems } = await pricePurchaseItems(connection, [item], true);
+    // First consistent read after the user mutex; missing rows must not take gap locks.
+    const [existing] = await connection.execute<RowDataPacket[]>(
+      'SELECT quantity FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ?',
+      [userId, productId, skuId ?? 0]
+    );
+    const total = quantity + (add ? Number(existing[0]?.quantity || 0) : 0);
+    if (!Number.isSafeInteger(total) || total > MAX_QUANTITY) throw new PurchaseError('商品数量超出范围');
+    if (total > (orderItems[0].sku ?? orderItems[0].product).stock) throw new PurchaseError('商品库存不足');
+    let result: ResultSetHeader;
+    if (add) {
+      [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO cart (user_id, product_id, sku_id, quantity) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE quantity = ?`, [userId, productId, skuId ?? null, total, total]
       );
-      const total = quantity + (add ? Number(existing[0]?.quantity || 0) : 0);
-      if (!Number.isSafeInteger(total) || total > MAX_QUANTITY) throw new PurchaseError('商品数量超出范围');
-      if (total > (orderItems[0].sku ?? orderItems[0].product).stock) throw new PurchaseError('商品库存不足');
-      let result: ResultSetHeader;
-      if (add) {
-        [result] = await connection.execute<ResultSetHeader>(
-          `INSERT INTO cart (user_id, product_id, sku_id, quantity) VALUES (?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE quantity = ?`, [userId, productId, skuId ?? null, total, total]
-        );
-      } else {
-        [result] = await connection.execute<ResultSetHeader>(
-          'UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ? AND sku_key = ?',
-          [total, userId, productId, skuId ?? 0]
-        );
-      }
-      return result.affectedRows > 0;
-    });
+    } else {
+      [result] = await connection.execute<ResultSetHeader>(
+        'UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ? AND sku_key = ?',
+        [total, userId, productId, skuId ?? 0]
+      );
+    }
+    return result.affectedRows > 0;
   }
 
-  static async add(userId: number, productId: number, quantity: number, skuId?: number): Promise<boolean> {
-    return this.write(userId, productId, quantity, skuId, true);
+  private static async write(userId: number, productId: number, quantity: number, skuId: number | undefined, add: boolean): Promise<boolean> {
+    normalizePurchaseItems([{ product_id: productId, sku_id: skuId, quantity }]);
+    return this.transaction(userId, connection => this.mutate(connection, userId, productId, quantity, skuId, add));
+  }
+
+  static async add(userId: number, productId: number, quantity: number, skuId?: number): Promise<boolean>;
+  static async add(userId: number, productId: number, quantity: number, skuId: number | undefined, addKey: string): Promise<{ add_key: string; replayed: boolean }>;
+  static async add(userId: number, productId: number, quantity: number, skuId?: number, addKey?: string): Promise<boolean | { add_key: string; replayed: boolean }> {
+    if (addKey === undefined) return this.write(userId, productId, quantity, skuId, true);
+    if (typeof addKey !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(addKey)) throw new PurchaseError('购物车添加请求号无效');
+    const [item] = normalizePurchaseItems([{ product_id: productId, sku_id: skuId, quantity }]);
+    const key = addKey.toLowerCase();
+    const fingerprint = createHash('sha256').update(JSON.stringify([item.product_id, item.sku_id ?? null, item.quantity])).digest('hex');
+    return this.transaction(userId, async connection => {
+      // Read before catalog validation: a replay remains valid after checkout, remove, clear or a stock change.
+      // The user mutex serializes receipts too; a missing receipt must not take a shared index gap lock.
+      const [receipts] = await connection.execute<RowDataPacket[]>(
+        'SELECT payload_fingerprint FROM cart_add_receipts WHERE user_id = ? AND add_key = ?', [userId, key]
+      );
+      if (receipts.length) {
+        if (receipts[0].payload_fingerprint !== fingerprint) throw new PurchaseError('购物车添加请求号已用于其他内容，请先恢复原请求', 409);
+        return { add_key: key, replayed: true };
+      }
+      if (!await this.mutate(connection, userId, item.product_id, item.quantity, item.sku_id, true)) throw new PurchaseError('添加失败');
+      await connection.execute(
+        'INSERT INTO cart_add_receipts (user_id, add_key, payload_fingerprint) VALUES (?, ?, ?)', [userId, key, fingerprint]
+      );
+      return { add_key: key, replayed: false };
+    });
   }
 
   static async list(userId: number): Promise<CartItem[]> {

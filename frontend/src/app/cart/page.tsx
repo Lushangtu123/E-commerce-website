@@ -13,27 +13,18 @@ import CheckoutSummary from '@/components/CheckoutSummary';
 import { logger } from '@/lib/logger';
 import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
+import { validCartItems } from '@/lib/cart-contents';
+import { cartAddBlocksWrites, useCartAddRecovery } from '@/hooks/use-cart-add-recovery';
+import { subscribeCanonicalCartAdd } from '@/lib/cart-add';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
-
-function validCartItems(value: unknown): value is CartItem[] {
-  if (!Array.isArray(value)) return false;
-  const keys = new Set<string>();
-  return value.every(item => {
-    if (!item || !Number.isSafeInteger(item.cart_id) || item.cart_id < 1 || !Number.isSafeInteger(item.product_id) || item.product_id < 1 ||
-      !Number.isInteger(item.quantity) || item.quantity < 1 || !Number.isInteger(item.stock) || item.stock < 0 || typeof item.title !== 'string' ||
-      !['string', 'number'].includes(typeof item.price) || !Number.isFinite(Number(item.price)) || Number(item.price) < 0 ||
-      (item.sku_id != null && (!Number.isSafeInteger(item.sku_id) || item.sku_id < 1)) ||
-      (item.available !== undefined && ![true, false, 0, 1].includes(item.available))) return false;
-    const key = cartItemKey(item);
-    if (keys.has(key)) return false;
-    keys.add(key); return true;
-  });
-}
 
 export default function CartPage() {
   const router = useRouter();
   const { t } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
+  const addRecovery = useCartAddRecovery();
+  const hasPendingAdd = !!addRecovery.pending || addRecovery.busy || addRecovery.blocked;
+  const addBlocksWrites = () => !!sessionId && !!user && cartAddBlocksWrites(sessionId, user.user_id);
   const { items, setItems, updateQuantity, removeItem } = useCartStore();
   const [loading, setLoading] = useState(true);
   const [cartFailure, setCartFailure] = useState<{ key: string; message: string } | null>(null);
@@ -61,7 +52,7 @@ export default function CartPage() {
   const [addressRevision, setAddressRevision] = useState(0);
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const hasUnconfirmedCheckout = unconfirmedSession === sessionKey;
-  const cartUpdating = updatingSession === sessionKey || unconfirmedCartSession === sessionKey;
+  const cartUpdating = updatingSession === sessionKey || unconfirmedCartSession === sessionKey || hasPendingAdd;
   const cartError = cartFailure?.key === sessionKey ? cartFailure.message : null;
   const addresses = addressResult?.key === sessionKey ? addressResult.addresses : [];
   const addressLoading = addressResult?.key !== sessionKey;
@@ -72,6 +63,18 @@ export default function CartPage() {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+
+  useEffect(() => subscribeCanonicalCartAdd((confirmedSession, confirmedUser) => {
+    const auth = useAuthStore.getState();
+    if (!mounted.current || confirmedSession !== sessionId || confirmedUser !== user?.user_id ||
+      auth.sessionId !== sessionId || auth.user?.user_id !== user?.user_id ||
+      cartRecovery.current === sessionKey || cartMutation.current || submittingRequest.current) return;
+    // A validated add read supersedes this page's initial/ordinary read. Retire that request
+    // immediately so a delayed reply cannot hide the canonical cart behind loading or an old error.
+    if (cartLoadRequest.current?.key === sessionKey) cartLoadRequest.current = null;
+    setLoading(false);
+    setCartFailure(previous => previous?.key === sessionKey && previous.message === '加载购物车失败，请重试' ? null : previous);
+  }), [sessionId, user?.user_id, sessionKey]);
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('user_coupon_id');
@@ -178,12 +181,13 @@ export default function CartPage() {
   const loadCart = async () => {
     if (!isCurrentSession() || cartLoadRequest.current?.key === sessionKey) return;
     const request = { key: sessionKey };
+    const previousItems = useCartStore.getState().items;
     cartLoadRequest.current = request;
     try {
       setLoading(true);
       setCartFailure(null);
       const data = await cartApi.list();
-      if (!isCurrentSession() || cartLoadRequest.current !== request) return;
+      if (!isCurrentSession() || cartLoadRequest.current !== request || useCartStore.getState().items !== previousItems) return;
       const recovering = cartRecovery.current === sessionKey;
       if (recovering && !validCartItems(data.items)) throw new Error('invalid cart recovery');
       setItems(data.items || []);
@@ -195,7 +199,7 @@ export default function CartPage() {
         toast.success(translate('购物车已重新同步，请核对商品和数量'));
       }
     } catch (error) {
-      if (!isCurrentSession() || cartLoadRequest.current !== request) return;
+      if (!isCurrentSession() || cartLoadRequest.current !== request || useCartStore.getState().items !== previousItems) return;
       const recovering = cartRecovery.current === sessionKey;
       if (!recovering) { setItems([]); setSelectedItems([]); }
       setCartFailure({ key: sessionKey, message: recovering ? '购物车操作结果尚未确认，请重新加载后再操作' : '加载购物车失败，请重试' });
@@ -220,7 +224,7 @@ export default function CartPage() {
   };
 
   const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
-    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
+    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
 
     const operation = {};
     cartMutation.current = operation;
@@ -244,7 +248,7 @@ export default function CartPage() {
   };
 
   const handleRemove = async (item: CartItem) => {
-    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
+    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     const operation = {};
     cartMutation.current = operation;
     setUpdatingSession(sessionKey);
@@ -265,7 +269,7 @@ export default function CartPage() {
   };
 
   const handleSelectAll = () => {
-    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
+    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     if (orderItems.length === availableItems.length) {
       setSelectedItems([]);
     } else {
@@ -274,13 +278,13 @@ export default function CartPage() {
   };
 
   const handleToggleSelect = (item: CartItem) => {
-    if (!isAvailable(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || !isCurrentSession()) return;
+    if (!isAvailable(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     const key = cartItemKey(item);
     setSelectedItems(selected => selected.includes(key) ? selected.filter(id => id !== key) : [...selected, key]);
   };
 
   const handleCheckout = async () => {
-    if (cartRecovery.current === sessionKey) return;
+    if (cartRecovery.current === sessionKey || addBlocksWrites()) return;
     if (pendingCheckout.current?.sessionKey === sessionKey) return;
     if (orderItems.length === 0) {
       toast.error(translate('请选择要结算的商品'));
@@ -293,7 +297,7 @@ export default function CartPage() {
   };
 
   const submitCheckout = async (input: OrderCreateInput, recovering = false) => {
-    if (submittingRequest.current || !isCurrentSession()) return;
+    if (submittingRequest.current || addBlocksWrites() || !isCurrentSession()) return;
     const attempt = { sessionKey, input };
     if (!storePendingCheckout(attempt)) {
       toast.error(translate('无法保存结算信息，请允许浏览器存储后重试'));

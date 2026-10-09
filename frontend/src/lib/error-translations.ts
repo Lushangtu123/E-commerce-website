@@ -3,6 +3,17 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '购物车添加请求号无效': 'Invalid cart add request ID.',
+  '购物车添加参数错误': 'Invalid cart add details.',
+  '购物车添加请求号已用于其他内容，请先恢复原请求': 'This request ID belongs to a different cart add. Restore the original request first.',
+  '无法保存购物车添加请求，请恢复浏览器存储后重试': 'Unable to save the cart add request. Restore browser storage and try again.',
+  '请先重试未确认的购物车添加': 'Retry the unconfirmed cart add first.',
+  '购物车添加正在处理中，请稍候': 'The cart add is being processed. Please wait.',
+  '购物车添加结果尚未确认，请重试原请求': 'The cart add is unconfirmed. Retry the original request.',
+  '重试原添加': 'Retry original add',
+  '商品 #{id}': 'Product #{id}',
+  '规格 #{id}': 'Option #{id}',
+  '数量：{count}': 'Quantity: {count}',
   '地址新增请求号无效': 'Invalid address creation request ID.',
   '地址新增请求号已用于其他内容，请先恢复原请求': 'This request ID belongs to different address details. Restore the original request first.',
   '原新增地址已删除，可重新添加地址': 'The original address was deleted. You can add a new address.',
