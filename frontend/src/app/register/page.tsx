@@ -2,7 +2,7 @@
 
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { userApi } from '@/lib/api';
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 import { passwordError } from '@/lib/password-validation';
+import { customerAuthAttempt, CustomerAuthAbandoned, CustomerAuthUnconfirmed } from '@/lib/customer-auth-flow';
 
 export default function RegisterPage() {
   const { t } = useI18n();
@@ -23,6 +24,11 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuthStore();
+  const mounted = useRef(true), mutation = useRef<object | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; mutation.current = null; };
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -33,6 +39,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!mounted.current || mutation.current) return;
 
     const { password, confirmPassword } = formData;
     const username = formData.username.trim();
@@ -54,17 +61,28 @@ export default function RegisterPage() {
       return;
     }
 
-    setLoading(true);
-    try {
-      const data = await userApi.register({ username, email, password });
+    const operation = {}; mutation.current = operation;
+    const alive = () => mounted.current && mutation.current === operation;
+    const attempt = customerAuthAttempt(alive, data => {
       login(data.user);
       toast.success(translate("注册成功"));
       router.push('/');
+    });
+    if (!attempt.current()) { mutation.current = null; return; }
+    setLoading(true);
+    try {
+      await userApi.register({ username, email, password }, attempt);
     } catch (error) {
+      if (!alive() || error instanceof CustomerAuthAbandoned) return;
+      if (error instanceof CustomerAuthUnconfirmed) {
+        if (error.report) toast.error(translate('注册结果尚未确认，请先尝试登录或找回密码'));
+        return;
+      }
+      if (!attempt.current()) return;
       logger.error('注册请求失败');
       toast.error(translate(requestFailure(error).response?.data?.error || "注册失败"));
     } finally {
-      setLoading(false);
+      if (alive()) { mutation.current = null; setLoading(false); }
     }
   };
 

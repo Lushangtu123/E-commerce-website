@@ -1,5 +1,6 @@
 import type { User } from '@/store/useAuthStore';
 import api from './client';
+import { clearCustomerCookie, customerSessionWrite, customerSignIn, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
 
 // 用户相关API
 export interface UserStats {
@@ -22,19 +23,23 @@ export interface AuthSession {
 }
 
 export const userApi = {
-  register: (data: { username: string; email: string; password: string }) =>
-    api.post<unknown, AuthSession>('/users/register', data),
-  login: (data: { email: string; password: string }) =>
-    api.post<unknown, AuthSession>('/users/login', data),
+  register: (data: { username: string; email: string; password: string }, attempt?: CustomerAuthAttempt) =>
+    customerSignIn(() => api.post<unknown, AuthSession>('/users/register', data), () => api.post('/users/logout'), attempt),
+  login: (data: { email: string; password: string }, attempt?: CustomerAuthAttempt) =>
+    customerSignIn(() => api.post<unknown, AuthSession>('/users/login', data), () => api.post('/users/logout'), attempt),
   /** Clears the httpOnly session cookie; the API needs no valid session to do so. */
-  logout: () => api.post<unknown, { message: string }>('/users/logout'),
+  logout: () => customerSessionWrite(async () => {
+    let data!: { message: string };
+    await clearCustomerCookie(async () => { data = await api.post<unknown, { message: string }>('/users/logout'); });
+    return data;
+  }),
   getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
   getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
   updateProfile: (data: ProfileInput) => api.put<unknown, { message: string; user: User }>('/users/profile', data),
   passwordCapabilities: () => api.get<unknown, { passwordResetAvailable: boolean; passwordMinLength: number; passwordMaxBytes: number }>('/users/password/capabilities'),
   forgotPassword: (email: string) => api.post<unknown, { message: string }>('/users/password/forgot', { email }),
-  resetPassword: (data: { token: string; newPassword: string }) => api.post('/users/password/reset', data),
-  changePassword: (data: { currentPassword: string; newPassword: string }) => api.put('/users/password', data),
+  resetPassword: (data: { token: string; newPassword: string }) => customerSessionWrite(() => api.post('/users/password/reset', data)),
+  changePassword: (data: { currentPassword: string; newPassword: string }) => customerSessionWrite(() => api.put('/users/password', data)),
 };
 
 // 收货地址相关API

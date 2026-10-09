@@ -24,7 +24,11 @@ const second = { user_id: 2, username: 'second', email: 'second@example.test' };
 
 describe('cookie sessions in the browser', () => {
   it('keeps the signed token out of storage after a login and names the sign-in itself', async () => {
-    vi.mocked(userApi.login).mockResolvedValue({ user: first, token: 'server-signed-token' } as never);
+    vi.mocked(userApi.login).mockImplementation(async (_data, attempt) => {
+      const session = { user: first, token: 'server-signed-token' };
+      attempt?.commit(session);
+      return session;
+    });
     render(<LoginPage />);
     fireEvent.change(document.querySelector('input[type="email"]')!, { target: { value: 'first@example.test' } });
     fireEvent.change(document.querySelector('input[type="password"]')!, { target: { value: 'example-password' } });
