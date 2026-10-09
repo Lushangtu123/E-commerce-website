@@ -327,6 +327,7 @@ E-commerce-website/
 - `POST /api/products`、`PUT /api/products/:id` - 创建、更新商品（需管理员 `product:create` / `product:edit` 权限）
 
 关键词搜索使用 `GET /api/products?keyword=...`（MySQL）或 `GET /api/search/es`（Elasticsearch，可回退 MySQL）。
+MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述（含英文翻译）中，各词可匹配不同字段。例如 `Acme headphones` 可找到品牌为 Acme、英文标题含 headphones 的商品。`%` 和 `_` 按字面字符搜索；匹配结果继续支持现有筛选、排序和分页。
 
 ### 收藏相关 (Favorites APIs) 🆕
 - `POST /api/favorites` - 添加收藏，body 为 `{ product_id }`，商品必须存在且上架
