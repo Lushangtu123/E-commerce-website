@@ -11,8 +11,9 @@ jobs:
     name: 后端：编译 + 测试
     runs-on: ubuntu-latest
     services:
+      # Docker Official Images on ECR avoid shared runner Docker Hub pull limits.
       redis:
-        image: redis:7-alpine
+        image: public.ecr.aws/docker/library/redis:7-alpine
         ports:
           - 6379:6379
         options: >-
@@ -21,7 +22,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
       mysql:
-        image: mysql:8.0
+        image: public.ecr.aws/docker/library/mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: order_test_password
           MYSQL_ROOT_HOST: '%'
