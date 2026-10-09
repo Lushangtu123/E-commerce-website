@@ -85,6 +85,6 @@ test('MySQL英文搜索查询两种语言并返回英文商品投影', async () 
   expect(sql).toContain('title_en LIKE ?');
   expect(sql).toContain('description_en LIKE ?');
   expect(sql).toContain('p.specs_en');
-  expect(params.slice(0, 4)).toEqual(['%Shirt%', '%Shirt%', '%Shirt%', '%Shirt%']);
+  expect(params.slice(0, 5)).toEqual(Array(5).fill('%Shirt%'));
   expect(result.products[0]).toHaveProperty('title_en', 'Shirt');
 });
