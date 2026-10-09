@@ -3,6 +3,14 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '商品更新结果未知，正在重新加载当前数据...': 'The product update result is unknown. Reloading the current data...',
+  '商品更新结果尚未确认，请重新加载核对；确认前不会再次提交': 'The product update is unconfirmed. Reload to check it before submitting another update.',
+  '重新核对商品': 'Check products again',
+  '已重新加载当前商品数据，请核对后重新编辑；此前提交结果仍无法确认': 'Current product data reloaded. Review it before editing again; the previous update remains unconfirmed.',
+  '规格更新结果未知，正在重新加载当前数据...': 'The variant update result is unknown. Reloading the current data...',
+  '规格更新结果尚未确认，请重新加载核对；确认前不会再次提交': 'The variant update is unconfirmed. Reload to check it before submitting another update.',
+  '重新核对规格': 'Check variants again',
+  '已重新加载当前规格数据，请核对后重新编辑；此前提交结果仍无法确认': 'Current variant data reloaded. Review it before editing again; the previous update remains unconfirmed.',
   '订单更新结果未知，正在核对实际状态...': 'The order update result is unknown. Checking the current state...',
   '订单更新结果尚未确认，请重新核对订单；确认前不会再次提交': 'The order update is unconfirmed. Check the order again before submitting another update.',
   '重新核对订单': 'Check order again',

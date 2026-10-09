@@ -54,7 +54,7 @@ interface Setup {
  * Signs administrator A in, answers the real API client at the transport layer and renders
  * the list. Raw fetch is stubbed so a page bypassing the shared client would show up.
  */
-async function setup(kind: Kind, { list, mutate = async () => ({}), categories = async () => [] }: Setup = {}) {
+async function setup(kind: Kind, { list, mutate, categories = async () => [] }: Setup = {}) {
   localStorage.setItem('admin_session', 'admin-a');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin A' }));
   const fetch = vi.fn();
@@ -73,7 +73,10 @@ async function setup(kind: Kind, { list, mutate = async () => ({}), categories =
       }
     } else {
       mutations.push({ path: config.url, method: config.method, body: typeof config.data === 'string' ? JSON.parse(config.data) : config.data, authorization });
-      data = await mutate();
+      const body = mutations.at(-1)?.body;
+      data = mutate ? await mutate() : config.url?.includes('/batch/')
+        ? { message: '批量更新成功', count: Array.isArray(body?.productIds) ? body.productIds.length : 0 }
+        : { message: '更新成功', status: body?.status };
     }
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
@@ -207,7 +210,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     expect(button(statusAction[kind])).toBeDisabled();
     if (kind === 'products') expect(button('添加商品')).toBeDisabled();
 
-    await act(async () => write.resolve({}));
+    await act(async () => write.resolve(kind === 'products' ? { message: '更新成功', status: 0 } : {}));
     await settle();
     expect(requests).toHaveLength(2);
     expect(notifications).toHaveLength(1);
@@ -306,7 +309,7 @@ describe.each(['products', 'users'] as const)('admin %s list', (kind) => {
     await old();
     expect(mutations).toHaveLength(1);
 
-    await act(async () => write.resolve({}));
+    await act(async () => write.resolve(kind === 'products' ? { message: '更新成功', status: 0 } : {}));
     await operation;
     await settle();
     expect(screen.getByText('Row 21')).toBeInTheDocument();

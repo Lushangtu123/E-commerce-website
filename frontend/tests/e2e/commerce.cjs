@@ -1044,6 +1044,8 @@ async function localPlatformScripts(context) {
   await page.waitForURL('http://127.0.0.1:3100/');
   assert.equal(passwordWrites, 1);
   console.log('PASS browser committed password change with lost reply clears inputs and recovers by signing in');
+  await require('./admin-inventory-recovery.cjs')({ admin, context, adminContext,
+    setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   assert.deepEqual(errors, [], 'browser runtime errors');
   assert.deepEqual(consoleErrors, [], 'browser console errors');
   console.log('PASS browser console has no unexpected errors');
