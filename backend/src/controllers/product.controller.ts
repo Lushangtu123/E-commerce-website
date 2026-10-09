@@ -51,7 +51,7 @@ export class ProductController {
     try {
       const productId = positiveId(req.params.id);
       if (!productId) return res.status(400).json({ error: '商品ID无效' });
-      // Availability is checked before cached details so a disabled product cannot remain purchasable.
+      // Details are read from MySQL on every request so a disabled product cannot remain purchasable.
       const product = await ProductModel.findById(productId);
       if (!product || product.status !== 1) return res.status(404).json({ error: '商品不存在' });
       const allSKUs = await SKUModel.findByProductId(productId, true);
