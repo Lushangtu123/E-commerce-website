@@ -25,7 +25,7 @@ integration('deleted product publication boundaries', () => {
     (query as jest.Mock).mockImplementation(async (sql, values) => (await db.query(sql, values))[0]);
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
     for (const match of source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
-      if (['products', 'categories', 'orders', 'order_items'].includes(match[2])) await db.query(match[1]);
+      if (['products', 'categories', 'orders', 'order_items', 'product_skus'].includes(match[2])) await db.query(match[1]);
     }
   });
   afterAll(async () => {
