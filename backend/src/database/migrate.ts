@@ -4,6 +4,7 @@ import logger from '../utils/logger';
 import { migrateCouponTables } from './migrate-coupon';
 import { migrateSkuTables } from './migrate-sku';
 import { migrateAddressTables } from './migrate-address';
+import { migrateAddressCreations } from './migrate-address-creations';
 import { migrateReviewTables } from './migrate-review';
 import { migrateAccountSecurity } from './migrate-account-security';
 import { migrateOrderCheckout } from './migrate-order-checkout';
@@ -230,6 +231,7 @@ async function runMigrations() {
     await migrateCouponTables(pool);
     await migrateSkuTables(pool);
     await migrateAddressTables(pool);
+    await migrateAddressCreations(pool);
     await migrateReviewTables(pool);
     await migrateAccountSecurity(pool);
     await migrateFulfillment(pool);

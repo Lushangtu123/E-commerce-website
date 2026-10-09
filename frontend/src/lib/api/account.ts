@@ -63,9 +63,16 @@ export interface ShippingAddress extends Omit<AddressInput, 'is_default' | 'prov
   detail_address: string | null;
 }
 
+export interface AddressCreationInput extends AddressInput { create_key?: string }
+export interface AddressCreationResult {
+  address_id: number;
+  creation_status: 'created' | 'replayed' | 'deleted';
+  message?: string;
+}
+
 export const addressApi = {
   list: () => api.get<unknown, { addresses: ShippingAddress[] }>('/addresses'),
-  create: (data: AddressInput) => api.post('/addresses', data),
+  create: (data: AddressCreationInput) => api.post<unknown, AddressCreationResult>('/addresses', data),
   update: (addressId: number, data: AddressInput) => api.put(`/addresses/${addressId}`, data),
   remove: (addressId: number) => api.delete(`/addresses/${addressId}`),
 };

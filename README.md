@@ -407,6 +407,8 @@ Admin product creation accepts an optional UUID `create_key`. The admin page sav
 
 Before pushing this feature (which triggers Preview), back up `products`, build the backend and run `npm run schema:product-creations`. With authorization, run `npm run migrate:product-creations` if needed, then check again. It only adds nullable `created_by_admin_id`, `create_key`, `create_fingerprint` and unique `(created_by_admin_id, create_key)`; historical products and stock stay intact. Keep these fields and the index when rolling back code. Builds and API requests do not migrate automatically.
 
+Address creation accepts an optional UUID `create_key`. The storefront saves the original request before posting and reuses it after uncertain replies or reloads. The same user/key/payload returns the original address identity; changed details return 409. A separate receipt survives address deletion, so an old retry reports the deleted address instead of creating it again. Before pushing, back up `shipping_addresses` and any existing `address_creation_receipts`, build the backend, and run `npm run schema:address-creations`. With approval, run `npm run migrate:address-creations` if needed and check again. This adds only the receipt table with primary and unique keys on `(user_id, create_key)`, preserving existing addresses and defaults and supporting managed MySQL services that require primary keys. Keep the table on rollback; builds and requests never migrate automatically.
+
 ### Review APIs
 - `POST /api/reviews` - Create a review
 - `GET /api/reviews/product/:id` - Reviews for a product

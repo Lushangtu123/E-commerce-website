@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { AddressError, AddressModel, normalizeAddress, validAddressId } from '../models/address.model';
+import { AddressError, AddressModel, normalizeAddress, normalizeAddressCreation, validAddressId } from '../models/address.model';
 import logger from '../utils/logger';
 
 function pathId(value: unknown): number | undefined {
@@ -26,7 +26,13 @@ export class AddressController {
   static async create(req: AuthRequest, res: Response) {
     try {
       if (!validAddressId(req.userId)) return res.status(401).json({ error: '未登录，请先登录' });
-      const fields = normalizeAddress(req.body);
+      const { address: fields, key } = normalizeAddressCreation(req.body);
+      if (key) {
+        const result = await AddressModel.createWithReceipt(req.userId, fields, key);
+        return res.status(result.creation_status === 'created' ? 201 : 200).json({
+          message: result.creation_status === 'deleted' ? '原新增地址已删除，可重新添加地址' : '收货地址创建成功', ...result,
+        });
+      }
       const addressId = await AddressModel.create(req.userId, fields);
       return res.status(201).json({ message: '收货地址创建成功', address_id: addressId });
     } catch (error) { return failure(res, error, '创建收货地址失败'); }

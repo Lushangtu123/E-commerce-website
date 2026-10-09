@@ -75,6 +75,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 后台优惠券列表与详情要求 `coupon:view`，创建要求 `coupon:create`，启停要求 `coupon:edit`。超级管理员按现有规则拥有全部权限；商品、订单或统计角色不会自动获得优惠券权限，其他角色需明确授权。已有仅使用超级管理员的部署无需变更数据库结构即可启用门禁；权限目录可通过现有 `admin-migrate.js` 初始化，勿给普通角色批量授予。
 
+新增地址的重试保护需要独立的 `address_creation_receipts` 表，包含 `user_id BIGINT`、`create_key CHAR(36)`、`payload_fingerprint CHAR(64)`、`address_id BIGINT`、`created_at TIMESTAMP`，并以 `(user_id, create_key)` 建立主键及唯一索引，兼容 Aiven 等要求新表必须有主键的 MySQL 服务。推送触发 Preview 前，核对共享目标库并备份 `shipping_addresses` 结构与数据及已有收据表，编译后运行 `npm run schema:address-creations`；缺表时经授权运行 `npm run migrate:address-creations` 再检查。迁移只创建收据表，不修改已有地址或默认地址；不建立指向可删除地址的外键，地址删除后仍保留原请求身份，旧请求不能重新创建该地址。回滚代码保留此表，构建和请求均不自动迁移。客户端先保存原载荷与 UUID，结果不明时暂停另一次新增，刷新后仅显式重试确认；地址编辑、删除和设为默认的未知结果以只读列表核对。
+
 ## QStash 订单超时任务
 
 待支付订单超过 30 分钟后取消，并通过现有事务恢复库存和优惠券；重复投递不会重复恢复库存。任务每次最多检查 50 笔，定时每 5 分钟触发一次。

@@ -3,6 +3,20 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '地址新增请求号无效': 'Invalid address creation request ID.',
+  '地址新增请求号已用于其他内容，请先恢复原请求': 'This request ID belongs to different address details. Restore the original request first.',
+  '原新增地址已删除，可重新添加地址': 'The original address was deleted. You can add a new address.',
+  '已重新核对最新地址，请确认操作结果': 'The latest addresses have been checked. Please verify the result.',
+  '地址结果尚未确认，请重新核对地址': 'The address update is unconfirmed. Check your addresses again.',
+  '无法保存地址恢复信息，请重新读取后再试': 'Unable to save address recovery details. Reload them before trying again.',
+  '地址字段无效，请修改后重试': 'Invalid address details. Correct them and try again.',
+  '新增地址结果尚未确认，请恢复原请求': 'Address creation is unconfirmed. Restore the original request.',
+  '无法生成地址请求号，请刷新后再试': 'Unable to create an address request ID. Refresh and try again.',
+  '无法读取地址恢复信息，请重新读取后再试': 'Unable to read address recovery details. Try reloading them.',
+  '重新读取新增地址': 'Reload pending address',
+  '存在待确认的新增地址，请恢复原请求': 'An address creation is awaiting confirmation. Restore the original request.',
+  '恢复新增地址': 'Restore address creation',
+  '重新核对地址': 'Check addresses again',
   '商品新增请求号无效': 'Invalid product creation request ID.',
   '管理员不可用，请重新登录': 'The administrator account is unavailable. Sign in again.',
   '商品新增请求号已用于其他内容，请先确认原商品': 'This request ID belongs to different product details. Confirm the original product first.',

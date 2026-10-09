@@ -484,12 +484,38 @@ async function localPlatformScripts(context) {
   await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
   console.log('PASS browser bilingual related-product retry preserves SKU selection and leaves neighboring requests untouched');
   await page.goto('http://127.0.0.1:3100/profile/address');
+  const addressCreationEndpoint = 'http://127.0.0.1:3101/api/addresses';
+  const addressBodies = [], addressCreationIds = [];
+  const lostAddressCreationReply = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    addressBodies.push(route.request().postDataJSON());
+    const response = await route.fetch(); assert.equal(response.status(), addressBodies.length === 1 ? 201 : 200);
+    const result = await response.json(); addressCreationIds.push(result.address_id);
+    if (addressBodies.length === 1) return route.abort('failed');
+    assert.equal(result.creation_status, 'replayed');
+    return route.fulfill({ response });
+  };
+  expectedRecoveryWrite = { endpoint: addressCreationEndpoint }; await page.route(addressCreationEndpoint, lostAddressCreationReply);
   await page.getByRole('button', { name: '新增地址', exact: true }).click();
   for (const [field, value] of Object.entries({ receiver_name: '浏览器测试收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '仅测试地址1号' })) {
     await page.locator(`input[name="${field}"]`).fill(value);
   }
   await page.getByRole('button', { name: '保存地址', exact: true }).click();
+  await visibleText(page, '新增地址结果尚未确认，请恢复原请求');
+  assert.match(addressBodies[0].create_key, /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i);
+  assert.equal(await page.getByRole('button', { name: '新增地址', exact: true }).isDisabled(), true);
+  await page.reload();
+  const recoverAddress = page.getByRole('button', { name: '恢复新增地址', exact: true });
+  await recoverAddress.click({ trial: true });
+  assert.equal(addressBodies.length, 1, 'reload does not automatically create an address');
+  await recoverAddress.click(); await recoverAddress.waitFor({ state: 'hidden' });
+  assert.equal(addressBodies.length, 2); assert.deepEqual(addressBodies[1], addressBodies[0]);
+  assert.equal(addressCreationIds[1], addressCreationIds[0]);
+  const savedAddressRows = (await (await context.request.get(addressCreationEndpoint)).json()).addresses;
+  assert.equal(savedAddressRows.length, 1); assert.equal(savedAddressRows[0].address_id, addressCreationIds[0]);
+  await page.unroute(addressCreationEndpoint, lostAddressCreationReply); expectedRecoveryWrite = undefined;
   await visibleText(page, '仅测试地址1号');
+  console.log('PASS browser lost address creation reply preserves one real MySQL address across reload and explicit retry');
   await page.goto('http://127.0.0.1:3100/products/1');
   // SSR exposes the language select before its change handler hydrates. Fresh inventory unlocks this button.
   await page.getByRole('button', { name: '加入购物车', exact: true }).click({ trial: true });
