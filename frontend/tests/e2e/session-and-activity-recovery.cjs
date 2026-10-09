@@ -41,6 +41,12 @@ module.exports = async function sessionAndActivityRecovery({ browser, localPlatf
     assert.deepEqual(await page.evaluate(() => [localStorage.getItem('session'), localStorage.getItem('user')]), [null, null]);
     assert.match(page.url(), /\/login$/);
     await page.evaluate(() => window.__restoreCustomerStorage());
+    await page.reload();
+    await page.getByRole('heading', { name: '登录账号', exact: true }).waitFor({ state: 'visible' });
+    assert.equal(await page.getByText(first.username, { exact: true }).count(), 0);
+    assert.equal((await context.request.get(`${api}/users/profile`)).status(), 401);
+    await page.getByLabel('邮箱', { exact: true }).fill(next.email);
+    await page.getByLabel('密码', { exact: true }).fill(password);
     await page.getByRole('button', { name: '登录', exact: true }).click();
     await page.waitForURL(`${origin}/`);
     await page.getByText(next.username, { exact: true }).waitFor({ state: 'visible' });

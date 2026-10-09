@@ -328,6 +328,8 @@ Cookie-changing authentication endpoints (customer login, registration, reset an
 
 Customer login, registration, logout and password requests share a cookie-write queue. An abandoned login cannot publish its profile after navigation; its cookie is cleared before the next sign-in starts. Failed cleanup must succeed before another sign-in sends credentials. Web Locks extend this ordering to cooperating tabs on the same origin where supported; the fallback orders requests within one tab. Credentials and account creation are never retried automatically.
 
+If browser storage fails during sign-in, the page reports the failure and attempts to clear the server cookie. A cleanup marker prevents a partially saved identity from returning after reload. Restore browser storage before explicitly signing in again; successful registration may already have created the account.
+
 Profile updates accept only `username`, `phone` and `avatar_url`, and at least one must be provided. The phone number is at most 20 characters and the avatar is an HTTP(S) URL of at most 255 characters; both can be cleared with an empty string or `null`. Re-submitting existing values also succeeds. The public profile never includes the password hash, and error messages are available in Chinese and English.
 
 A password change binds the submitting account and sign-in before waiting in the queue, then checks them again after acquiring the cookie lock and before sending credentials. Switching accounts, replacing the sign-in, or leaving the form cancels a queued request that has not been sent. Already-dispatched requests keep the existing completion and uncertain-result handling.
@@ -377,6 +379,8 @@ MySQL search splits keywords on whitespace and requires every term to appear in 
 - `DELETE /api/browse/history` - Clear the user's browsing history
 
 Favourites and browsing history default to `page=1&limit=20`, with `limit` at most 100. Query parameters must be canonical positive integer strings; duplicate, unknown or invalid parameters are rejected. Product IDs may be any JavaScript safe positive integer. Entries for products that no longer exist can still be deleted and are shown as "Product no longer exists". Both pages can retry failed loads, hide the previous user's data immediately after switching accounts, and move back to a valid page after the last entry on the last page is deleted.
+
+An uncertain deletion or an already removed entry triggers a fresh list read. If that read fails, **Check list again** retries only the read while further actions remain locked; it never repeats the deletion.
 
 ### Cart APIs
 - `GET /api/cart` - Get the cart, including SKU snapshots and `available` / `unavailable_reason`
@@ -483,6 +487,8 @@ Administrator sign-in accepts only string `username` and `password` fields. The 
 - `GET /api/admin/orders` - Order list
 - `GET /api/admin/orders/:id` - Order details
 - `PUT /api/admin/orders/:id/status` - Update order status (shipping requires a carrier and tracking number)
+
+Administrator status changes and their audit record commit in one transaction. Audit failure rolls back the status and related inventory, sales and coupon changes. Request IP and User-Agent values are bounded to the audit columns before writing.
 - `GET /api/admin/orders/stats/overview` - Order statistics
 
 **Users:**
