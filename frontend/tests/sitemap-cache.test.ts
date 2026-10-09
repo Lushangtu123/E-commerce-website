@@ -85,6 +85,8 @@ function sitemapServer() {
         }
       }, { routeKind: APP_ROUTE_KIND, incrementalCache, waitUntil: promise => { background.push(promise); } });
       await Promise.allSettled(background);
+      // Since Next 16.4 a failed prerender resolves as { error, result } instead of a cache entry.
+      if (result && 'error' in result) throw result.error;
       if (result?.value?.kind !== APP_ROUTE) throw new Error('No sitemap XML response');
       return result.value.body.toString();
     },
