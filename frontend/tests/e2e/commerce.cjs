@@ -1281,6 +1281,7 @@ async function localPlatformScripts(context) {
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./admin-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   assert.deepEqual(errors, [], 'browser runtime errors');
   assert.deepEqual(consoleErrors, [], 'browser console errors');
   console.log('PASS browser console has no unexpected errors');

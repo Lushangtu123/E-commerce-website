@@ -123,7 +123,7 @@ describe('admin layout session', () => {
     storage({ admin_session: 'first-session', admin_user: admin('first') });
     const adapter: AxiosAdapter = async config => {
       requests.push(config);
-      return { data: { message: 'ok' }, status: 200, statusText: 'OK', headers: {}, config };
+      return { data: { message: '已退出登录' }, status: 200, statusText: 'OK', headers: {}, config };
     };
     api.defaults.adapter = adapter;
     await renderLayout();
@@ -266,4 +266,3 @@ describe('API client sessions', () => {
     expect(localStorage.getItem('admin_session')).toBe('admin-session');
   });
 });
-

@@ -22,7 +22,8 @@ async function setupApi(storage: Storage, apiUrl = 'http://localhost:3001/api') 
   const respond: AxiosAdapter = async config => {
     requests.push(config);
     const data = config.method === 'post' && ['/users/login', '/users/register'].includes(config.url || '')
-      ? { user: { user_id: 1, username: 'customer', email: 'customer@example.test' } } : { data: [] };
+      ? { user: { user_id: 1, username: 'customer', email: 'customer@example.test' } }
+      : config.method === 'post' && config.url === '/admin/logout' ? { message: '已退出登录' } : { data: [] };
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
   client.default.defaults.adapter = respond;
@@ -319,7 +320,7 @@ describe('API client admin cookie session', () => {
   it('posts the admin logout with credentials and the CSRF header', async () => {
     const { adminApi, requests } = await setupApi({ admin_session: 'admin-session', admin_user: '{"admin_id":2,"username":"admin"}' });
 
-    await adminApi.logout();
+    expect(await adminApi.logout()).toEqual({ message: '已退出登录' });
 
     expect(requests.map(config => [config.method, config.url])).toEqual([['post', '/admin/logout']]);
     expect(credentials(requests[0])).toEqual(asAdmin);

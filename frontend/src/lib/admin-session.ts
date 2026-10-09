@@ -19,6 +19,10 @@ export interface AdminSession {
   };
 }
 
+export class AdminSessionPublicationError extends Error {
+  constructor(public readonly sessionReplaced: boolean) { super('Unable to record administrator sign-in'); }
+}
+
 // Older valid sessions contain only username/role_name. Validate fields used by
 // the layout without requiring newer response fields or trusting stored roles.
 export function getAdminSession(): AdminSession | null {
@@ -48,9 +52,25 @@ export function getAdminSessionId(): string | null {
 }
 
 /** Records a sign-in whose session cookie the API has just set. */
-export function startAdminSession(admin: AdminSession['admin']): void {
-  localStorage.setItem(ADMIN_SESSION_KEY, newSessionId());
-  localStorage.setItem('admin_user', JSON.stringify(admin));
+export function startAdminSession(admin: AdminSession['admin']): string {
+  const sessionId = newSessionId();
+  let previousSessionId: string | null = null;
+  try {
+    previousSessionId = localStorage.getItem(ADMIN_SESSION_KEY);
+    localStorage.setItem(ADMIN_SESSION_KEY, sessionId);
+    localStorage.setItem('admin_user', JSON.stringify(admin));
+  } catch {
+    let sessionReplaced = false;
+    try {
+      const current = localStorage.getItem(ADMIN_SESSION_KEY);
+      sessionReplaced = current !== sessionId && current !== previousSessionId;
+      // A partial publication must not give an old profile the newly written sign-in id.
+      if (current === sessionId) clearAdminSession(sessionId);
+    } catch { /* Storage is unavailable; never remove a session whose ownership cannot be checked. */ }
+    throw new AdminSessionPublicationError(sessionReplaced);
+  }
+  try { window.dispatchEvent(new Event(ADMIN_SESSION_EVENT)); } catch { /* Storage still records this sign-in. */ }
+  return sessionId;
 }
 
 // Only clear the session that initiated an action; an old response must not
