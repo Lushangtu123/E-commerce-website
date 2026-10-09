@@ -15,6 +15,9 @@ import OrderAfterSales from '@/components/OrderAfterSales';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { confirmAction } from '@/lib/confirm';
+import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
+
+type Recovery = { key: string; before: number; action: CustomerOrderAction; checking: boolean };
 
 const ORDER_STATUS = {
   0: { text: '待支付', color: 'text-orange-600' },
@@ -40,6 +43,8 @@ export default function OrderDetailPage() {
   const mounted = useRef(true);
   const actionLock = useRef(false);
   const [actionPending, setActionPending] = useState(false);
+  const recovery = useRef<Recovery | null>(null);
+  const [recoveryView, setRecoveryView] = useState<Recovery | null>(null);
   const payments = usePaymentSettings(isHydrated && isAuthenticated);
 
   const rawOrderId = params.id;
@@ -47,7 +52,8 @@ export default function OrderDetailPage() {
   const orderId = Number.isSafeInteger(parsedOrderId) && parsedOrderId > 0 && String(parsedOrderId) === rawOrderId ? parsedOrderId : NaN;
   const sessionKey = JSON.stringify([sessionId, user?.user_id, orderId]);
   const loadError = failure?.key === sessionKey ? failure.message : null;
-  const actionsBlocked = actionPending || loading || !!loadError;
+  const unresolved = recoveryView?.key === sessionKey ? recoveryView : null;
+  const actionsBlocked = actionPending || loading || !!loadError || !!unresolved;
   const currentSession = useRef(sessionKey);
   currentSession.current = sessionKey;
   const isCurrentSession = () => {
@@ -71,6 +77,8 @@ export default function OrderDetailPage() {
     detailInFlight.current = null;
     actionLock.current = false;
     setActionPending(false);
+    recovery.current = null;
+    setRecoveryView(null);
     if (!isHydrated) return;
     if (!isAuthenticated) {
       router.push('/login');
@@ -85,17 +93,17 @@ export default function OrderDetailPage() {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, router]);
 
   useEffect(() => {
-    if (isHydrated && isAuthenticated && !loadError && loadedKey === sessionKey && order?.status === 0) {
+    if (isHydrated && isAuthenticated && !loadError && !unresolved && loadedKey === sessionKey && order?.status === 0) {
       let active = true;
       const refresh = () => loadRemainingTime(() => active);
       refresh();
       const interval = setInterval(refresh, 60000);
       return () => { active = false; clearInterval(interval); };
     }
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status, loadError]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status, loadError, unresolved]);
 
   const loadOrder = async (afterWrite = false) => {
-    if (!isCurrentSession() || (!afterWrite && detailInFlight.current !== null)) return;
+    if (!isCurrentSession() || recovery.current?.key === sessionKey || (!afterWrite && detailInFlight.current !== null)) return;
     // A successful write needs a new snapshot; any earlier read is now obsolete.
     const request = ++detailRequest.current;
     detailInFlight.current = request;
@@ -104,8 +112,10 @@ export default function OrderDetailPage() {
       setFailure(null);
       const data = await orderApi.getDetail(orderId);
       if (!isCurrentSession() || request !== detailRequest.current) return;
-      setOrder(data.order);
-      setItems(data.items || []);
+      const actual = customerOrderSnapshot(data, orderId);
+      if (!actual) throw new Error('Invalid order detail');
+      setOrder(actual.order);
+      setItems(actual.items);
       setLoadedKey(sessionKey);
     } catch (error) {
       if (!isCurrentSession() || request !== detailRequest.current) return;
@@ -123,6 +133,38 @@ export default function OrderDetailPage() {
       if (detailInFlight.current === request) detailInFlight.current = null;
       if (isCurrentSession() && request === detailRequest.current) setLoading(false);
     }
+  };
+
+  const checkOrder = async (record: Recovery) => {
+    if (!isCurrentSession() || recovery.current !== record || record.checking) return;
+    record.checking = true;
+    setRecoveryView({ ...record });
+    // The known snapshot stays visible with locked controls while an obsolete countdown read is retired.
+    setLoading(false);
+    // Retire countdown or earlier detail reads before reconciling the write.
+    const request = ++detailRequest.current;
+    detailInFlight.current = request;
+    try {
+      const data = await orderApi.getDetail(orderId);
+      if (!isCurrentSession() || recovery.current !== record || request !== detailRequest.current) return;
+      const actual = customerOrderSnapshot(data, orderId);
+      if (!actual) throw new Error('Invalid order detail');
+      setOrder(actual.order); setItems(actual.items); setLoadedKey(sessionKey); setFailure(null); setLoading(false);
+      recovery.current = null; setRecoveryView(null);
+      toast[actual.order.status === customerOrderTarget[record.action] ? 'success' : 'error'](translate(customerOrderCheckMessage(record.before, actual.order.status, record.action)));
+    } catch {
+      if (isCurrentSession() && recovery.current === record && request === detailRequest.current) {
+        record.checking = false; setRecoveryView({ ...record });
+      }
+    } finally {
+      if (detailInFlight.current === request) detailInFlight.current = null;
+    }
+  };
+
+  const recoverWrite = async (action: CustomerOrderAction) => {
+    const record: Recovery = { key: sessionKey, before: order!.status, action, checking: false };
+    recovery.current = record; setRecoveryView({ ...record });
+    await checkOrder(record);
   };
 
   const loadRemainingTime = async (isActive: () => boolean) => {
@@ -143,51 +185,54 @@ export default function OrderDetailPage() {
   };
 
   const handlePay = async () => {
-    if (!isCurrentSession() || detailInFlight.current !== null || loadError || !payments.canPay || actionLock.current || order?.status !== 0) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || recovery.current?.key === sessionKey || loadError || !payments.canPay || actionLock.current || order?.status !== 0) return;
     actionLock.current = true; setActionPending(true);
     try {
       await orderApi.pay(orderId);
       if (!isCurrentSession()) return;
       toast.success(translate('模拟支付完成，未实际扣款'));
-      loadOrder(true);
+      await loadOrder(true);
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(translate(requestFailure(error).response?.data?.error || '支付失败'));
+      if (uncertainCustomerOrderWrite(error)) await recoverWrite('pay');
+      else toast.error(translate(requestFailure(error).response?.data?.error || '支付失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
   };
 
   const handleCancel = async () => {
-    if (!isCurrentSession() || detailInFlight.current !== null || loadError || actionLock.current || order?.status !== 0) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || recovery.current?.key === sessionKey || loadError || actionLock.current || order?.status !== 0) return;
     if (!(await confirmAction(t('确定要取消订单吗？')))) return;
-    if (!isCurrentSession() || detailInFlight.current !== null || loadError || actionLock.current) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || recovery.current?.key === sessionKey || loadError || actionLock.current) return;
     actionLock.current = true; setActionPending(true);
 
     try {
       await orderApi.cancel(orderId);
       if (!isCurrentSession()) return;
       toast.success(translate('订单已取消'));
-      loadOrder(true);
+      await loadOrder(true);
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(translate(requestFailure(error).response?.data?.error || '取消失败'));
+      if (uncertainCustomerOrderWrite(error)) await recoverWrite('cancel');
+      else toast.error(translate(requestFailure(error).response?.data?.error || '取消失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
   };
 
   const handleConfirm = async () => {
-    if (!isCurrentSession() || detailInFlight.current !== null || loadError || actionLock.current || order?.status !== 2) return;
+    if (!isCurrentSession() || detailInFlight.current !== null || recovery.current?.key === sessionKey || loadError || actionLock.current || order?.status !== 2) return;
     actionLock.current = true; setActionPending(true);
     try {
       await orderApi.confirm(orderId);
       if (!isCurrentSession()) return;
       toast.success(translate('确认收货成功'));
-      loadOrder(true);
+      await loadOrder(true);
     } catch (error) {
       if (!isCurrentSession()) return;
-      toast.error(translate(requestFailure(error).response?.data?.error || '确认收货失败'));
+      if (uncertainCustomerOrderWrite(error)) await recoverWrite('confirm');
+      else toast.error(translate(requestFailure(error).response?.data?.error || '确认收货失败'));
     } finally {
       if (isCurrentSession()) { actionLock.current = false; setActionPending(false); }
     }
@@ -228,6 +273,10 @@ export default function OrderDetailPage() {
       <div className="container-custom max-w-4xl">
         <h1 className="text-3xl font-bold mb-8">{t("订单详情")}</h1>
         {errorNotice}
+        {unresolved && <div className="card p-6 mb-6" role="alert">
+          <p>{t(unresolved.checking ? '订单更新结果未知，正在核对实际状态...' : '订单更新结果尚未确认，请重新核对订单；确认前不会再次提交')}</p>
+          <button className="btn btn-secondary mt-4" disabled={unresolved.checking || actionPending} onClick={() => { const record = recovery.current; if (record?.key === sessionKey) void checkOrder(record); }}>{t('重新核对订单')}</button>
+        </div>}
         {order.payment_method === 'demo' ? <p role="status" className="mb-6 rounded-lg bg-amber-50 p-4 text-amber-900">{t('演示订单，未实际扣款')}</p> : order.status === 0 && <p role="status" className="mb-6 rounded-lg bg-amber-50 p-4 text-amber-900">{t(payments.loading ? '正在确认支付服务...' : payments.isDemo ? '当前为演示支付，不会实际扣款' : '暂未开通在线支付，请勿向任何个人转账')}</p>}
 
         {/* 订单状态 */}
