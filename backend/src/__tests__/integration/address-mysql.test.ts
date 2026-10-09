@@ -113,6 +113,38 @@ integration('真实 MySQL 地址事务及并发', () => {
     expect(remaining.find(address => address.address_id === first)?.is_default).toBe(1);
   });
 
+  test('旧标签只设默认保留其他标签刚保存的姓名、电话和地址，重试只保留一个默认项', async () => {
+    await AddressModel.create(1, fields);
+    const id = await AddressModel.create(1, fields);
+    const old = (await request(app).get('/api/addresses').set(auth()).expect(200)).body.addresses.find((address: any) => address.address_id === id);
+    const updated = { ...fields, receiver_name: '新收件人', phone: '13900139000', detail_address: '最新地址2号' };
+    await request(app).put(`/api/addresses/${id}`).set(auth()).send(updated).expect(200);
+    expect(old.detail_address).toBe('道路1号');
+    await request(app).put(`/api/addresses/${id}/default`).set(auth()).send({}).expect(200);
+    await request(app).put(`/api/addresses/${id}/default`).set(auth()).send({}).expect(200);
+    const addresses = await rows(); expectOneDefault(addresses);
+    expect(addresses.find(address => address.address_id === id)).toMatchObject({ receiver_name: '新收件人', phone: '13900139000', detail_address: '最新地址2号', is_default: 1 });
+    await request(app).put(`/api/addresses/${id}/default`).set(auth(2)).send({}).expect(404);
+    await request(app).put('/api/addresses/999999/default').set(auth()).send({}).expect(404);
+    expect(await rows()).toEqual(addresses);
+  });
+
+  test('默认专属操作与编辑并发保持新资料，并发默认操作仍恰好一个默认项', async () => {
+    const first = await AddressModel.create(1, fields);
+    const second = await AddressModel.create(1, fields);
+    for (let index = 0; index < 4; index++) {
+      const changed = { ...fields, receiver_name: `新收件人${index}`, detail_address: `最新地址${index}` };
+      await Promise.all([
+        request(app).put(`/api/addresses/${second}/default`).set(auth()).send({}).expect(200),
+        request(app).put(`/api/addresses/${second}`).set(auth()).send(changed).expect(200),
+      ]);
+      const addresses = await rows(); expectOneDefault(addresses);
+      expect(addresses.find(address => address.address_id === second)).toMatchObject({ receiver_name: changed.receiver_name, detail_address: changed.detail_address, is_default: 1 });
+    }
+    await Promise.all([first, second].map(id => request(app).put(`/api/addresses/${id}/default`).set(auth()).send({}).expect(200)));
+    expectOneDefault(await rows());
+  });
+
   test('false切换到其他最小地址，删除默认提升最小地址；零或多个旧默认写入时修复', async () => {
     const first = await AddressModel.create(1, fields);
     const second = await AddressModel.create(1, fields);

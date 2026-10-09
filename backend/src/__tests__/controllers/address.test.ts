@@ -33,9 +33,11 @@ test('全部地址端点都需要用户令牌，管理员令牌不能替代用�
   await request(app).get('/api/addresses').expect(401);
   await request(app).post('/api/addresses').send(fields).expect(401);
   await request(app).put('/api/addresses/3').send(fields).expect(401);
+  await request(app).put('/api/addresses/3/default').send({}).expect(401);
   await request(app).delete('/api/addresses/3').expect(401);
   const admin = jwt.sign({ adminId: 1, type: 'admin' }, 'test-jwt-secret');
   await request(app).get('/api/addresses').set('Authorization', `Bearer ${admin}`).expect(401);
+  await request(app).put('/api/addresses/3/default').set('Authorization', `Bearer ${admin}`).send({}).expect(401);
   expect(getPool).not.toHaveBeenCalled();
 });
 
@@ -76,9 +78,23 @@ test('创建/更新缺少任何一个字段或只设默认都拒绝', async () =
   expect(getPool).not.toHaveBeenCalled();
 });
 
+test('专属默认操作只修改默认标记，重复设置保持成功且不重写地址字段', async () => {
+  await request(app).put('/api/addresses/3/default').set(token()).send({}).expect(200);
+  await request(app).put('/api/addresses/3/default').set(token()).send({}).expect(200);
+  const writes = connection.execute.mock.calls.filter(([sql]: [string]) => sql.startsWith('UPDATE'));
+  expect(writes).toHaveLength(2);
+  expect(writes.every(([sql, values]: [string, any[]]) => sql.includes('is_default = CASE') && !sql.includes('receiver_name') && values[0] === 3 && values[1] === 1)).toBe(true);
+});
+
+test.each([{ is_default: true }, { user_id: 2 }, fields, [], null])('专属默认操作拒绝非空对象或其他类型 %j', async body => {
+  await request(app).put('/api/addresses/3/default').set(token()).set('Content-Type', 'application/json').send(JSON.stringify(body)).expect(400);
+  expect(getPool).not.toHaveBeenCalled();
+});
+
 test.each(['0', '-1', '1x', '1e2', '1.5', '01', '9007199254740992'])('PUT/DELETE拒绝非法路径ID %s', async id => {
   await request(app).put(`/api/addresses/${id}`).set(token()).send(fields).expect(400);
   await request(app).delete(`/api/addresses/${id}`).set(token()).expect(400);
+  await request(app).put(`/api/addresses/${id}/default`).set(token()).send({}).expect(400);
   expect(getPool).not.toHaveBeenCalled();
 });
 
@@ -92,6 +108,8 @@ test('其他用户地址与不存在地址统一404，任何写操作未执行',
   await request(app).put('/api/addresses/3').set(token(2)).send(fields).expect(404);
   await request(app).delete('/api/addresses/3').set(token(2)).expect(404);
   await request(app).put('/api/addresses/99').set(token()).send(fields).expect(404);
+  await request(app).put('/api/addresses/3/default').set(token(2)).send({}).expect(404);
+  await request(app).put('/api/addresses/99/default').set(token()).send({}).expect(404);
   expect(connection.execute.mock.calls.some(([sql]: [string]) => /^(INSERT|UPDATE|DELETE)/.test(sql))).toBe(false);
 });
 

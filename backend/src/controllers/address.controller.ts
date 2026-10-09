@@ -58,4 +58,17 @@ export class AddressController {
       return res.json({ message: '收货地址删除成功' });
     } catch (error) { return failure(res, error, '删除收货地址失败'); }
   }
+
+  static async setDefault(req: AuthRequest, res: Response) {
+    try {
+      if (!validAddressId(req.userId)) return res.status(401).json({ error: '未登录，请先登录' });
+      const addressId = pathId(req.params.id);
+      if (!addressId) return res.status(400).json({ error: '地址ID无效' });
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length !== 0) {
+        throw new AddressError('地址字段或值无效');
+      }
+      await AddressModel.setDefault(req.userId, addressId);
+      return res.json({ message: '收货地址更新成功' });
+    } catch (error) { return failure(res, error, '更新收货地址失败'); }
+  }
 }
