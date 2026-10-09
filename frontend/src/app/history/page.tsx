@@ -30,17 +30,17 @@ export default function BrowseHistoryPage() {
   const { t, formatDate, locale } = useI18n();
   const router = useRouter();
   const { user, isHydrated, rows: history, loading, page, total, totalPages, limit,
-    error: loadError, reload: fetchHistory, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation } =
+    error: loadError, reload: fetchHistory, goToPage, isCurrentScope, hasDisplayedRow, busy, runMutation, deletionRecovery } =
     useCustomerActivity<BrowseHistory>('history', browseApi.getHistory, '获取浏览历史失败');
 
   const handleRemove = (productId: number) => runMutation(() => browseApi.deleteRecord(productId), {
-    productId, refresh: true,
+    productId, refresh: true, deletion: 'remove',
     onSuccess: () => toast.success(translate("删除成功")),
     onError: error => toast.error(translate(requestFailure(error).response?.data?.message || "删除失败")),
   });
 
   const handleClearAll = () => runMutation(() => browseApi.clearHistory(), {
-    confirm: () => confirmAction(t("确定要清空所有浏览历史吗？")), refresh: true,
+    confirm: () => confirmAction(t("确定要清空所有浏览历史吗？")), refresh: true, deletion: 'clear',
     onSuccess: () => toast.success(translate("已清空浏览历史")),
     onError: error => toast.error(translate(requestFailure(error).response?.data?.message || "清空失败")),
   });
@@ -95,10 +95,11 @@ export default function BrowseHistoryPage() {
           )}
         </div>
 
+        {deletionRecovery?.checking && <p role="status" className="mb-4 text-gray-600">{t('删除结果未知，正在核对最新列表...')}</p>}
         {loadError ? (
           <div className="bg-white rounded-lg shadow-xs p-12 text-center" role="alert">
             <p className="text-red-600">{t(loadError)}</p>
-            <button onClick={fetchHistory} className="mt-4 px-4 py-2 border rounded-lg">{t("重新加载")}</button>
+            <button onClick={fetchHistory} className="mt-4 px-4 py-2 border rounded-lg">{t(deletionRecovery ? '重新核对列表' : '重新加载')}</button>
           </div>
         ) : history.length === 0 ? (
           <div className="bg-white rounded-lg shadow-xs p-12 text-center">
