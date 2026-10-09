@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { createHash } from 'crypto';
 import { getPool } from '../database/mysql';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
@@ -15,6 +16,20 @@ export interface AddressInput {
   district: string;
   detail_address: string;
   is_default?: boolean;
+}
+
+export interface AddressCreationResult {
+  address_id: number;
+  creation_status: 'created' | 'replayed' | 'deleted';
+}
+
+export function normalizeAddressCreation(input: unknown): { address: AddressInput; key?: string } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AddressError('地址字段或值无效');
+  const { create_key: key, ...fields } = input as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(input, 'create_key') && (typeof key !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(key))) {
+    throw new AddressError('地址新增请求号无效');
+  }
+  return { address: normalizeAddress(fields), ...(typeof key === 'string' ? { key: key.toLowerCase() } : {}) };
 }
 
 export interface Address extends Omit<AddressInput, 'is_default' | 'province' | 'city' | 'district' | 'detail_address'> {
@@ -92,6 +107,17 @@ async function chooseDefault(connection: PoolConnection, userId: number, address
 
 const values = (address: AddressInput) => [address.receiver_name, address.phone, address.province, address.city, address.district, address.detail_address];
 
+async function insertAddress(connection: PoolConnection, userId: number, addresses: LockedAddress[], address: AddressInput): Promise<number> {
+  if (addresses.length >= 20) throw new AddressError('每个用户最多保存20个收货地址');
+  const [result] = await connection.execute<ResultSetHeader>(
+    `INSERT INTO shipping_addresses (user_id, receiver_name, phone, province, city, district, detail_address)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`, [userId, ...values(address)]
+  );
+  if (result.affectedRows !== 1 || !validAddressId(result.insertId)) throw new Error('地址创建未完成');
+  await chooseDefault(connection, userId, [...addresses, { address_id: result.insertId, is_default: 0 }], result.insertId, address.is_default);
+  return result.insertId;
+}
+
 export class AddressModel {
   static async list(userId: number): Promise<Address[]> {
     checkId(userId);
@@ -104,15 +130,31 @@ export class AddressModel {
 
   static async create(userId: number, input: unknown): Promise<number> {
     const address = normalizeAddress(input);
+    return transaction(userId, (connection, addresses) => insertAddress(connection, userId, addresses, address));
+  }
+
+  /** The durable receipt survives edits and physical deletion; retries never recreate a deleted address. */
+  static async createWithReceipt(userId: number, input: unknown, createKey: string): Promise<AddressCreationResult> {
+    const { address, key } = normalizeAddressCreation({ ...(input as AddressInput), create_key: createKey });
+    if (!key) throw new AddressError('地址新增请求号无效');
+    const fingerprint = createHash('sha256').update(JSON.stringify([...values(address), address.is_default === true])).digest('hex');
     return transaction(userId, async (connection, addresses) => {
-      if (addresses.length >= 20) throw new AddressError('每个用户最多保存20个收货地址');
-      const [result] = await connection.execute<ResultSetHeader>(
-        `INSERT INTO shipping_addresses (user_id, receiver_name, phone, province, city, district, detail_address)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`, [userId, ...values(address)]
+      const [receipts] = await connection.execute<RowDataPacket[]>(
+        'SELECT address_id, payload_fingerprint FROM address_creation_receipts WHERE user_id = ? AND create_key = ? FOR UPDATE', [userId, key]
       );
-      if (result.affectedRows !== 1) throw new Error('地址创建未完成');
-      await chooseDefault(connection, userId, [...addresses, { address_id: result.insertId, is_default: 0 }], result.insertId, address.is_default);
-      return result.insertId;
+      if (receipts.length) {
+        const receipt = receipts[0];
+        if (receipt.payload_fingerprint !== fingerprint) throw new AddressError('地址新增请求号已用于其他内容，请先恢复原请求', 409);
+        if (!validAddressId(receipt.address_id)) throw new Error('地址新增收据无效');
+        return { address_id: receipt.address_id, creation_status: addresses.some(row => row.address_id === receipt.address_id) ? 'replayed' : 'deleted' };
+      }
+      const addressId = await insertAddress(connection, userId, addresses, address);
+      const [result] = await connection.execute<ResultSetHeader>(
+        'INSERT INTO address_creation_receipts (user_id, create_key, payload_fingerprint, address_id) VALUES (?, ?, ?, ?)',
+        [userId, key, fingerprint, addressId]
+      );
+      if (result.affectedRows !== 1) throw new Error('地址新增收据保存失败');
+      return { address_id: addressId, creation_status: 'created' };
     });
   }
 
