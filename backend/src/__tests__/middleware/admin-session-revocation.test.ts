@@ -104,3 +104,43 @@ test('没有 CSRF 头时拒绝退出且不撤销', async () => {
   await request(app()).post('/api/admin/logout').set('Cookie', `admin_session=${token({ authVersion: 0 })}`).expect(403);
   expect(authVersion).toBe(0);
 });
+
+test('Bearer 退出撤销该令牌及其 Cookie 副本', async () => {
+  const issued = token({ authVersion: 0 });
+  await request(app()).get('/api/admin/profile').set('Authorization', `Bearer ${issued}`).expect(200);
+  const out = await request(app()).post('/api/admin/logout').set('Authorization', `Bearer ${issued}`).set(csrf).expect(200);
+  expect(cookieOf(out)).toBe('admin_session=');
+  expect(authVersion).toBe(1);
+  await request(app()).get('/api/admin/profile').set('Authorization', `Bearer ${issued}`).expect(401);
+  await request(app()).get('/api/admin/profile').set('Cookie', `admin_session=${issued}`).expect(401);
+});
+
+test('Bearer 与另一管理员 Cookie 同时存在时，注销认证所选的 Bearer 身份', async () => {
+  const issued = token({ authVersion: 0 });
+  const other = token({ adminId: 10, authVersion: 0 });
+  await request(app()).post('/api/admin/logout').set('Authorization', `Bearer ${issued}`)
+    .set('Cookie', `admin_session=${other}`).set(csrf).expect(200);
+  expect(queries.filter(q => q.sql.startsWith('UPDATE admins'))).toEqual([
+    { sql: 'UPDATE admins SET auth_version = auth_version + 1 WHERE admin_id = ? AND auth_version = ?', params: [9, 0] },
+  ]);
+});
+
+test('无效 Bearer 不回退撤销同时携带的有效 Cookie', async () => {
+  const invalid = jwt.sign({ adminId: 9, type: 'admin', authVersion: 0 }, 'wrong-secret');
+  await request(app()).post('/api/admin/logout').set('Authorization', `Bearer ${invalid}`)
+    .set('Cookie', `admin_session=${token({ authVersion: 0 })}`).set(csrf).expect(200);
+  expect(authVersion).toBe(0);
+  expect(queries.some(q => q.sql.startsWith('UPDATE admins'))).toBe(false);
+});
+
+test('Bearer 退出仍需要 CSRF 头', async () => {
+  await request(app()).post('/api/admin/logout').set('Authorization', `Bearer ${token({ authVersion: 0 })}`).expect(403);
+  expect(authVersion).toBe(0);
+});
+
+test('Bearer 撤销失败时清除 Cookie 并返回 503', async () => {
+  failRevocation = true;
+  const out = await request(app()).post('/api/admin/logout').set('Authorization', `Bearer ${token({ authVersion: 0 })}`)
+    .set(csrf).expect(503);
+  expect(cookieOf(out)).toBe('admin_session=');
+});

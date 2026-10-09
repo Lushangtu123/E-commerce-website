@@ -43,7 +43,7 @@ router.post('/login', authLimiter, adminLogin);
  *   post:
  *     tags: [管理后台]
  *     summary: 管理员退出登录
- *     description: 清除管理员 httpOnly 会话 Cookie；令牌过期后也能调用。需带 X-Requested-With 请求头。
+ *     description: 清除管理员 httpOnly 会话 Cookie，并撤销有效令牌所属管理员的全部会话；同时携带 Bearer 与 Cookie 时以 Bearer 为准。令牌过期后也能调用。需带 X-Requested-With 请求头。
  *     parameters:
  *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     responses:
@@ -51,6 +51,8 @@ router.post('/login', authLimiter, adminLogin);
  *         description: 已清除会话 Cookie
  *       403:
  *         description: 缺少 X-Requested-With 请求头
+ *       503:
+ *         description: 已清除本设备 Cookie，但未能撤销其他会话，请重试
  */
 router.post('/logout', adminLogout);
 
