@@ -108,6 +108,7 @@ export const afterSalesApi = {
   create: (orderId: number, data: { type: 'refund' | 'return'; reason: string }) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales`, data),
   withdraw: (orderId: number) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/withdraw`),
   list: (params: { page: number; limit: number; status?: string }) => api.get<unknown, { requests: AfterSalesRequest[]; pagination: { total: number; totalPages: number } }>('/admin/after-sales', { params }),
+  adminGet: (id: number) => api.get<unknown, { after_sales: AfterSalesRequest }>(`/admin/after-sales/${id}`),
   review: (id: number, data: { status: 'approved' | 'rejected'; note: string }) => api.post(`/admin/after-sales/${id}/review`, data),
   tracking: (orderId: number, data: { company: string; tracking_number: string }) => api.post<unknown, { after_sales: AfterSalesRequest }>(`/orders/${orderId}/after-sales/return-tracking`, data),
   complete: (id: number, data: { refund_amount: string; refund_reference?: string; note: string }) => api.post(`/admin/after-sales/${id}/complete`, data),

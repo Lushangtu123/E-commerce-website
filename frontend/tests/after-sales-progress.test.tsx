@@ -26,7 +26,7 @@ async function setup(admin = false, options: { row?: object; mutate?: () => Prom
   const writes: { url?: string; body: unknown }[] = [];
   const adapter: AxiosAdapter = async config => {
     let data: unknown;
-    if (config.method === 'get') data = admin ? { requests: [current], pagination: { total: 1 } } : { after_sales: current };
+    if (config.method === 'get') data = admin && !/\/admin\/after-sales\/\d+$/.test(config.url!) ? { requests: [current], pagination: { total: 1 } } : { after_sales: current };
     else {
       const body = JSON.parse(config.data); writes.push({ url: config.url, body });
       if (options.mutate) data = await options.mutate();

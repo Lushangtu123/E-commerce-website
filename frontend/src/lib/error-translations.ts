@@ -105,6 +105,7 @@ export const errorTranslations: Record<string, string> = {
   '保存退货运单失败': 'Unable to save return tracking.',
   '人工处理记录已保存并结案，系统未执行资金退款': 'Manual processing recorded and closed. The system did not transfer a refund.',
   '保存售后结案失败': 'Unable to save the after-sales closure.',
+  '售后申请状态已改变，已关闭当前草稿，请核对最新进度': 'The after-sales request changed. The current draft was closed; check its latest progress.',
   '商品不存在或已删除，请重新加载列表': 'A product is missing or deleted. Reload the list.',
   '后台查询参数无效': 'Invalid admin query parameters',
   '加载订单详情失败，请重试': 'Could not load order details. Please try again',

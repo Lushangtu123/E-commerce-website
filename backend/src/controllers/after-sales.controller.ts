@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { AfterSalesError, validAfterSalesId, getAfterSales, createAfterSales, withdrawAfterSales, reviewAfterSales, listAfterSales, submitReturnTracking, completeAfterSales } from '../services/after-sales.service';
+import { AfterSalesError, validAfterSalesId, getAfterSales, createAfterSales, withdrawAfterSales, reviewAfterSales, listAfterSales, getAfterSalesById, submitReturnTracking, completeAfterSales } from '../services/after-sales.service';
 import logger from '../utils/logger';
 
 function pathId(value: unknown): number {
@@ -38,6 +38,10 @@ export const withdrawCustomerAfterSales = async (req: AuthRequest, res: Response
 export const getAdminAfterSales = async (req: Request, res: Response) => {
   try { return res.json(await listAfterSales(req.query)); }
   catch (error) { return fail(res, error, '获取售后列表失败'); }
+};
+export const getAdminAfterSalesDetail = async (req: Request, res: Response) => {
+  try { return res.json({ after_sales: await getAfterSalesById(pathId(req.params.id)) }); }
+  catch (error) { return fail(res, error, '获取售后申请失败'); }
 };
 export const reviewAdminAfterSales = async (req: Request, res: Response) => {
   try {

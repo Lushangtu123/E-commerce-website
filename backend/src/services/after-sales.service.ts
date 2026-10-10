@@ -173,6 +173,17 @@ export async function listAfterSales(input: unknown) {
   return { requests, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 }
 
+export async function getAfterSalesById(requestId: number): Promise<AfterSalesRequest> {
+  validateIds(requestId);
+  const [requests] = await getPool().query<AfterSalesRequest[]>(
+    `SELECT a.*, o.order_no, o.total_amount, o.payment_method, o.status AS order_status, u.username
+     FROM after_sales_requests a JOIN orders o ON o.order_id = a.order_id
+     LEFT JOIN users u ON u.user_id = a.user_id WHERE a.request_id = ?`, [requestId]
+  );
+  if (!requests[0]) throw new AfterSalesError('售后申请不存在', 404);
+  return requests[0];
+}
+
 export async function submitReturnTracking(userId: number, orderId: number, input: unknown): Promise<AfterSalesRequest> {
   validateIds(userId, orderId);
   const { error, value } = trackingSchema.validate(input);

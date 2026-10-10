@@ -31,7 +31,8 @@ async function setup(kind: 'create'|'withdraw'|'tracking'|'review'|'complete', o
       if (reads === 2 && options.pending) return { config, status: 200, statusText: 'OK', headers: {}, data: await options.pending.promise };
       if (reads === 2 && options.failRead) throw error(config, 503);
       const value = !admin && useAuthStore.getState().user?.user_id !== 1 ? null : saved ? canonical : initial;
-      return { config, status: 200, statusText: 'OK', headers: {}, data: admin ? { requests: kind === 'review' && saved ? [] : [value], pagination: { total: kind === 'review' && saved ? 0 : 1 } } : { after_sales: value } };
+      const detail = admin && /\/admin\/after-sales\/\d+$/.test(config.url!);
+      return { config, status: 200, statusText: 'OK', headers: {}, data: admin && !detail ? { requests: kind === 'review' && saved ? [] : [value], pagination: { total: kind === 'review' && saved ? 0 : 1 } } : { after_sales: value } };
     }
     writes++; saved = !options.noCommit; throw error(config, options.status);
   }) as AxiosAdapter;
@@ -59,19 +60,19 @@ async function setup(kind: 'create'|'withdraw'|'tracking'|'review'|'complete', o
 describe('after-sales canonical reconciliation', () => {
   it.each(['create','withdraw','tracking','review','complete'] as const)('reads canonical state after lost %s response without repeating writes', async kind => {
     const state = await setup(kind); state.submit(); await settle();
-    expect(state.counts()).toEqual({ reads: 2, writes: 1 });
+    expect(state.counts()).toEqual({ reads: ['review', 'complete'].includes(kind) ? 3 : 2, writes: 1 });
     expect(screen.queryByRole('button', { name: t(state.buttonName) })).toBeNull(); await state.stale(); expect(state.counts().writes).toBe(1);
   });
   it.each([408,429,500,503,409])('reconciles admin HTTP %s and closes the obsolete review draft', async status => {
     const state = await setup('review', { status }); state.submit(); await settle();
-    expect(state.counts()).toEqual({ reads: 2, writes: 1 }); expect(screen.queryByLabelText(t('审核说明'))).toBeNull();
+    expect(state.counts()).toEqual({ reads: 3, writes: 1 }); expect(screen.queryByLabelText(t('审核说明'))).toBeNull();
   });
   it.each(['create','tracking','review','complete'] as const)('failed %s canonical read blocks stale write until read-only retry', async kind => {
     const state = await setup(kind, { failRead: true }); state.submit(); await settle();
     expect(state.counts()).toEqual({ reads: 2, writes: 1 }); expect(screen.getByRole('button', { name: t(state.buttonName) })).toBeDisabled();
     await state.stale(); expect(state.counts().writes).toBe(1);
     const reload = screen.getByRole('button', { name: t(kind === 'create' || kind === 'tracking' ? '刷新售后进度' : '重新加载') });
-    fireEvent.click(reload); await settle(); expect(state.counts()).toEqual({ reads: 3, writes: 1 }); expect(screen.queryByRole('button', { name: t(state.buttonName) })).toBeNull();
+    fireEvent.click(reload); await settle(); expect(state.counts()).toEqual({ reads: ['review', 'complete'].includes(kind) ? 4 : 3, writes: 1 }); expect(screen.queryByRole('button', { name: t(state.buttonName) })).toBeNull();
   });
   it.each(['create','tracking','review','complete'] as const)('preserves %s draft after definite400 without canonical reads', async kind => {
     const state = await setup(kind, { status: 400, noCommit: true }); state.submit(); await settle(); expect(state.counts()).toEqual({ reads: 1, writes: 1 }); expect(screen.getByRole('button', { name: t(state.buttonName) })).toBeEnabled();
@@ -102,6 +103,6 @@ describe('after-sales canonical reconciliation', () => {
     expect(screen.getByRole('button', { name: t(state.buttonName) })).toBeDisabled();
     await state.stale(); expect(state.counts().writes).toBe(1);
     fireEvent.click(screen.getByRole('button', { name: t(kind === 'create' ? '刷新售后进度' : '重新加载') })); await settle();
-    expect(state.counts()).toEqual({ reads: 3, writes: 1 }); expect(screen.queryByRole('button', { name: t(state.buttonName) })).toBeNull();
+    expect(state.counts()).toEqual({ reads: kind === 'review' ? 4 : 3, writes: 1 }); expect(screen.queryByRole('button', { name: t(state.buttonName) })).toBeNull();
   });
 });

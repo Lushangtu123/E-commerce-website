@@ -47,6 +47,12 @@ const asAdmin = asCustomer;
 const both = { session: 'customer-session', admin_session: 'admin-session' };
 
 describe('API client requests', () => {
+  it('reads one after-sales request by request ID with administrator cookie credentials', async () => {
+    const { afterSalesApi, requests } = await setupApi(both);
+    await afterSalesApi.adminGet(17);
+    expect(requests).toHaveLength(1); expect(requests[0].method).toBe('get');
+    expect(requests[0].url).toBe('/admin/after-sales/17'); expect(credentials(requests[0])).toEqual(asAdmin);
+  });
   it.each(['/products', '/products/hot', '/products/12', '/reviews/product/12', '/recommendations/related/12', '/search/hot', '/search/suggestions'])
     ('reads public GET %s when browser storage is unavailable', async path => {
       const { api, requests } = await setupApi({});
