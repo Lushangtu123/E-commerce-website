@@ -1,3 +1,4 @@
+import { installCatalogRouter, useCatalogSearchParams } from './catalog-router';
 import { act, fireEvent, screen } from '@testing-library/react';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import type { ReactNode } from 'react';
@@ -18,8 +19,9 @@ const sentSession = (config: { headers: { get(name: string): unknown } }) =>
 
 
 // Next returns the same router on every render; pages list it as an effect dependency.
-const router = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin' }));
+const orderQuery = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin', useSearchParams: () => useCatalogSearchParams(orderQuery) }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
   const toast = { success: vi.fn(), error: vi.fn() };
@@ -198,3 +200,5 @@ describe('admin coupons', () => {
     expect(container.firstElementChild).toHaveAttribute('data-testid', 'admin-layout');
   });
 });
+
+beforeEach(() => { orderQuery.current = new URLSearchParams(); orderQuery.listeners.clear(); installCatalogRouter(router, orderQuery); window.history.replaceState(null, '', '/admin/orders'); });

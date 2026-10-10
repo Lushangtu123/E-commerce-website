@@ -1,3 +1,4 @@
+import { installCatalogRouter, useCatalogSearchParams } from './catalog-router';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import type { ReactNode } from 'react';
@@ -10,6 +11,9 @@ import api from '@/lib/api';
 import { ADMIN_CLEANUP_KEY, ADMIN_SESSION_EVENT, startAdminSession } from '@/lib/admin-session';
 import { captureHandler, deferred, render, settle } from './helpers';
 
+const orderQuery = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, useSearchParams: () => useCatalogSearchParams(orderQuery) }));
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -162,3 +166,5 @@ describe('in-flight administrator results during a temporary publication pause',
     expect(delivered).toBe(true);
   });
 });
+
+beforeEach(() => { orderQuery.current = new URLSearchParams(); orderQuery.listeners.clear(); installCatalogRouter(router, orderQuery); window.history.replaceState(null, '', '/'); });

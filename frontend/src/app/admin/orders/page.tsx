@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
 import type { AdminOrderRow, AdminPage } from '@/lib/api';
@@ -10,6 +10,8 @@ import { translate, useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
 import { requestFailure } from '@/lib/api-error';
 import { confirmAction } from '@/lib/confirm';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { emptyOrderFilters, orderFilterKeys, orderFiltersUrl, normalizeOrderFilters, readOrderFilters, type OrderFilters } from '@/lib/admin-order-filters';
 
 const NEXT_STATUS: Record<number, { status: number; text: string }> = { 0: { status: 4, text: '取消订单' }, 1: { status: 2, text: '发货' }, 2: { status: 3, text: '完成订单' } };
 const STATUS = ['待支付', '已支付', '已发货', '已完成', '已取消'];
@@ -32,13 +34,30 @@ const unknownWrite = (error: unknown) => {
 };
 
 export default function AdminOrdersPage() {
+  const { t } = useI18n();
+  return <Suspense fallback={<p role="status">{t('加载中...')}</p>}><AdminOrdersContent /></Suspense>;
+}
+
+function AdminOrdersContent() {
   const { t, formatDate } = useI18n(), session = useAdminSession();
-  const [view, setView] = useState({ sessionId: session.sessionId, page: 1, filters: { orderNo: '', status: '' } });
-  const ownsView = view.sessionId === session.sessionId;
-  const page = ownsView ? view.page : 1;
-  const filters = ownsView ? view.filters : { orderNo: '', status: '' };
-  const [draft, setDraft] = useState({ sessionId: session.sessionId, orderNo: '' });
-  const orderNoDraft = draft.sessionId === session.sessionId ? draft.orderNo : '';
+  const router = useRouter(), searchParams = useSearchParams();
+  const urlKey = searchParams?.toString() ?? '';
+  const paramsReady = searchParams !== null;
+  const [owner, setOwner] = useState<string | null>(null);
+  const ownsFilters = owner === null || owner === session.sessionId;
+  const cleared = searchParams !== null && [...orderFilterKeys, 'page'].every(key => !searchParams.has(key));
+  if (session.sessionId && (owner === null || (!ownsFilters && cleared))) setOwner(session.sessionId);
+  const applied = readOrderFilters(ownsFilters ? urlKey : '');
+  const { page, filters } = applied;
+  const [navigation, setNavigation] = useState<{ sessionId: string | null; from: string; to: string; preserved?: OrderFilters } | null>(null);
+  const waitingNavigation = navigation?.sessionId === session.sessionId && navigation.from === urlKey && navigation.to !== urlKey;
+  const preserved = navigation?.sessionId === session.sessionId && navigation.to === urlKey ? navigation.preserved : undefined;
+  if (navigation && (navigation.sessionId !== session.sessionId || navigation.from !== urlKey)) setNavigation(null);
+  const draftKey = JSON.stringify([session.sessionId, urlKey]);
+  const [draft, setDraft] = useState({ key: draftKey, filters });
+  if (draft.key !== draftKey) setDraft({ key: draftKey, filters: preserved ?? filters });
+  const draftFilters = draft.key === draftKey ? draft.filters : filters;
+  const [formError, setFormError] = useState<{ key: string; message: string } | null>(null);
   const [result, setResult] = useState<{ key: string; orders: AdminOrderRow[]; total: number; error?: string } | null>(null);
   const [shipment, setShipment] = useState<ShipmentDraft | null>(null);
   const currentShipment = useRef(shipment);
@@ -54,28 +73,34 @@ export default function AdminOrdersPage() {
   const confirmed = useRef(new Map<number, { sessionId: string | null; before: number; order: OrderState }>());
   const request = useRef(0), mutation = useRef<object | null>(null), latestLoad = useRef<(() => Promise<void>) | null>(null);
   const pendingLoad = useRef<{ key: string } | null>(null);
-  const key = JSON.stringify([session.sessionId, page, filters]);
-  const currentKey = useRef(key); currentKey.current = key;
-  const active = () => session.active() && currentKey.current === key;
+  const key = JSON.stringify([session.sessionId, page, filters, urlKey]);
+  const currentKey = useRef(key); currentKey.current = waitingNavigation ? '' : key;
+  const active = () => searchParams !== null && ownsFilters && session.active() && currentKey.current === key && new URLSearchParams(window.location.search).toString() === urlKey;
   const visible = result?.key === key && session.active() ? result : null;
   const displayed = useRef(visible);
   useLayoutEffect(() => { currentShipment.current = shipment; displayed.current = visible; }, [shipment, visible]);
   const loading = !visible, orders = visible?.orders ?? [], total = visible?.total ?? 0;
-  const changePage = (target: number) => {
-    if (!active() || target === page) return;
-    currentKey.current = JSON.stringify([session.sessionId, target, filters]);
-    setView({ sessionId: session.sessionId, page: target, filters });
-    setShipment(null);
+  const navigate = (next: OrderFilters, target = 1, replace = false, preserveDraft = false) => {
+    if (!active()) return;
+    const href = orderFiltersUrl(urlKey, next, target);
+    if (href === `/admin/orders${urlKey ? `?${urlKey}` : ''}`) return;
+    setNavigation({ sessionId: session.sessionId, from: urlKey, to: new URL(href, window.location.origin).searchParams.toString(), ...(preserveDraft && { preserved: { ...draftFilters, status: next.status } }) });
+    currentKey.current = ''; setShipment(null);
+    router[replace ? 'replace' : 'push'](href, { scroll: false });
+  };
+  const changePage = (target: number, replace = false) => {
+    if (!active() || applied.error || target === page || target < 1 || target > 10000) return;
+    navigate(filters, target, replace, !replace);
   };
   const fetchOrders = async (force = false) => {
-    if (!active() || (!force && pendingLoad.current?.key === key)) return;
+    if (!active() || applied.error || (!force && pendingLoad.current?.key === key)) return;
     const operation = { key }; pendingLoad.current = operation;
     const revision = ++request.current; setResult(null);
     try {
-      const data = await api.get<unknown, AdminPage & { orders?: AdminOrderRow[] }>('/admin/orders', { params: { page, limit: 20, ...(filters.orderNo && { orderNo: filters.orderNo }), ...(filters.status !== '' && { status: filters.status }) } });
+      const data = await api.get<unknown, AdminPage & { orders?: AdminOrderRow[] }>('/admin/orders', { params: { page, limit: 20, ...Object.fromEntries(orderFilterKeys.filter(name => filters[name]).map(name => [name, filters[name]])) } });
       if (!active() || revision !== request.current) return;
       let total = Number(data.pagination?.total) || 0;
-      if (page > Math.max(1, Math.ceil(total / 20))) { changePage(Math.max(1, Math.ceil(total / 20))); return; }
+      if (page > Math.max(1, Math.ceil(total / 20))) { changePage(Math.max(1, Math.min(10000, Math.ceil(total / 20))), true); return; }
       const rows = (data.orders || []).map(order => {
         const checked = confirmed.current.get(order.order_id);
         if (!checked || checked.sessionId !== session.sessionId) return order;
@@ -99,24 +124,30 @@ export default function AdminOrdersPage() {
   useEffect(() => { setShipment(null); void fetchOrders(); return () => {
     request.current++;
     if (pendingLoad.current?.key === key) pendingLoad.current = null;
-  }; }, [key]);
+  }; }, [key, paramsReady, ownsFilters]);
   // A tab opened during publication has no in-flight read to resume.
   useEffect(() => { if (session.ready && !pendingLoad.current) void latestLoad.current?.(); }, [session.ready]);
-  const changeFilters = (next: typeof filters) => {
-    if (!active() || (page === 1 && next.orderNo === filters.orderNo && next.status === filters.status)) return;
-    currentKey.current = JSON.stringify([session.sessionId, 1, next]);
-    setView({ sessionId: session.sessionId, page: 1, filters: next });
-    setShipment(null);
+  useEffect(() => {
+    if (!session.sessionId || searchParams === null) return;
+    if (owner !== null && owner !== session.sessionId && !cleared) router.replace(orderFiltersUrl(urlKey, emptyOrderFilters), { scroll: false });
+  }, [session.sessionId, owner, cleared, router, urlKey, searchParams]);
+  const changeDraft = (name: keyof OrderFilters, value: string) => {
+    if (!active()) return;
+    setDraft({ key: draftKey, filters: { ...draftFilters, [name]: value } }); setFormError(null);
   };
   const submitSearch = () => {
     if (!active()) return;
-    if (page === 1 && orderNoDraft === filters.orderNo) void fetchOrders();
-    else changeFilters({ ...filters, orderNo: orderNoDraft });
+    const normalized = normalizeOrderFilters(draftFilters);
+    if (normalized.error) { setFormError({ key, message: normalized.error }); return; }
+    setDraft({ key: draftKey, filters: normalized.filters }); setFormError(null);
+    if (page === 1 && JSON.stringify(normalized.filters) === JSON.stringify(filters)) void fetchOrders();
+    else navigate(normalized.filters);
   };
   const resetSearch = () => {
     if (!active()) return;
-    setDraft({ sessionId: session.sessionId, orderNo: '' });
-    changeFilters({ orderNo: '', status: '' });
+    setDraft({ key: draftKey, filters: emptyOrderFilters }); setFormError(null);
+    if (!applied.error && page === 1 && JSON.stringify(filters) === JSON.stringify(emptyOrderFilters)) void fetchOrders();
+    else navigate(emptyOrderFilters);
   };
   const syncRecovery = () => setRecoveries(Array.from(recovery.current.values()));
   const checkOrder = async (record: Recovery) => {
@@ -190,10 +221,15 @@ export default function AdminOrdersPage() {
   };
   return <AdminLayout><div className="space-y-6">
     <div><h1 className="text-2xl font-bold">{t('订单管理')}</h1><p className="text-gray-600 mt-1">{t('查看和管理所有订单')}</p></div>
-    <form role="search" className="card p-4 grid grid-cols-1 md:grid-cols-4 gap-4" onSubmit={event => { event.preventDefault(); submitSearch(); }}>
-      <input className="input" type="text" aria-label={t('订单号')} placeholder={t('搜索订单号...')} value={orderNoDraft} onChange={event => { if (active()) setDraft({ sessionId: session.sessionId, orderNo: event.target.value }); }} />
-      <select className="input" value={filters.status} aria-label={t('订单状态')} onChange={event => changeFilters({ ...filters, status: event.target.value })}><option value="">{t('全部状态')}</option>{STATUS.map((label, index) => <option key={index} value={String(index)}>{t(label)}</option>)}</select>
-      <button type="submit" className="btn btn-secondary">{t('搜索')}</button><button type="button" className="btn btn-secondary" onClick={resetSearch}>{t('重置')}</button>
+    <form role="search" className="card p-4 space-y-4" onSubmit={event => { event.preventDefault(); submitSearch(); }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <label>{t('订单号')}<input className="input mt-1" type="text" aria-label={t('订单号')} placeholder={t('搜索订单号...')} maxLength={32} value={draftFilters.orderNo} disabled={!session.ready || !searchParams || !ownsFilters} onChange={event => changeDraft('orderNo', event.target.value)} /></label>
+        <label>{t('订单状态')}<select className="input mt-1" value={filters.status} disabled={!session.ready || !searchParams || !ownsFilters} onChange={event => navigate({ ...filters, status: event.target.value }, 1, false, true)}><option value="">{t('全部状态')}</option>{STATUS.map((label, index) => <option key={index} value={String(index)}>{t(label)}</option>)}</select></label>
+        <label>{t('用户编号')}<input className="input mt-1" inputMode="numeric" value={draftFilters.userId} disabled={!session.ready || !searchParams || !ownsFilters} onChange={event => changeDraft('userId', event.target.value)} /></label>
+        {(['startDate', 'endDate'] as const).map(name => <label key={name}>{t(name === 'startDate' ? '开始日期' : '结束日期')}<input className="input mt-1" type="date" value={draftFilters[name]} disabled={!session.ready || !searchParams || !ownsFilters} onChange={event => changeDraft(name, event.target.value)} /></label>)}
+      </div>
+      {(applied.error || (formError?.key === key && formError.message)) && <p role="alert" className="text-red-600">{t(applied.error || formError!.message)}</p>}
+      <div className="flex gap-3"><button type="submit" className="btn btn-secondary" disabled={!session.ready || !searchParams || !ownsFilters}>{t('搜索')}</button><button type="button" className="btn btn-secondary" disabled={!session.ready || !searchParams || !ownsFilters} onClick={resetSearch}>{t('重置')}</button></div>
     </form>
     {checked && <section className="card p-4 space-y-3" aria-label={t('订单核对结果')}>
       <div className="flex items-center justify-between gap-3"><h2 className="font-bold">{t('订单核对结果')}</h2><button type="button" className="btn btn-secondary" onClick={() => { if (session.active()) setLastChecked(current => current === checked ? null : current); }}>{t('关闭')}</button></div>
@@ -216,7 +252,7 @@ export default function AdminOrdersPage() {
       <div className="flex gap-3"><button className="btn btn-primary" disabled={busy || unresolved.some(record => record.order.order_id === shipment.id)}>{t('确认发货')}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { if (active() && !mutation.current && currentShipment.current === shipment) setShipment(null); }}>{t('取消')}</button></div>
     </form>}
     <div className="card overflow-x-auto">
-      {loading ? <p className="p-8" role="status">{t('加载中...')}</p> : visible.error ? <div className="p-6" role="alert"><p className="text-red-600">{t(visible.error)}</p><button onClick={() => void fetchOrders()} className="btn btn-secondary mt-4">{t('重新加载')}</button></div> : <>
+      {applied.error ? null : loading ? <p className="p-8" role="status">{t('加载中...')}</p> : visible.error ? <div className="p-6" role="alert"><p className="text-red-600">{t(visible.error)}</p><button onClick={() => void fetchOrders()} className="btn btn-secondary mt-4">{t('重新加载')}</button></div> : <>
         <table className="w-full"><thead className="bg-gray-50"><tr>{['订单号', '用户', '收货信息', '物流信息', '金额', '商品数量', '状态', '下单时间', '操作'].map(label => <th key={label} className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t(label)}</th>)}</tr></thead>
         <tbody>{orders.map(order => <tr key={order.order_id} className="border-t">
           <td className="p-4 text-sm">{order.order_no}{order.payment_method === 'demo' && <p className="text-xs text-amber-800 mt-1">{t('演示订单，未实际扣款')}</p>}</td><td className="p-4 text-sm">{order.username || t('未知用户')}</td>

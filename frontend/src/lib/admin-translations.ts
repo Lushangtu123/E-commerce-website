@@ -70,6 +70,7 @@ export const adminTranslations: Record<string, string> = {
   '操作类型': 'Action',
   '管理员编号': 'Administrator ID',
   '全部操作': 'All actions',
+  '订单筛选条件无效，请检查后重试': 'Invalid order filters. Check the values and try again.',
   '开始日期': 'Start date',
   '结束日期': 'End date',
   '筛选': 'Filter',
