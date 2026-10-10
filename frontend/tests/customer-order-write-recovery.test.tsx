@@ -82,9 +82,9 @@ describe.each(['detail', 'list'] as const)('customer order %s write recovery', k
     expect(screen.queryByRole('button', { name: '重新核对订单' })).not.toBeInTheDocument();
   });
 
-  it('keeps the unknown write locked after a failed GET, and retry only reads', async () => {
+  it.each([undefined, 409])('keeps HTTP %s recovery locked after a failed GET, and retry only reads', async status => {
     await setup(kind);
-    vi.mocked(orderApi.cancel).mockRejectedValue(failure());
+    vi.mocked(orderApi.cancel).mockRejectedValue(failure(status));
     vi.mocked(orderApi.getDetail).mockRejectedValue(failure(503));
     await click(button('取消订单'));
     expect(screen.getByRole('alert')).toHaveTextContent('订单更新结果尚未确认，请重新核对订单；确认前不会再次提交');
@@ -128,12 +128,13 @@ describe.each(['detail', 'list'] as const)('customer order %s write recovery', k
     expect(stateText(kind, 4)).toBeInTheDocument();
   });
 
-  it.each(['cancel', 'pay', 'confirm'] as const)('keeps normal %s success and known rejection behavior', async action => {
+  it.each((['cancel', 'pay', 'confirm'] as const).flatMap(action => [400, 403, 404].map(status => ({ action, status }))))('keeps normal $action success and definite HTTP $status rejection behavior', async ({ action, status }) => {
     await setup(kind, action === 'confirm' ? 2 : 0);
     const before = vi.mocked(orderApi.getDetail).mock.calls.length;
-    vi.mocked(orderApi[action]).mockRejectedValueOnce({ response: { status: 400, data: { error: '订单状态不允许此操作' } } });
+    const error = status === 400 ? '订单ID无效' : status === 403 ? '无权操作该订单' : '订单不存在';
+    vi.mocked(orderApi[action]).mockRejectedValueOnce({ response: { status, data: { error } } });
     await click(button(labels[action]));
-    expect(notices).toEqual(['订单状态不允许此操作']);
+    expect(notices).toEqual([error]);
     expect(orderApi.getDetail).toHaveBeenCalledTimes(before);
     expect(button(labels[action])).toBeEnabled();
     vi.mocked(orderApi.getDetail).mockResolvedValue(detail(target[action]));
@@ -141,6 +142,20 @@ describe.each(['detail', 'list'] as const)('customer order %s write recovery', k
     await click(button(labels[action]));
     expect(stateText(kind, target[action])).toBeInTheDocument();
     expect(orderApi[action]).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['cancel', 'pay', 'confirm'] as const)('adopts a different canonical state after a conflicting %s, without replay', async action => {
+    await setup(kind, action === 'confirm' ? 2 : 0);
+    const actual = action === 'cancel' ? 1 : 4;
+    vi.mocked(orderApi[action]).mockRejectedValue({ response: { status: 409, data: { error: '订单状态不允许此操作' } } });
+    vi.mocked(orderApi.getDetail).mockResolvedValue(detail(actual));
+    vi.mocked(orderApi.list).mockImplementation(async params => list(actual, params as ListParams));
+    await click(button(labels[action]));
+    expect(stateText(kind, actual)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: labels[action] })).not.toBeInTheDocument();
+    expect(notices).toEqual(['订单已变更，请核对实际状态']);
+    expect(orderApi[action]).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '重新核对订单' })).not.toBeInTheDocument();
   });
 
   it('does not expose simulated payment when production payment is disabled', async () => {

@@ -189,6 +189,78 @@ describe('下单原子性', () => {
 });
 
 describe('订单状态迁移', () => {
+  test.each([
+    ['cancel', 1], ['cancel', 4],
+    ['pay', 1], ['pay', 4],
+    ['confirm', 0], ['confirm', 1], ['confirm', 3], ['confirm', 4],
+  ] as const)('%s 与锁定的状态 %s 冲突时返回 409，拒绝重复写入', async (action, status) => {
+    order.status = status;
+    // Even an old order that has already changed status is a conflict, not a pending payment timeout.
+    order.has_timed_out = 1;
+    const res = response();
+    await OrderController[action](request(), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '订单状态不允许此操作' });
+    expect(connection.execute.mock.calls.filter(([sql]: [string]) => /^UPDATE\b/i.test(sql))).toHaveLength(0);
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+    expect(connection.release).toHaveBeenCalledTimes(1);
+    expect(redis.del).not.toHaveBeenCalled();
+    expect(order.status).toBe(status);
+  });
+
+  test.each([0, 2, 3, 4])('后台发货与实际状态 %s 冲突时返回 409，不写物流或审核', async status => {
+    order.status = status;
+    const res = response();
+    await updateOrderStatus(request({ status: 2, shipping_company: '顺丰', tracking_number: 'SFTEST1001' }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '订单状态不允许此操作' });
+    expect(matching('UPDATE orders')).toHaveLength(0);
+    expect(matching('INSERT INTO admin_logs')).toHaveLength(0);
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+  });
+
+  test('锁定后条件更新没有匹配行时返回 409 并回滚', async () => {
+    order.status = 2;
+    const original = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('UPDATE orders')) return Promise.resolve([{ affectedRows: 0 }, []]);
+      return original(sql, params);
+    });
+    const res = response();
+    await OrderController.confirm(request(), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '订单状态已改变' });
+    expect(order.status).toBe(2);
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['cancel', 'pay', 'confirm'] as const)('%s 保留无效 ID 400、归属 403 和不存在 404', async action => {
+    const invalid = response();
+    await OrderController[action]({ ...request(), params: { id: 'bad-id' } }, invalid);
+    expect(invalid.status).toHaveBeenCalledWith(400);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+
+    const foreign = response();
+    await OrderController[action](request({}, 8), foreign);
+    expect(foreign.status).toHaveBeenCalledWith(403);
+    expect(foreign.json).toHaveBeenCalledWith({ error: '无权操作该订单' });
+
+    const original = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('FROM orders')) return Promise.resolve([[], []]);
+      return original(sql, params);
+    });
+    const missing = response();
+    await OrderController[action](request(), missing);
+    expect(missing.status).toHaveBeenCalledWith(404);
+    expect(missing.json).toHaveBeenCalledWith({ error: '订单不存在' });
+    expect(matching('UPDATE orders')).toHaveLength(0);
+    expect(connection.commit).not.toHaveBeenCalled();
+  });
+
   test.each(['manual', 'timeout'])('历史跨规格总量超限订单允许%s取消并分别回补', async operation => {
     const execute = connection.execute.getMockImplementation();
     connection.execute.mockImplementation((sql: string, params: unknown[]) => {
@@ -262,7 +334,7 @@ describe('订单状态迁移', () => {
 
     const second = response();
     await OrderController.cancel(request(), second);
-    expect(second.status).toHaveBeenCalledWith(400);
+    expect(second.status).toHaveBeenCalledWith(409);
     expect(matching('stock = stock +')).toHaveLength(1);
   });
 
@@ -277,7 +349,7 @@ describe('订单状态迁移', () => {
     await OrderController.pay(request(), response());
     const cancel = response();
     await OrderController.cancel(request(), cancel);
-    expect(cancel.status).toHaveBeenCalledWith(400);
+    expect(cancel.status).toHaveBeenCalledWith(409);
     expect(matching('sales_count = sales_count +')).toHaveLength(1);
     expect(matching('stock = stock +')).toHaveLength(0);
   });

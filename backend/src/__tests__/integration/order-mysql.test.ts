@@ -377,6 +377,36 @@ integration('真实 MySQL 订单事务及并发', () => {
     expect(await product()).toMatchObject({ stock: 8, sales_count: 2 });
   });
 
+  test.each(['cancel', 'pay', 'confirm'] as const)('其他页面已改变订单后，%s HTTP 返回 409，核对读取最新状态且不重复写入', async action => {
+    const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 2 }]);
+    if (action === 'pay') {
+      await transitionOrder(orderId, OrderStatus.CANCELLED, { userId: 1 });
+    } else {
+      await transitionOrder(orderId, OrderStatus.PAID, { userId: 1 });
+      if (action === 'confirm') {
+        await transitionOrder(orderId, OrderStatus.SHIPPED, { shipment: { shipping_company: '顺丰', tracking_number: 'SFTEST1001' } });
+        await transitionOrder(orderId, OrderStatus.COMPLETED, { userId: 1 });
+      }
+    }
+    // An already-cancelled old order must report its changed status before checking payment age.
+    await db.query('UPDATE orders SET created_at = DATE_SUB(NOW(), INTERVAL 31 MINUTE) WHERE order_id = ?', [orderId]);
+    const beforeProduct = await product();
+    const [beforeOrders] = await db.query<RowDataPacket[]>('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+    const actual = action === 'pay' ? OrderStatus.CANCELLED : action === 'confirm' ? OrderStatus.COMPLETED : OrderStatus.PAID;
+
+    const app = express(); app.use(express.json()); app.use('/orders', orderRoutes);
+    const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
+    for (let retry = 0; retry < 2; retry++) {
+      const rejected = await request(app).post(`/orders/${orderId}/${action}`).set(auth).expect(409);
+      expect(rejected.body).toEqual({ error: '订单状态不允许此操作' });
+    }
+    const checked = await request(app).get(`/orders/${orderId}`).set(auth).expect(200);
+    expect(checked.body.order).toMatchObject({ order_id: orderId, status: actual });
+    const [afterOrders] = await db.query<RowDataPacket[]>('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+    expect(afterOrders).toEqual(beforeOrders);
+    expect(await product()).toEqual(beforeProduct);
+  });
+
   test('未到期订单不会被提前超时取消', async () => {
     const { orderId } = await createOrder(1, [{ product_id: 1, quantity: 2 }]);
     expect(await cancelTimeoutOrder(orderId)).toBe(false);

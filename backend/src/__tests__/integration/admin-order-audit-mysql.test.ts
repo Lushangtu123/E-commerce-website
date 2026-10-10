@@ -115,7 +115,7 @@ integration('admin order status and audit atomicity in real MySQL', () => {
     expect((await order()).status).toBe(1); expect(await audits()).toHaveLength(0);
   });
   test('a rejected transition and disabled collection do not write audits', async () => {
-    await update(3).expect(400);
+    await update(3).expect(409, { error: '订单状态不允许此操作' });
     await db.query('UPDATE orders SET status=0 WHERE order_id=10');
     const oldMode = process.env.PAYMENT_MODE; delete process.env.PAYMENT_MODE;
     try { await update(1).expect(503); } finally { process.env.PAYMENT_MODE = oldMode; }
@@ -124,7 +124,7 @@ integration('admin order status and audit atomicity in real MySQL', () => {
   test('concurrent shipping records only the winning tracking number and one audit', async () => {
     const attempts = await Promise.all(['TRACK-A', 'TRACK-B'].map(tracking_number => request(app).put('/api/admin/orders/10/status')
       .set(auth()).send({ status: 2, shipping_company: shipment.shipping_company, tracking_number })));
-    expect(attempts.map(result => result.status).sort()).toEqual([200, 400]);
+    expect(attempts.map(result => result.status).sort()).toEqual([200, 409]);
     expect(['TRACK-A', 'TRACK-B']).toContain((await order()).tracking_number); expect(await audits()).toHaveLength(1);
   });
   test.each([1, 4])('customer transition to %i keeps its existing path without admin audit', async status => {
