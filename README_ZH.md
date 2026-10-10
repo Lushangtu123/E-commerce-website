@@ -408,6 +408,8 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - `POST /api/coupons/calculate` - 计算优惠金额
 - `GET /api/coupons/:id` - 获取优惠券详情
 
+优惠券中心仅在回执包含 `success: true` 和合法的正整数 `user_coupon_id` 时确认领取；回执异常或浏览器存储清理未核验通过时保留原请求号，通过「重试领取」恢复同一张券，避免另领一张。
+
 **管理员端:**
 - `POST /api/admin/coupons` - 创建优惠券
 - `GET /api/admin/coupons` - 获取优惠券列表

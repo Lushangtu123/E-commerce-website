@@ -140,7 +140,7 @@ describe('coupon center', () => {
     await settle();
     const before = document.body.innerHTML;
 
-    await act(async () => claim.resolve({}));
+    await act(async () => claim.resolve({ success: true, data: { user_coupon_id: 7 } }));
     await settle();
     expect(document.body.innerHTML).toBe(before);
   });
