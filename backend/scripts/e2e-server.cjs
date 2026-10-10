@@ -71,10 +71,11 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
   await pool.query("INSERT INTO categories(category_id,name) VALUES(1,'浏览器测试分类')");
   await pool.query("INSERT INTO categories(category_id,name) VALUES(9000,'PaginationFixture')");
-  await pool.query(`INSERT INTO products(product_id,title,title_en,description,description_en,brand,specs,specs_en,category_id,price,stock,status)
-    VALUES(1,'浏览器交易测试商品','Browser checkout product','浏览器中文描述','Browser English description','BrowserBrand',?,?,1,10.10,20,1)`,
+  // Keep the primary flow fixtures ahead of pagination rows even when MySQL changes tie order.
+  await pool.query(`INSERT INTO products(product_id,title,title_en,description,description_en,brand,specs,specs_en,category_id,price,stock,sales_count,status)
+    VALUES(1,'浏览器交易测试商品','Browser checkout product','浏览器中文描述','Browser English description','BrowserBrand',?,?,1,10.10,20,1,1)`,
     [JSON.stringify({ 材质: '棉' }), JSON.stringify({ 材质: { name: 'Material', value: 'Cotton' } })]);
-  await pool.query("INSERT INTO products(product_id,title,title_en,category_id,price,original_price,stock,status) VALUES(2,'浏览器规格价格商品','Browser variant product',1,99.00,150.00,0,1)");
+  await pool.query("INSERT INTO products(product_id,title,title_en,category_id,price,original_price,stock,sales_count,status) VALUES(2,'浏览器规格价格商品','Browser variant product',1,99.00,150.00,0,1,1)");
   // These older local-only rows exercise URL pagination without changing the primary commerce fixtures.
   for (let index = 1; index <= 21; index++) {
     const title = `PaginationFixture ${String(index).padStart(2, '0')}`;
