@@ -3,7 +3,7 @@
 import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import type { AdminPage, AdminProductRow, Category } from '@/lib/api';
@@ -43,6 +43,8 @@ export default function AdminProductsPage() {
   const [creation, setCreation] = useState<{ sessionId: string; attempt: PendingProductCreation } | null>(null);
   const creationUnavailable = useRef<string | null>(null);
   const [creationStorageError, setCreationStorageError] = useState<string | null>(null);
+  const creationRestoredFor = useRef<string | null>(null);
+  const [restoredCreationSession, setRestoredCreationSession] = useState<string | null>(null);
   const pending = creation?.sessionId === sessionId ? creation.attempt : null;
 
   const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
@@ -63,6 +65,8 @@ export default function AdminProductsPage() {
     } }),
   });
   const categoriesQuery = useAdminQuery({ name: 'categories', params: [], load: () => api.get<unknown, Category[]>('/products/categories') });
+  const { isCurrentSession } = query;
+  const sessionReady = isCurrentSession();
   const categories = categoriesQuery.data ?? [];
   const categoriesReady = categoriesQuery.data !== undefined && !categoriesQuery.error;
   const categoriesLoading = !categoriesReady && !categoriesQuery.error;
@@ -85,8 +89,8 @@ export default function AdminProductsPage() {
   const reloadCategories = () => {
     if (formScope === scopeKey && isCurrentScope() && categoriesQuery.isCurrentSession()) void categoriesQuery.refetch();
   };
-  const restoreCreation = () => {
-    if (!sessionId || !query.isCurrentSession() || writeLocked()) return;
+  const restoreCreation = useCallback(() => {
+    if (!sessionId || !isCurrentSession() || mutation.current || recovery.current?.sessionId === sessionId) return;
     try {
       const attempt = readPendingProductCreation(sessionId);
       pendingCreation.current = attempt ? { sessionId, attempt } : null;
@@ -96,7 +100,8 @@ export default function AdminProductsPage() {
       pendingCreation.current = null; setCreation(null);
       creationUnavailable.current = sessionId; setCreationStorageError(sessionId);
     }
-  };
+    creationRestoredFor.current = sessionId; setRestoredCreationSession(sessionId);
+  }, [sessionId, isCurrentSession]);
 
   // Cancel earlier list reads before replacing the cache with this recovery snapshot.
   // A filter change during the read is checked again through the latest render's loader.
@@ -133,8 +138,14 @@ export default function AdminProductsPage() {
     setNewProduct(EMPTY_PRODUCT_FORM);
     pendingCreation.current = null; setCreation(null);
     creationUnavailable.current = null; setCreationStorageError(null);
-    restoreCreation();
+    creationRestoredFor.current = null; setRestoredCreationSession(null);
   }, [sessionId]);
+
+  // A page can mount while publication pauses this same session. Restore once
+  // it becomes ready without resetting an editor or an in-flight mutation.
+  useEffect(() => {
+    if (sessionReady && creationRestoredFor.current !== sessionId) restoreCreation();
+  }, [sessionId, sessionReady, restoreCreation]);
 
   // A selection belongs to the page and filters it was made on, even when they are visited again.
   useEffect(() => {
@@ -272,14 +283,14 @@ export default function AdminProductsPage() {
   };
 
   const updateNewProduct = (next: ProductFormValues) => {
-    if (formScope === scopeKey && isDisplayedScope() && !writeLocked() && pendingCreation.current?.sessionId !== sessionId) setNewProduct(next);
+    if (formScope === scopeKey && isDisplayedScope() && !writeLocked() && creationRestoredFor.current === sessionId && pendingCreation.current?.sessionId !== sessionId) setNewProduct(next);
   };
   const updateEditProduct = (next: EditProductForm) => {
     if (formScope === scopeKey && isDisplayedScope() && !writeLocked()) setEditProduct(next);
   };
 
   const submitCreation = async (attempt: PendingProductCreation) => {
-    if (!sessionId || !query.isCurrentSession() || writeLocked() || creationUnavailable.current === sessionId) return;
+    if (!sessionId || !query.isCurrentSession() || writeLocked() || creationRestoredFor.current !== sessionId || creationUnavailable.current === sessionId) return;
     const recovering = pendingCreation.current?.sessionId === sessionId;
     if (!storePendingProductCreation(sessionId, attempt)) {
       toast.error(translate('无法保存商品新增请求，请允许浏览器存储后重试')); return;
@@ -312,7 +323,7 @@ export default function AdminProductsPage() {
   };
 
   const handleAddProduct = () => {
-    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || writeLocked() || pendingCreation.current?.sessionId === sessionId || creationUnavailable.current === sessionId || !sessionId) return;
+    if (formScope !== scopeKey || !isDisplayedScope() || !categoriesReady || writeLocked() || creationRestoredFor.current !== sessionId || pendingCreation.current?.sessionId === sessionId || creationUnavailable.current === sessionId || !sessionId) return;
     if (!isProductFormComplete(newProduct)) {
       toast.error(translate('请填写商品标题、价格和分类'));
       return;
@@ -382,8 +393,8 @@ export default function AdminProductsPage() {
             <p className="text-gray-600 mt-1">{t("管理商品的上下架和信息")}</p>
           </div>
           <button 
-            onClick={() => { if (isDisplayedScope() && !writeLocked() && pendingCreation.current?.sessionId !== sessionId && creationUnavailable.current !== sessionId) { setFormScope(scopeKey); setShowAddModal(true); } }}
-            disabled={busy || !!pending || creationStorageError === sessionId || loading || !!loadError}
+            onClick={() => { if (isDisplayedScope() && !writeLocked() && creationRestoredFor.current === sessionId && pendingCreation.current?.sessionId !== sessionId && creationUnavailable.current !== sessionId) { setFormScope(scopeKey); setShowAddModal(true); } }}
+            disabled={busy || !!pending || restoredCreationSession !== sessionId || creationStorageError === sessionId || loading || !!loadError}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             <span className="flex items-center">
