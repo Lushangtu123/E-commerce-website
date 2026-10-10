@@ -420,6 +420,7 @@ async function localPlatformScripts(context) {
   await page.getByRole('button', { name: 'Add to favorites', exact: true }).click({ trial: true });
   await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
   console.log('PASS browser favorite reconciliation outage provides read-only retry and preserves the committed intent');
+  await require('./customer-product-links.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await page.goto('http://127.0.0.1:3100/history');
   for (const locale of ['zh-CN', 'en']) {
     await page.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).selectOption(locale);

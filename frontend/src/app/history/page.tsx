@@ -3,7 +3,9 @@
 import { translate, useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { MouseEvent } from 'react';
 import { browseApi } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 import { FiClock, FiShoppingCart, FiTrash } from 'react-icons/fi';
@@ -58,8 +60,9 @@ export default function BrowseHistoryPage() {
     });
   };
 
-  const handleProductClick = (productId: number) => {
-    if (hasDisplayedRow(productId)) router.push(`/products/${productId}`);
+  const handleProductNavigation = (event: MouseEvent<HTMLAnchorElement>, productId: number) => {
+    // onClick also runs for Ctrl/Cmd clicks, so stale rows cannot open another tab.
+    if (!hasDisplayedRow(productId)) event.preventDefault();
   };
 
   if (!isHydrated || !user || loading) {
@@ -119,9 +122,12 @@ export default function BrowseHistoryPage() {
                   key={item.id}
                   className="bg-white rounded-lg shadow-xs overflow-hidden hover:shadow-md transition group"
                 >
-                  <div
-                    className="relative cursor-pointer"
-                    onClick={() => handleProductClick(item.product_id)}
+                  <Link
+                    href={`/products/${item.product_id}`}
+                    className="relative block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-600"
+                    onClick={event => handleProductNavigation(event, item.product_id)}
+                    onAuxClick={event => handleProductNavigation(event, item.product_id)}
+                    onContextMenu={event => handleProductNavigation(event, item.product_id)}
                   >
                     <ProductImage
                       src={item.main_image}
@@ -139,14 +145,19 @@ export default function BrowseHistoryPage() {
                         <span className="text-white text-xl font-bold">{t("已下架")}</span>
                       </div>
                     )}
-                  </div>
+                  </Link>
 
                   <div className="p-4">
-                    <h2
-                      className="font-medium text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-primary-600"
-                      onClick={() => handleProductClick(item.product_id)}
-                    >
-                      {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : localizedText(item.title, item.title_en, locale))}
+                    <h2 className="font-medium text-gray-900 mb-2">
+                      <Link
+                        href={`/products/${item.product_id}`}
+                        className="line-clamp-2 hover:text-primary-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                        onClick={event => handleProductNavigation(event, item.product_id)}
+                        onAuxClick={event => handleProductNavigation(event, item.product_id)}
+                        onContextMenu={event => handleProductNavigation(event, item.product_id)}
+                      >
+                        {(!item.title || (item.status === -1 && item.title === '商品已不存在') ? t("商品已不存在") : localizedText(item.title, item.title_en, locale))}
+                      </Link>
                     </h2>
 
                     <div className="flex items-baseline gap-2 mb-2">
