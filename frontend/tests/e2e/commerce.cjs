@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { chromium } = require('playwright');
+const awaitGate = require('./await-gate.cjs');
 const root = path.resolve(__dirname, '../..');
 const backend = path.resolve(root, '../backend');
 const children = [];
@@ -131,7 +132,7 @@ async function localPlatformScripts(context) {
   const countCardWrites = request => { if (request.method() === 'POST' && request.url() === 'http://127.0.0.1:3101/api/cart') cardWrites++; };
   page.on('request', countCardWrites); await page.route(cardEndpoint, delayCardRead);
   await cardAdd.evaluate(button => { button.click(); button.click(); });
-  await cardReadStarted;
+  await awaitGate(cardReadStarted, 'product card detail request');
   assert.equal(await ordinaryCard.getByRole('button', { name: '处理中...', exact: true }).isDisabled(), true);
   const cardWriteCompleted = page.waitForResponse(response => response.request().method() === 'POST' && response.url() === 'http://127.0.0.1:3101/api/cart');
   releaseCardRead(); assert.equal((await cardWriteCompleted).status(), 200);
@@ -170,7 +171,7 @@ async function localPlatformScripts(context) {
     await route.fulfill({ response });
   };
   await page.route(addCartEndpoint, delayInitialCartRead);
-  await page.goto('http://127.0.0.1:3100/cart'); await initialCartStarted;
+  await page.goto('http://127.0.0.1:3100/cart'); await awaitGate(initialCartStarted, 'initial cart response');
   await page.getByRole('button', { name: '重试原添加', exact: true }).click();
   await page.getByRole('alert').filter({ hasText: '商品 #1' }).waitFor({ state: 'hidden' });
   await page.getByRole('heading', { name: '浏览器交易测试商品', exact: true }).waitFor({ state: 'visible' });
