@@ -29,10 +29,13 @@ export interface ProductListSeed {
  * The URL supplies the applied search and page. A matching server seed carries the products
  * in the HTML; the client refreshes that same page after hydration.
  */
-export default function ProductListView({ seed = null }: { seed?: ProductListSeed | null }) {
+export default function ProductListView({ seed = null, initialSearch }: { seed?: ProductListSeed | null; initialSearch?: string }) {
   const { t } = useI18n();
   const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
-  const searchParams = useSearchParams() || new URLSearchParams();
+  const currentSearchParams = useSearchParams() || new URLSearchParams();
+  // The URL may move while this streamed boundary is still waiting for its JavaScript.
+  // Initial hydration belongs to the server's query; later renders follow the live URL.
+  const searchParams = !hydrated && initialSearch !== undefined ? new URLSearchParams(initialSearch) : currentSearchParams;
   const router = useRouter();
   const keyword = searchParams.get('keyword') || '';
   const sort = searchParams.get('sort') || 'created_at DESC';
@@ -89,7 +92,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   // Canonicalize malformed pages and recover from catalog shrinkage without adding history entries.
   // Hide an out-of-range response until its replacement page loads.
   useEffect(() => {
-    if (currentScope.current !== scope) return;
+    if (!hydrated || currentScope.current !== scope) return;
     if (!beyondLastPage && !pageNeedsCorrection) { correction.current = null; return; }
     const params = new URLSearchParams(search);
     const next = beyondLastPage ? lastPage : page;
@@ -100,7 +103,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
     if (correction.current === key) return;
     correction.current = key;
     navigate(href, true);
-  }, [beyondLastPage, pageNeedsCorrection, lastPage, page, search, scope, navigate]);
+  }, [hydrated, beyondLastPage, pageNeedsCorrection, lastPage, page, search, scope, navigate]);
 
   useEffect(() => {
     if (!query.error) return;
@@ -109,7 +112,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   }, [query.error]);
 
   const handlePageChange = (next: number) => {
-    if (currentScope.current !== scope || next < 1 || next > totalPages || next === page) return;
+    if (!hydrated || currentScope.current !== scope || next < 1 || next > totalPages || next === page) return;
     const params = new URLSearchParams(search);
     if (next === 1) params.delete('page');
     else params.set('page', String(next));
@@ -135,8 +138,9 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
               <select
                 id="product-sort"
                 value={sort}
+                disabled={!hydrated}
                 onChange={(e) => {
-                  if (currentScope.current !== scope) return;
+                  if (!hydrated || currentScope.current !== scope) return;
                   const params = new URLSearchParams(searchParams);
                   params.set('sort', e.target.value);
                   params.delete('page');
@@ -151,8 +155,8 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
               </select>
             </div>
           </div>
-          <CatalogFilters initial={draft} scope={searchScope} onApply={nextFilters => {
-            if (currentScope.current !== scope) return;
+          <CatalogFilters initial={draft} scope={searchScope} disabled={!hydrated} onApply={nextFilters => {
+            if (!hydrated || currentScope.current !== scope) return;
             const params = new URLSearchParams(searchParams);
             CATALOG_FILTER_KEYS.forEach(key => params.delete(key));
             Object.entries(catalogFilterParams(nextFilters)).forEach(([key, value]) => params.set(key, value));
@@ -197,7 +201,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handlePageChange(pagination.page - 1)}
-                    disabled={pagination.page === 1}
+                    disabled={!hydrated || pagination.page === 1}
                     className="btn btn-secondary disabled:opacity-50"
                   >
                     {t("上一页")}</button>
@@ -213,6 +217,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                         <button
                           key={page}
                           onClick={() => handlePageChange(page)}
+                          disabled={!hydrated}
                           className={`btn ${
                             page === pagination.page ? 'btn-primary' : 'btn-secondary'
                           }`}
@@ -228,7 +233,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                   
                   <button
                     onClick={() => handlePageChange(pagination.page + 1)}
-                    disabled={pagination.page === pagination.totalPages}
+                    disabled={!hydrated || pagination.page === pagination.totalPages}
                     className="btn btn-secondary disabled:opacity-50"
                   >
                     {t("下一页")}</button>

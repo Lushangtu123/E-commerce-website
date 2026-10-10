@@ -49,6 +49,71 @@ async function serverRender(search: Record<string, string | string[]>, result: A
 beforeEach(() => { installCatalogRouter(router, query); query.current = new URLSearchParams(); });
 
 describe('server-rendered product list', () => {
+  it.each([
+    'keyword=Original',
+    'keyword=Different&sort=price+DESC&brand=Other',
+  ])('hydrates the original server query when the live URL has already changed to %s', async nextSearch => {
+    const { element, container } = await serverRender({ keyword: 'Original', page: '2' },
+      { kind: 'ok', data: { ...list(['Server page two'], 2), page: 2, total: 21 } });
+    expect(container.textContent).toContain('共找到 21 件商品');
+    query.current = new URLSearchParams(nextSearch);
+    const refresh = deferred<ProductList>();
+    vi.mocked(productApi.list).mockReturnValue(refresh.promise);
+    const mismatches: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(container,
+        <QueryClientProvider client={createQueryClient()}>{element}</QueryClientProvider>,
+        { onRecoverableError: error => mismatches.push(error) }); });
+      expect(mismatches).toEqual([]);
+      await act(async () => refresh.resolve(list(['Current URL copy'])));
+      await settle();
+      expect(cards(container)).toEqual(['Current URL copy']);
+      expect(router.replace).not.toHaveBeenCalled();
+    } finally { if (root) await act(() => root!.unmount()); }
+  });
+
+  it('hydrates the captured query even when the server API failed and there is no product seed', async () => {
+    const { element, container } = await serverRender({ keyword: 'Original' }, { kind: 'unavailable' });
+    query.current = new URLSearchParams('keyword=Different');
+    vi.mocked(productApi.list).mockReturnValue(deferred<ProductList>().promise);
+    const mismatches: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(container,
+        <QueryClientProvider client={createQueryClient()}>{element}</QueryClientProvider>,
+        { onRecoverableError: error => mismatches.push(error) }); });
+      expect(mismatches).toEqual([]);
+    } finally { if (root) await act(() => root!.unmount()); }
+  });
+
+  it('keeps sorting, filters and page controls disabled in server HTML before their handlers hydrate', async () => {
+    const { container } = await serverRender({ page: '2' }, { kind: 'ok', data: { ...list(['Page two'], 3), page: 2 } });
+    expect(container.querySelector('#product-sort')).toBeDisabled();
+    for (const control of Array.from(container.querySelectorAll('form input, form select, form button'))) expect(control).toBeDisabled();
+    for (const button of Array.from(container.querySelectorAll('button')).filter(button => ['上一页', '下一页', '1', '2', '3'].includes(button.textContent!.trim()))) expect(button).toBeDisabled();
+    expect(cards(container)).toEqual(['Page two']);
+  });
+
+  it('enables the catalog controls after hydration and applies sorting without a mismatch', async () => {
+    const { element, container } = await serverRender({ page: '2' }, { kind: 'ok', data: { ...list(['Page two'], 3), page: 2 } });
+    expect(container.querySelector('#product-sort')).toBeDisabled();
+    vi.mocked(productApi.list).mockReturnValue(deferred<ProductList>().promise);
+    const mismatches: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(container,
+        <QueryClientProvider client={createQueryClient()}>{element}</QueryClientProvider>,
+        { onRecoverableError: error => mismatches.push(error) }); });
+      expect(container.querySelector('#product-sort')).toBeEnabled();
+      for (const control of Array.from(container.querySelectorAll('form input, form select, form button'))) expect(control).toBeEnabled();
+      expect(Array.from(container.querySelectorAll('button')).find(button => button.textContent!.trim() === '1')).toBeEnabled();
+      fireEvent.change(container.querySelector('#product-sort')!, { target: { value: 'price DESC' } });
+      expect(router.push).toHaveBeenCalledWith('/products?sort=price+DESC');
+      expect(mismatches).toEqual([]);
+    } finally { if (root) await act(() => root!.unmount()); }
+  });
+
   it("puts the first page of the URL's search into the server HTML", async () => {
     const { container } = await serverRender({ keyword: '衬衫 & 裤', sort: ['price ASC', 'ignored'] }, { kind: 'ok', data: list(['Linen shirt', 'Cotton shirt'], 3) });
 
