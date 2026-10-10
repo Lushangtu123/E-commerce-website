@@ -31,7 +31,7 @@ async function setup(admin = false, options: { row?: object; mutate?: () => Prom
       const body = JSON.parse(config.data); writes.push({ url: config.url, body });
       if (options.mutate) data = await options.mutate();
       else {
-        current = config.url?.endsWith('/complete') ? { ...current, ...body, completed_at: '2026-10-08T00:00:00Z' }
+        current = config.url?.endsWith('/complete') ? { ...current, ...body, completion_note: body.note, refund_reference: body.refund_reference ?? null, completed_at: '2026-10-08T00:00:00Z' }
           : { ...current, return_company: body.company, return_tracking_number: body.tracking_number, return_submitted_at: '2026-10-08T00:00:00Z' };
         data = { after_sales: current };
       }

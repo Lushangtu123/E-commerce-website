@@ -13,6 +13,7 @@ import AfterSalesProgress from '@/components/AfterSalesProgress';
 import Link from 'next/link';
 import { moneyToCents } from '@/lib/money';
 import { validAfterSalesRequest } from '@/lib/after-sales-response';
+import { matchesAfterSalesWrite, validAfterSalesWriteSnapshot, type AfterSalesWrite } from '@/lib/admin-after-sales-write';
 
 type DraftIdentity = { key: string; id: number; orderId: number };
 function canComplete(value: AfterSalesRequest) {
@@ -49,6 +50,7 @@ export default function AdminAfterSalesPage() {
   const currentTarget = useRef<typeof target>(null);
   const updateTarget = useCallback((value: typeof target) => { currentTarget.current = value; setTarget(value); }, []);
   const recovery = useRef<string | null>(null);
+  const receipt = useRef<{ key: string; intent: AfterSalesWrite } | null>(null);
   const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   const currentReview = useRef<typeof review>(null), currentCompletion = useRef<typeof completion>(null), currentResult = useRef<typeof result>(null);
   const updateReview = useCallback((value: typeof review) => { currentReview.current = value; setReview(value); }, []);
@@ -83,10 +85,18 @@ export default function AdminAfterSalesPage() {
           if (status && detail.after_sales.status !== status) { requests = requests.filter(value => value.request_id !== draft.id); total = Math.max(0, total - 1); }
           else requests = requests.map(value => value.request_id === draft.id ? detail.after_sales : value);
         }
+        const intent = receipt.current?.key === key ? receipt.current.intent : null;
+        if (intent && !validAfterSalesWriteSnapshot(detail.after_sales, intent)) throw new Error('Invalid after-sales write snapshot');
+        const matched = intent && matchesAfterSalesWrite(detail.after_sales, intent);
         const eligible = reviewDraft ? detail.after_sales.status === 'requested' : canComplete(detail.after_sales);
-        if (eligible) updateTarget({ key, value: detail.after_sales });
+        if (matched) {
+          if (reviewDraft) updateReview(null); else updateCompletion(null);
+          receipt.current = null;
+          toast.success(translate(reviewDraft ? '售后审核已保存，未执行资金退款' : '人工处理记录已保存并结案，系统未执行资金退款'));
+        } else if (eligible) { receipt.current = null; updateTarget({ key, value: detail.after_sales }); }
         else {
           if (reviewDraft) updateReview(null); else updateCompletion(null);
+          receipt.current = null;
           toast.error(translate('售后申请状态已改变，已关闭当前草稿，请核对最新进度'));
         }
       }
@@ -104,7 +114,7 @@ export default function AdminAfterSalesPage() {
     finally { if (pendingLoad.current === operation) { pendingLoad.current = null; setLoading(false); } }
   };
   latestLoad.current = load;
-  useEffect(() => { setPage(1); setStatus('requested'); updateReview(null); updateCompletion(null); updateTarget(null); mutation.current = null; setBusy(false); setLoading(false); recovery.current = null; setUnconfirmed(null); }, [session.sessionId, updateCompletion, updateReview, updateTarget]);
+  useEffect(() => { setPage(1); setStatus('requested'); updateReview(null); updateCompletion(null); updateTarget(null); mutation.current = null; setBusy(false); setLoading(false); recovery.current = null; receipt.current = null; setUnconfirmed(null); }, [session.sessionId, updateCompletion, updateReview, updateTarget]);
   useEffect(() => { updateReview(null); updateCompletion(null); updateTarget(null); load(); return () => {
     request.current++;
     if (pendingLoad.current?.key === key) pendingLoad.current = null;
@@ -118,7 +128,10 @@ export default function AdminAfterSalesPage() {
     if (!note || note.length > 500) { toast.error(translate('请填写1至500个字符的审核说明')); return; }
     const operation = { key }; mutation.current = operation; setBusy(true);
     try {
-      await afterSalesApi.review(review.id, { status: review.decision, note });
+      const intent: AfterSalesWrite = { before: value.value, kind: 'review', status: review.decision, note };
+      const response: unknown = await afterSalesApi.review(review.id, { status: review.decision, note });
+      if (!active() || mutation.current !== operation) return;
+      if (!response || typeof response !== 'object' || !('after_sales' in response) || ('success' in response && response.success !== true) || !matchesAfterSalesWrite(response.after_sales, intent)) { receipt.current = { key, intent }; throw new Error('Invalid review receipt'); }
       if (!active() || mutation.current !== operation) return;
       if (active()) { toast.success(translate('售后审核已保存，未执行资金退款')); updateReview(null); }
       await latestLoad.current?.(operation);
@@ -147,7 +160,10 @@ export default function AdminAfterSalesPage() {
     if (cents > 0 && !reference) { toast.error(translate('实际退款必须填写退款凭证')); return; }
     const operation = { key }; mutation.current = operation; setBusy(true);
     try {
-      await afterSalesApi.complete(completion.id, { refund_amount: amount, ...(reference && { refund_reference: reference }), note });
+      const intent: AfterSalesWrite = { before: value, kind: 'complete', amount, reference, note };
+      const response: unknown = await afterSalesApi.complete(completion.id, { refund_amount: amount, ...(reference && { refund_reference: reference }), note });
+      if (!active() || mutation.current !== operation) return;
+      if (!response || typeof response !== 'object' || !('after_sales' in response) || ('success' in response && response.success !== true) || !matchesAfterSalesWrite(response.after_sales, intent)) { receipt.current = { key, intent }; throw new Error('Invalid completion receipt'); }
       if (!active() || mutation.current !== operation) return;
       if (active()) { toast.success(translate('人工处理记录已保存并结案，系统未执行资金退款')); updateCompletion(null); }
       await latestLoad.current?.(operation);
