@@ -271,7 +271,7 @@ describe('forgot password', () => {
 });
 
 describe('reset password', () => {
-  async function setup({ url = `/reset-password#token=${resetToken}`, write = async () => ({}), strict = false }: { url?: string; write?: Handler; strict?: boolean } = {}) {
+  async function setup({ url = `/reset-password#token=${resetToken}`, write = async () => ({ reauthenticate: true }), strict = false }: { url?: string; write?: Handler; strict?: boolean } = {}) {
     window.history.replaceState(null, '', url);
     const replaceState = vi.spyOn(window.history, 'replaceState');
     serve({ 'POST /users/password/reset': write });
@@ -322,7 +322,7 @@ describe('reset password', () => {
     submitTogether(form()!, form()!);
     expect(payloads).toHaveLength(1);
     act(() => useAuthStore.getState().login(replacement, 'session-b'));
-    await act(async () => pending.resolve({}));
+    await act(async () => pending.resolve({ reauthenticate: true }));
     await settle();
 
     expect(useAuthStore.getState().sessionId).toBe('session-b');
