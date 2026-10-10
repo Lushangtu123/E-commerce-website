@@ -81,8 +81,10 @@ async function transaction<T>(userId: number, work: (connection: PoolConnection,
     // The user lock serializes inserts even when the address list is still empty.
     const [users] = await connection.execute<RowDataPacket[]>('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]);
     if (!users.length) throw new AddressError('用户不存在', 404);
+    // The first consistent read starts after the user mutex, so it sees a preceding
+    // writer's commit. Locking missing address ranges would block other users' inserts.
     const [addresses] = await connection.execute<LockedAddress[]>(
-      'SELECT address_id, is_default FROM shipping_addresses WHERE user_id = ? ORDER BY address_id FOR UPDATE', [userId]
+      'SELECT address_id, is_default FROM shipping_addresses WHERE user_id = ? ORDER BY address_id', [userId]
     );
     const result = await work(connection, addresses);
     await connection.commit();
@@ -139,8 +141,10 @@ export class AddressModel {
     if (!key) throw new AddressError('地址新增请求号无效');
     const fingerprint = createHash('sha256').update(JSON.stringify([...values(address), address.is_default === true])).digest('hex');
     return transaction(userId, async (connection, addresses) => {
+      // The same user mutex serializes receipt writers; missing keys must not gap-lock
+      // the index shared by different users making their first idempotent requests.
       const [receipts] = await connection.execute<RowDataPacket[]>(
-        'SELECT address_id, payload_fingerprint FROM address_creation_receipts WHERE user_id = ? AND create_key = ? FOR UPDATE', [userId, key]
+        'SELECT address_id, payload_fingerprint FROM address_creation_receipts WHERE user_id = ? AND create_key = ?', [userId, key]
       );
       if (receipts.length) {
         const receipt = receipts[0];

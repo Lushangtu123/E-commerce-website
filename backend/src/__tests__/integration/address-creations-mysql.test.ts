@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
+import mysql, { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { getPool, query } from '../../database/mysql';
 import addressRoutes from '../../routes/address.routes';
 import { migrateAddressCreations } from '../../database/migrate-address-creations';
+import { AddressModel } from '../../models/address.model';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
@@ -47,6 +48,78 @@ integration('真实 MySQL 地址新增收据', () => {
     await db.query("INSERT INTO users(user_id,username,email,password_hash) VALUES(1,'one','one@example.test','x'),(2,'two','two@example.test','x')");
   });
   const rows = async (table: string) => (await db.query<RowDataPacket[]>(`SELECT * FROM ${table} ORDER BY user_id,address_id`))[0];
+
+  // Pause real statements after both independent transactions have inspected their
+  // missing receipts. This forces the overlapping inserts without production hooks,
+  // changing the SQL, or relying on the scheduler to happen to expose a deadlock.
+  function overlapReceiptReads() {
+    let arrivals = 0, timedOut = false;
+    let release!: () => void;
+    const ready = new Promise<void>(resolve => { release = resolve; });
+    const timer = setTimeout(() => { timedOut = true; release(); }, 3000);
+    (getPool as jest.Mock).mockReturnValue({
+      getConnection: async () => {
+        const connection = await db.getConnection();
+        let paused = false;
+        return new Proxy(connection, {
+          get(target, property) {
+            if (property === 'execute') return async (sql: string, params?: Parameters<PoolConnection['execute']>[1]) => {
+              const result = await connection.execute(sql, params);
+              if (!paused && /^\s*SELECT\b/i.test(sql) && /\bFROM\s+address_creation_receipts\b/i.test(sql)) {
+                paused = true;
+                if (++arrivals === 2) { clearTimeout(timer); release(); }
+                await ready;
+              }
+              return result;
+            };
+            const value = Reflect.get(target, property);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        }) as PoolConnection;
+      },
+    });
+    return {
+      assertBothArrived: () => { expect(timedOut).toBe(false); expect(arrivals).toBe(2); },
+      restore: () => { clearTimeout(timer); release(); (getPool as jest.Mock).mockReturnValue(db); },
+    };
+  }
+
+  test.each([false, true])('不同用户同时新增各自地址和收据均成功（已有地址=%s）', async hasAddresses => {
+    // A fresh empty index makes the empty-list case independent of deleted-row
+    // purge timing and prior tests' receipt keys.
+    await db.query('TRUNCATE TABLE address_creation_receipts');
+    await db.query('TRUNCATE TABLE shipping_addresses');
+    const oldIds: number[] = [];
+    // Seed sequentially: the concurrency being exercised is the creation below.
+    if (hasAddresses) for (const userId of [1, 2]) {
+      oldIds.push(await AddressModel.create(userId, { ...fields, detail_address: `旧地址${userId}` }));
+    }
+
+    const barrier = overlapReceiptReads();
+    try {
+      const results = await Promise.allSettled([1, 2].map(userId => AddressModel.createWithReceipt(
+        userId, { ...fields, detail_address: `新地址${userId}`, is_default: true }, key
+      )));
+      barrier.assertBothArrived();
+      expect(results).toEqual([expect.objectContaining({ status: 'fulfilled' }), expect.objectContaining({ status: 'fulfilled' })]);
+    } finally { barrier.restore(); }
+
+    const addresses = await rows('shipping_addresses'), receipts = await rows('address_creation_receipts');
+    expect(addresses).toHaveLength(hasAddresses ? 4 : 2);
+    expect(receipts).toHaveLength(2);
+    for (const userId of [1, 2]) {
+      const owned = addresses.filter(row => row.user_id === userId);
+      expect(owned.filter(row => row.is_default === 1)).toEqual([
+        expect.objectContaining({ detail_address: `新地址${userId}` }),
+      ]);
+      const receipt = receipts.find(row => row.user_id === userId)!;
+      expect(receipt).toMatchObject({ create_key: key, address_id: owned.find(row => row.detail_address === `新地址${userId}`)!.address_id });
+      if (hasAddresses) expect(owned.find(row => row.address_id === oldIds[userId - 1])).toMatchObject({ detail_address: `旧地址${userId}`, is_default: 0 });
+      expect(await AddressModel.createWithReceipt(userId, { ...fields, detail_address: `新地址${userId}`, is_default: true }, key)).toEqual({ address_id: receipt.address_id, creation_status: 'replayed' });
+    }
+    expect(await rows('shipping_addresses')).toEqual(addresses);
+    expect(await rows('address_creation_receipts')).toEqual(receipts);
+  });
 
   test('相同用户请求号并发仅插入一次，首次201、重放200均返回同一ID', async () => {
     const responses = await Promise.all(Array.from({ length: 8 }, () => post()));

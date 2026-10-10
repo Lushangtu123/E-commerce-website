@@ -29,10 +29,9 @@ beforeEach(() => {
 const statements = () => connection.execute.mock.calls.map(([sql]: [string]) => sql);
 const defaultWrite = () => connection.execute.mock.calls.find(([sql]: [string]) => sql.includes('is_default = CASE'));
 
-test('首次创建自动默认，先锁用户再按地址ID锁，完整字段trim且只提交一次', async () => {
+test('首次创建自动默认，锁用户后完整字段trim且只提交一次', async () => {
   expect(await AddressModel.create(1, fields)).toBe(21);
   expect(statements()[0]).toMatch(/FROM users.+FOR UPDATE/);
-  expect(statements()[1]).toMatch(/FROM shipping_addresses.+ORDER BY address_id FOR UPDATE/);
   const insert = connection.execute.mock.calls.find(([sql]: [string]) => sql.startsWith('INSERT'));
   expect(insert[1]).toEqual([1, '收件人', '+86 138-0000-0000', '省', '市', '区', '道路1号']);
   expect(defaultWrite()[1]).toEqual([21, 1]);
