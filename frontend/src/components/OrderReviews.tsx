@@ -10,6 +10,7 @@ import { requestFailure } from '@/lib/api-error';
 type Item = { product_id: number; product_name: string; product_name_en?: string | null };
 type Draft = { rating: string; content: string };
 type Result = { key: string; reviews?: PurchaseReview[]; error?: string };
+type ReviewAttempt = Readonly<{ key: string; productId: number; rating: number; content: string; conflict?: string }>;
 const initialDraft: Draft = { rating: '5', content: '' };
 
 export default function OrderReviews({ orderId, items }: { orderId: number; items: Item[] }) {
@@ -21,11 +22,12 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
   const mounted = useRef(true);
   const request = useRef(0);
   const mutation = useRef<object | null>(null);
-  const recovery = useRef<{ key: string; productId: number; conflict?: string } | null>(null);
+  const recovery = useRef<ReviewAttempt | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const currentReviews = useRef<PurchaseReview[] | null>(null);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const draftRef = useRef<Record<number, Draft>>({});
+  const [conflictedDrafts, setConflictedDrafts] = useState<Record<number, ReviewAttempt>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ key: string; productId: number; error?: string; success?: string } | null>(null);
   const isCurrent = () => {
@@ -65,9 +67,15 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       const attempt = recovery.current;
       if (attempt?.key === key) {
         recovery.current = null;
-        const saved = all.some(review => review.product_id === attempt.productId);
+        const saved = all.find(review => review.product_id === attempt.productId);
+        const matches = saved?.rating === attempt.rating && (saved.content ?? '') === attempt.content;
+        if (saved && (!matches || attempt.conflict)) {
+          setConflictedDrafts(current => ({ ...current, [attempt.productId]: attempt }));
+        }
         setNotice({ key, productId: attempt.productId, ...(attempt.conflict ? { error: attempt.conflict }
-          : saved ? { success: '评论成功' } : { error: '评价尚未保存，已保留草稿，请检查后重试' }) });
+          : matches ? { success: '评论成功' } : { error: saved
+            ? '已保存的评价与本页提交内容不同，已保留本页草稿，请核对'
+            : '评价尚未保存，已保留草稿，请检查后重试' }) });
       }
     } catch (error) {
       if (isCurrent() && generation === request.current) setResult({ key, error: recovery.current?.key === key
@@ -77,7 +85,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
 
   useEffect(() => {
     request.current++; mutation.current = null; currentReviews.current = null; recovery.current = null;
-    draftRef.current = {}; setDrafts({}); setResult(null); setBusy(null); setNotice(null);
+    draftRef.current = {}; setDrafts({}); setConflictedDrafts({}); setResult(null); setBusy(null); setNotice(null);
     if (isHydrated && isAuthenticated && products.length) load();
     return () => { request.current++; };
   }, [key, isHydrated, isAuthenticated]);
@@ -98,13 +106,14 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
     if (!/^[1-5]$/.test(draft.rating) || content.length > 2000) {
       setNotice({ key, productId, error: '评分须为1至5分，评价内容最多2000个字符' }); return;
     }
+    const submission: ReviewAttempt = { key, productId, rating, content };
     const operation = {}; mutation.current = operation; setBusy(productId); setNotice(null);
     const active = () => isCurrent() && mutation.current === operation;
     try {
       const data = await reviewApi.create({ order_id: orderId, product_id: productId, rating, content });
       if (!active()) return;
       if (!Number.isSafeInteger(data.review_id) || data.review_id <= 0) {
-        recovery.current = { key, productId };
+        recovery.current = submission;
         await load(true);
         return;
       }
@@ -115,7 +124,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       if (!active()) return;
       const failure = requestFailure(error), status = failure.response?.status;
       if (status === undefined || status === 408 || status === 429 || status === 409 || status >= 500) {
-        recovery.current = { key, productId, ...(status === 409 ? { conflict: failure.response?.data?.error || '评论已存在，请勿重复提交' } : {}) };
+        recovery.current = { ...submission, ...(status === 409 ? { conflict: failure.response?.data?.error || '评论已存在，请勿重复提交' } : {}) };
         await load(true);
       } else setNotice({ key, productId, error: failure.response?.data?.error || '创建评论失败' });
     } finally {
@@ -136,6 +145,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
       ) : <div className="space-y-6">{products.map(item => {
         const review = result.reviews?.find(review => review.product_id === item.product_id);
         const draft = drafts[item.product_id] ?? initialDraft;
+        const retained = conflictedDrafts[item.product_id];
         const message = notice?.key === key && notice.productId === item.product_id ? notice : null;
         return <div key={item.product_id} className="border-t pt-5">
           <h3 className="font-medium mb-3">{localizedText(item.product_name, item.product_name_en, locale)}</h3>
@@ -143,6 +153,14 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
             <p className="text-green-700">{t('已评价')} · {t('{rating}分', { rating: review.rating })}</p>
             {review.content && <p className="mt-2 whitespace-pre-wrap wrap-break-word text-gray-700">{review.content}</p>}
             {review.created_at && <p className="mt-2 text-xs text-gray-500">{formatDate(review.created_at)}</p>}
+            {retained?.key === key && <div role="group" aria-label={t('本页提交的评价草稿')} className="mt-4 rounded border bg-gray-50 p-3">
+              <h4 className="font-medium">{t('本页提交的评价草稿')}</h4>
+              <p className="mt-2 text-sm">{t('{rating}分', { rating: retained.rating })}</p>
+              <label className="mt-2 block" htmlFor={`review-retained-content-${item.product_id}`}>
+                <span className="mb-1 block text-sm">{t('本页提交的评价内容')}</span>
+                <textarea id={`review-retained-content-${item.product_id}`} className="input min-h-24" rows={3} readOnly value={retained.content} />
+              </label>
+            </div>}
           </div> : <form onSubmit={event => submit(event, item.product_id)} className="space-y-3">
             <label className="block" htmlFor={`review-rating-${item.product_id}`}><span className="block mb-1 text-sm font-medium">{t('评分')}</span>
               <select id={`review-rating-${item.product_id}`} className="input max-w-xs" value={draft.rating} disabled={busy !== null} onChange={event => change(item.product_id, 'rating', event.target.value)}>
