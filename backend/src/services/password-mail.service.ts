@@ -6,6 +6,14 @@ interface GmailMailConfig { provider: 'gmail'; user: string; appPassword: string
 export type PasswordMailConfig = ResendMailConfig | GmailMailConfig;
 export const PASSWORD_MAIL_TIMEOUT_MS = 5000;
 
+/** Only a definite refusal permits replacing a possibly delivered reset link. */
+export class PasswordMailError extends Error {
+  constructor(readonly deliveryOutcome: 'rejected' | 'unknown', message = '密码找回邮件发送失败') {
+    super(message);
+    this.name = 'PasswordMailError';
+  }
+}
+
 /** Links are constructed only from operator configuration, never request Host/Origin headers. */
 export function passwordMailConfig(): PasswordMailConfig | null {
   const appUrl = process.env.APP_URL?.trim();
@@ -57,7 +65,12 @@ async function sendGmailResetEmail(email: string, text: string, config: GmailMai
       const socket = connection._socket;
       connection.close();
       if (socket) socket.destroy();
-      if (error) reject(error);
+      if (error) {
+        const responseCode = (error as Error & { responseCode?: number }).responseCode;
+        reject(error instanceof PasswordMailError ? error : new PasswordMailError(
+          Number.isInteger(responseCode) && responseCode! >= 400 && responseCode! <= 599 ? 'rejected' : 'unknown'
+        ));
+      }
       else resolve();
     }
     connection.on('error', finish);
@@ -70,7 +83,7 @@ async function sendGmailResetEmail(email: string, text: string, config: GmailMai
         if (error) return finish(error);
         connection.send({ from: config.user, to: [email] }, message.createReadStream(), (error, info) => {
           if (error) return finish(error);
-          finish(info?.accepted.includes(email) ? null : new Error('SMTP recipient rejected'));
+          finish(info?.accepted.includes(email) ? null : new PasswordMailError('rejected'));
         });
       });
     });
@@ -79,7 +92,7 @@ async function sendGmailResetEmail(email: string, text: string, config: GmailMai
 
 export async function sendPasswordResetEmail(email: string, token: string, config: PasswordMailConfig | null): Promise<void> {
   if (!config || !/^[a-f0-9]{64}$/.test(token) || !/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(email)) {
-    throw new Error('密码找回邮件服务暂不可用');
+    throw new PasswordMailError('rejected', '密码找回邮件服务暂不可用');
   }
   // A fragment avoids putting the bearer secret in web server URLs and Referer headers.
   const link = `${config.appOrigin}/reset-password#token=${token}`;
@@ -92,6 +105,12 @@ export async function sendPasswordResetEmail(email: string, token: string, confi
       body: JSON.stringify({ from: config.from, to: [email], subject: '重置商城密码 / Reset your store password',
         text }),
     });
-    if (!response.ok) throw new Error('邮件发送失败');
-  } catch { throw new Error('密码找回邮件发送失败'); }
+    // Refusal/validation responses cannot have accepted this request. Timeouts,
+    // in-flight conflicts and server errors may follow acceptance, so stay conservative.
+    if (!response.ok) throw new PasswordMailError(
+      [400, 401, 403, 404, 405, 422, 429].includes(response.status) ? 'rejected' : 'unknown'
+    );
+  } catch (error) {
+    throw error instanceof PasswordMailError ? error : new PasswordMailError('unknown');
+  }
 }
