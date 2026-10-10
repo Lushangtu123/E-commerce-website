@@ -45,11 +45,11 @@ function sqlCalls() {
   return connection.execute.mock.calls.map(([sql]: [string]) => sql);
 }
 
-test('SKU创建先锁父商品再按ID锁SKU，同连接提交且不覆盖基础库存', async () => {
+test('SKU创建锁父商品后插入，同连接提交且不覆盖基础库存', async () => {
   expect(await SKUModel.create(mutation())).toBe(12);
   expect(connection.beginTransaction).toHaveBeenCalledTimes(1);
   expect(sqlCalls()[0]).toMatch(/FROM products.+FOR UPDATE/);
-  expect(sqlCalls()[1]).toMatch(/FROM product_skus.+ORDER BY sku_id FOR UPDATE/);
+  expect(sqlCalls()[1]).toMatch(/INSERT INTO product_skus/);
   const insert = connection.execute.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO product_skus'));
   expect(insert[1]).toEqual([1, 'BLUE-M', '{"color":"blue"}', null, 0, null, 0, null, 1]);
   expect(connection.commit).toHaveBeenCalledTimes(1);
@@ -95,6 +95,8 @@ test('模型拒绝非法库存/价格/规格和字段，数据库不写入', asy
 
 test('更新支持code whitelist并拒绝任意字段', async () => {
   expect(await (SKUModel.update as any)(11, { sku_code: 'NEW-CODE', status: 0 }, 1)).toBe(true);
+  expect(sqlCalls()[0]).toMatch(/FROM products.+FOR UPDATE/);
+  expect(sqlCalls()[1]).toMatch(/FROM product_skus.+ORDER BY sku_id FOR UPDATE/);
   expect(sqlCalls().find((sql: string) => sql.startsWith('UPDATE product_skus'))).toContain('sku_code = ?');
   await expect(SKUModel.update(11, { product_id: 2 })).rejects.toMatchObject({ statusCode: 400 });
 });

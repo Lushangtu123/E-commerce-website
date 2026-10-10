@@ -21,11 +21,15 @@ function validateCreate(data: any) {
   return { product_id, ...value };
 }
 
-async function lockProductSKUs(connection: PoolConnection, productId: number): Promise<ProductSKU[]> {
+async function lockProduct(connection: PoolConnection, productId: number): Promise<void> {
   const [products] = await connection.execute<RowDataPacket[]>(
     'SELECT product_id, status FROM products WHERE product_id = ? FOR UPDATE', [productId]
   );
   if (products.length === 0 || products[0].status === -1) throw new SKUError('商品不存在', 404);
+}
+
+async function lockProductSKUs(connection: PoolConnection, productId: number): Promise<ProductSKU[]> {
+  await lockProduct(connection, productId);
   const [skus] = await connection.execute<(ProductSKU & RowDataPacket)[]>(
     'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sku_id FOR UPDATE', [productId]
   );
@@ -94,7 +98,9 @@ export class SKUModel {
   }, audit?: AdminAuditContext): Promise<number> {
     const fields = validateCreate(data);
     return skuTransaction(async connection => {
-      await lockProductSKUs(connection, fields.product_id);
+      // The parent mutex serializes creation for this product. Locking an empty
+      // SKU range would also block unrelated products' first inserts.
+      await lockProduct(connection, fields.product_id);
       const [result] = await connection.execute<ResultSetHeader>(
         `INSERT INTO product_skus (product_id, sku_code, specs, specs_en, price, original_price, stock, image, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -114,7 +120,7 @@ export class SKUModel {
     if (codes.size !== fields.length) throw new SKUError('SKU编码重复', 409);
     const productIds: number[] = [...new Set<number>(fields.map(sku => sku.product_id))].sort((left, right) => left - right);
     await skuTransaction(async connection => {
-      for (const productId of productIds) await lockProductSKUs(connection, productId);
+      for (const productId of productIds) await lockProduct(connection, productId);
       for (const sku of fields) {
         await connection.execute(
           `INSERT INTO product_skus (product_id, sku_code, specs, specs_en, price, original_price, stock, image, status)
