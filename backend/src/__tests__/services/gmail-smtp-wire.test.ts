@@ -27,6 +27,7 @@ const sockets = new Set<Socket>();
 let messages: string[];
 let authenticated: boolean;
 let stall: 'login' | 'data' | null;
+let refusal: 'login' | 'recipient' | 'data' | null;
 
 beforeAll(() => {
   fixtureDir = mkdtempSync(join(tmpdir(), 'commerce-smtp-test-'));
@@ -45,7 +46,7 @@ afterAll(() => {
 beforeEach(async () => {
   process.env.EMAIL_PROVIDER = 'gmail'; process.env.GMAIL_USER = 'wire.test@gmail.com';
   process.env.GMAIL_APP_PASSWORD = 'abcdefghijklmnop'; process.env.APP_URL = 'https://shop.example.test';
-  mockTrusted = true; messages = []; authenticated = false; stall = null;
+  mockTrusted = true; messages = []; authenticated = false; stall = null; refusal = null;
   server = tls.createServer({ allowHalfOpen: true, cert: mockCert, key: readFileSync(join(fixtureDir, 'key.pem')) }, socket => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
@@ -60,7 +61,7 @@ beforeEach(async () => {
           const end = pending.indexOf('\r\n.\r\n');
           if (end < 0) break;
           messages.push(pending.slice(0, end)); pending = pending.slice(end + 5); data = false;
-          if (stall !== 'data') socket.write('250 2.0.0 message accepted\r\n');
+          if (stall !== 'data') socket.write(refusal === 'data' ? '450 4.3.0 temporary refusal\r\n' : '250 2.0.0 message accepted\r\n');
           continue;
         }
         const end = pending.indexOf('\r\n');
@@ -69,9 +70,9 @@ beforeEach(async () => {
         else if (command.startsWith('AUTH PLAIN ')) {
           const decoded = Buffer.from(command.slice(11), 'base64').toString();
           authenticated = decoded === '\0wire.test@gmail.com\0abcdefghijklmnop';
-          if (stall !== 'login') socket.write(authenticated ? '235 2.7.0 authenticated\r\n' : '535 5.7.0 invalid credentials\r\n');
+          if (stall !== 'login') socket.write(authenticated && refusal !== 'login' ? '235 2.7.0 authenticated\r\n' : '535 5.7.0 invalid credentials\r\n');
         } else if (command === 'MAIL FROM:<wire.test@gmail.com>' && authenticated) socket.write('250 sender accepted\r\n');
-        else if (command === 'RCPT TO:<customer@example.test>' && authenticated) socket.write('250 recipient accepted\r\n');
+        else if (command === 'RCPT TO:<customer@example.test>' && authenticated) socket.write(refusal === 'recipient' ? '550 5.1.1 recipient refused\r\n' : '250 recipient accepted\r\n');
         else if (command === 'DATA' && authenticated) { data = true; socket.write('354 end with dot\r\n'); }
         else socket.write('550 command rejected\r\n');
       }
@@ -118,9 +119,16 @@ test('untrusted TLS certificate prevents authentication and delivery', async () 
 test.each(['login', 'data'] as const)('deadline destroys the actual TLS socket when the peer stalls during %s', async phase => {
   stall = phase;
   await expect(mail.sendPasswordResetEmail('customer@example.test', 'a'.repeat(64), mail.passwordMailConfig()))
-    .rejects.toThrow('密码找回邮件发送失败');
+    .rejects.toMatchObject({ message: '密码找回邮件发送失败', deliveryOutcome: 'unknown' });
   expect(authenticated).toBe(true);
   expect(messages).toHaveLength(phase === 'login' ? 0 : 1);
   expect(mockLastConnection._socket).toBeTruthy();
   expect(mockLastConnection._socket && mockLastConnection._socket.destroyed).toBe(true);
 }, 8000);
+
+test.each(['login', 'recipient', 'data'] as const)('real SMTP negative completion at %s is a definite refusal', async phase => {
+  refusal = phase;
+  await expect(mail.sendPasswordResetEmail('customer@example.test', 'a'.repeat(64), mail.passwordMailConfig()))
+    .rejects.toMatchObject({ message: '密码找回邮件发送失败', deliveryOutcome: 'rejected' });
+  expect(messages).toHaveLength(phase === 'data' ? 1 : 0);
+});

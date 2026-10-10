@@ -9,6 +9,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import userRoutes from '../../routes/user.routes';
+import { requestPasswordRecovery } from '../../services/password-recovery.service';
 jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn(), connectDatabase: jest.fn() }));
 
 const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST);
@@ -24,6 +25,9 @@ integration('isolated MySQL password revocation and single-use reset', () => {
   const sessionOf = (res: { headers: Record<string, unknown> }) =>
     /customer_session=([^;]+)/.exec(String(res.headers['set-cookie']))![1];
   const model = () => require('../../models/password-reset.model').PasswordResetModel;
+  const mailConfig = { apiKey: 'fixture-only', from: 'support@example.test', appOrigin: 'https://shop.example.test' };
+  const clock = { now: () => 0, sleep: async () => {} };
+  const sentDigest = (init?: RequestInit) => hash(/#token=([a-f0-9]{64})/.exec(JSON.parse(init!.body as string).text)![1]);
   const app = express(); app.use(express.json()); app.use('/api/users', userRoutes);
 
   beforeAll(async () => {
@@ -50,14 +54,179 @@ integration('isolated MySQL password revocation and single-use reset', () => {
     await db.query('DELETE FROM password_reset_tokens'); await db.query('DELETE FROM users');
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (7,'customer','customer@example.test','old-hash'),(8,'other','other@example.test','other-hash')");
   });
+  afterEach(() => jest.restoreAllMocks());
+
+  test('a definite mail refusal preserves the previous link without changing the account or another user', async () => {
+    const previous = hash('previous-link');
+    await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    const [before] = await db.query<RowDataPacket[]>('SELECT expires_at FROM password_reset_tokens WHERE user_id = 7');
+    await model().issue(8, hash('other-link'));
+    const transport = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 429 } as Response);
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(transport).toHaveBeenCalledTimes(1);
+    const [after] = await db.query<RowDataPacket[]>('SELECT expires_at FROM password_reset_tokens WHERE user_id = 7');
+    expect(after).toEqual(before);
+    expect(await model().consume(previous, 'recovered-password')).toBe(true);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    expect(await UserModel.getAuthVersion(7)).toBe(1);
+    expect(await model().consume(hash('other-link'), 'other-password')).toBe(true);
+  });
+
+  test('definite rejection permits a bounded ten-second retry while an immediate resend stays blocked', async () => {
+    const transport = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 429 } as Response)
+      .mockResolvedValue({ ok: true, status: 200 } as Response);
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    const [failed] = await db.query<RowDataPacket[]>('SELECT token_hash FROM password_reset_tokens WHERE user_id = 7');
+    expect(await model().consume(failed[0].token_hash, 'must-not-change')).toBe(false);
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(transport).toHaveBeenCalledTimes(1);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(created_at, INTERVAL 11 SECOND) WHERE user_id = 7');
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
+  test.each(['accepted', 'server-error', 'network-timeout'])('%s retains the new link and ordinary sixty-second cooldown', async outcome => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    let candidate = '';
+    const transport = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      candidate = sentDigest(init);
+      if (outcome === 'network-timeout') throw new Error('outcome unknown');
+      return { ok: outcome === 'accepted', status: outcome === 'accepted' ? 200 : 503 } as Response;
+    });
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(created_at, INTERVAL 11 SECOND) WHERE user_id = 7');
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    expect(await model().consume(candidate, 'new-password')).toBe(true);
+    expect(await model().consume(candidate, 'must-not-change')).toBe(false);
+  });
+
+  test('a late rejection cannot revive previous links after an authenticated password change', async () => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      expect(await model().changePassword(7, 'old-hash', 'changed-password')).toBe(true);
+      return { ok: false, status: 429 } as Response;
+    });
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    expect(await UserModel.getAuthVersion(7)).toBe(1);
+    const [tokens] = await db.query<RowDataPacket[]>('SELECT * FROM password_reset_tokens WHERE user_id = 7');
+    expect(tokens).toHaveLength(0);
+  });
+
+  test('a changed auth version prevents recovery even when the same candidate row remains', async () => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    let candidate = '';
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      candidate = sentDigest(init);
+      await db.query('UPDATE users SET auth_version = auth_version + 1 WHERE user_id = 7');
+      return { ok: false, status: 429 } as Response;
+    });
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    const [tokens] = await db.query<RowDataPacket[]>('SELECT token_hash FROM password_reset_tokens WHERE user_id = 7');
+    expect(tokens).toEqual([{ token_hash: candidate }]);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+  });
+
+  test('consuming a possibly delivered candidate before its rejection callback prevents old-link restoration', async () => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      expect(await model().consume(sentDigest(init), 'consumed-password')).toBe(true);
+      return { ok: false, status: 429 } as Response;
+    });
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    expect(await UserModel.getAuthVersion(7)).toBe(1);
+  });
+
+  test('a newer issuance wins over a delayed rejection for an older request', async () => {
+    const previous = hash('previous-link'); const newer = hash('newer-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(created_at, INTERVAL 61 SECOND) WHERE user_id = 7');
+      expect(await model().issue(7, newer)).toBeTruthy();
+      return { ok: false, status: 429 } as Response;
+    });
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    expect(await model().consume(newer, 'newer-password')).toBe(true);
+  });
+
+  test('restoration keeps the original expiry and never revives a link that expires during delivery', async () => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND), expires_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE user_id = 7');
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      await db.query('DO SLEEP(1.1)');
+      return { ok: false, status: 429 } as Response;
+    });
+    const recover = jest.spyOn(model(), 'recoverRejectedIssuance');
+    await requestPasswordRecovery('customer@example.test', mailConfig, clock);
+    expect(recover).toHaveBeenCalledWith(expect.objectContaining({ previous: expect.objectContaining({ tokenHash: previous }) }));
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    const [tokens] = await db.query<RowDataPacket[]>('SELECT token_hash FROM password_reset_tokens WHERE user_id = 7 AND expires_at > UTC_TIMESTAMP(3)');
+    expect(tokens).toHaveLength(0);
+    expect(await UserModel.getAuthVersion(7)).toBe(0);
+  });
+
+  test('a recovery commit failure rolls back restored data and keeps the public request uniform', async () => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    let candidate = '';
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      candidate = sentDigest(init);
+      const conn = await db.getConnection();
+      (getPool as jest.Mock).mockReturnValueOnce({ getConnection: async () => ({
+        beginTransaction: conn.beginTransaction.bind(conn), query: conn.query.bind(conn),
+        commit: async () => { throw new Error('fixture commit failure'); },
+        rollback: conn.rollback.bind(conn), release: conn.release.bind(conn),
+      }) });
+      return { ok: false, status: 429 } as Response;
+    });
+    await expect(requestPasswordRecovery('customer@example.test', mailConfig, clock)).resolves.toBeUndefined();
+    expect(await UserModel.getAuthVersion(7)).toBe(0);
+    const [tokens] = await db.query<RowDataPacket[]>('SELECT token_hash FROM password_reset_tokens WHERE user_id = 7');
+    expect(tokens).toEqual([{ token_hash: candidate }]);
+    expect(await model().consume(previous, 'must-not-change')).toBe(false);
+    expect(await model().consume(candidate, 'candidate-password')).toBe(true);
+  });
+
+  test('concurrent rejection recovery and token consumption never restore a link after a successful reset', async () => {
+    const previous = hash('previous-link'); const candidate = hash('candidate-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    const receipt = await model().issue(7, candidate);
+    const [recovered, consumed] = await Promise.all([
+      model().recoverRejectedIssuance(receipt), model().consume(candidate, 'consumed-password'),
+    ]);
+    expect([recovered, consumed].sort()).toEqual([false, true]);
+    expect(await model().consume(previous, 'previous-password')).toBe(!consumed);
+    expect(await UserModel.getAuthVersion(7)).toBe(1);
+  });
+
+  test('a rejection receipt settles once and cannot extend the restored link or retry cooldown on replay', async () => {
+    const previous = hash('previous-link'); await model().issue(7, previous);
+    await db.query('UPDATE password_reset_tokens SET created_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 61 SECOND) WHERE user_id = 7');
+    const receipt = await model().issue(7, hash('candidate-link'));
+    expect(await model().recoverRejectedIssuance(receipt)).toBe(true);
+    const [before] = await db.query<RowDataPacket[]>('SELECT token_hash,expires_at,created_at FROM password_reset_tokens WHERE user_id = 7');
+    expect(await model().recoverRejectedIssuance(receipt)).toBe(false);
+    const [after] = await db.query<RowDataPacket[]>('SELECT token_hash,expires_at,created_at FROM password_reset_tokens WHERE user_id = 7');
+    expect(after).toEqual(before);
+    expect(await model().consume(previous, 'recovered-password')).toBe(true);
+  });
 
   test('migration preserves legacy accounts with version0 and authenticates current version', async () => {
     expect(await UserModel.getAuthVersion(7)).toBe(0);
     expect(await UserModel.getAuthVersion(999)).toBeNull();
   });
   test('issuance stores only a digest, expires in30minutes, and account cooldown stops resends', async () => {
-    const digest = hash('a'.repeat(64)); expect(await model().issue(7, digest)).toBe(true);
-    expect(await model().issue(7, hash('b'.repeat(64)))).toBe(false);
+    const digest = hash('a'.repeat(64)); expect(await model().issue(7, digest)).toMatchObject({ userId: 7, tokenHash: digest, authVersion: 0 });
+    expect(await model().issue(7, hash('b'.repeat(64)))).toBeNull();
     const [rows] = await db.query<RowDataPacket[]>('SELECT token_hash, TIMESTAMPDIFF(SECOND,created_at,expires_at) AS duration FROM password_reset_tokens');
     expect(rows).toEqual([{ token_hash: digest, duration: 1800 }]);
   });

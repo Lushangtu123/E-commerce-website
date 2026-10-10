@@ -126,6 +126,21 @@ test('recipient rejection is not reported as a successful send', async () => {
   expect(mockClose).toHaveBeenCalledTimes(1);
 });
 
+test.each([421, 450, 535, 550])('an SMTP negative reply %i is definite rejection', async responseCode => {
+  mockSend.mockImplementation((_envelope, _message, callback) => callback(Object.assign(new Error('private SMTP details'), { responseCode })));
+  await expect(mail.sendPasswordResetEmail('customer@example.test', 'a'.repeat(64), mail.passwordMailConfig()))
+    .rejects.toMatchObject({ message: '密码找回邮件发送失败', deliveryOutcome: 'rejected' });
+});
+
+test('a completed recipient rejection is definite while a generic socket error is unknown', async () => {
+  mockSend.mockImplementation((_envelope, _message, callback) => callback(null, { accepted: [], rejected: ['customer@example.test'] }));
+  await expect(mail.sendPasswordResetEmail('customer@example.test', 'a'.repeat(64), mail.passwordMailConfig()))
+    .rejects.toMatchObject({ deliveryOutcome: 'rejected' });
+  mockSend.mockImplementation((_envelope, _message, callback) => callback(new Error('socket dropped after DATA')));
+  await expect(mail.sendPasswordResetEmail('customer@example.test', 'a'.repeat(64), mail.passwordMailConfig()))
+    .rejects.toMatchObject({ deliveryOutcome: 'unknown' });
+});
+
 test.each(['customer@example.test\r\nBcc:evil@example.test', 'customer@example.test,evil@example.test'])('invalid recipient %p never opens SMTP', async recipient => {
   await expect(mail.sendPasswordResetEmail(recipient, 'a'.repeat(64), mail.passwordMailConfig())).rejects.toThrow();
   expect(mockConstruct).not.toHaveBeenCalled();
