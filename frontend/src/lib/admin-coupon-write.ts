@@ -54,6 +54,16 @@ export function matchesCouponCreation(coupon: Coupon, input: CouponFormValues) {
     Date.parse(coupon.end_time) === Date.parse(input.end_time);
 }
 
+/** Critical coupon rules and state must agree across the detail and refreshed list. */
+export function matchesCouponSnapshot(value: Coupon, canonical: Coupon) {
+  return value.coupon_id === canonical.coupon_id && value.status === canonical.status && matchesCouponCreation(value, {
+    code: canonical.code, name: canonical.name, description: canonical.description ?? '', type: canonical.type,
+    discount_value: Number(canonical.discount_value), min_amount: Number(canonical.min_amount), max_discount: Number(canonical.max_discount ?? 0),
+    total_quantity: canonical.total_quantity, per_user_limit: canonical.per_user_limit,
+    start_time: canonical.start_time, end_time: canonical.end_time,
+  });
+}
+
 function validIntent(value: unknown): value is CouponWriteIntent {
   if (!record(value) || typeof value.key !== 'string' || !value.key || value.key.length > 100) return false;
   if (value.kind === 'status') return positiveId(value.id) && (value.status === 0 || value.status === 1) &&

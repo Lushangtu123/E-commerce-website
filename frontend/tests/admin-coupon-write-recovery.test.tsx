@@ -18,7 +18,7 @@ const coupon = (status = 1) => ({
   received_count: 20, used_count: 5, per_user_limit: 1, status,
   start_time: '2026-11-01T10:00:00.000Z', end_time: '2026-12-01T10:00:00.000Z', created_at: '2026-01-01T00:00:00Z',
 });
-const list = (rows = [coupon()]) => ({ data: rows, pagination: { page: 1, page_size: 50, total: rows.length, total_pages: Math.ceil(rows.length / 50) } });
+const list = (rows: (ReturnType<typeof coupon> | ReturnType<typeof matched>)[] = [coupon()]) => ({ data: rows, pagination: { page: 1, page_size: 50, total: rows.length, total_pages: Math.ceil(rows.length / 50) } });
 const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name });
 const field = (name: RegExp) => screen.getByLabelText<HTMLInputElement>(name);
 const originalAdapter = api.defaults.adapter;
@@ -91,13 +91,14 @@ describe('unknown coupon status writes', () => {
     await settle();
     await act(async () => oldList.resolve(list([coupon()]))); await settle();
     expect(button('+ 创建优惠券')).toBeDisabled();
-    expect(button('启用')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '启用' })).not.toBeInTheDocument();
     await click('重新确认优惠券结果');
     expect(button('启用')).toBeEnabled();
     expect(writes).toHaveLength(1);
   });
 
   it('retains recovery when storage cleanup fails after a valid read', async () => {
+    read = url => url === '/admin/coupons' ? list([coupon(writes.length ? 0 : 1)]) : { success: true, data: coupon(0) };
     await mount();
     const remove = vi.spyOn(sessionStorage, 'removeItem').mockImplementation(() => { throw new Error('storage blocked'); });
     await click('禁用');
@@ -133,7 +134,8 @@ describe('unknown coupon status writes', () => {
     };
     await mount(); await click('禁用');
     expect(button('+ 创建优惠券')).toBeDisabled();
-    expect(button('禁用')).toBeDisabled();
+    if (failure === 'bad list') expect(screen.queryByText('Saved coupon')).not.toBeInTheDocument();
+    else expect(button('禁用')).toBeDisabled();
     healthy = true;
     await click('重新确认优惠券结果');
     expect(writes).toHaveLength(1);
@@ -199,7 +201,7 @@ describe('unknown coupon creations', () => {
   it('renders read-only recovery and its result in English', async () => {
     let healthy = false;
     read = url => {
-      if (url === '/admin/coupons') return list();
+      if (url === '/admin/coupons') return list(healthy ? [matched(writes[0].input)] : [coupon()]);
       if (!healthy) throw failed(503);
       return { success: true, data: matched(writes[0].input) };
     };
@@ -213,7 +215,7 @@ describe('unknown coupon creations', () => {
   });
 
   it('confirms a committed creation by its stable code and submitted fields without replaying POST', async () => {
-    read = url => url === '/admin/coupons' ? list() : { success: true, data: matched(writes[0].input) };
+    read = url => url === '/admin/coupons' ? list(writes.length ? [matched(writes[0].input)] : [coupon()]) : { success: true, data: matched(writes[0].input) };
     await mount(); await draft(); await submit();
     expect(reads).toContain('/admin/coupons/by-code/SAVE');
     expect(screen.queryByRole('heading', { name: '创建优惠券' })).not.toBeInTheDocument();
@@ -228,7 +230,8 @@ describe('unknown coupon creations', () => {
     expect(button('+ 创建优惠券')).toBeDisabled();
     expect(writes).toHaveLength(1);
     expect(button('重试原创建请求')).toBeEnabled();
-    write = () => ({ success: true });
+    write = () => ({ success: true, data: { coupon_id: 7 } });
+    read = url => url === '/admin/coupons' ? list(writes.length ? [matched(writes[0].input)] : [coupon()]) : { success: true, data: matched(writes[0].input) };
     await click('重试原创建请求');
     expect(writes).toHaveLength(2);
     expect(writes[1].input).toEqual(writes[0].input);
@@ -236,7 +239,10 @@ describe('unknown coupon creations', () => {
   });
 
   it('retains a draft when the code belongs to a different coupon', async () => {
-    read = url => url === '/admin/coupons' ? list() : { success: true, data: { ...matched(writes[0].input), name: 'Another creation' } };
+    read = url => {
+      const canonical = writes.length ? { ...matched(writes[0].input), name: 'Another creation' } : coupon();
+      return url === '/admin/coupons' ? list([canonical]) : { success: true, data: canonical };
+    };
     await mount(); await draft(); await submit();
     expect(field(/^优惠券名称/)).toHaveValue('Saved coupon');
     expect(field(/^优惠券名称/)).toBeEnabled();
@@ -247,7 +253,7 @@ describe('unknown coupon creations', () => {
   it('persists the submitted intent before POST so interrupted navigation can safely confirm it', async () => {
     const pending = deferred(); write = () => pending.promise;
     const view = await mount(); await draft(); await submit(); view.unmount();
-    read = url => url === '/admin/coupons' ? list() : { success: true, data: matched(writes[0].input) };
+    read = url => url === '/admin/coupons' ? list(writes.length ? [matched(writes[0].input)] : [coupon()]) : { success: true, data: matched(writes[0].input) };
     await mount();
     expect(button('+ 创建优惠券')).toBeDisabled();
     await click('重新确认优惠券结果');

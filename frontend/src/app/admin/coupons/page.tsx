@@ -14,11 +14,11 @@ import { requestFailure } from '@/lib/api-error';
 import AdminCouponForm, { EMPTY_COUPON_FORM, type CouponFormValues } from '@/components/AdminCouponForm';
 import AdminCouponTable, { type AdminCoupon } from '@/components/AdminCouponTable';
 import { clearCouponWrite, couponCreationDraft, matchesCouponCreation, readCouponWrite, storeCouponWrite,
-  unknownCouponWrite, validCouponPage, validCouponSnapshot, type CouponWriteIntent } from '@/lib/admin-coupon-write';
+  unknownCouponWrite, validCouponPage, validCouponSnapshot, matchesCouponSnapshot, type CouponWriteIntent } from '@/lib/admin-coupon-write';
 import { newSessionId } from '@/lib/session-id';
 
 const PAGE_SIZE = 50;
-type Recovery = { sessionId: string; intent: CouponWriteIntent; checking: boolean; absent?: boolean };
+type Recovery = { sessionId: string; intent: CouponWriteIntent; checking: boolean; absent?: boolean; acknowledged?: boolean; viewFailed?: boolean };
 
 export default function AdminCouponsPage() {
   const { t } = useI18n();
@@ -42,7 +42,7 @@ export default function AdminCouponsPage() {
   const [recovering, setRecovering] = useState<Recovery | null>(null);
   const [restoredSessionId, setRestoredSessionId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
-  const latestRead = useRef<(() => Promise<boolean>) | null>(null);
+  const latestRead = useRef<((canonical: Parameters<typeof matchesCouponSnapshot>[0]) => Promise<boolean>) | null>(null);
   const query = useScopedQuery({
     scope: ['admin', 'coupons', sessionId],
     params: [page, status],
@@ -113,7 +113,7 @@ export default function AdminCouponsPage() {
 
   // Install only a valid snapshot for the currently displayed page. Cancel older list requests
   // before this read, so they cannot put stale actionable rows back after reconciliation.
-  latestRead.current = async () => {
+  latestRead.current = async canonical => {
     if (!isCurrentScope()) return false;
     await queryClient.cancelQueries({ queryKey: ['admin', 'coupons', sessionId] });
     if (!isCurrentScope()) return false;
@@ -121,6 +121,7 @@ export default function AdminCouponsPage() {
     if (!isCurrentScope()) return false;
     if (!validCouponPage(actual) || actual.pagination?.page !== page || actual.pagination.page_size !== PAGE_SIZE ||
       (status !== '' && actual.data.some(coupon => coupon.status !== Number(status)))) throw new Error('Invalid coupon list snapshot');
+    if (actual.data.some(row => (row.coupon_id === canonical.coupon_id || row.code.toUpperCase() === canonical.code.toUpperCase()) && !matchesCouponSnapshot(row, canonical))) throw new Error('Coupon snapshot changed during confirmation');
     queryClient.setQueryData(['admin', 'coupons', sessionId, page, status], actual);
     return true;
   };
@@ -155,6 +156,7 @@ export default function AdminCouponsPage() {
     if (!query.isCurrentSession() || recovery.current !== record || record.checking) return;
     const checking = { ...record, checking: true, absent: false };
     recovery.current = checking; setRecovering(checking);
+    let readingList = false;
     try {
       const intent = checking.intent;
       const response: unknown = intent.kind === 'create' ? await adminCouponApi.getByCode(intent.input.code) : await adminCouponApi.getDetail(intent.id);
@@ -170,34 +172,37 @@ export default function AdminCouponsPage() {
       const canonical = response.data;
       if (!validCouponSnapshot(canonical) || (intent.kind === 'status' ? canonical.coupon_id !== intent.id :
         canonical.code.toUpperCase() !== intent.input.code.toUpperCase())) throw new Error('Invalid coupon identity');
-      if (!await latestRead.current?.()) throw new Error('Coupon view changed');
+      readingList = true;
+      if (!await latestRead.current?.(canonical)) throw new Error('Coupon view changed');
       if (!query.isCurrentSession() || recovery.current !== checking || !clearCouponWrite(checking.sessionId, intent.key)) return;
       recovery.current = null; setRecovering(null);
       if (intent.kind === 'create') {
         const matches = matchesCouponCreation(canonical, intent.input);
         setDraft({ sessionId, open: !matches, values: matches ? EMPTY_COUPON_FORM : couponCreationDraft(intent.input) });
-        toast.error(translate(matches ? '已确认原优惠券创建结果，请核对当前列表' : '该代码对应的优惠券与原创建内容不一致，请核对后修改草稿'));
-      } else toast.error(translate('已重新加载优惠券当前状态，请核对后再操作'));
+        if (matches && checking.acknowledged) toast.success(translate('创建成功！'));
+        else toast.error(translate(matches ? '已确认原优惠券创建结果，请核对当前列表' : '该代码对应的优惠券与原创建内容不一致，请核对后修改草稿'));
+      } else if (checking.acknowledged && canonical.status === intent.status) toast.success(translate('状态更新成功！'));
+      else toast.error(translate('已重新加载优惠券当前状态，请核对后再操作'));
     } catch {
       // A failed, malformed or outdated read keeps the original intent and every write locked.
     } finally {
       if (query.isCurrentSession() && recovery.current === checking) {
-        const failed = { ...checking, checking: false };
+        const failed = { ...checking, checking: false, viewFailed: checking.viewFailed || readingList };
         recovery.current = failed; setRecovering(failed);
       }
     }
   };
 
-  const startRecovery = async (intent: CouponWriteIntent) => {
+  const startRecovery = async (intent: CouponWriteIntent, acknowledged = false) => {
     if (!sessionId || !query.isCurrentSession()) return;
-    const record = { sessionId, intent, checking: false };
+    const record = { sessionId, intent, checking: false, acknowledged };
     recovery.current = record; setRecovering(record);
     // Close the blocking dialog so the read-only recovery controls are accessible.
     setDraft(current => current.sessionId === sessionId ? { ...current, open: false } : current);
     await checkResult(record);
   };
 
-  const runMutation = async (intent: CouponWriteIntent, isCurrent: () => boolean, success: string, failure: string, original?: Recovery) => {
+  const runMutation = async (intent: CouponWriteIntent, isCurrent: () => boolean, failure: string, original?: Recovery) => {
     if (!sessionId || !isCurrentScope() || !isCurrent() || mutation.current ||
       (original ? recovery.current !== original || !original.absent : writeLocked())) return;
     if (!storeCouponWrite(sessionId, intent)) {
@@ -211,14 +216,9 @@ export default function AdminCouponsPage() {
       if (intent.kind === 'create') await adminCouponApi.create(intent.input);
       else await adminCouponApi.updateStatus(intent.id, intent.status);
       if (!query.isCurrentSession() || mutation.current !== operation) return;
-      if (!clearCouponWrite(sessionId, intent.key)) { await startRecovery(intent); return; }
-      recovery.current = null; setRecovering(null);
-      if (isCurrent()) {
-        if (intent.kind === 'create') setDraft({ sessionId, open: false, values: EMPTY_COUPON_FORM });
-        toast.success(translate(success));
-      }
-      // Refresh whichever filter this administrator now displays, retaining the lock through that read.
-      if (query.isCurrentSession()) await query.invalidate();
+      // The API acknowledges only an ID or a generic success flag. Confirm the saved
+      // fields/status through the canonical read before retiring the durable intent.
+      await startRecovery(intent, true);
     } catch (error) {
       if (!query.isCurrentSession() || mutation.current !== operation) return;
       // A replay still belongs to the original uncertain intent, including a duplicate-code 4xx.
@@ -242,13 +242,13 @@ export default function AdminCouponsPage() {
     return runMutation({ key: newSessionId(), kind: 'create', input: {
       ...draft.values, code: draft.values.code.trim(), name: draft.values.name.trim(),
       start_time: new Date(draft.values.start_time).toISOString(), end_time: new Date(draft.values.end_time).toISOString(),
-    } }, isCurrentDraft, '创建成功！', '创建失败');
+    } }, isCurrentDraft, '创建失败');
   };
 
   const handleUpdateStatus = (coupon: AdminCoupon) => {
     if (!coupons.includes(coupon)) return;
     return runMutation({ key: newSessionId(), kind: 'status', id: coupon.coupon_id, status: coupon.status === 1 ? 0 : 1 },
-      isDisplayedScope, '状态更新成功！', '更新失败');
+      isDisplayedScope, '更新失败');
   };
 
   return (
@@ -289,7 +289,7 @@ export default function AdminCouponsPage() {
               <button onClick={() => checkResult(unresolved)} disabled={unresolved.checking || pendingSessionId === sessionId}
                 className="mt-3 px-4 py-2 border rounded-lg disabled:opacity-50">{t(unresolved.checking ? '确认中...' : '重新确认优惠券结果')}</button>
               {unresolved.absent && unresolved.intent.kind === 'create' && (
-                <button onClick={() => runMutation(unresolved.intent, isCurrentScope, '创建成功！', '创建失败', unresolved)}
+                <button onClick={() => runMutation(unresolved.intent, isCurrentScope, '创建失败', unresolved)}
                   disabled={pendingSessionId === sessionId} className="mt-3 ml-3 px-4 py-2 border rounded-lg disabled:opacity-50">{t('重试原创建请求')}</button>
               )}
             </div>
@@ -311,7 +311,7 @@ export default function AdminCouponsPage() {
             </div>
           ) : (
             <>
-              <AdminCouponTable coupons={coupons} busy={busy} onCreate={openForm} onToggleStatus={handleUpdateStatus} />
+              {!unresolved?.viewFailed && <AdminCouponTable coupons={coupons} busy={busy} onCreate={openForm} onToggleStatus={handleUpdateStatus} />}
               <div className="bg-white px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <p className="text-sm text-gray-700">{t('共 {count} 张优惠券', { count: total })}</p>
                 <div className="flex gap-2">
