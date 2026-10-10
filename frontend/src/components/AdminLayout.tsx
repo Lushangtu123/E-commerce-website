@@ -23,6 +23,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(() => getAdminSessionId());
   const mounted = useRef(false);
+  const sidebarToggle = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +57,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     // Login waits for this queued cookie cleanup even after the layout has unmounted.
     adminApi.logout().catch(error => logger.error('退出登录失败:', error));
     router.push('/admin/login');
+  };
+
+  const closeSidebar = () => {
+    sidebarToggle.current?.focus();
+    setSidebarOpen(false);
   };
 
   const menuItems = [
@@ -129,12 +135,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* 侧边栏 */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 text-white transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div id="admin-sidebar" hidden={!sidebarOpen} inert={!sidebarOpen}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 text-white transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-6 bg-gray-800">
           <span className="text-xl font-bold">{t("管理后台")}</span>
           <button
-            onClick={() => setSidebarOpen(false)}
+            onClick={closeSidebar}
             aria-label={t('关闭侧栏')}
             className="lg:hidden text-gray-400 hover:text-white"
           >
@@ -194,8 +201,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* 顶部栏 */}
         <div className="bg-white shadow-xs h-16 flex items-center justify-between px-6">
           <button
+            ref={sidebarToggle}
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label={t('切换侧栏')}
+            aria-expanded={sidebarOpen}
+            aria-controls="admin-sidebar"
             className="text-gray-600 hover:text-gray-900"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
