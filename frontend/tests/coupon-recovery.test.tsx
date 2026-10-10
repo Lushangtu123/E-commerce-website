@@ -135,7 +135,7 @@ describe('coupon center pagination and claims', () => {
     clickTogether(button, button);
     expect(couponApi.receive).toHaveBeenCalledTimes(1);
     expect(button).toBeDisabled();
-    await act(async () => claim.resolve({ success: true })); await settle();
+    await act(async () => claim.resolve({ success: true, data: { user_coupon_id: 7 } })); await settle();
   });
 
   it('refuses a displayed claim after another tab changes stored session', async () => {
