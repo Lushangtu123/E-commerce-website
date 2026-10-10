@@ -29,10 +29,13 @@ export interface ProductListSeed {
  * The URL supplies the applied search and page. A matching server seed carries the products
  * in the HTML; the client refreshes that same page after hydration.
  */
-export default function ProductListView({ seed = null }: { seed?: ProductListSeed | null }) {
+export default function ProductListView({ seed = null, initialSearch }: { seed?: ProductListSeed | null; initialSearch?: string }) {
   const { t } = useI18n();
   const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
-  const searchParams = useSearchParams() || new URLSearchParams();
+  const currentSearchParams = useSearchParams() || new URLSearchParams();
+  // The URL may move while this streamed boundary is still waiting for its JavaScript.
+  // Initial hydration belongs to the server's query; later renders follow the live URL.
+  const searchParams = !hydrated && initialSearch !== undefined ? new URLSearchParams(initialSearch) : currentSearchParams;
   const router = useRouter();
   const keyword = searchParams.get('keyword') || '';
   const sort = searchParams.get('sort') || 'created_at DESC';
@@ -89,7 +92,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   // Canonicalize malformed pages and recover from catalog shrinkage without adding history entries.
   // Hide an out-of-range response until its replacement page loads.
   useEffect(() => {
-    if (currentScope.current !== scope) return;
+    if (!hydrated || currentScope.current !== scope) return;
     if (!beyondLastPage && !pageNeedsCorrection) { correction.current = null; return; }
     const params = new URLSearchParams(search);
     const next = beyondLastPage ? lastPage : page;
@@ -100,7 +103,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
     if (correction.current === key) return;
     correction.current = key;
     navigate(href, true);
-  }, [beyondLastPage, pageNeedsCorrection, lastPage, page, search, scope, navigate]);
+  }, [hydrated, beyondLastPage, pageNeedsCorrection, lastPage, page, search, scope, navigate]);
 
   useEffect(() => {
     if (!query.error) return;

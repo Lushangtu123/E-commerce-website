@@ -21,7 +21,10 @@ async function loadSeed(params: SearchParams): Promise<ProductListSeed | null> {
 
 // Server-rendered so shared links already carry their requested page of products.
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const seed = await loadSeed(await searchParams);
+  const params = await searchParams;
+  const initialSearch = new URLSearchParams(Object.entries(params).flatMap(([key, value]) =>
+    value === undefined ? [] : (Array.isArray(value) ? value : [value]).map(item => [key, item]))).toString();
+  const seed = await loadSeed(params);
   return (
     <Suspense fallback={
       <div className="py-10">
@@ -32,7 +35,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         </div>
       </div>
     }>
-      <ProductListView seed={seed} />
+      <ProductListView seed={seed} initialSearch={initialSearch} />
     </Suspense>
   );
 }
