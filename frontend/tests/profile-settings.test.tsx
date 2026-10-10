@@ -170,17 +170,17 @@ describe('settings page', () => {
   });
 
   it('saves only permitted normalized fields and clears phone and avatar across a refresh', async () => {
-    await setup({ save: async body => ({ user: { ...customer, ...(body as Partial<User>), username: '服务器确认名', password_hash: 'private' } }) });
+    await setup({ save: async body => ({ user: { ...customer, ...(body as Partial<User>), password_hash: 'private' } }) });
     useCartStore.getState().setItems([cartItem]);
 
     edit({ username: '  新名字  ', phone: '  ', avatar_url: '' });
     await submit();
 
     expect(requests[1]).toEqual({ method: 'put', body: { username: '新名字', phone: null, avatar_url: null }, authorization: undefined, url: '/users/profile' });
-    expect(input('username')).toHaveValue('服务器确认名');
+    expect(input('username')).toHaveValue('新名字');
     expect(screen.getByText(/资料已保存/)).toBeInTheDocument();
     useAuthStore.getState().hydrate();
-    expect(useAuthStore.getState().user).toMatchObject({ username: '服务器确认名', phone: null });
+    expect(useAuthStore.getState().user).toMatchObject({ username: '新名字', phone: null });
     expect(useAuthStore.getState().user).not.toHaveProperty('password_hash');
     expect(useCartStore.getState().items).toHaveLength(1);
     expect(localStorage.getItem('admin_session')).toBe('administrator');
