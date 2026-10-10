@@ -1,4 +1,4 @@
-/** Shared by the server first page and the client query; invalid URLs never silently widen a search. */
+/** Shared by server rendering and client queries; invalid URLs never silently widen a search. */
 export interface CatalogFilters {
   category_id?: number;
   brand?: string;
@@ -15,6 +15,13 @@ export interface CatalogFilterDraft {
 
 export const CATALOG_FILTER_KEYS = ['category_id', 'brand', 'min_price', 'max_price'] as const;
 export const CATALOG_SORTS = ['created_at DESC', 'created_at ASC', 'price ASC', 'price DESC', 'sales_count DESC', 'sales_count ASC', 'rating DESC', 'price', 'sales'];
+
+/** Match the API's page range, without accepting duplicate, rounded or overflowing values. */
+export function parseCatalogPage(value: string | string[] | null | undefined): number {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page <= 2147483647 ? page : 1;
+}
 
 export function readCatalogDraft(params: { get(name: string): string | null }): CatalogFilterDraft {
   return Object.fromEntries(CATALOG_FILTER_KEYS.map(key => [key, params.get(key) ?? ''])) as unknown as CatalogFilterDraft;

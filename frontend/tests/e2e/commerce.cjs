@@ -90,6 +90,7 @@ async function localPlatformScripts(context) {
   await page.getByRole('heading', { name: '欢迎来到电商平台', exact: true }).waitFor({ state: 'visible' });
   await page.locator('section').filter({ has: page.getByRole('heading', { name: '热门商品', exact: true }) }).locator('a[href="/products/1"]').waitFor({ state: 'visible' });
   console.log('PASS browser fresh anonymous homepage hydrates before registration');
+  await require('./catalog-pagination.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await page.goto('http://127.0.0.1:3100/register');
   const customerUsername = `browser${Date.now()}`;
   await page.locator('input[name="username"]').fill(customerUsername);
