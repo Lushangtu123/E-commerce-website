@@ -12,9 +12,9 @@ export const CSRF_HEADER = 'X-Requested-With';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-function cookieOptions(): CookieOptions {
+function cookieOptions(path = '/api'): CookieOptions {
   // The cookie only travels to the API, never to the pages around it.
-  return { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/api' };
+  return { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path };
 }
 
 /** Reads one cookie from the request; a missing or malformed value reads as absent. */
@@ -32,13 +32,13 @@ export function readCookie(req: Request, name: string): string | undefined {
 }
 
 /** Stores a signed session in an httpOnly cookie that expires together with the token. */
-export function setSessionCookie(res: Response, name: string, token: string): void {
+export function setSessionCookie(res: Response, name: string, token: string, path = '/api'): void {
   const expiresAt = (jwt.decode(token) as jwt.JwtPayload | null)?.exp;
-  res.cookie(name, token, { ...cookieOptions(), ...(expiresAt && { maxAge: Math.max(0, expiresAt * 1000 - Date.now()) }) });
+  res.cookie(name, token, { ...cookieOptions(path), ...(expiresAt && { maxAge: Math.max(0, expiresAt * 1000 - Date.now()) }) });
 }
 
-export function clearSessionCookie(res: Response, name: string): void {
-  res.clearCookie(name, cookieOptions());
+export function clearSessionCookie(res: Response, name: string, path = '/api'): void {
+  res.clearCookie(name, cookieOptions(path));
 }
 
 /** True when an unsafe request carries the header that a cross-site page cannot send. */
