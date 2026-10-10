@@ -22,12 +22,12 @@ function AdminLogsContent() {
   const { t, formatDate } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlKey = searchParams.toString();
+  const urlKey = searchParams?.toString() ?? '';
   const sessionId = useAdminSessionId();
   // The first session claims the deep link. A replacement waits until the old filters leave the URL.
   const [owner, setOwner] = useState<string | null>(null);
   const ownsFilters = owner === null || owner === sessionId;
-  const cleared = [...logFilterKeys, 'page'].every(key => !searchParams.has(key));
+  const cleared = searchParams !== null && [...logFilterKeys, 'page'].every(key => !searchParams.has(key));
   if (sessionId && (owner === null || (!ownsFilters && cleared))) setOwner(sessionId);
   const applied = readLogFilters(ownsFilters ? urlKey : '');
   const { filters, page } = applied;
@@ -40,7 +40,7 @@ function AdminLogsContent() {
   const query = useAdminQuery({
     name: 'logs',
     params: [page, filters],
-    enabled: ownsFilters && !applied.error,
+    enabled: searchParams !== null && ownsFilters && !applied.error,
     load: () => api.get<unknown, { logs: AdminLog[]; pagination: { total: number } }>('/admin/logs', {
       params: { page, limit: 20, ...Object.fromEntries(logFilterKeys.filter(key => filters[key]).map(key => [key, filters[key]])) },
     }),
@@ -51,7 +51,7 @@ function AdminLogsContent() {
     ? requestFailure(query.error).response?.data?.error || requestFailure(query.error).message || '获取日志失败'
     : undefined;
   const loading = !query.data && !error;
-  const isCurrentView = () => ownsFilters && query.isCurrentSession() && currentView.current === viewKey &&
+  const isCurrentView = () => searchParams !== null && ownsFilters && query.isCurrentSession() && currentView.current === viewKey &&
     new URLSearchParams(window.location.search).toString() === urlKey;
 
   useEffect(() => {
@@ -120,23 +120,23 @@ function AdminLogsContent() {
         <form onSubmit={applyFilters} className="bg-white rounded-lg shadow-sm p-4 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-sm font-medium">{t('操作类型')}
-              <select className="input mt-1" value={draft.action} disabled={!sessionId || !ownsFilters} onChange={event => changeDraft('action', event.target.value)}>
+              <select className="input mt-1" value={draft.action} disabled={!searchParams || !sessionId || !ownsFilters} onChange={event => changeDraft('action', event.target.value)}>
                 <option value="">{t('全部操作')}</option>
                 {draft.action && !Object.hasOwn(logActionLabels, draft.action) && <option value={draft.action}>{draft.action}</option>}
                 {Object.entries(logActionLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
               </select>
             </label>
             <label className="text-sm font-medium">{t('管理员编号')}
-              <input className="input mt-1" value={draft.adminId} inputMode="numeric" disabled={!sessionId || !ownsFilters} onChange={event => changeDraft('adminId', event.target.value)} />
+              <input className="input mt-1" value={draft.adminId} inputMode="numeric" disabled={!searchParams || !sessionId || !ownsFilters} onChange={event => changeDraft('adminId', event.target.value)} />
             </label>
             {(['startDate', 'endDate'] as const).map(key => <label key={key} className="text-sm font-medium">{t(key === 'startDate' ? '开始日期' : '结束日期')}
-              <input type="date" className="input mt-1" value={draft[key]} disabled={!sessionId || !ownsFilters} onChange={event => changeDraft(key, event.target.value)} />
+              <input type="date" className="input mt-1" value={draft[key]} disabled={!searchParams || !sessionId || !ownsFilters} onChange={event => changeDraft(key, event.target.value)} />
             </label>)}
           </div>
           {(applied.error || (formError?.key === viewKey && formError.message)) && <p role="alert" className="text-sm text-red-600">{t(applied.error || formError!.message)}</p>}
           <div className="flex gap-3">
-            <button type="submit" className="btn btn-primary" disabled={!sessionId || !ownsFilters}>{t('筛选')}</button>
-            <button type="button" onClick={resetFilters} className="btn btn-outline" disabled={!sessionId || !ownsFilters}>{t('重置')}</button>
+            <button type="submit" className="btn btn-primary" disabled={!searchParams || !sessionId || !ownsFilters}>{t('筛选')}</button>
+            <button type="button" onClick={resetFilters} className="btn btn-outline" disabled={!searchParams || !sessionId || !ownsFilters}>{t('重置')}</button>
           </div>
         </form>
 

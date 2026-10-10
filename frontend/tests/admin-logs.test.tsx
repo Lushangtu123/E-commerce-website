@@ -12,8 +12,11 @@ import { useLocaleStore } from '@/store/useLocaleStore';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-const query = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin/logs', useSearchParams: () => useCatalogSearchParams(query) }));
+const query = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>(), ready: true }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin/logs', useSearchParams: () => {
+  const params = useCatalogSearchParams(query);
+  return query.ready ? params : null;
+} }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 
@@ -53,7 +56,7 @@ async function click(label: string) {
 describe('admin logs', () => {
   beforeEach(() => {
     requests = [];
-    query.current = new URLSearchParams(); query.listeners.clear();
+    query.current = new URLSearchParams(); query.listeners.clear(); query.ready = true;
     installCatalogRouter(router, query);
     window.history.replaceState(null, '', '/admin/logs');
   });
@@ -151,6 +154,19 @@ describe('admin logs', () => {
     await click('上一页');
     expect(requests.at(-1)?.params.page).toBeLessThan(3);
     expect(new URLSearchParams(window.location.search).get('action')).toBe('LOGIN');
+  });
+
+  it('waits for nullable Next search parameters before requesting or applying filters', async () => {
+    query.ready = false;
+    await setup(() => ({ logs: [], pagination: { total: 0 } }));
+    expect(requests).toHaveLength(0);
+    expect(screen.getByRole('button', { name: '筛选' })).toBeDisabled();
+    act(() => {
+      query.ready = true;
+      router.replace('/admin/logs?action=LOGIN&page=2');
+    }); await settle();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].params).toEqual({ page: 2, limit: 20, action: 'LOGIN' });
   });
 
   it('reads through the shared API client and shows a retryable error instead of an empty table', async () => {
