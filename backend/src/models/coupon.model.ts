@@ -92,7 +92,22 @@ export class CouponModel {
       if (audit) await writeAdminAudit(connection, audit, 'CREATE_COUPON', 'coupon', String(result.insertId), `创建优惠券: ${coupon.name} (${coupon.code})`);
       return result.insertId;
     };
-    return audit ? adminWriteTransaction(insert) : insert(getPool());
+    if (!audit) return insert(getPool());
+    let workDeadlock: unknown;
+    try {
+      return await adminWriteTransaction(async connection => {
+        try { return await insert(connection); }
+        catch (error) {
+          if ((error as { code?: string })?.code === 'ER_LOCK_DEADLOCK') workDeadlock = error;
+          throw error;
+        }
+      });
+    } catch (error) {
+      // InnoDB aborts a deadlocked transaction. After cleanup, retry the complete
+      // coupon + audit once; acquisition, commit or cleanup failures never enter this path.
+      if (workDeadlock !== undefined && error === workDeadlock) return adminWriteTransaction(insert);
+      throw error;
+    }
   }
 
   /**

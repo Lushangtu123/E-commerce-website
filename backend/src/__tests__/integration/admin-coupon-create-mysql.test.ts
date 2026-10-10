@@ -5,6 +5,7 @@ import { getPool } from '../../database/mysql';
 import { migrateCouponTables } from '../../database/migrate-coupon';
 import { CouponModel } from '../../models/coupon.model';
 import { AdminCouponController } from '../../controllers/admin-coupon.controller';
+import logger from '../../utils/logger';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
@@ -83,5 +84,42 @@ integration('管理员优惠券创建冲突（真实 MySQL）', () => {
     const [rows] = await db.query<RowDataPacket[]>('SELECT code, name FROM coupons ORDER BY code');
     expect(rows).toEqual([{ code: 'ONE', name: 'first coupon' }, { code: 'TWO', name: 'other coupon' }]);
     expect((await db.query<RowDataPacket[]>('SELECT action FROM admin_logs'))[0]).toEqual([{ action: 'CREATE_COUPON' }, { action: 'CREATE_COUPON' }]);
+  });
+
+  test('撤销未提交的同代码插入后，两位等待的创建者仍只提交一张券和一条审计', async () => {
+    const blocker = await db.getConnection();
+    const errors: string[] = [];
+    jest.spyOn(logger, 'error').mockImplementation((value: any) => { errors.push(value.err?.code ?? 'unknown'); });
+    const first = response(), second = response();
+    let pending: Promise<unknown[]> | undefined;
+    try {
+      await blocker.beginTransaction();
+      await blocker.execute(`INSERT INTO coupons
+        (code,name,type,discount_value,total_quantity,remain_quantity,start_time,end_time)
+        VALUES ('RACE','uncommitted fixture',1,10,100,100,'2026-01-01','2026-12-31')`);
+      pending = Promise.all([
+        AdminCouponController.createCoupon(input('RACE', 'first admin coupon', 1), first as any),
+        AdminCouponController.createCoupon(input('race', 'second admin coupon', 2), second as any),
+      ]);
+      const deadline = Date.now() + 5000;
+      let waiting = 0;
+      while (waiting < 2 && Date.now() < deadline) {
+        const [locks] = await db.query<RowDataPacket[]>(`SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID) AS waiting
+          FROM performance_schema.data_lock_waits w
+          JOIN performance_schema.data_locks l ON w.BLOCKING_ENGINE_LOCK_ID = l.ENGINE_LOCK_ID
+          WHERE l.OBJECT_SCHEMA = ? AND l.OBJECT_NAME = 'coupons'`, [database]);
+        waiting = Number(locks[0].waiting);
+        if (waiting < 2) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(2);
+      await blocker.rollback();
+      await pending;
+      expect({ statuses: [first.statusCode, second.statusCode].sort(), errors }).toEqual({ statuses: [200, 409], errors: [] });
+      expect((await db.query<RowDataPacket[]>('SELECT coupon_id FROM coupons'))[0]).toHaveLength(1);
+      expect((await db.query<RowDataPacket[]>('SELECT action FROM admin_logs'))[0]).toEqual([{ action: 'CREATE_COUPON' }]);
+    } finally {
+      await blocker.rollback(); blocker.release();
+      if (pending) await pending;
+    }
   });
 });
