@@ -14,7 +14,7 @@ import { requestFailure } from '@/lib/api-error';
 import { localizedText, specSummary } from '@/lib/product-content';
 import { inventoryUpdateAcknowledged, unknownInventoryWrite } from '@/lib/admin-inventory-write';
 
-type Editor = { key: string; id: number | null; draft: SKUDraft };
+type Editor = { key: string; id: number | null; draft: SKUDraft; previous?: AdminSKU };
 type Recovery = { key: string; checking: boolean };
 
 const validMoney = (value: unknown) => (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
@@ -124,7 +124,7 @@ export default function AdminSKUPage() {
 
   const open = (sku?: AdminSKU) => {
     if (!isDisplayed() || writeLocked() || editorRef.current || (sku && !data?.skus.some(row => row.sku_id === sku.sku_id))) return;
-    replaceEditor({ key, id: sku?.sku_id ?? null, draft: skuDraft(sku) }); setNotice(null);
+    replaceEditor({ key, id: sku?.sku_id ?? null, draft: skuDraft(sku), previous: sku }); setNotice(null);
   };
   const change = (update: (draft: SKUDraft) => SKUDraft) => {
     const current = editorRef.current;
@@ -138,8 +138,9 @@ export default function AdminSKUPage() {
     let payload;
     try { payload = parseSKUForm(current.draft); }
     catch (error) { setNotice({ key, error: (error as Error).message }); return; }
-    const previous = data?.skus.find(row => row.sku_id === current.id);
-    const changes = previous ? skuChanges(payload, previous) : null;
+    // A refetch can reflect purchases while this editor stays open. Only send
+    // fields changed from the opened snapshot, never its untouched old stock.
+    const changes = current.previous ? skuChanges(payload, current.previous) : null;
     if (changes && Object.keys(changes).length === 0) { setNotice({ key, success: '没有需要保存的修改' }); return; }
     const operation = {}; mutation.current = operation; setPendingKey(key); setNotice(null);
     const active = () => isCurrent() && mutation.current === operation;
