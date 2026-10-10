@@ -1313,6 +1313,7 @@ async function localPlatformScripts(context) {
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   await require('./admin-sku-indicators.cjs')({ admin, adminContext });
   await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
+  await require('./customer-publication-guard.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./default-address.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./address-capacity.cjs')({ browser, localPlatformScripts, errors });
