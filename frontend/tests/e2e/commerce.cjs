@@ -805,6 +805,7 @@ async function localPlatformScripts(context) {
   await admin.locator('input[type="password"]').fill('BrowserFixtureAdmin123!');
   await admin.getByRole('button', { name: '登录', exact: true }).click();
   await admin.waitForURL(/\/admin\/dashboard$/);
+  await require('./admin-sidebar-keyboard.cjs')({ admin });
   const dashboardOrdersEndpoint = 'http://127.0.0.1:3101/api/admin/dashboard/recent-orders';
   let dashboardReads = 0, dashboardUnavailable = true;
   const dashboardFault = route => { dashboardReads++; return dashboardUnavailable
