@@ -318,7 +318,7 @@ export default function CartPage() {
       ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }), checkout_key: crypto.randomUUID() });
   };
 
-  const submitCheckout = async (input: OrderCreateInput, recovering = false) => {
+  const submitCheckout = async (input: OrderCreateInput) => {
     if (submittingRequest.current || addBlocksWrites() || !isCurrentSession()) return;
     const attempt = { sessionKey, input };
     if (!storePendingCheckout(attempt)) {
@@ -335,10 +335,9 @@ export default function CartPage() {
       clearPendingCheckout(sessionKey);
       pendingCheckout.current = null;
       setUnconfirmedSession(null);
-      if (recovering) {
-        // The customer may have added new rows on another page after the original commit.
-        void readCanonicalCart(undefined, { fresh: true }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
-      } else input.items.forEach(item => removeItem(item.product_id, item.sku_id));
+      // Another page can add quantities before checkout or after its original commit.
+      // Keep this global read alive after navigation; the cart helper checks its session.
+      void readCanonicalCart(undefined, { fresh: true }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
       setSelectedItems([]);
       toast.success(translate('订单创建成功'));
       router.push(`/orders/${data.order_id}`);
@@ -389,7 +388,7 @@ export default function CartPage() {
       <p>{t('上次下单结果尚未确认，请先重试确认订单。重试会保留原商品、地址和优惠券。')}</p>
       <button className="btn btn-primary" disabled={submitting} onClick={() => {
         const attempt = pendingCheckout.current;
-        if (attempt?.sessionKey === sessionKey) void submitCheckout(attempt.input, true);
+        if (attempt?.sessionKey === sessionKey) void submitCheckout(attempt.input);
       }}>{t(submitting ? '确认中...' : '重试确认订单')}</button>
       <Link href="/orders" className="block text-primary-600 underline">{t('查看我的订单')}</Link>
     </div></div>;
