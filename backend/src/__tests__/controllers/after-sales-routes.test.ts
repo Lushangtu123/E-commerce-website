@@ -3,7 +3,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 jest.mock('../../services/after-sales.service', () => ({
   getAfterSales: jest.fn(), createAfterSales: jest.fn(), withdrawAfterSales: jest.fn(), reviewAfterSales: jest.fn(), listAfterSales: jest.fn(),
-  submitReturnTracking: jest.fn(), completeAfterSales: jest.fn(),
+  submitReturnTracking: jest.fn(), completeAfterSales: jest.fn(), getAfterSalesById: jest.fn(),
   validAfterSalesId: (id: unknown) => Number.isSafeInteger(id) && Number(id) > 0,
   AfterSalesError: class extends Error { constructor(message: string, public statusCode = 400) { super(message); } },
 }));
@@ -11,6 +11,7 @@ jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
 jest.mock('../../models/user.model', () => ({ UserModel: { getAuthVersion: jest.fn().mockResolvedValue(0) } }));
 import * as service from '../../services/after-sales.service';
 import { getPool } from '../../database/mysql';
+const detail = (): jest.Mock => require('../../services/after-sales.service').getAfterSalesById;
 let allowed: boolean;
 const app = () => {
   const application = express(); application.use(express.json());
@@ -35,6 +36,28 @@ beforeEach(() => {
   (service.reviewAfterSales as jest.Mock).mockResolvedValue({ request_id: 9, status: 'approved' });
   (service.submitReturnTracking as jest.Mock).mockResolvedValue({ request_id: 9, status: 'approved' });
   (service.completeAfterSales as jest.Mock).mockResolvedValue({ request_id: 9, status: 'approved' });
+  (detail() as jest.Mock).mockResolvedValue({ request_id: 9, status: 'requested' });
+});
+
+test('admin request detail requires authentication and order view permission', async () => {
+  await request(app()).get('/api/admin/after-sales/9').expect(401);
+  await request(app()).get('/api/admin/after-sales/9').set(customer()).expect(403);
+  allowed = false;
+  await request(app()).get('/api/admin/after-sales/9').set(admin()).expect(403);
+  expect(detail()).not.toHaveBeenCalled();
+  allowed = true;
+  await request(app()).get('/api/admin/after-sales/9').set(admin()).expect(200, { after_sales: { request_id: 9, status: 'requested' } });
+  expect(detail()).toHaveBeenCalledWith(9);
+});
+test.each(['0', '-1', '1e2', '999999999999999999999'])('admin request detail rejects invalid path ID %s', async id => {
+  await request(app()).get(`/api/admin/after-sales/${id}`).set(admin()).expect(400);
+  expect(detail()).not.toHaveBeenCalled();
+});
+test('admin request detail maps missing records and hides internal errors', async () => {
+  (detail() as jest.Mock).mockRejectedValue(new service.AfterSalesError('售后申请不存在', 404));
+  await request(app()).get('/api/admin/after-sales/9').set(admin()).expect(404, { error: '售后申请不存在' });
+  (detail() as jest.Mock).mockRejectedValue(new Error('database private detail'));
+  await request(app()).get('/api/admin/after-sales/9').set(admin()).expect(500, { error: '获取售后申请失败' });
 });
 
 test('return tracking requires customer authentication and forwards the authenticated owner', async () => {

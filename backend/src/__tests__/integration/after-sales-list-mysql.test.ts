@@ -3,7 +3,7 @@ import path from 'path';
 import mysql, { Pool } from 'mysql2/promise';
 import { getPool } from '../../database/mysql';
 import { migrateFulfillment } from '../../database/migrate-fulfillment';
-import { listAfterSales } from '../../services/after-sales.service';
+import { listAfterSales, getAfterSalesById } from '../../services/after-sales.service';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
@@ -37,5 +37,12 @@ integration('after-sales admin list context in real MySQL', () => {
     for (const value of data.requests) {
       expect(value).not.toHaveProperty('email'); expect(value).not.toHaveProperty('password_hash'); expect(value).not.toHaveProperty('phone');
     }
+  });
+  test('exact request SQL returns paid context independently of page and status', async () => {
+    expect(await getAfterSalesById(1)).toMatchObject({ request_id: 1, user_id: 7, username: 'Known customer', order_no: 'ORDER-10', total_amount: '29.99', payment_method: 'external', status: 'approved' });
+    const missingCustomer = await getAfterSalesById(2);
+    expect(missingCustomer).toMatchObject({ request_id: 2, username: null, payment_method: 'demo' });
+    for (const field of ['email', 'password_hash', 'phone']) expect(missingCustomer).not.toHaveProperty(field);
+    await expect(getAfterSalesById(999)).rejects.toMatchObject({ statusCode: 404 });
   });
 });
