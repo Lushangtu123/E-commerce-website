@@ -278,6 +278,15 @@ export async function transitionOrder(
     if (options.userId !== undefined && order.user_id !== options.userId) {
       throw new OrderError('无权操作该订单', 403);
     }
+    const previousStatus: Partial<Record<OrderStatus, OrderStatus>> = {
+      [OrderStatus.PAID]: OrderStatus.PENDING,
+      [OrderStatus.CANCELLED]: OrderStatus.PENDING,
+      [OrderStatus.SHIPPED]: OrderStatus.PAID,
+      [OrderStatus.COMPLETED]: OrderStatus.SHIPPED,
+    };
+    if (previousStatus[targetStatus] === undefined) throw new OrderError('订单状态不允许此操作');
+    // Clients reconcile a stale action against the current order after a 409 response.
+    if (order.status !== previousStatus[targetStatus]) throw new OrderError('订单状态不允许此操作', 409);
     if (targetStatus === OrderStatus.PAID) {
       // NOW() is fixed at statement start: refresh it after acquiring a possibly contended row lock.
       const [deadline] = await connection.execute<RowDataPacket[]>(
@@ -286,15 +295,6 @@ export async function transitionOrder(
       if (Number(order.has_timed_out) === 1 || Number(deadline[0]?.has_timed_out) === 1) {
         throw new OrderError('订单支付已超时，请重新下单');
       }
-    }
-    const previousStatus: Partial<Record<OrderStatus, OrderStatus>> = {
-      [OrderStatus.PAID]: OrderStatus.PENDING,
-      [OrderStatus.CANCELLED]: OrderStatus.PENDING,
-      [OrderStatus.SHIPPED]: OrderStatus.PAID,
-      [OrderStatus.COMPLETED]: OrderStatus.SHIPPED,
-    };
-    if (previousStatus[targetStatus] === undefined || order.status !== previousStatus[targetStatus]) {
-      throw new OrderError('订单状态不允许此操作');
     }
 
     const productIds: number[] = [];
@@ -365,7 +365,7 @@ export async function transitionOrder(
       `UPDATE orders SET status = ?${timeUpdate}${shipmentUpdate}${paymentUpdate} WHERE order_id = ? AND status = ?`,
       [targetStatus, ...(shipment ? [shipment.shipping_company, shipment.tracking_number] : []), orderId, order.status]
     );
-    if (updated.affectedRows !== 1) throw new OrderError('订单状态已改变');
+    if (updated.affectedRows !== 1) throw new OrderError('订单状态已改变', 409);
     if (options.adminAudit) {
       // An admin transition and its audit either both commit or both roll back,
       // including restored inventory/coupons and payment sales counters.

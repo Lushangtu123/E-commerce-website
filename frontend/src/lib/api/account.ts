@@ -12,9 +12,9 @@ export interface UserStats {
 }
 
 export interface ProfileInput {
-  username: string;
-  phone: string | null;
-  avatar_url: string | null;
+  username?: string;
+  phone?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface AuthSession {

@@ -98,6 +98,24 @@ test('admin pagination rejects huge/negative/non-integer and unknown queries', a
     await expect(service().listAfterSales(input)).rejects.toMatchObject({ statusCode: 400 });
   }
 });
+
+test('admin detail selects one request by its own ID with paid context, without a pagination or status filter', async () => {
+  existing = { request_id: 5, order_id: 10, user_id: 7, status: 'requested', total_amount: '29.99', payment_method: 'external' };
+  expect(await service().getAfterSalesById(5)).toMatchObject(existing);
+  expect(pool.query).toHaveBeenCalledTimes(1);
+  const [sql, params] = pool.query.mock.calls[0];
+  expect(sql).toContain('WHERE a.request_id = ?');
+  expect(sql).toContain('o.total_amount'); expect(sql).toContain('o.payment_method');
+  expect(sql).not.toMatch(/LIMIT|OFFSET|a.status =/); expect(params).toEqual([5]);
+  expect(pool.getConnection).not.toHaveBeenCalled();
+});
+test('admin detail reports a missing request as 404', async () => {
+  await expect(service().getAfterSalesById(999)).rejects.toMatchObject({ message: '售后申请不存在', statusCode: 404 });
+});
+test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('admin detail rejects invalid ID %s before SQL', async id => {
+  await expect(service().getAfterSalesById(id)).rejects.toMatchObject({ statusCode: 400 });
+  expect(pool.query).not.toHaveBeenCalled();
+});
 test.each([
   undefined, null, [], {}, { company: ' ', tracking_number: '123' },
   { company: 'x'.repeat(61), tracking_number: '123' }, { company: 'carrier', tracking_number: 'x'.repeat(101) },

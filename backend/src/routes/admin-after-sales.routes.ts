@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
-import { getAdminAfterSales, reviewAdminAfterSales, completeAdminAfterSales } from '../controllers/after-sales.controller';
+import { getAdminAfterSales, getAdminAfterSalesDetail, reviewAdminAfterSales, completeAdminAfterSales } from '../controllers/after-sales.controller';
 const router = Router();
 router.use(authenticateAdmin);
 /**
@@ -19,6 +19,21 @@ router.use(authenticateAdmin);
  *       400: { description: 查询参数无效 }
  */
 router.get('/', requirePermission('order:view'), getAdminAfterSales);
+/**
+ * @openapi
+ * /api/admin/after-sales/{id}:
+ *   get:
+ *     tags: [管理后台-售后]
+ *     summary: 按申请编号查询最新售后进度，需 order:view 权限
+ *     security: [{ adminAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+ *     responses:
+ *       200: { description: 返回 after_sales，包含订单实付与支付方式 }
+ *       400: { description: 申请编号无效 }
+ *       404: { description: 申请不存在 }
+ */
+router.get('/:id', requirePermission('order:view'), getAdminAfterSalesDetail);
 /**
  * @openapi
  * /api/admin/after-sales/{id}/review:
