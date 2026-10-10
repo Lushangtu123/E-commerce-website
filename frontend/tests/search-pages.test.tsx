@@ -25,7 +25,7 @@ vi.mock('@/components/ProductCard', () => ({
 }));
 vi.mock('@/lib/api', () => ({
   searchApi: { getHistory: vi.fn(), getHot: vi.fn(async () => ({ keywords: [] })), record: vi.fn(async () => ({})), deleteKeyword: vi.fn(async () => ({})) },
-  productApi: { list: vi.fn() },
+  productApi: { list: vi.fn(), getCategories: vi.fn(async () => []) },
 }));
 
 type History = { history: SearchKeyword[] };

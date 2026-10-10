@@ -10,12 +10,15 @@ import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import { FiPackage } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import CatalogFilters from '@/components/CatalogFilters';
+import { CATALOG_FILTER_KEYS, CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, readCatalogDraft, type CatalogFilters as Filters } from '@/lib/catalog-filters';
 
 const LIMIT = 20;
 
 export interface ProductListSeed {
   keyword: string;
   sort: string;
+  filters?: Filters;
   list: ProductListResult;
 }
 
@@ -29,17 +32,22 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   const router = useRouter();
   const keyword = searchParams.get('keyword') || '';
   const sort = searchParams.get('sort') || 'created_at DESC';
-  // A page belongs to the keyword and sort it was chosen for; a new search, or a return to an earlier one, starts on page one.
-  const [pageState, setPageState] = useState({ keyword, sort, page: 1 });
-  if (pageState.keyword !== keyword || pageState.sort !== sort) setPageState({ keyword, sort, page: 1 });
-  const page = pageState.keyword === keyword && pageState.sort === sort ? pageState.page : 1;
-  const scope = JSON.stringify([keyword, sort, page]);
+  const draft = readCatalogDraft(searchParams);
+  const { filters, error } = parseCatalogFilters(draft);
+  const filterError = error || (!CATALOG_SORTS.includes(sort) ? '请选择有效的商品排序' : undefined);
+  const searchScope = JSON.stringify([keyword, sort, draft]);
+  // A page belongs to the entire applied search; filter navigation starts on page one.
+  const [pageState, setPageState] = useState({ searchScope, page: 1 });
+  if (pageState.searchScope !== searchScope) setPageState({ searchScope, page: 1 });
+  const page = pageState.searchScope === searchScope ? pageState.page : 1;
+  const scope = JSON.stringify([searchScope, page]);
   const currentScope = useRef(scope);
   currentScope.current = scope;
-  const seeded = seed && seed.keyword === keyword && seed.sort === sort && page === 1 ? seed.list : undefined;
+  const seeded = !filterError && seed && seed.keyword === keyword && seed.sort === sort && JSON.stringify(catalogFilterParams(seed.filters ?? {})) === JSON.stringify(catalogFilterParams(filters)) && page === 1 ? seed.list : undefined;
   const query = useQuery({
-    queryKey: ['products', keyword, sort, page],
-    queryFn: () => productApi.list({ keyword, sort, page, limit: LIMIT }),
+    queryKey: ['products', keyword, sort, filters, page, filterError],
+    queryFn: () => productApi.list({ keyword, sort, ...filters, page, limit: LIMIT }),
+    enabled: !filterError,
     initialData: seeded,
   });
   const lastPage = Math.max(1, query.data?.totalPages || 0);
@@ -50,13 +58,13 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   // A failed refresh keeps the products already shown; only a search with nothing to show reports the error in place.
   // A retry of such a search is pending again, so it shows the skeleton rather than the old error.
   const loadError = !data && query.isError;
-  const loading = !data && !loadError;
+  const loading = !filterError && !data && !loadError;
   const pagination = { page, totalPages };
 
   // Catalog edits may remove the page being read. Hide that response until the valid page loads.
   useEffect(() => {
-    if (beyondLastPage && currentScope.current === scope) setPageState({ keyword, sort, page: lastPage });
-  }, [beyondLastPage, keyword, sort, lastPage, scope]);
+    if (beyondLastPage && currentScope.current === scope) setPageState({ searchScope, page: lastPage });
+  }, [beyondLastPage, searchScope, lastPage, scope]);
 
   useEffect(() => {
     if (!query.error) return;
@@ -66,7 +74,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
 
   const handlePageChange = (next: number) => {
     if (currentScope.current !== scope || next < 1 || next > totalPages || next === page) return;
-    setPageState({ keyword, sort, page: next });
+    setPageState({ searchScope, page: next });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -103,10 +111,21 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
               </select>
             </div>
           </div>
+          <CatalogFilters initial={draft} scope={searchScope} onApply={nextFilters => {
+            if (currentScope.current !== scope) return;
+            const params = new URLSearchParams(searchParams);
+            CATALOG_FILTER_KEYS.forEach(key => params.delete(key));
+            Object.entries(catalogFilterParams(nextFilters)).forEach(([key, value]) => params.set(key, value));
+            params.delete('page');
+            setPageState({ searchScope, page: 1 });
+            router.push(`/products${params.size ? `?${params}` : ''}`);
+          }} />
         </div>
 
         {/* 商品列表 */}
-        {loading ? (
+        {filterError ? (
+          <p role="alert" className="py-10 text-center text-red-600">{t(filterError)}</p>
+        ) : loading ? (
           <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
             {[...Array(12)].map((_, i) => <ProductCardSkeleton key={i} />)}
           </div>
