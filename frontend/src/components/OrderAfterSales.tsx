@@ -10,6 +10,14 @@ import { validAfterSalesRequest } from '@/lib/after-sales-response';
 
 export const AFTER_SALES_STATUS = { requested: '待审核', approved: '审核通过', rejected: '审核拒绝', withdrawn: '已撤回' };
 
+class InvalidAfterSalesResponse extends Error {}
+function responseValue(data: unknown, orderId: number): AfterSalesRequest | null {
+  if (!data || typeof data !== 'object' || !('after_sales' in data)) throw new InvalidAfterSalesResponse();
+  const value = data.after_sales;
+  if (value !== null && (!validAfterSalesRequest(value) || value.order_id !== orderId)) throw new InvalidAfterSalesResponse();
+  return value;
+}
+
 export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const { t, formatDate } = useI18n();
   const { sessionId, user, isAuthenticated } = useAuthStore();
@@ -20,7 +28,7 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const currentResult = useRef<typeof result>(null);
   const updateResult = (value: typeof result) => { currentResult.current = value; setResult(value); };
   const pendingLoad = useRef<{ key: string } | null>(null);
-  const recovery = useRef<{ key: string; unknown: boolean } | null>(null);
+  const recovery = useRef<{ key: string; unknown: boolean; readFailed?: boolean } | null>(null);
   const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
@@ -44,18 +52,24 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     try {
       const data = await afterSalesApi.get(orderId);
       if (active() && revision === request.current) {
-        if (attempt && data.after_sales !== null && (!validAfterSalesRequest(data.after_sales) || data.after_sales.order_id !== orderId)) throw new Error('invalid after-sales state');
-        updateResult({ key, value: data.after_sales }); setLoadError(null);
+        const value = responseValue(data, orderId);
+        updateResult({ key, value }); setLoadError(null);
         if (attempt && recovery.current === attempt) {
           recovery.current = null; setUnconfirmed(null);
           if (attempt.unknown) setNotice({ key, success: '售后进度已重新加载，请核对处理结果' });
+          else if (attempt.readFailed) setNotice(null);
         }
       }
     } catch (error) {
       if (active() && revision === request.current) {
         const message = requestFailure(error).response?.data?.error || '加载售后申请失败，请重试';
-        if (attempt) setNotice({ key, error: '操作结果尚未确认，请刷新售后进度后再操作' });
-        else if (loaded) setLoadError({ key, message });
+        if (attempt) { attempt.readFailed = true; setNotice({ key, error: '操作结果尚未确认，请刷新售后进度后再操作' }); }
+        else if (loaded) {
+          setLoadError({ key, message });
+          if (error instanceof InvalidAfterSalesResponse) {
+            recovery.current = { key, unknown: false }; setUnconfirmed(key);
+          }
+        }
         else updateResult({ key, value: null, error: message });
       }
     } finally {
@@ -78,7 +92,10 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     try {
       const data = withdraw ? await afterSalesApi.withdraw(orderId) : await afterSalesApi.create(orderId, { type, reason: trimmed });
       if (!active() || mutation.current !== operation) return;
-      updateResult({ key, value: data.after_sales }); setReason('');
+      const value = responseValue(data, orderId);
+      if (!value || (withdraw ? value.request_id !== result.value?.request_id || value.status !== 'withdrawn'
+        : value.type !== type || value.reason !== trimmed || value.status !== 'requested')) throw new InvalidAfterSalesResponse();
+      updateResult({ key, value }); setReason('');
       setNotice({ key, success: withdraw ? '售后申请已撤回' : '售后申请已提交，等待审核' });
     } catch (error) {
       if (active() && mutation.current === operation) {
@@ -104,7 +121,11 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     try {
       const data = await afterSalesApi.tracking(orderId, { company, tracking_number });
       if (!active() || mutation.current !== operation) return;
-      updateResult({ key, value: data.after_sales }); setParcel({ company: '', tracking_number: '' }); setNotice({ key, success: '退货运单已保存' });
+      const saved = responseValue(data, orderId);
+      if (!saved || saved.request_id !== value.request_id || saved.type !== 'return' || saved.status !== 'approved' ||
+        saved.return_company !== company || saved.return_tracking_number !== tracking_number ||
+        typeof saved.return_submitted_at !== 'string' || !Number.isFinite(Date.parse(saved.return_submitted_at))) throw new InvalidAfterSalesResponse();
+      updateResult({ key, value: saved }); setParcel({ company: '', tracking_number: '' }); setNotice({ key, success: '退货运单已保存' });
     } catch (error) {
       if (active() && mutation.current === operation) {
         const failure = requestFailure(error);

@@ -107,7 +107,7 @@ describe('customer after-sales refresh', () => {
     const { reads, writes } = await setup({ read: async () => ({ after_sales: row('approved') }), write: () => pending.promise });
     fillParcel(); const form = document.querySelector('form')!; submitTogether(form, form);
     fireEvent(window, new Event('focus')); await settle(); expect(reads).toEqual([1]); expect(writes).toHaveLength(1);
-    await act(async () => pending.resolve({ after_sales: row('approved', { return_submitted_at: '2026-10-08' }) })); await settle();
+    await act(async () => pending.resolve({ after_sales: row('approved', { return_submitted_at: '2026-10-08', return_company: 'Draft carrier', return_tracking_number: 'Draft tracking' }) })); await settle();
     fireEvent.click(refresh()); await settle(); expect(screen.getByText(t('退货运单已保存'))).toBeInTheDocument();
   });
 
