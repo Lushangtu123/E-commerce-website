@@ -1,3 +1,4 @@
+import { installCatalogRouter, useCatalogSearchParams } from './catalog-router';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { AxiosAdapter } from 'axios';
 import type { ReactNode } from 'react';
@@ -8,6 +9,9 @@ import { useLocaleStore } from '@/store/useLocaleStore';
 import { apiError, captureHandler, deferred, render, settle, submitTogether } from './helpers';
 
 const notices = vi.hoisted(() => [] as string[]);
+const orderQuery = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, useSearchParams: () => useCatalogSearchParams(orderQuery) }));
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('react-hot-toast', () => ({ default: { success: (message: string) => notices.push(message), error: (message: string) => notices.push(message) } }));
 
@@ -285,3 +289,5 @@ describe('administrator order write recovery', () => {
     expect(notices).toEqual([]);
   });
 });
+
+beforeEach(() => { orderQuery.current = new URLSearchParams(); orderQuery.listeners.clear(); installCatalogRouter(router, orderQuery); window.history.replaceState(null, '', '/admin/orders'); });
