@@ -95,4 +95,36 @@ integration('真实 MySQL 管理员会话版本', () => {
     const [rows] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 10');
     expect(rows[0].auth_version).toBe(0);
   });
+
+  test.each(['before-write', 'after-commit'] as const)('Cookie 清除后以撤销回执恢复真实 SQL：%s', async failure => {
+    const [before] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 9');
+    const version = Number(before[0].auth_version);
+    const token = jwt.sign({ adminId: 9, type: 'admin', authVersion: version }, 'test-jwt-secret', { expiresIn: '24h' });
+    let interrupted = false;
+    (getPool as jest.Mock).mockReturnValue({ query: async (sql: string, params: unknown[]) => {
+      if (!interrupted && sql.startsWith('UPDATE admins SET auth_version')) {
+        interrupted = true;
+        if (failure === 'after-commit') await db.query(sql, params);
+        throw new Error('Isolated one-time database response failure');
+      }
+      return db.query(sql, params);
+    } });
+    const app = express();
+    app.get('/fixture-session', (_req, res) => { res.cookie('admin_session', token, { httpOnly: true, path: '/api' }); res.end(); });
+    app.post('/api/admin/logout', adminLogout);
+    app.get('/api/admin/profile', authenticateAdmin, (_req, res) => res.json({ authenticated: true }));
+    const browser = request.agent(app);
+    try {
+      await browser.get('/fixture-session').expect(200);
+      await browser.get('/api/admin/profile').expect(200);
+      await browser.post('/api/admin/logout').set('X-Requested-With', 'XMLHttpRequest').expect(503);
+      await browser.get('/api/admin/profile').expect(401);
+      await browser.post('/api/admin/logout').set('X-Requested-With', 'XMLHttpRequest').expect(200);
+      const [after] = await db.query<RowDataPacket[]>('SELECT auth_version FROM admins WHERE admin_id = 9');
+      expect(Number(after[0].auth_version)).toBe(version + 1);
+      await request(app).get('/api/admin/profile').set('Cookie', `admin_session=${token}`).expect(401);
+      const fresh = jwt.sign({ adminId: 9, type: 'admin', authVersion: version + 1 }, 'test-jwt-secret', { expiresIn: '1h' });
+      await request(app).get('/api/admin/profile').set('Cookie', `admin_session=${fresh}`).expect(200);
+    } finally { (getPool as jest.Mock).mockReturnValue(db); }
+  });
 });
