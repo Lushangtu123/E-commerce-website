@@ -169,6 +169,23 @@ describe('admin logs', () => {
     expect(requests[0].params).toEqual({ page: 2, limit: 20, action: 'LOGIN' });
   });
 
+  it('waits for the actual URL before clearing a replaced administrator’s filters', async () => {
+    query.ready = false;
+    act(() => router.replace('/admin/logs?action=LOGIN&page=2&trace=keep'));
+    await setup(() => ({ logs: [], pagination: { total: 0 } }));
+    switchAdmin({ notify: true }); await settle();
+    expect(window.location.search).toBe('?action=LOGIN&page=2&trace=keep');
+    expect(requests).toHaveLength(0);
+    act(() => {
+      query.ready = true;
+      query.current = new URLSearchParams(window.location.search);
+      query.listeners.forEach(listener => listener());
+    }); await settle();
+    expect(window.location.search).toBe('?trace=keep');
+    expect(requests).toHaveLength(1);
+    expect(requests[0].params).toEqual({ page: 1, limit: 20 });
+  });
+
   it('reads through the shared API client and shows a retryable error instead of an empty table', async () => {
     let calls = 0;
     await setup(async () => {

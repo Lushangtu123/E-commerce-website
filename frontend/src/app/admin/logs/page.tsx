@@ -55,9 +55,9 @@ function AdminLogsContent() {
     new URLSearchParams(window.location.search).toString() === urlKey;
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || searchParams === null) return;
     if (owner !== null && owner !== sessionId && !cleared) router.replace(logFiltersUrl(urlKey, emptyLogFilters), { scroll: false });
-  }, [sessionId, owner, cleared, router, urlKey]);
+  }, [sessionId, owner, cleared, router, urlKey, searchParams]);
 
   useEffect(() => {
     if (query.error) logger.error('获取日志失败:', query.error);
