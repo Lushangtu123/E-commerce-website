@@ -427,6 +427,8 @@ Before deploying cart retry support, back up `cart` and any existing `cart_add_r
 
 Address creation accepts an optional UUID `create_key`. The storefront saves the original request before posting and reuses it after uncertain replies or reloads. The same user/key/payload returns the original address identity; changed details return 409. A separate receipt survives address deletion, so an old retry reports the deleted address instead of creating it again. Before pushing, back up `shipping_addresses` and any existing `address_creation_receipts`, build the backend, and run `npm run schema:address-creations`. With approval, run `npm run migrate:address-creations` if needed and check again. This adds only the receipt table with primary and unique keys on `(user_id, create_key)`, preserving existing addresses and defaults and supporting managed MySQL services that require primary keys. Keep the table on rollback; builds and requests never migrate automatically.
 
+If an uncertain creation retry encounters the 20-address limit, the API returns `400` with `code: ADDRESS_CAPACITY_REACHED`. After checking a fresh address list, the page permits deleting a selected old address to free space while preserving the original creation UUID and locked details. An uncertain deletion is checked with a read-only retry; edits, default changes and fresh creations stay blocked until the original creation receipt is confirmed.
+
 ### Review APIs
 - `POST /api/reviews` - Create a review
 - `GET /api/reviews/product/:id` - Reviews for a product

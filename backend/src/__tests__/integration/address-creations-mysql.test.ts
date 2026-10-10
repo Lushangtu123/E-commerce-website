@@ -94,6 +94,20 @@ integration('真实 MySQL 地址新增收据', () => {
     await request(app).put('/api/addresses/1').set(auth()).send({ ...fields, create_key: key }).expect(400);
     expect(await rows('address_creation_receipts')).toHaveLength(0);
   });
+  test('未提交的请求在容量满时保留身份，删除选中旧地址后同key只新增一次', async () => {
+    for (let index = 0; index < 20; index++) await post(fields).expect(201);
+    const rejected = await post().expect(400);
+    expect(rejected.body).toEqual({ error: '每个用户最多保存20个收货地址', code: 'ADDRESS_CAPACITY_REACHED' });
+    expect(await rows('address_creation_receipts')).toHaveLength(0);
+    const selected = (await rows('shipping_addresses'))[0].address_id;
+    await request(app).delete(`/api/addresses/${selected}`).set(auth()).expect(200);
+    const responses = await Promise.all([post(), post(), post()]);
+    expect(responses.map(response => response.status).sort()).toEqual([200, 200, 201]);
+    expect(new Set(responses.map(response => response.body.address_id)).size).toBe(1);
+    expect(await rows('shipping_addresses')).toHaveLength(20);
+    expect(await rows('address_creation_receipts')).toHaveLength(1);
+    expect((await rows('shipping_addresses')).some(row => row.address_id === selected)).toBe(false);
+  });
   test('云库要求主键时仍可新建收据表并通过结构检查', async () => {
     const connection = await db.getConnection();
     try {

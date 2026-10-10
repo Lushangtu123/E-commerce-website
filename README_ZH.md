@@ -327,6 +327,8 @@ E-commerce-website/
 
 完整地址包含 `receiver_name`、`phone`、`province`、`city`、`district`、`detail_address` 六个非空字符串，可选 `is_default` 布尔值；不能指定其他用户。前端个人中心的「收货地址」可管理地址，购物车结算必须选择地址。
 
+新增结果不明的原请求重试遇到 20 个地址上限时，接口返回带 `code: ADDRESS_CAPACITY_REACHED` 的 `400`。页面先核对最新列表，再允许删除选中的旧地址释放空间；原新增 UUID 和地址内容保持锁定，继续恢复时复用原请求。删除结果不明时只重试读取核对；编辑、设为默认和再次新增仍须等待原新增收据确认。本次容量恢复无需数据库迁移。
+
 ### 商品相关 (Product APIs)
 - `GET /api/products` - 获取商品列表（支持分页、排序、筛选）
 - `GET /api/products/:id` - 获取商品详情（含SKU信息）

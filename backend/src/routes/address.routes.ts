@@ -35,7 +35,16 @@ router.use(authMiddleware);
  *           schema: { $ref: '#/components/schemas/AddressInput' }
  *     responses:
  *       201: { description: 创建成功，返回 message 与 address_id }
- *       400: { description: 地址无效或超过20条上限 }
+ *       400:
+ *         description: 地址无效；超过20条上限时返回 code ADDRESS_CAPACITY_REACHED，恢复原请求前可核对列表并删除选中的旧地址
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [error]
+ *               properties:
+ *                 error: { type: string }
+ *                 code: { type: string, enum: [ADDRESS_CAPACITY_REACHED] }
  *       401: { description: 未登录 }
  */
 router.get('/', AddressController.list);

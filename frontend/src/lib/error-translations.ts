@@ -30,6 +30,8 @@ export const errorTranslations: Record<string, string> = {
   '重新读取新增地址': 'Reload pending address',
   '存在待确认的新增地址，请恢复原请求': 'An address creation is awaiting confirmation. Restore the original request.',
   '恢复新增地址': 'Restore address creation',
+  '地址已满，请选择删除一个旧地址，再恢复原新增请求': 'Your address list is full. Delete an old address, then restore the original creation request.',
+  '已释放地址空间，请恢复原新增请求': 'Address space is available. Restore the original creation request.',
   '重新核对地址': 'Check addresses again',
   '商品新增请求号无效': 'Invalid product creation request ID.',
   '管理员不可用，请重新登录': 'The administrator account is unavailable. Sign in again.',

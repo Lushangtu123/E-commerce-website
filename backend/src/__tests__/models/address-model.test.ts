@@ -51,7 +51,7 @@ test('新增非默认保持旧默认，显式设默认选择新地址', async ()
 
 test('每用户20条上限和不存在用户在同事务中拒绝，不插入', async () => {
   rows = Array.from({ length: 20 }, (_, id) => ({ address_id: id + 1, is_default: id === 0 ? 1 : 0 }));
-  await expect(AddressModel.create(1, fields)).rejects.toMatchObject({ statusCode: 400 });
+  await expect(AddressModel.create(1, fields)).rejects.toMatchObject({ statusCode: 400, code: 'ADDRESS_CAPACITY_REACHED' });
   expect(statements().some(sql => sql.startsWith('INSERT'))).toBe(false);
   expect(connection.rollback).toHaveBeenCalledTimes(1);
   rows = []; userExists = false;

@@ -21,12 +21,21 @@ beforeEach(() => {
     beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[]) => {
       if (sql.includes('FROM users')) return [[{ user_id: params[0] }], []];
+      if (sql.includes('FROM address_creation_receipts')) return [[], []];
       if (sql.startsWith('SELECT')) return [rows.filter(address => address.user_id === params[0]), []];
       return [{ insertId: 21, affectedRows: 1 }, []];
     }),
   };
   db = { getConnection: jest.fn().mockResolvedValue(connection), execute: jest.fn(async (_sql: string, params: any[]) => [rows.filter(address => address.user_id === params[0]), []]) };
   (getPool as jest.Mock).mockReturnValue(db);
+});
+
+test.each([false, true])('地址容量返回可识别的400 code，带收据请求 %p', async keyed => {
+  rows = Array.from({ length: 20 }, (_, index) => ({ ...rows[0], address_id: index + 1 }));
+  const body = keyed ? { ...fields, create_key: '861dc7fb-0207-4b9a-98c3-95e6d28acb28' } : fields;
+  const result = await request(app).post('/api/addresses').set(token()).send(body).expect(400);
+  expect(result.body).toEqual({ error: '每个用户最多保存20个收货地址', code: 'ADDRESS_CAPACITY_REACHED' });
+  expect(connection.execute.mock.calls.some(([sql]: [string]) => sql.startsWith('INSERT'))).toBe(false);
 });
 
 test('全部地址端点都需要用户令牌，管理员令牌不能替代用户登录', async () => {
