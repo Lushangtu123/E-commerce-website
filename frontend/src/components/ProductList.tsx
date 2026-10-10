@@ -2,7 +2,7 @@
 
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { productApi, type ProductList as ProductListResult } from '@/lib/api';
@@ -14,6 +14,9 @@ import CatalogFilters from '@/components/CatalogFilters';
 import { CATALOG_FILTER_KEYS, CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, parseCatalogPage, readCatalogDraft, type CatalogFilters as Filters } from '@/lib/catalog-filters';
 
 const LIMIT = 20;
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
 
 export interface ProductListSeed {
   keyword: string;
@@ -28,6 +31,7 @@ export interface ProductListSeed {
  */
 export default function ProductListView({ seed = null }: { seed?: ProductListSeed | null }) {
   const { t } = useI18n();
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   const searchParams = useSearchParams() || new URLSearchParams();
   const router = useRouter();
   const keyword = searchParams.get('keyword') || '';
@@ -63,14 +67,22 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
     enabled: !filterError,
     initialData: seeded,
   });
-  const lastPage = Math.max(1, query.data?.totalPages || 0);
-  const beyondLastPage = query.isSuccess && page > lastPage;
-  const data = beyondLastPage ? undefined : query.data;
+  // Initial browser hydration must read the same server snapshot even when the tab's
+  // query cache already contains a different result for this URL.
+  const queryData = hydrated ? query.data : seeded;
+  const cachedPageMissing = queryData && page > Math.max(1, queryData.totalPages || 0);
+  // A cached missing page cannot override a valid server page until its refresh succeeds.
+  const waitingForPage = hydrated && cachedPageMissing && seeded && page <= Math.max(1, seeded.totalPages || 0)
+    && (query.isFetching || query.isError);
+  const result = waitingForPage ? seeded : queryData;
+  const lastPage = Math.max(1, result?.totalPages || 0);
+  const beyondLastPage = (hydrated ? query.isSuccess : Boolean(seeded)) && page > lastPage;
+  const data = beyondLastPage ? undefined : result;
   const products = data?.products || [];
   const totalPages = data?.totalPages || 0;
   // A failed refresh keeps the products already shown; only a search with nothing to show reports the error in place.
   // A retry of such a search is pending again, so it shows the skeleton rather than the old error.
-  const loadError = !data && query.isError;
+  const loadError = hydrated && !data && query.isError;
   const loading = !filterError && !data && !loadError;
   const pagination = { page, totalPages };
 

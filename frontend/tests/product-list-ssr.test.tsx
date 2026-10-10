@@ -90,6 +90,95 @@ describe('server-rendered product list', () => {
     container.remove();
   });
 
+  it('hydrates a later server page when the browser still has an out-of-range cached result', async () => {
+    const serverList = { ...list(['Server page two'], 2), page: 2, total: 21 };
+    const { element, container } = await serverRender({ keyword: 'shirt', page: '2' }, { kind: 'ok', data: serverList });
+    const client = createQueryClient();
+    client.setQueryData(['products', 'shirt', 'created_at DESC', {}, 2, undefined],
+      { ...list([], 1), page: 2, total: 1 });
+    const refresh = deferred<ProductList>();
+    vi.mocked(productApi.list).mockReturnValue(refresh.promise);
+    const mismatches: unknown[] = [];
+    document.body.appendChild(container);
+    const root = await act(async () => hydrateRoot(container,
+      <QueryClientProvider client={client}>{element}</QueryClientProvider>,
+      { onRecoverableError: error => { mismatches.push(error); } }));
+    try {
+      expect(mismatches).toEqual([]);
+      expect(cards()).toEqual(['Server page two']);
+      await act(async () => refresh.resolve(serverList));
+      await settle();
+      expect(cards()).toEqual(['Server page two']);
+      expect(router.replace).not.toHaveBeenCalled();
+    } finally {
+      act(() => root.unmount());
+      client.clear();
+      container.remove();
+    }
+  });
+
+  it('hydrates the server snapshot before reading a different valid browser cache', async () => {
+    const { element, container } = await serverRender({}, { kind: 'ok', data: list(['Server copy'], 2) });
+    const client = createQueryClient();
+    client.setQueryData(['products', '', 'created_at DESC', {}, 1, undefined], list(['Cached copy'], 1));
+    const refresh = deferred<ProductList>();
+    vi.mocked(productApi.list).mockReturnValue(refresh.promise);
+    const mismatches: unknown[] = [];
+    document.body.appendChild(container);
+    const root = await act(async () => hydrateRoot(container,
+      <QueryClientProvider client={client}>{element}</QueryClientProvider>,
+      { onRecoverableError: error => { mismatches.push(error); } }));
+    try {
+      expect(mismatches).toEqual([]);
+      expect(cards()).toEqual(['Cached copy']);
+      await act(async () => refresh.resolve(list(['Fresh copy'], 2)));
+      await settle();
+      expect(cards()).toEqual(['Fresh copy']);
+    } finally {
+      act(() => root.unmount());
+      client.clear();
+      container.remove();
+    }
+  });
+
+  it.each(['failed', 'still missing'])('waits for a %s refresh before correcting an old cached missing page', async outcome => {
+    const serverList = { ...list(['Server page two'], 2), page: 2, total: 21 };
+    const { element, container } = await serverRender({ keyword: 'shirt', page: '2' }, { kind: 'ok', data: serverList });
+    const missing = { ...list([], 1), page: 2, total: 1 };
+    const client = createQueryClient();
+    client.setQueryData(['products', 'shirt', 'created_at DESC', {}, 2, undefined], missing);
+    const refresh = deferred<ProductList>();
+    vi.mocked(productApi.list).mockImplementation(params => (params as { page: number }).page === 2 ? refresh.promise
+      : Promise.resolve(list(['Real first page'], 1)));
+    const mismatches: unknown[] = [];
+    document.body.appendChild(container);
+    const root = await act(async () => hydrateRoot(container,
+      <QueryClientProvider client={client}>{element}</QueryClientProvider>,
+      { onRecoverableError: error => { mismatches.push(error); } }));
+    try {
+      expect(mismatches).toEqual([]);
+      expect(cards()).toEqual(['Server page two']);
+      expect(router.replace).not.toHaveBeenCalled();
+      await act(async () => {
+        if (outcome === 'failed') refresh.reject(new Error('Offline'));
+        else refresh.resolve(missing);
+      });
+      await settle();
+      if (outcome === 'failed') {
+        expect(cards()).toEqual(['Server page two']);
+        expect(router.replace).not.toHaveBeenCalled();
+        expect(toast.error).toHaveBeenCalledWith('加载商品失败');
+      } else {
+        expect(cards()).toEqual(['Real first page']);
+        expect(router.replace).toHaveBeenCalledExactlyOnceWith('/products?keyword=shirt', { scroll: false });
+      }
+    } finally {
+      act(() => root.unmount());
+      client.clear();
+      container.remove();
+    }
+  });
+
   it('keeps the products already shown when the background refresh fails', async () => {
     vi.mocked(productApi.list).mockRejectedValue(new Error('Offline'));
     render(<ProductListView seed={{ keyword: '', sort: 'created_at DESC', list: list(['Server copy']) }} />);
