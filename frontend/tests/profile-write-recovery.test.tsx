@@ -49,6 +49,77 @@ const submit = async () => { fireEvent.submit(form()); await settle(); };
 afterEach(() => { api.defaults.adapter = originalAdapter; });
 
 describe('profile uncertain-write recovery through the real API client', () => {
+  it('keeps submitted fields when a successful reply and canonical read describe different edits', async () => {
+    let reads = 0;
+    const latest = { ...customer, username: 'Concurrent name', phone: 'Concurrent phone' };
+    const { methods } = await setup({
+      get: () => ({ user: ++reads === 1 ? customer : latest }),
+      put: () => ({ user: customer }),
+    });
+    edit({ username: '  Intended name  ' }); await submit();
+    expect(methods).toEqual(['get', 'put', 'get']);
+    expect(input('username')).toHaveValue('  Intended name  ');
+    expect(input('phone')).toHaveValue('Concurrent phone');
+    expect(screen.queryByText('资料已保存')).toBeNull();
+    expect(screen.getByText('当前资料与您的修改不同，已保留草稿，请检查后重试')).toBeInTheDocument();
+    fireEvent.click(button('撤销修改'));
+    expect(input('username')).toHaveValue('Concurrent name');
+    expect(methods.filter(method => method === 'put')).toHaveLength(1);
+  });
+
+  it('recognizes a committed save only after a mismatched successful reply is confirmed by reading', async () => {
+    let reads = 0;
+    const { methods } = await setup({
+      get: () => ({ user: ++reads === 1 ? customer : { ...customer, username: 'Intended', phone: null } }),
+      put: () => ({ user: customer }),
+    });
+    edit({ username: ' Intended ', phone: '  ' }); await submit();
+    expect(methods).toEqual(['get', 'put', 'get']);
+    expect(input('username')).toHaveValue('Intended');
+    expect(input('phone')).toHaveValue('');
+    expect(screen.getByText('资料已保存')).toBeInTheDocument();
+    expect(button('保存修改')).toBeDisabled();
+  });
+
+  it('blocks another write and Undo when a mismatched successful reply cannot be read back', async () => {
+    let reads = 0, unavailable = true;
+    const { methods } = await setup({
+      get: config => { if (++reads > 1 && unavailable) throw failure(config); return { user: reads === 1 ? customer : { ...customer, username: 'Intended' } }; },
+      put: () => ({ user: customer }),
+    });
+    edit({ username: ' Intended ' });
+    const staleSave = captureHandler(form(), 'onSubmit'), staleUndo = captureHandler(button('撤销修改'));
+    await submit();
+    expect(methods).toEqual(['get', 'put', 'get']);
+    expect(input('username')).toHaveValue(' Intended ');
+    expect(useAuthStore.getState().user?.username).toBe(customer.username);
+    expect(button('保存修改')).toBeDisabled(); expect(button('撤销修改')).toBeDisabled();
+    await staleSave(); await staleUndo();
+    expect(methods).toEqual(['get', 'put', 'get']);
+    act(() => useLocaleStore.getState().setLocale('en'));
+    expect(screen.getByText('Your save is not yet confirmed. Reload your profile before making more changes.')).toBeInTheDocument();
+    unavailable = false; fireEvent.click(button('Reload profile')); await settle();
+    expect(methods).toEqual(['get', 'put', 'get', 'get']);
+    expect(screen.getByText('Profile saved')).toBeInTheDocument();
+  });
+
+  it('checks every edited field and preserves a clearing intent when only part of a successful reply matches', async () => {
+    const { methods } = await setup({ get: () => ({ user: customer }), put: () => ({ user: { ...customer, username: 'Intended' } }) });
+    edit({ username: 'Intended', avatar_url: '' }); await submit();
+    expect(methods).toEqual(['get', 'put', 'get']);
+    expect(input('username')).toHaveValue('Intended'); expect(input('avatar_url')).toHaveValue('');
+    expect(screen.queryByText('资料已保存')).toBeNull();
+    expect(button('保存修改')).toBeEnabled();
+  });
+
+  it('accepts matching normalized edited fields even when an untouched field changed independently', async () => {
+    const { methods } = await setup({ put: body => ({ user: { ...customer, ...body, phone: 'Concurrent phone' } }) });
+    edit({ username: ' Intended ' }); await submit();
+    expect(methods).toEqual(['get', 'put']);
+    expect(screen.getByText('资料已保存')).toBeInTheDocument();
+    expect(input('username')).toHaveValue('Intended'); expect(input('phone')).toHaveValue('Concurrent phone');
+  });
+
   it.each([undefined, 408, 429, 500, 503])('reads canonical details after %s and recognizes an applied normalized save', async status => {
     let canonical: ProfileResponse = { user: customer };
     const { methods } = await setup({

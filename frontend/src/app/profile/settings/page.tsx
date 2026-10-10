@@ -16,6 +16,10 @@ const valuesOf = (profile: User): Draft => ({ username: profile.username, phone:
 const equal = (a: Draft, b: Draft) => a.username === b.username && a.phone === b.phone && a.avatar_url === b.avatar_url;
 const normalize = (value: Draft): Draft => ({ username: value.username.trim(), phone: value.phone.trim(), avatar_url: value.avatar_url.trim() });
 const fields = ['username', 'phone', 'avatar_url'] as const;
+const matchesChanges = (profile: User, changes: ProfileInput) => {
+  const actual = normalize(valuesOf(profile));
+  return fields.every(field => !Object.hasOwn(changes, field) || actual[field] === (changes[field] ?? ''));
+};
 function changesOf(draft: Draft, profile: User): ProfileInput {
   const next = normalize(draft), previous = normalize(valuesOf(profile));
   const changes: ProfileInput = {};
@@ -81,8 +85,7 @@ export default function ProfileSettingsPage() {
       const data = await userApi.getProfile();
       if (!active()) return;
       if (!validProfile(data.user, user?.user_id) || !useAuthStore.getState().updateUser(data.user, sessionId!)) throw new Error('invalid profile sync');
-      const actual = normalize(valuesOf(data.user));
-      const saved = fields.every(field => !Object.hasOwn(attempt.payload, field) || actual[field] === (attempt.payload[field] ?? ''));
+      const saved = matchesChanges(data.user, attempt.payload);
       const next = { key: sessionKey, profile: data.user };
       loaded.current = next; setResult(next);
       const nextDraft = valuesOf(data.user);
@@ -169,6 +172,9 @@ export default function ProfileSettingsPage() {
       if (!validProfile(data.user, user?.user_id)) {
         markUnconfirmed();
         setNotice({ key: sessionKey, error: '用户资料响应无效，请重新加载', reload: true }); return;
+      }
+      if (!matchesChanges(data.user, payload)) {
+        markUnconfirmed(); await reconcileProfile(operation); return;
       }
       if (!useAuthStore.getState().updateUser(data.user, sessionId!)) {
         markUnconfirmed();
