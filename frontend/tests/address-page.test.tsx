@@ -65,6 +65,154 @@ describe('address management', () => {
     for (const name of fields) fireEvent.change(input(name), { target: { value: address[name] } });
   };
   const unavailable = (status?: number) => Object.assign(new Error('network unavailable'), status ? { response: { status, data: { error: '暂时不可用' } } } : {});
+  const capacityFailure = () => Object.assign(new Error('address capacity'), { response: { status: 400, data: { error: '每个用户最多保存20个收货地址', code: 'ADDRESS_CAPACITY_REACHED' } } });
+  const fullList = () => Array.from({ length: 20 }, (_, index) => ({ ...address, address_id: 41 + index, receiver_name: `Receiver ${index + 1}` }));
+  const firstDelete = () => screen.getAllByRole('button', { name: '删除' })[0];
+
+  it('frees a selected old address after a verified capacity rejection and restores the unchanged creation intent', async () => {
+    let latest = fullList().slice(0, 19);
+    await setup(async () => ({ addresses: latest }));
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(capacityFailure()).mockImplementationOnce(async () => {
+      latest = [...latest, { ...address, address_id: 88 }];
+      return { address_id: 88, creation_status: 'created' };
+    });
+    await fillNew(); await submit();
+    const original = vi.mocked(addressApi.create).mock.calls[0][0];
+    latest = fullList();
+    await click('恢复新增地址');
+    expect(addressApi.list).toHaveBeenCalledTimes(2);
+    expect(firstDelete()).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: '编辑' }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(input('receiver_name')).toBeDisabled();
+    vi.mocked(addressApi.remove).mockImplementation(async id => { latest = latest.filter(row => row.address_id !== id); return {} as never; });
+    fireEvent.click(firstDelete()); await settle();
+    expect(addressApi.remove).toHaveBeenCalledExactlyOnceWith(41);
+    expect(screen.getByText('已释放地址空间，请恢复原新增请求')).toBeInTheDocument();
+    expect(firstDelete()).toBeDisabled();
+    expect(screen.getByRole('button', { name: '新增地址' })).toBeDisabled();
+    await click('恢复新增地址');
+    expect(vi.mocked(addressApi.create).mock.calls.map(([body]) => body)).toEqual([original, original, original]);
+    expect(latest).toHaveLength(20);
+    expect(latest.filter(row => row.address_id === 88)).toHaveLength(1);
+    expect(notifications).toContain('地址已添加');
+  });
+
+  it('does not enable capacity deletion until a fresh valid list succeeds and retries only that read', async () => {
+    let latest = fullList().slice(0, 19), reads = 0;
+    await setup(async () => {
+      if (++reads === 2) return { addresses: 'invalid' } as never;
+      return { addresses: latest };
+    });
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(capacityFailure());
+    await fillNew(); await submit(); latest = fullList();
+    await click('恢复新增地址');
+    expect(firstDelete()).toBeDisabled();
+    expect(screen.getByRole('button', { name: '恢复新增地址' })).toBeDisabled();
+    await click('重新核对地址');
+    expect(addressApi.create).toHaveBeenCalledTimes(2);
+    expect(addressApi.remove).not.toHaveBeenCalled();
+    expect(firstDelete()).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: '编辑' }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it('verifies an unknown capacity deletion without repeating DELETE or releasing the original creation lock', async () => {
+    let latest = fullList().slice(0, 19), reads = 0;
+    await setup(async () => {
+      if (++reads === 3) throw unavailable();
+      return { addresses: latest };
+    });
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(capacityFailure()).mockResolvedValueOnce({ address_id: 88, creation_status: 'replayed' });
+    await fillNew(); await submit(); latest = fullList(); await click('恢复新增地址');
+    const original = vi.mocked(addressApi.create).mock.calls[0][0];
+    vi.mocked(addressApi.remove).mockImplementation(async id => { latest = latest.filter(row => row.address_id !== id); throw unavailable(); });
+    fireEvent.click(firstDelete()); await settle();
+    expect(addressApi.remove).toHaveBeenCalledTimes(1);
+    expect(firstDelete()).toBeDisabled();
+    expect(screen.getByRole('button', { name: '恢复新增地址' })).toBeDisabled();
+    await click('重新核对地址');
+    expect(addressApi.remove).toHaveBeenCalledTimes(1);
+    expect(firstDelete()).toBeDisabled();
+    expect(screen.getByRole('button', { name: '恢复新增地址' })).toBeEnabled();
+    await click('恢复新增地址');
+    expect(vi.mocked(addressApi.create).mock.calls[2][0]).toEqual(original);
+  });
+
+  it('rechecks capacity deletion permission after confirmation and blocks an old handler after account changes', async () => {
+    let latest = fullList().slice(0, 19);
+    await setup(async () => ({ addresses: latest }));
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(capacityFailure()).mockResolvedValueOnce({ address_id: 88, creation_status: 'replayed' });
+    await fillNew(); await submit(); latest = fullList(); await click('恢复新增地址');
+    const confirmation = deferred<boolean>();
+    vi.stubGlobal('confirm', () => confirmation.promise);
+    const oldDelete = captureHandler(firstDelete());
+    fireEvent.click(firstDelete());
+    await click('恢复新增地址');
+    await act(async () => { confirmation.resolve(true); await Promise.resolve(); }); await settle();
+    expect(addressApi.remove).not.toHaveBeenCalled();
+    switchAccount(); await settle(); await oldDelete(); await settle();
+    expect(addressApi.remove).not.toHaveBeenCalled();
+  });
+
+  it('does not grant capacity deletion for an untyped 400 or a mismatched persisted creation', async () => {
+    let latest = fullList().slice(0, 19);
+    await setup(async () => ({ addresses: latest }));
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(apiError('每个用户最多保存20个收货地址')).mockRejectedValueOnce(capacityFailure());
+    await fillNew(); await submit(); latest = fullList(); await click('恢复新增地址');
+    expect(firstDelete()).toBeDisabled();
+    await click('恢复新增地址'); expect(firstDelete()).toBeEnabled();
+    sessionStorage.setItem('pending-address-create:one:1', '{broken');
+    fireEvent.click(firstDelete()); await settle();
+    expect(addressApi.remove).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '新增地址' })).toBeDisabled();
+  });
+
+  it('keeps the original identity after a refresh and requires capacity permission to be verified again', async () => {
+    let latest = fullList().slice(0, 19);
+    const { view } = await setup(async () => ({ addresses: latest }));
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValue(capacityFailure());
+    await fillNew(); await submit(); latest = fullList(); await click('恢复新增地址');
+    const original = vi.mocked(addressApi.create).mock.calls[0][0];
+    expect(firstDelete()).toBeEnabled();
+    view.unmount(); await setup(async () => ({ addresses: latest }));
+    expect(firstDelete()).toBeDisabled();
+    expect(addressApi.create).toHaveBeenCalledTimes(2);
+    await click('恢复新增地址');
+    expect(firstDelete()).toBeEnabled();
+    expect(vi.mocked(addressApi.create).mock.calls[2][0]).toEqual(original);
+  });
+
+  it('ignores a late capacity read after switching accounts', async () => {
+    const read = deferred<List>(); let reads = 0;
+    await setup(async () => ++reads === 2 ? read.promise : { addresses: fullList().slice(0, 19) });
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(capacityFailure());
+    await fillNew(); await submit();
+    fireEvent.click(screen.getByRole('button', { name: '恢复新增地址' })); await settle();
+    switchAccount(); await settle();
+    await act(async () => { read.resolve({ addresses: fullList() }); await Promise.resolve(); }); await settle();
+    expect(screen.queryByRole('button', { name: '恢复新增地址' })).not.toBeInTheDocument();
+    expect(screen.queryByText('地址已满，请选择删除一个旧地址，再恢复原新增请求')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新增地址' })).toBeEnabled();
+    expect(notifications).toEqual([]);
+  });
+
+  it.each(['success', 'failure'] as const)('ignores a late capacity DELETE %s after switching accounts', async outcome => {
+    let latest = fullList().slice(0, 19);
+    await setup(async () => ({ addresses: latest }));
+    vi.mocked(addressApi.create).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(capacityFailure());
+    await fillNew(); await submit(); latest = fullList(); await click('恢复新增地址');
+    const deletion = deferred();
+    vi.mocked(addressApi.remove).mockReturnValue(deletion.promise as never);
+    fireEvent.click(firstDelete()); await settle();
+    expect(addressApi.remove).toHaveBeenCalledTimes(1);
+    latest = [{ ...address, address_id: 89, receiver_name: 'Second Receiver' }];
+    switchAccount(); await settle();
+    const count = vi.mocked(addressApi.list).mock.calls.length;
+    await act(async () => { if (outcome === 'success') deletion.resolve({}); else deletion.reject(unavailable()); }); await settle();
+    expect(addressApi.list).toHaveBeenCalledTimes(count);
+    expect(screen.getByText(/Second Receiver/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新增地址' })).toBeEnabled();
+    expect(notifications).toEqual([]);
+  });
 
   it('sets default with only the address ID and preserves a newer address from another tab', async () => {
     let latest = { ...address };

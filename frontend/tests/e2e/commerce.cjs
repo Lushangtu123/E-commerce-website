@@ -1287,6 +1287,7 @@ async function localPlatformScripts(context) {
   await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./default-address.cjs')({ browser, localPlatformScripts, watchConsole, errors });
+  await require('./address-capacity.cjs')({ browser, localPlatformScripts, errors });
   await require('./cart-badge-sync.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,

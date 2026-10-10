@@ -5,7 +5,7 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 
 export class AddressError extends Error {
-  constructor(message: string, public readonly statusCode = 400) { super(message); }
+  constructor(message: string, public readonly statusCode = 400, public readonly code?: 'ADDRESS_CAPACITY_REACHED') { super(message); }
 }
 
 export interface AddressInput {
@@ -108,7 +108,7 @@ async function chooseDefault(connection: PoolConnection, userId: number, address
 const values = (address: AddressInput) => [address.receiver_name, address.phone, address.province, address.city, address.district, address.detail_address];
 
 async function insertAddress(connection: PoolConnection, userId: number, addresses: LockedAddress[], address: AddressInput): Promise<number> {
-  if (addresses.length >= 20) throw new AddressError('每个用户最多保存20个收货地址');
+  if (addresses.length >= 20) throw new AddressError('每个用户最多保存20个收货地址', 400, 'ADDRESS_CAPACITY_REACHED');
   const [result] = await connection.execute<ResultSetHeader>(
     `INSERT INTO shipping_addresses (user_id, receiver_name, phone, province, city, district, detail_address)
      VALUES (?, ?, ?, ?, ?, ?, ?)`, [userId, ...values(address)]

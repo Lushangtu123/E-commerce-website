@@ -27,6 +27,12 @@ const addressInput = (address: ShippingAddress): AddressInput => ({
   city: address.city ?? '', district: address.district ?? '', detail_address: address.detail_address ?? '',
   is_default: address.is_default === true || address.is_default === 1,
 });
+interface CapacityRecovery {
+  sessionKey: string;
+  attempt: PendingAddressCreation;
+  /** Only IDs from an explicit, validated canonical GET can be selected for deletion. */
+  deletableIds: number[] | null;
+}
 
 async function readAddresses(): Promise<{ addresses: ShippingAddress[] }> {
   const result = await addressApi.list();
@@ -58,6 +64,8 @@ export default function AddressPage() {
   const [storageReady, setStorageReady] = useState<string>();
   const [storageError, setStorageError] = useState<string>();
   const [verification, setVerification] = useState<string>();
+  const capacityRef = useRef<CapacityRecovery | null>(null);
+  const [capacityState, setCapacityState] = useState<CapacityRecovery | null>(null);
   const query = useSessionQuery({ name: 'addresses', params: [], load: readAddresses });
   const { isCurrentSession: isCurrent } = query;
   const addresses = query.data?.addresses || [];
@@ -65,6 +73,7 @@ export default function AddressPage() {
   const loading = !query.data && !error;
   const isBusy = busy === sessionKey;
   const pending = pendingState?.sessionKey === sessionKey ? pendingState.attempt : null;
+  const capacity = capacityState?.sessionKey === sessionKey && capacityState.attempt.key === pending?.key ? capacityState : null;
   const needsVerification = verification === sessionKey;
   const hasStorageError = storageError === sessionKey;
   const writeLocked = isBusy || !!pending || needsVerification || hasStorageError || storageReady !== sessionKey;
@@ -74,9 +83,11 @@ export default function AddressPage() {
     if (recoveryLock.current.sessionKey !== sessionKey) recoveryLock.current = { sessionKey, creation: false, verification: false, storage: true };
     recoveryLock.current[kind] = locked;
   };
+  const setCapacity = (value: CapacityRecovery | null) => { capacityRef.current = value; setCapacityState(value); };
 
   const loadPending = () => {
     if (!isCurrent() || !sessionId || !user) return;
+    setCapacity(null);
     try {
       const attempt = readPendingAddressCreation(sessionId, user.user_id);
       lockRecovery('creation', !!attempt); lockRecovery('storage', false);
@@ -113,7 +124,14 @@ export default function AddressPage() {
     const data = await readAddresses();
     if (!isCurrent()) return false;
     queryClient.setQueryData(queryKey, data);
-    return true;
+    return data;
+  };
+
+  const confirmCapacity = (data: { addresses: ShippingAddress[] }) => {
+    const current = capacityRef.current;
+    if (!current || current.sessionKey !== sessionKey || !isCurrent()) return;
+    setCapacity({ ...current, deletableIds: data.addresses.length >= 20 ? data.addresses.map(address => address.address_id) : [] });
+    setFormError('');
   };
 
   const reloadAddresses = async () => {
@@ -125,11 +143,54 @@ export default function AddressPage() {
     if (!isCurrent() || mutation.current || !needsVerification || recoveryLock.current.sessionKey !== sessionKey || !recoveryLock.current.verification) return;
     mutation.current = sessionKey; setBusy(sessionKey);
     try {
-      if (await refreshCanonical()) {
+      const data = await refreshCanonical();
+      if (data) {
         lockRecovery('verification', false);
         setVerification(undefined);
-        setFormError('已重新核对最新地址，请确认操作结果');
+        if (capacityRef.current?.sessionKey === sessionKey) confirmCapacity(data);
+        else setFormError('已重新核对最新地址，请确认操作结果');
       }
+    } catch {
+      if (isCurrent()) setFormError('地址结果尚未确认，请重新核对地址');
+    } finally {
+      if (isCurrent()) { mutation.current = null; setBusy(null); }
+    }
+  };
+
+  const canDeleteForCapacity = (addressId: number) => {
+    const current = capacityRef.current;
+    const locks = recoveryLock.current;
+    return isCurrent() && !mutation.current && current?.sessionKey === sessionKey &&
+      !!current.deletableIds?.includes(addressId) && locks.sessionKey === sessionKey &&
+      locks.creation && !locks.verification && !locks.storage;
+  };
+
+  const deleteForCapacity = async (addressId: number) => {
+    if (!canDeleteForCapacity(addressId) || !sessionId || !user) return;
+    const permission = capacityRef.current!;
+    if (!await confirmAction(t('确定删除这个收货地址吗？')) || !canDeleteForCapacity(addressId) || capacityRef.current !== permission) return;
+    try {
+      const stored = readPendingAddressCreation(sessionId, user.user_id);
+      if (!stored || stored.key !== permission.attempt.key || JSON.stringify(stored.input) !== JSON.stringify(permission.attempt.input)) throw new Error('Changed address recovery');
+    } catch {
+      lockRecovery('storage', true); setStorageError(sessionKey); return;
+    }
+    mutation.current = sessionKey; setBusy(sessionKey); setFormError('');
+    setCapacity({ ...permission, deletableIds: null });
+    lockRecovery('verification', true); setVerification(sessionKey);
+    let completed = false;
+    try {
+      try {
+        await addressApi.remove(addressId);
+        if (!isCurrent()) return;
+        completed = true;
+      } catch { if (!isCurrent()) return; }
+      // Whether DELETE succeeded, failed, or lost its reply, only a fresh GET can reopen this limited path.
+      const data = await refreshCanonical();
+      if (!data) return;
+      lockRecovery('verification', false); setVerification(undefined);
+      confirmCapacity(data);
+      if (completed && !data.addresses.some(address => address.address_id === addressId)) toast.success(translate('地址已删除'));
     } catch {
       if (isCurrent()) setFormError('地址结果尚未确认，请重新核对地址');
     } finally {
@@ -193,6 +254,7 @@ export default function AddressPage() {
       }
     }
     mutation.current = sessionKey; setBusy(sessionKey); setFormError('');
+    setCapacity(null);
     lockRecovery('creation', true);
     let confirmed = false;
     const sent = { ...attempt, uncertain: true };
@@ -219,7 +281,18 @@ export default function AddressPage() {
     } catch (error) {
       if (!isCurrent()) return;
       const failure = requestFailure(error);
-      if (!confirmed && !attempt.uncertain && failure.response?.status === 400 &&
+      if (!confirmed && attempt.uncertain && failure.response?.status === 400 && failure.response.data?.code === 'ADDRESS_CAPACITY_REACHED') {
+        setCapacity({ sessionKey, attempt: sent, deletableIds: null });
+        lockRecovery('verification', true); setVerification(sessionKey);
+        try {
+          const data = await refreshCanonical();
+          if (data) {
+            lockRecovery('verification', false); setVerification(undefined); confirmCapacity(data);
+          }
+        } catch {
+          if (isCurrent()) setFormError('地址结果尚未确认，请重新核对地址');
+        }
+      } else if (!confirmed && !attempt.uncertain && failure.response?.status === 400 &&
         clearPendingAddressCreation(sessionId, user.user_id, attempt.key)) {
         lockRecovery('creation', false);
         setPendingState({ sessionKey, attempt: null });
@@ -260,7 +333,11 @@ export default function AddressPage() {
         <Link href="/cart" className="text-primary-600 underline">{t("返回购物车")}</Link>
       </div>
       {hasStorageError && <div className="card p-6 text-red-600" role="alert"><p>{t('无法读取地址恢复信息，请重新读取后再试')}</p><button disabled={isBusy} onClick={loadPending} className="underline mt-2">{t('重新读取新增地址')}</button></div>}
-      {pending && <div className="card p-6 mb-4"><p>{t('存在待确认的新增地址，请恢复原请求')}</p><button disabled={isBusy || hasStorageError} onClick={() => createAddress(pending)} className="btn btn-primary mt-2">{t('恢复新增地址')}</button></div>}
+      {pending && <div className="card p-6 mb-4"><p>{t('存在待确认的新增地址，请恢复原请求')}</p>
+        {capacity?.deletableIds && !needsVerification && <p className="mt-2 text-amber-700" role="status">{t(capacity.deletableIds.length
+          ? '地址已满，请选择删除一个旧地址，再恢复原新增请求'
+          : '已释放地址空间，请恢复原新增请求')}</p>}
+        <button disabled={isBusy || hasStorageError || needsVerification} onClick={() => createAddress(pending)} className="btn btn-primary mt-2">{t('恢复新增地址')}</button></div>}
       {needsVerification && <div className="card p-6 mb-4"><p>{t('地址结果尚未确认，请重新核对地址')}</p><button disabled={isBusy} onClick={verify} className="btn btn-primary mt-2">{t('重新核对地址')}</button></div>}
       {error && !needsVerification ? <div className="card p-6 text-red-600" role="alert"><p>{t(error)}</p><button disabled={isBusy} onClick={reloadAddresses} className="underline mt-2">{t("重新加载地址")}</button></div> : (
         <>
@@ -275,7 +352,10 @@ export default function AddressPage() {
               <div className="flex gap-4 mt-4 text-sm">
                 <button disabled={writeLocked} onClick={() => { if (!isCurrent() || writeLocked || blocksWrite()) return; setEditing(address.address_id); setForm(addressInput(address)); setFormError(''); }} className="text-primary-600">{t("编辑")}</button>
                 {!(address.is_default === true || address.is_default === 1) && <button disabled={writeLocked} onClick={() => mutate(() => addressApi.setDefault(address.address_id), '默认地址已更新')} className="text-primary-600">{t("设为默认")}</button>}
-                <button disabled={writeLocked} onClick={async () => { if (isCurrent() && !writeLocked && !blocksWrite() && await confirmAction(t('确定删除这个收货地址吗？'))) return mutate(() => addressApi.remove(address.address_id), '地址已删除'); }} className="text-red-600">{t("删除")}</button>
+                <button disabled={writeLocked && !(capacity?.deletableIds?.includes(address.address_id) && !isBusy && !needsVerification && !hasStorageError)} onClick={async () => {
+                  if (canDeleteForCapacity(address.address_id)) return deleteForCapacity(address.address_id);
+                  if (isCurrent() && !writeLocked && !blocksWrite() && await confirmAction(t('确定删除这个收货地址吗？'))) return mutate(() => addressApi.remove(address.address_id), '地址已删除');
+                }} className="text-red-600">{t("删除")}</button>
               </div>
             </div>)}
           </div>

@@ -10,7 +10,7 @@ function pathId(value: unknown): number | undefined {
 }
 
 function failure(res: Response, error: unknown, message: string) {
-  if (error instanceof AddressError) return res.status(error.statusCode).json({ error: error.message });
+  if (error instanceof AddressError) return res.status(error.statusCode).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
   logger.error({ err: error }, message);
   return res.status(500).json({ error: message });
 }
