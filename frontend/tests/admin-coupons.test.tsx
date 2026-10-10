@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import toast from 'react-hot-toast';
@@ -13,7 +13,7 @@ vi.mock('react-hot-toast', () => {
 });
 vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/lib/api', () => ({
-  adminCouponApi: { getList: vi.fn(), create: vi.fn(), updateStatus: vi.fn() },
+  adminCouponApi: { getList: vi.fn(), create: vi.fn(), updateStatus: vi.fn(), getDetail: vi.fn(), getByCode: vi.fn() },
 }));
 
 const active = {
@@ -28,7 +28,7 @@ const create = vi.mocked(adminCouponApi.create);
 const updateStatus = vi.mocked(adminCouponApi.updateStatus);
 
 async function setup(coupons: unknown[] = [active, disabled]) {
-  list.mockResolvedValue({ data: coupons } as never);
+  list.mockResolvedValue({ data: coupons, pagination: { page: 1, page_size: 50, total: coupons.length, total_pages: Math.ceil(coupons.length / 50) } } as never);
   render(<AdminCouponsPage />);
   await settle();
 }
@@ -69,10 +69,13 @@ describe('admin coupons', () => {
 
   it('enables and disables a coupon, then reloads the list', async () => {
     await setup();
-    updateStatus.mockResolvedValue({} as never);
+    updateStatus.mockResolvedValue({ success: true } as never);
+    list.mockResolvedValueOnce({ data: [{ ...active, status: 0 }, disabled], pagination: { page: 1, page_size: 50, total: 2, total_pages: 1 } } as never)
+      .mockResolvedValueOnce({ data: [{ ...active, status: 0 }, { ...disabled, status: 1 }], pagination: { page: 1, page_size: 50, total: 2, total_pages: 1 } } as never);
+    vi.mocked(adminCouponApi.getDetail).mockImplementation(async id => ({ success: true, data: id === 3 ? { ...active, status: 0 } : { ...disabled, status: 1 } }) as never);
     fireEvent.click(screen.getAllByRole('button', { name: '禁用' })[0]);
     await settle();
-    fireEvent.click(screen.getByRole('button', { name: '启用' }));
+    fireEvent.click(within(screen.getByText('Paused').closest('tr')!).getByRole('button', { name: '启用' }));
     await settle();
 
     expect(updateStatus.mock.calls).toEqual([[3, 0], [4, 1]]);
@@ -92,7 +95,8 @@ describe('admin coupons', () => {
 
   it('creates a coupon from every field, closes the form, reloads and starts the next one blank', async () => {
     await setup();
-    create.mockResolvedValue({} as never);
+    create.mockResolvedValue({ success: true, data: { coupon_id: 8 } } as never);
+    vi.mocked(adminCouponApi.getByCode).mockImplementation(async () => ({ success: true, data: { ...active, ...create.mock.calls[0][0], coupon_id: 8, remain_quantity: 500, received_count: 0, used_count: 0 } }) as never);
     await click('+ 创建优惠券');
     expect(formHeading()).toBeInTheDocument();
 

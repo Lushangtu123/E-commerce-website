@@ -40,18 +40,23 @@ function announceSession() {
   act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'admin_session' })); });
 }
 
-async function setup({ list = () => result(), mutate = async () => ({}) }: {
+async function setup({ list = () => result(), mutate = async () => ({}), detail }: {
   list?: (call: Read) => unknown;
   mutate?: (call: Write) => unknown;
+  detail?: (call: Write) => unknown;
 } = {}) {
   signIn('admin-a');
   const adapter: AxiosAdapter = async config => {
     const session = localStorage.getItem('admin_session');
     let data;
-    if (config.method === 'get') {
+    if (config.method === 'get' && config.url !== '/admin/coupons') {
+      const write = writes.at(-1)!;
+      data = { success: true, data: detail ? detail(write) : { ...coupon(Number(config.url?.split('/').at(-1)) || 1000), ...(write.url?.endsWith('/status') ? { status: write.data.status } : write.data) } };
+    } else if (config.method === 'get') {
       const call = { params: config.params as Params, session };
       reads.push(call);
       data = await list(call);
+      if (data && typeof data === 'object' && 'pagination' in data) data = { ...data, pagination: { ...(data.pagination as object), page: call.params.page } };
     } else {
       const call = { url: config.url, method: config.method, data: typeof config.data === 'string' ? JSON.parse(config.data) : config.data, session };
       writes.push(call);
@@ -75,6 +80,7 @@ async function openDraft(name = 'Draft') {
   await click('+ 创建优惠券');
   fireEvent.change(field(/^优惠券代码/), { target: { value: 'draft' } });
   fireEvent.change(field(/^优惠券名称/), { target: { value: name } });
+  fireEvent.change(field(/^优惠值/), { target: { value: '10' } });
   fireEvent.change(field(/^生效时间/), { target: { value: '2026-11-01T10:00' } });
   fireEvent.change(field(/^失效时间/), { target: { value: '2026-12-01T10:00' } });
 }
@@ -133,7 +139,9 @@ describe('admin coupon recovery and pagination', () => {
   it('hides earlier rows if a mutation refresh fails', async () => {
     await setup({ list: () => reads.length === 1 ? result() : Promise.reject(apiError('更新后的列表失败')) });
     await click('禁用');
-    expect(screen.getByRole('alert')).toHaveTextContent('更新后的列表失败');
+    expect(screen.getByRole('alert')).toHaveTextContent('优惠券提交结果尚未确认');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(button('+ 创建优惠券')).toBeDisabled();
     expect(screen.queryByText('Current coupon')).not.toBeInTheDocument();
     expect(screen.queryByText('暂无优惠券')).not.toBeInTheDocument();
   });
@@ -156,7 +164,7 @@ describe('admin coupon recovery and pagination', () => {
   it('clamps the final filtered page after disabling its only coupon', async () => {
     let total = 51;
     const { commits } = await setup({
-      list: ({ params }) => result([coupon(params.page === 2 ? 51 : 1)], total),
+      list: ({ params }) => result(total === 50 && params.page === 2 ? [] : [coupon(params.page === 2 ? 51 : 1)], total),
       mutate: () => { total = 50; return {}; },
     });
     await filter('1');
@@ -205,13 +213,16 @@ describe('admin coupon mutation locks', () => {
     await act(async () => write.resolve({}));
     await settle();
     expect(button('禁用')).toBeDisabled();
-    await act(async () => refresh.resolve(result()));
+    await act(async () => refresh.resolve(result([coupon(1, 'Current coupon', 0)])));
     await settle();
-    expect(button('禁用')).toBeEnabled();
+    expect(button('启用')).toBeEnabled();
   });
 
   it('rejects an old row handler after a replacement response for the same filter', async () => {
-    await setup({ list: () => result([coupon(1, `Version ${reads.length}`)]) });
+    await setup({
+      list: () => result([coupon(1, `Version ${reads.length}`, writes.length ? 0 : 1)]),
+      detail: () => coupon(1, 'Version 2', 0),
+    });
     const stale = captureHandler(button('禁用'));
     await click('禁用');
     await stale();
