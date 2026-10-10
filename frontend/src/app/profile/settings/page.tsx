@@ -14,6 +14,16 @@ type Draft = { username: string; phone: string; avatar_url: string };
 type Loaded = { key: string; profile?: User; error?: string };
 const valuesOf = (profile: User): Draft => ({ username: profile.username, phone: profile.phone ?? '', avatar_url: profile.avatar_url ?? '' });
 const equal = (a: Draft, b: Draft) => a.username === b.username && a.phone === b.phone && a.avatar_url === b.avatar_url;
+const normalize = (value: Draft): Draft => ({ username: value.username.trim(), phone: value.phone.trim(), avatar_url: value.avatar_url.trim() });
+const fields = ['username', 'phone', 'avatar_url'] as const;
+function changesOf(draft: Draft, profile: User): ProfileInput {
+  const next = normalize(draft), previous = normalize(valuesOf(profile));
+  const changes: ProfileInput = {};
+  if (next.username !== previous.username) changes.username = next.username;
+  if (next.phone !== previous.phone) changes.phone = next.phone || null;
+  if (next.avatar_url !== previous.avatar_url) changes.avatar_url = next.avatar_url || null;
+  return changes;
+}
 
 function validProfile(value: User, userId: number | undefined): boolean {
   return !!value && value.user_id === userId && typeof value.username === 'string' && typeof value.email === 'string' &&
@@ -36,13 +46,14 @@ export default function ProfileSettingsPage() {
   const mounted = useRef(true);
   const revision = useRef(0);
   const mutation = useRef<object | null>(null);
-  const recovery = useRef<{ key: string; payload: Draft; draft: Draft } | null>(null);
+  const recovery = useRef<{ key: string; payload: ProfileInput; draft: Draft } | null>(null);
   const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   const passwordRedirect = useRef<'/login?passwordChanged=1' | '/login?passwordChangeUnconfirmed=1' | null>(null);
   const profile = result?.key === sessionKey ? result.profile : undefined;
   const busy = saving === sessionKey;
   const blocked = unconfirmed === sessionKey;
-  const dirty = !!profile && !!draft && !equal(draft, valuesOf(profile));
+  const dirty = !!profile && !!draft && !equal(normalize(draft), normalize(valuesOf(profile)));
+  const rawDirty = !!profile && !!draft && !equal(draft, valuesOf(profile));
   const isCurrent = () => {
     const state = useAuthStore.getState();
     try {
@@ -70,10 +81,14 @@ export default function ProfileSettingsPage() {
       const data = await userApi.getProfile();
       if (!active()) return;
       if (!validProfile(data.user, user?.user_id) || !useAuthStore.getState().updateUser(data.user, sessionId!)) throw new Error('invalid profile sync');
-      const saved = equal(valuesOf(data.user), attempt.payload);
+      const actual = normalize(valuesOf(data.user));
+      const saved = fields.every(field => !Object.hasOwn(attempt.payload, field) || actual[field] === (attempt.payload[field] ?? ''));
       const next = { key: sessionKey, profile: data.user };
       loaded.current = next; setResult(next);
-      replaceDraft(saved ? valuesOf(data.user) : attempt.draft);
+      const nextDraft = valuesOf(data.user);
+      // Only edited fields belong to this attempt; retries must not restore stale untouched values.
+      if (!saved) for (const field of fields) if (Object.hasOwn(attempt.payload, field)) nextDraft[field] = attempt.draft[field];
+      replaceDraft(nextDraft);
       recovery.current = null; setUnconfirmed(null);
       setNotice({ key: sessionKey, ...(saved ? { success: '资料已保存' } : { error: '当前资料与您的修改不同，已保留草稿，请检查后重试' }) });
     } catch {
@@ -127,10 +142,11 @@ export default function ProfileSettingsPage() {
     event.preventDefault();
     const current = draftRef.current;
     const previous = loaded.current;
-    if (!isCurrent() || mutation.current || recovery.current?.key === sessionKey || !current || previous?.key !== sessionKey || !previous.profile || equal(current, valuesOf(previous.profile))) return;
-    const payload: ProfileInput = { username: current.username.trim(), phone: current.phone.trim() || null, avatar_url: current.avatar_url.trim() || null };
+    if (!isCurrent() || mutation.current || recovery.current?.key === sessionKey || !current || previous?.key !== sessionKey || !previous.profile) return;
+    const payload = changesOf(current, previous.profile);
+    if (Object.keys(payload).length === 0) return;
     let error = '';
-    if (!payload.username || payload.username.length > 50) error = '用户名必须为1至50个字符';
+    if (payload.username !== undefined && (!payload.username || payload.username.length > 50)) error = '用户名必须为1至50个字符';
     else if (payload.phone && payload.phone.length > 20) error = '联系电话必须为不超过20个字符的字符串或空值';
     else if (payload.avatar_url) {
       try {
@@ -144,7 +160,7 @@ export default function ProfileSettingsPage() {
     mutation.current = operation; setSaving(sessionKey); setNotice(null);
     const active = () => isCurrent() && generation === revision.current && mutation.current === operation;
     const markUnconfirmed = () => {
-      recovery.current = { key: sessionKey, payload: { username: payload.username, phone: payload.phone ?? '', avatar_url: payload.avatar_url ?? '' }, draft: current };
+      recovery.current = { key: sessionKey, payload, draft: current };
       setUnconfirmed(sessionKey);
     };
     try {
@@ -206,7 +222,7 @@ export default function ProfileSettingsPage() {
           {notice?.key === sessionKey && notice.success && <div role="status" className="text-green-700 text-sm">{t(notice.success)}</div>}
           <div className="flex flex-wrap gap-3 border-t pt-6">
             <button type="submit" disabled={busy || blocked || !dirty} className="btn btn-primary disabled:opacity-50">{t(busy ? '保存中...' : '保存修改')}</button>
-            <button type="button" disabled={busy || blocked || !dirty} className="btn btn-outline disabled:opacity-50" onClick={() => {
+            <button type="button" disabled={busy || blocked || !rawDirty} className="btn btn-outline disabled:opacity-50" onClick={() => {
               const current = loaded.current;
               if (!isCurrent() || mutation.current || recovery.current?.key === sessionKey || current?.key !== sessionKey || !current.profile) return;
               replaceDraft(valuesOf(current.profile)); setNotice(null);
