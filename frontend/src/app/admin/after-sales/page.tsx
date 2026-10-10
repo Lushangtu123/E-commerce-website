@@ -42,12 +42,14 @@ export default function AdminAfterSalesPage() {
   const updateResult = useCallback((value: typeof result) => { currentResult.current = value; setResult(value); }, []);
   const key = JSON.stringify([session.sessionId, page, status]), currentKey = useRef(key); currentKey.current = key;
   const request = useRef(0), mutation = useRef<{ key: string } | null>(null), latestLoad = useRef<((operation?: { key: string }) => Promise<void>) | null>(null);
+  const pendingLoad = useRef<{ key: string } | null>(null);
   const active = () => session.active() && currentKey.current === key;
   const visible = result?.key === key && session.active() ? result : null;
   const closing = visible?.requests.find(value => value.request_id === completion?.id);
   const blocked = unconfirmed === key;
   const load = async (reconcileOperation?: { key: string }) => {
     if (!active() || (mutation.current?.key === key && mutation.current !== reconcileOperation)) return;
+    const operation = { key }; pendingLoad.current = operation;
     const revision = ++request.current; updateResult(null);
     try {
       const data = await afterSalesApi.list({ page, limit: 20, ...(status && { status }) });
@@ -64,10 +66,15 @@ export default function AdminAfterSalesPage() {
         if (draft?.key === key && !data.requests?.some(value => value.request_id === draft.id && value.status === 'approved' && !value.completed_at && (value.type === 'refund' || value.return_submitted_at))) updateCompletion(null);
       }
     } catch (error) { if (active() && revision === request.current) updateResult({ key, requests: [], total: 0, error: recovery.current === key ? '操作结果尚未确认，请刷新售后进度后再操作' : requestFailure(error).response?.data?.error || '加载售后申请失败，请重试' }); }
+    finally { if (pendingLoad.current === operation) pendingLoad.current = null; }
   };
   latestLoad.current = load;
   useEffect(() => { setPage(1); setStatus('requested'); updateReview(null); updateCompletion(null); mutation.current = null; setBusy(false); recovery.current = null; setUnconfirmed(null); }, [session.sessionId, updateCompletion, updateReview]);
-  useEffect(() => { updateReview(null); updateCompletion(null); load(); return () => { request.current++; }; }, [key, updateCompletion, updateReview]);
+  useEffect(() => { updateReview(null); updateCompletion(null); load(); return () => {
+    request.current++;
+    if (pendingLoad.current?.key === key) pendingLoad.current = null;
+  }; }, [key, updateCompletion, updateReview]);
+  useEffect(() => { if (session.ready && !pendingLoad.current) void latestLoad.current?.(); }, [session.ready]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!active() || mutation.current || recovery.current === key || currentReview.current !== review || currentResult.current !== visible || review?.key !== key || !visible?.requests.some(value => value.request_id === review.id && value.status === 'requested')) return;
@@ -88,7 +95,7 @@ export default function AdminAfterSalesPage() {
         }
       }
     }
-    finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
+    finally { if (mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   const complete = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -117,7 +124,7 @@ export default function AdminAfterSalesPage() {
         }
       }
     }
-    finally { if (session.active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
+    finally { if (mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
   return <AdminLayout><div className="space-y-6">
     <div><h1 className="text-2xl font-bold">{t('售后管理')}</h1><p className="mt-2 text-amber-800">{t('售后审核、退货运单和人工处理进度在此查看，不会自动退款')}</p></div>

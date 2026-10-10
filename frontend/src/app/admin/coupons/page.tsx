@@ -47,7 +47,7 @@ export default function AdminCouponsPage() {
     scope: ['admin', 'coupons', sessionId],
     params: [page, status],
     load: () => status === '' ? adminCouponApi.getList(page, PAGE_SIZE) : adminCouponApi.getList(page, PAGE_SIZE, Number(status)),
-    enabled: !!sessionId,
+    enabled: !!sessionId && session.ready,
     sessionIsCurrent: session.active,
   });
   const pageSize = Number(query.data?.pagination?.page_size) || PAGE_SIZE;

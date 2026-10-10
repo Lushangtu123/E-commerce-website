@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, getAdminSessionId } from '@/lib/admin-session';
+import { ADMIN_CLEANUP_KEY, ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, adminSessionIsReady, getAdminSessionId } from '@/lib/admin-session';
 import { useScopedQuery } from '@/hooks/use-scoped-query';
 
 /** The stored administrator sessionId, read again whenever this or another tab changes the session. */
@@ -11,7 +11,7 @@ export function useAdminSessionId() {
     const sync = () => notifySessionChange(value => value + 1);
     const onStorage = (event: StorageEvent) => {
       if ((event.storageArea === null || event.storageArea === localStorage) &&
-        (event.key === null || event.key === ADMIN_SESSION_KEY || event.key === 'admin_user')) sync();
+        (event.key === null || event.key === ADMIN_SESSION_KEY || event.key === 'admin_user' || event.key === ADMIN_CLEANUP_KEY)) sync();
     };
     window.addEventListener('storage', onStorage);
     window.addEventListener(ADMIN_SESSION_EVENT, sync);
@@ -38,8 +38,8 @@ export function useAdminQuery<T>({ name, params, load, enabled = true }: AdminQu
     scope: ['admin', name, sessionId],
     params,
     load,
-    enabled: enabled && !!sessionId,
-    sessionIsCurrent: () => !!sessionId && getAdminSessionId() === sessionId,
+    enabled: enabled && !!sessionId && adminSessionIsReady(),
+    sessionIsCurrent: () => !!sessionId && adminSessionIsReady() && getAdminSessionId() === sessionId,
   });
   return { ...query, sessionId };
 }

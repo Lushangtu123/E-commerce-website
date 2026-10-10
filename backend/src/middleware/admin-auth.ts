@@ -72,6 +72,17 @@ export const authenticateAdmin = async (
       return res.status(401).json({ error: '登录已过期，请重新登录' });
     }
 
+    // Context constrains a verified administrator, never supplies credentials or permissions.
+    const expected = req.get('X-Expected-Admin-Id');
+    if (expected !== undefined) {
+      if (!/^[1-9]\d*$/.test(expected) || !Number.isSafeInteger(Number(expected))) {
+        return res.status(400).json({ error: '请求格式无效' });
+      }
+      if (Number(expected) !== admin.admin_id) {
+        return res.status(409).json({ error: '登录状态已变化，请刷新后重试' });
+      }
+    }
+
     // 将管理员信息附加到请求对象
     req.admin = {
       adminId: admin.admin_id,
