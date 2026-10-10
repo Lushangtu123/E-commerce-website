@@ -3,7 +3,7 @@
 import '@/lib/admin-i18n';
 import { useI18n } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, clearAdminSession, getAdminSession, getAdminSessionId, type AdminSession } from '@/lib/admin-session';
+import { ADMIN_CLEANUP_KEY, ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, adminSessionIsReady, clearAdminSession, getAdminSession, getAdminSessionId, type AdminSession } from '@/lib/admin-session';
 import { adminApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
@@ -22,6 +22,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [storedAdmin, setAdmin] = useState<AdminSession['admin'] | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(() => getAdminSessionId());
+  const [, notifySessionChange] = useState(0);
   const mounted = useRef(false);
   const sidebarToggle = useRef<HTMLButtonElement>(null);
 
@@ -33,10 +34,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       const next = getAdminSession();
       setAdmin(next?.admin ?? null);
       setSessionId(next?.sessionId ?? null);
+      notifySessionChange(value => value + 1);
       if (!next) router.push('/admin/login');
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === ADMIN_SESSION_KEY || event.key === 'admin_user') syncSession();
+      if (event.key === null || event.key === ADMIN_SESSION_KEY || event.key === 'admin_user' || event.key === ADMIN_CLEANUP_KEY) syncSession();
     };
     syncSession();
     window.addEventListener?.('storage', onStorage);
@@ -50,7 +52,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, [router, pathname]);
 
   const handleLogout = () => {
-    if (!mounted.current || !sessionId || getAdminSessionId() !== sessionId) return;
+    if (!mounted.current || !sessionId || !adminSessionIsReady() || getAdminSessionId() !== sessionId) return;
     clearAdminSession(sessionId);
     setAdmin(null);
     setSessionId(null);
@@ -127,7 +129,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   ];
 
   const current = getAdminSession();
-  if (!storedAdmin || !current || current.sessionId !== sessionId) {
+  if (!storedAdmin || !current || !adminSessionIsReady() || current.sessionId !== sessionId) {
     return <div className="min-h-screen flex items-center justify-center">{t("加载中...")}</div>;
   }
   const admin = current.admin;

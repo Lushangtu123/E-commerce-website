@@ -69,6 +69,13 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     ['migrate-product-creations', 'migrateProductCreations'],
   ]) await require(path.join(backend, `dist/database/${file}`))[method](pool);
   await require(path.join(backend, 'dist/database/admin-migrate')).default();
+  // A second local administrator exercises Cookie handover between two real sign-ins.
+  const [[publicationRole]] = await pool.query("SELECT role_id FROM roles WHERE role_name = 'super_admin'");
+  const publicationPassword = await require('bcryptjs').hash(process.env.ADMIN_BOOTSTRAP_PASSWORD, 10);
+  await pool.execute(
+    'INSERT INTO admins (username, password_hash, real_name, role_id, status) VALUES (?, ?, ?, ?, 1)',
+    ['admin_publication_b', publicationPassword, 'Publication B', publicationRole.role_id],
+  );
   await pool.query("INSERT INTO categories(category_id,name) VALUES(1,'浏览器测试分类')");
   await pool.query("INSERT INTO categories(category_id,name) VALUES(9000,'PaginationFixture')");
   // Keep the primary flow fixtures ahead of pagination rows even when MySQL changes tie order.

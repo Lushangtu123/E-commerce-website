@@ -100,6 +100,8 @@ export default function AdminOrdersPage() {
     request.current++;
     if (pendingLoad.current?.key === key) pendingLoad.current = null;
   }; }, [key]);
+  // A tab opened during publication has no in-flight read to resume.
+  useEffect(() => { if (session.ready && !pendingLoad.current) void latestLoad.current?.(); }, [session.ready]);
   const changeFilters = (next: typeof filters) => {
     if (!active() || (page === 1 && next.orderNo === filters.orderNo && next.status === filters.status)) return;
     currentKey.current = JSON.stringify([session.sessionId, 1, next]);
@@ -150,7 +152,7 @@ export default function AdminOrdersPage() {
     if (!session.active() || record.sessionId !== session.sessionId || recovery.current.get(record.order.order_id) !== record || record.checking || mutation.current) return;
     const operation = {}; mutation.current = operation; setPendingSession(session.sessionId);
     try { await checkOrder(record); }
-    finally { if (session.active() && mutation.current === operation) { mutation.current = null; setPendingSession(null); } }
+    finally { if (mutation.current === operation) { mutation.current = null; setPendingSession(null); } }
   };
   const handleUpdate = async (id: number, status: number) => {
     if (!active() || mutation.current || recovery.current.get(id)?.sessionId === session.sessionId || loading || visible?.error || displayed.current !== visible) return;
@@ -184,7 +186,7 @@ export default function AdminOrdersPage() {
       if (unknownWrite(error)) { recovery.current.set(id, record); syncRecovery(); await checkOrder(record); }
       else if (active()) toast.error(translate(requestFailure(error).response?.data?.error || '更新订单状态失败'));
     }
-    finally { if (session.active() && mutation.current === operation) { mutation.current = null; setPendingSession(null); } }
+    finally { if (mutation.current === operation) { mutation.current = null; setPendingSession(null); } }
   };
   return <AdminLayout><div className="space-y-6">
     <div><h1 className="text-2xl font-bold">{t('订单管理')}</h1><p className="text-gray-600 mt-1">{t('查看和管理所有订单')}</p></div>

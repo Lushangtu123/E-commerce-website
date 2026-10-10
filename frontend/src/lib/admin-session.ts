@@ -6,6 +6,8 @@ export const ADMIN_SESSION_EVENT = 'admin-session-changed';
  * Storage only names this sign-in, so every tab can tell when another one signs in or out.
  */
 export const ADMIN_SESSION_KEY = 'admin_session';
+/** Set before a possible cookie write, and retained until its profile or cleanup is confirmed. */
+export const ADMIN_CLEANUP_KEY = 'admin_session_cleanup_pending';
 /** Where signed tokens used to be stored; such a session has no cookie and must sign in again. */
 const LEGACY_TOKEN_KEY = 'admin_token';
 
@@ -49,6 +51,13 @@ export function getAdminSession(): AdminSession | null {
 
 export function getAdminSessionId(): string | null {
   return getAdminSession()?.sessionId ?? null;
+}
+
+/** Read on every protected action, including before a delayed cross-tab storage event arrives. */
+export function adminSessionIsReady(): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return localStorage.getItem(ADMIN_CLEANUP_KEY) !== '1'; }
+  catch { return false; }
 }
 
 /** Records a sign-in whose session cookie the API has just set. */

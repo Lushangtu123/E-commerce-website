@@ -1,5 +1,5 @@
 import { requestFailure } from '@/lib/api-error';
-import { ADMIN_SESSION_KEY, AdminSessionPublicationError, clearAdminSession, getAdminSession, type AdminSession } from '@/lib/admin-session';
+import { ADMIN_CLEANUP_KEY, ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, AdminSessionPublicationError, clearAdminSession, getAdminSession, type AdminSession } from '@/lib/admin-session';
 
 export interface AdminAuthResult { admin: AdminSession['admin'] }
 export interface AdminAuthAttempt {
@@ -18,16 +18,16 @@ let writing = false;
 const waiting: (() => void)[] = [];
 let revision = 0;
 let cleanupPending = false;
-const CLEANUP_KEY = 'admin_session_cleanup_pending';
 
 function needsCleanup() {
-  return cleanupPending || (typeof window !== 'undefined' && localStorage.getItem(CLEANUP_KEY) === '1');
+  return cleanupPending || (typeof window !== 'undefined' && localStorage.getItem(ADMIN_CLEANUP_KEY) === '1');
 }
 function recordCleanup(pending: boolean) {
   cleanupPending = pending;
   if (typeof window !== 'undefined') {
-    if (pending) localStorage.setItem(CLEANUP_KEY, '1');
-    else localStorage.removeItem(CLEANUP_KEY);
+    if (pending) localStorage.setItem(ADMIN_CLEANUP_KEY, '1');
+    else localStorage.removeItem(ADMIN_CLEANUP_KEY);
+    try { window.dispatchEvent(new Event(ADMIN_SESSION_EVENT)); } catch { /* The durable marker still guards each request. */ }
   }
 }
 
@@ -136,16 +136,23 @@ export function adminSignIn(request: () => Promise<AdminAuthResult>, clear: () =
       throw new AdminAuthAbandoned();
     }
     const report = attempt.current();
+    let publishedSessionId: string | null = null;
     try {
       // These synchronous writes finish in this lock before another cookie writer starts.
-      recordCleanup(false);
       attempt.commit(value);
+      publishedSessionId = getAdminSession()?.sessionId ?? null;
+      // Every intermediate identity event remains blocked until both storage writes finish.
+      recordCleanup(false);
     } catch (error) {
       const identity = () => { try { return localStorage.getItem(ADMIN_SESSION_KEY); } catch { return undefined; } };
       const afterFailure = identity();
       try { await clearCookie(clear); } catch { /* Storage failure must not leave an untracked cookie. */ }
       const stillOwned = afterFailure === identity();
-      attempt.forget();
+      if (stillOwned && publishedSessionId && afterFailure === publishedSessionId &&
+          getAdminSession()?.admin.admin_id === value.admin.admin_id) {
+        // Publication succeeded but final marker clearing failed; its cookie has been cleaned above.
+        clearAdminSession(publishedSessionId);
+      } else attempt.forget();
       throw new AdminAuthUnconfirmed(report && stillOwned && !(error instanceof AdminSessionPublicationError && error.sessionReplaced));
     }
     return value;
