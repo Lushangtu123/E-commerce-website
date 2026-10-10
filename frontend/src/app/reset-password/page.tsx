@@ -10,40 +10,63 @@ import { requestFailure } from '@/lib/api-error';
 
 export default function ResetPasswordPage() {
   const { t } = useI18n();
-  const [token, setToken] = useState<string | null>(null), [ready, setReady] = useState(false);
+  const [link, setLink] = useState<{ token: string | null; generation: number }>({ token: null, generation: 0 });
+  const { token, generation } = link;
+  const [ready, setReady] = useState(false);
   const [password, setPassword] = useState(''), [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState<{ error?: string; success?: string } | null>(null);
   const mounted = useRef(true), pending = useRef(false);
   const captured = useRef(false), finished = useRef(false);
+  const capability = useRef(link), retired = useRef(new Set<string>());
+  const pathname = useRef<string | null>(null);
   useEffect(() => {
     mounted.current = true;
-    // Strict Mode replays effects after cleanup. Capture once so that replay
-    // does not replace the credential with null after its fragment is removed.
-    if (!captured.current) {
-      captured.current = true;
+    pathname.current = window.location.pathname;
+    const capture = () => {
+      if (window.location.pathname !== pathname.current || (!window.location.hash && captured.current)) return;
       const match = /^#token=([a-f0-9]{64})$/.exec(window.location.hash);
-      if (window.location.hash) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-      setToken(match?.[1] ?? null); setReady(true);
-    }
-    return () => { mounted.current = false; };
+      if (window.location.hash) window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+      // Strict Mode, hashless history events and repeated links must preserve the
+      // current draft or its single-use outcome after the fragment was removed.
+      if (captured.current && match?.[1] === capability.current.token) return;
+      captured.current = true;
+      capability.current = { token: match && !retired.current.has(match[1]) ? match[1] : null, generation: capability.current.generation + 1 };
+      finished.current = false;
+      setLink(capability.current); setReady(true); setPassword(''); setConfirmation(''); setNotice(null);
+    };
+    capture();
+    window.addEventListener('hashchange', capture);
+    window.addEventListener('popstate', capture);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener('hashchange', capture);
+      window.removeEventListener('popstate', capture);
+    };
   }, []);
+  const current = () => mounted.current && capability.current.generation === generation && capability.current.token === token &&
+    window.location.pathname === pathname.current && !window.location.hash;
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!mounted.current || pending.current || finished.current || !token) return;
+    if (!current() || pending.current || finished.current || !token) return;
     const error = passwordError(password) || (password !== confirmation ? '两次输入的新密码不一致' : null);
     if (error) { setNotice({ error }); return; }
+    // A dispatched capability cannot be published as a fresh link while its
+    // outcome is unknown, including A -> B -> A navigation before the reply.
+    retired.current.add(token);
     pending.current = true; setBusy(true); setNotice(null);
     const previousSession = useAuthStore.getState();
     const finish = (confirmed: boolean) => {
+      retired.current.add(token);
       if (!mounted.current) return;
-      // This capability is single-use. A late or malformed reply cannot prove it
-      // unused, and even an obsolete submit handler must never send it again.
-      finished.current = true;
-      setToken(null); setPassword(''); setConfirmation('');
-      const current = useAuthStore.getState();
+      const auth = useAuthStore.getState();
       try {
-        if (previousSession.sessionId && current.sessionId === previousSession.sessionId && current.user?.user_id === previousSession.user?.user_id && storedSessionId() === previousSession.sessionId) current.logout();
+        if (previousSession.sessionId && auth.sessionId === previousSession.sessionId && auth.user?.user_id === previousSession.user?.user_id && storedSessionId() === previousSession.sessionId) auth.logout();
       } catch { /* Storage denial must not change the reset outcome or clear a replacement session. */ }
+      if (!current()) return;
+      // A late or malformed reply cannot prove this capability unused. Retire it
+      // without clearing a newer link that arrived while this request was pending.
+      finished.current = true;
+      setLink({ token: null, generation }); setPassword(''); setConfirmation('');
       setNotice(confirmed ? { success: '密码已重置，所有旧会话已失效，请使用新密码登录' }
         : { error: '重置密码结果尚未确认，请先尝试用新密码登录；若无法登录，请重新申请重置邮件' });
     };
@@ -51,13 +74,14 @@ export default function ResetPasswordPage() {
       const data: unknown = await userApi.resetPassword({ token, newPassword: password });
       finish(!!data && typeof data === 'object' && 'reauthenticate' in data && data.reauthenticate === true);
     } catch (error) {
-      if (mounted.current) {
-        const failure = requestFailure(error), status = failure.response?.status;
-        if (!status || status === 408 || status === 409 || status === 429 || status >= 500) finish(false);
-        else {
-          if (status === 400 && (failure.response?.data?.code === 'INVALID_RESET_TOKEN' || failure.response?.data?.error === '密码重置链接无效或已过期')) {
-            finished.current = true; setToken(null); setPassword(''); setConfirmation('');
-          }
+      const failure = requestFailure(error), status = failure.response?.status;
+      if (!status || status === 408 || status === 409 || status === 429 || status >= 500) finish(false);
+      else {
+        const invalid = status === 400 && (failure.response?.data?.code === 'INVALID_RESET_TOKEN' || failure.response?.data?.error === '密码重置链接无效或已过期');
+        // A definite field rejection proves it unused; a corrected retry remains possible.
+        if (!invalid) retired.current.delete(token);
+        if (current()) {
+          if (invalid) { finished.current = true; setLink({ token: null, generation }); setPassword(''); setConfirmation(''); }
           setNotice({ error: failure.response?.data?.error || '重置密码失败，请重新申请重置邮件' });
         }
       }

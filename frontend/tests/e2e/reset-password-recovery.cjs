@@ -99,5 +99,88 @@ module.exports = async function resetPasswordRecovery({ browser, localPlatformSc
         await context.close();
       }
     }
+    await resetLinkNavigation({ browser, localPlatformScripts, watchConsole, errors, base, endpoint });
   } finally { await connection.end(); }
 };
+
+/** Synthetic replies stay inside the browser; real one-time SQL consumption is checked above. */
+async function resetLinkNavigation({ browser, localPlatformScripts, watchConsole, errors, base, endpoint }) {
+  const first = 'a'.repeat(64), second = 'b'.repeat(64);
+  const password = 'NavigationFixturePassword123!';
+  for (const scenario of ['invalid tab', 'unused link', 'late confirmed', 'late unknown', 'return while pending']) {
+    const context = await browser.newContext(); let release;
+    try {
+      await localPlatformScripts(context);
+      const page = await context.newPage(); page.setDefaultTimeout(30000);
+      const content = page.locator('main');
+      page.on('pageerror', error => errors.push(error.message)); watchConsole(page, `reset-navigation-${scenario}`);
+      const posted = [];
+      const gate = new Promise(resolve => { release = resolve; });
+      let started;
+      const dispatched = new Promise(resolve => { started = resolve; });
+      await page.route(endpoint, async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        const body = route.request().postDataJSON(); posted.push(body.token);
+        assert.equal(body.newPassword, password);
+        if (body.token === first && (scenario.startsWith('late') || scenario === 'return while pending')) {
+          started(); await gate;
+        }
+        await route.fulfill({ status: 200, json: scenario === 'late unknown' && body.token === first ? {} : { reauthenticate: true } });
+      });
+      await page.goto(`${base}/reset-password?source=email${scenario === 'invalid tab' ? '' : `#token=${first}`}`);
+      await content.locator(scenario === 'invalid tab' ? '[role="alert"]' : 'form').waitFor({ state: 'visible' });
+      const stamp = await page.evaluate(() => {
+        window.resetNavigationDocument = crypto.randomUUID();
+        return window.resetNavigationDocument;
+      });
+      const fill = async () => {
+        await page.getByLabel('新密码', { exact: true }).fill(password);
+        await page.getByLabel('确认新密码', { exact: true }).fill(password);
+      };
+      const navigate = async token => {
+        await page.evaluate(token => { location.hash = `token=${token}`; }, token);
+        await page.waitForFunction(() => !location.hash);
+        assert.equal(await page.evaluate(() => window.resetNavigationDocument), stamp, 'hash-only navigation preserves the same document');
+        assert.equal(new URL(page.url()).search, '?source=email');
+      };
+      if (scenario === 'unused link') {
+        await fill();
+        await content.locator('form').evaluate(form => {
+          const key = Object.keys(form).find(name => name.startsWith('__reactProps$'));
+          const submit = form[key]?.onSubmit;
+          if (typeof submit !== 'function') throw new Error('Rendered reset form lacks a React handler');
+          window.oldResetNavigationSubmit = () => submit({ preventDefault() {} });
+        });
+      }
+      if (scenario.startsWith('late') || scenario === 'return while pending') {
+        await fill(); await page.getByRole('button', { name: '设置新密码', exact: true }).click(); await dispatched;
+      }
+      await navigate(second);
+      await content.locator('form').waitFor({ state: 'visible' });
+      for (const input of await page.locator('input[type="password"]').all()) assert.equal(await input.inputValue(), '');
+      if (scenario.startsWith('late') || scenario === 'return while pending') {
+        assert.equal(await page.getByLabel('新密码', { exact: true }).isDisabled(), true);
+        if (scenario === 'return while pending') {
+          await navigate(first); assert.equal(await content.locator('form').count(), 0);
+        }
+        release();
+        if (scenario === 'return while pending') {
+          await content.getByRole('alert').waitFor({ state: 'visible' });
+          await navigate(second);
+        }
+        await page.getByLabel('新密码', { exact: true }).waitFor({ state: 'visible' });
+        await page.waitForFunction(() => !document.querySelector('input[type="password"]').disabled);
+        assert.equal(await content.getByRole('status').count(), 0);
+        assert.equal(await content.getByRole('alert').count(), 0, 'late A outcomes cannot overwrite the fresh B form');
+      }
+      if (scenario === 'unused link') await page.evaluate(() => window.oldResetNavigationSubmit());
+      assert.deepEqual(posted, scenario.startsWith('late') || scenario === 'return while pending' ? [first] : []);
+      await fill(); await page.getByRole('button', { name: '设置新密码', exact: true }).click();
+      await content.getByRole('status').filter({ hasText: '密码已重置' }).waitFor({ state: 'visible' });
+      assert.equal(posted.at(-1), second, 'only an explicit new submission uses the replacement capability');
+      await navigate(second);
+      assert.equal(await content.locator('form').count(), 0, 'a duplicate consumed capability is not republished');
+      console.log(`PASS browser same-document reset link ${scenario} strips fragments, retires stale handlers and submits only the current capability`);
+    } finally { release?.(); await context.close(); }
+  }
+}
