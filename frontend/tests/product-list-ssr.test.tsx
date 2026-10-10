@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import toast from 'react-hot-toast';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductsPage from '@/app/products/page';
 import ProductListView from '@/components/ProductList';
 import { productApi, type Product, type ProductList } from '@/lib/api';
@@ -25,7 +25,7 @@ vi.mock('@/components/ProductCard', () => ({
   default: ({ product }: { product: Product }) => <div data-testid="product-card">{product.title}</div>,
   ProductCardSkeleton: () => <div data-testid="product-skeleton" />,
 }));
-vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn() } }));
+vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn(), getCategories: vi.fn(async () => []) } }));
 vi.mock('@/lib/site', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/site')>(), fetchApiResult: vi.fn() }));
 
 const list = (titles: string[], totalPages = 1): ProductList =>
@@ -41,6 +41,8 @@ async function serverRender(search: Record<string, string | string[]>, result: A
   container.innerHTML = renderToString(<QueryClientProvider client={createQueryClient()}>{element}</QueryClientProvider>);
   return { element, container };
 }
+
+beforeEach(() => { query.current = new URLSearchParams(); });
 
 describe('server-rendered product list', () => {
   it("puts the first page of the URL's search into the server HTML", async () => {
@@ -187,5 +189,46 @@ describe('server-rendered product list', () => {
     await settle();
     expect(screen.getByText('暂无商品')).toBeInTheDocument();
     expect(productApi.list).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('catalog filter URL and server rendering', () => {
+  it('uses the same category, brand and price constraints for server HTML and hydration', async () => {
+    const search = { keyword: 'shirt', category_id: '3', brand: 'Example & Co', min_price: '20', max_price: '80', sort: 'price ASC' };
+    const { element, container } = await serverRender(search, { kind: 'ok', data: list(['Filtered shirt']) });
+    expect(cards(container)).toEqual(['Filtered shirt']);
+    const path = vi.mocked(fetchApiResult).mock.lastCall![0];
+    expect(Object.fromEntries(new URL(path, 'http://api.test').searchParams)).toEqual({ ...search, page: '1', limit: '20' });
+    const refresh = deferred<ProductList>();
+    vi.mocked(productApi.list).mockReturnValue(refresh.promise);
+    document.body.appendChild(container);
+    const mismatches: unknown[] = [];
+    const root = await act(async () => hydrateRoot(container, <QueryClientProvider client={createQueryClient()}>{element}</QueryClientProvider>,
+      { onRecoverableError: error => { mismatches.push(error); } }));
+    expect(mismatches).toEqual([]);
+    expect(productApi.list).toHaveBeenCalledWith({ keyword: 'shirt', sort: 'price ASC', category_id: 3, brand: 'Example & Co', min_price: 20, max_price: 80, page: 1, limit: 20 });
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('does not turn an invalid price range into an unfiltered catalog', async () => {
+    const { container } = await serverRender({ min_price: '80', max_price: '20' }, { kind: 'ok', data: list(['Unfiltered item']) });
+    expect(fetchApiResult).not.toHaveBeenCalled();
+    expect(cards(container)).toEqual([]);
+    expect(container.textContent).toContain('最高价不能低于最低价');
+    render(<ProductListView />);
+    await settle();
+    expect(productApi.list).not.toHaveBeenCalled();
+  });
+
+  it('never shows a seed belonging to different filters', async () => {
+    const { element } = await serverRender({ brand: 'Old brand' }, { kind: 'ok', data: list(['Old brand product']) });
+    query.current = new URLSearchParams({ brand: 'New brand' });
+    vi.mocked(productApi.list).mockReturnValue(deferred<ProductList>().promise);
+    render(element);
+    await settle();
+    expect(cards()).toEqual([]);
+    expect(productApi.list).toHaveBeenCalledWith({ keyword: '', sort: 'created_at DESC', brand: 'New brand', page: 1, limit: 20 });
   });
 });

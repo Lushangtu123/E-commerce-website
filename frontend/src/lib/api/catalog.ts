@@ -43,6 +43,7 @@ export interface ProductList {
 
 export const productApi = {
   list: (params?: object) => api.get<unknown, ProductList>('/products', { params }),
+  getCategories: () => api.get<unknown, { category_id: number; name: string }[]>('/products/categories'),
   getDetail: (id: number) => api.get<unknown, { product: Product }>(`/products/${id}`),
   getHotProducts: (limit?: number) => api.get<unknown, { products: Product[] }>('/products/hot', { params: { limit } }),
 };

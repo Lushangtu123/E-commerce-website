@@ -40,6 +40,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Product reviews and ratings
 
 ### Product Features
+- Category, exact brand and price-range filters have Apply/Reset controls. Applied filters stay in the URL and share the server first page, client query and pagination; invalid ranges require correction.
 - Product list (pagination and sorting)
 - Promotion badges and crossed-out original prices appear only when the original price exceeds the selling price, including decimal strings returned by MySQL
 - Product details

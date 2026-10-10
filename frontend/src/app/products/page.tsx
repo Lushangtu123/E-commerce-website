@@ -3,6 +3,7 @@ import ProductListView, { type ProductListSeed } from '@/components/ProductList'
 import { ProductCardSkeleton } from '@/components/ProductCard';
 import type { ProductList } from '@/lib/api';
 import { fetchApiResult } from '@/lib/site';
+import { CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, readCatalogDraft } from '@/lib/catalog-filters';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) || '';
@@ -11,9 +12,11 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 async function loadSeed(params: SearchParams): Promise<ProductListSeed | null> {
   const keyword = first(params.keyword);
   const sort = first(params.sort) || 'created_at DESC';
-  const search = new URLSearchParams({ ...(keyword && { keyword }), sort, page: '1', limit: '20' });
+  const { filters, error } = parseCatalogFilters(readCatalogDraft({ get: key => first(params[key]) }));
+  if (error || !CATALOG_SORTS.includes(sort)) return null;
+  const search = new URLSearchParams({ ...(keyword && { keyword }), sort, ...catalogFilterParams(filters), page: '1', limit: '20' });
   const result = await fetchApiResult<ProductList>(`/products?${search}`, { revalidate: 60 });
-  return result.kind === 'ok' && Array.isArray(result.data.products) ? { keyword, sort, list: result.data } : null;
+  return result.kind === 'ok' && Array.isArray(result.data.products) ? { keyword, sort, filters, list: result.data } : null;
 }
 
 // Server-rendered so the HTML already carries the first page of products.
