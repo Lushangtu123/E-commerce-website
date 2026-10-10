@@ -193,7 +193,7 @@ describe('admin fulfillment', () => {
       expect(writes[0].data).toEqual({ status: 'approved', note: 'Contact the customer to arrange follow-up' });
       expect(writes[0].authorization).toBe('session:admin-a');
 
-      await act(async () => pending.resolve({}));
+      await act(async () => pending.resolve({ after_sales: { ...request('approved'), review_note: 'Contact the customer to arrange follow-up', reviewed_at: '2026-10-10T10:00:00Z' } }));
       await settle();
       expect(notices.at(-1)).toBe('售后审核已保存，未执行资金退款');
     });
