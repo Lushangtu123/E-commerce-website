@@ -178,9 +178,12 @@ export function customerSignIn(request: () => Promise<AuthSession>, clear: () =>
     }
     // Publishing the profile belongs to the same lock as Set-Cookie, before the next write starts.
     const report = !attempt || attempt.reportable();
+    let publishedSessionId: string | null = null;
     try {
-      recordCleanup(false);
       attempt?.commit(data);
+      if (attempt) publishedSessionId = useAuthStore.getState().sessionId;
+      // Other tabs must keep protected requests blocked until the profile is fully recorded.
+      recordCleanup(false);
     } catch (error) {
       const identity = () => { try { return storedSessionId(); } catch { return undefined; } };
       const afterFailure = identity();
@@ -190,7 +193,12 @@ export function customerSignIn(request: () => Promise<AuthSession>, clear: () =>
         // The cookie is gone, but a readable mixed pair must also stay signed out after reload.
         try { recordCleanup(true); } catch { /* The in-memory marker still blocks a later credential write. */ }
       }
-      attempt?.forget();
+      const state = useAuthStore.getState();
+      if (stillOwned && publishedSessionId && afterFailure === publishedSessionId &&
+          state.sessionId === publishedSessionId && state.user?.user_id === data.user.user_id) {
+        // Publication succeeded but clearing its marker failed; the cookie was still cleaned above.
+        useAuthStore.getState().logout();
+      } else attempt?.forget();
       throw new CustomerAuthUnconfirmed(report && stillOwned && !(error instanceof CustomerSessionPublicationError && error.sessionReplaced), 'storage');
     }
     return data;

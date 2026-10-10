@@ -1,9 +1,10 @@
 /** The shared API client: one axios instance that checks and records the session of every request. */
 import axios, { type AxiosRequestConfig } from 'axios';
-import { SESSION_KEY, storedSessionId, useAuthStore } from '@/store/useAuthStore';
+import { CUSTOMER_CLEANUP_KEY, SESSION_KEY, storedSessionId, useAuthStore } from '@/store/useAuthStore';
 import { ADMIN_SESSION_KEY, clearAdminSession } from '@/lib/admin-session';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const EXPECTED_CUSTOMER_HEADER = 'X-Expected-Customer-Id';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -51,13 +52,23 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
 // 请求拦截器：核对会话，记录请求所属的登录
 api.interceptors.request.use(
   (config) => {
+    // Bind protected customer calls to this tab's profile; callers cannot select another account.
+    config.headers.delete(EXPECTED_CUSTOMER_HEADER);
     if (typeof window !== 'undefined') {
       const identity = getRequestIdentity(config);
       if (identity === 'customer') {
         const auth = useAuthStore.getState();
         const sessionId = storedSessionId();
         // Another tab signed in or out: the cookie may no longer belong to the account this tab shows.
-        if (auth.isHydrated && auth.sessionId !== sessionId) throw new Error('登录状态已变化，请刷新后重试');
+        if (localStorage.getItem(CUSTOMER_CLEANUP_KEY) === '1' || (auth.isHydrated && auth.sessionId !== sessionId)) {
+          throw new Error('登录状态已变化，请刷新后重试');
+        }
+        if (auth.isHydrated && auth.isAuthenticated) {
+          const userId = auth.user?.user_id;
+          if (!Number.isSafeInteger(userId) || Number(userId) <= 0) throw new Error('登录状态已变化，请刷新后重试');
+          // The cookie can change after this check. The API rejects a different authenticated customer.
+          config.headers.set(EXPECTED_CUSTOMER_HEADER, String(userId));
+        }
         requestSessions.set(config, sessionId);
       }
       // The raw stored id, so a 401 can also clear a stored session whose profile is unreadable.

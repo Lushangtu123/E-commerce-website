@@ -16,6 +16,21 @@ function userPayload(decoded: string | jwt.JwtPayload): decoded is jwt.JwtPayloa
     (decoded.authVersion === undefined || (Number.isSafeInteger(decoded.authVersion) && decoded.authVersion >= 0));
 }
 
+/** An expected profile only constrains an already verified identity; it never authenticates. */
+function matchesExpectedCustomer(req: Request, res: Response, userId: number): boolean {
+  const expected = req.get('X-Expected-Customer-Id');
+  if (expected === undefined) return true;
+  if (!/^[1-9]\d*$/.test(expected) || !Number.isSafeInteger(Number(expected))) {
+    res.status(400).json({ error: '请求格式无效' });
+    return false;
+  }
+  if (Number(expected) !== userId) {
+    res.status(409).json({ error: '登录状态已变化，请刷新后重试' });
+    return false;
+  }
+  return true;
+}
+
 export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   let decoded: jwt.JwtPayload;
   try {
@@ -34,6 +49,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
   try {
     const version = await UserModel.getAuthVersion(decoded.userId);
     if (version === null || version !== (decoded.authVersion ?? 0)) return res.status(401).json({ error: '登录已过期，请重新登录' });
+    if (!matchesExpectedCustomer(req, res, decoded.userId)) return;
     req.userId = decoded.userId;
     req.user = decoded;
     return next();
@@ -52,6 +68,7 @@ export async function optionalAuth(req: AuthRequest, res: Response, next: NextFu
     if (token) {
       const decoded = jwt.verify(token, jwtSecret()) as any;
       if (userPayload(decoded) && (await UserModel.getAuthVersion(decoded.userId)) === (decoded.authVersion ?? 0)) {
+        if (!matchesExpectedCustomer(req, res, decoded.userId)) return;
         req.userId = decoded.userId;
         req.user = decoded;
       }

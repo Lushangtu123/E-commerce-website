@@ -17,6 +17,12 @@ module.exports = async function queuedPasswordAccount({ browser, localPlatformSc
     for (const [page, label] of [[pageA, 'queued-password-a'], [pageB, 'queued-password-b']]) {
       page.setDefaultTimeout(30000); page.on('pageerror', error => errors.push(error.message)); watchConsole(page, label);
     }
+    // Model a background tab whose pending-marker event has not been processed yet.
+    // Install before the app listener; the publication test covers immediate form hiding.
+    // This test still exercises a real queued callback, with later identity events active.
+    await pageA.addInitScript(() => window.addEventListener('storage', event => {
+      if (event.key === 'customer_session_cleanup_pending' && event.newValue === '1') event.stopImmediatePropagation();
+    }));
     const login = async (page, account) => {
       await page.goto('http://127.0.0.1:3100/login');
       await page.getByLabel('邮箱', { exact: true }).fill(account.email);
@@ -40,11 +46,13 @@ module.exports = async function queuedPasswordAccount({ browser, localPlatformSc
     await pageA.getByRole('button', { name: '修改密码', exact: true }).click();
     await pageA.getByRole('button', { name: '处理中...', exact: true }).waitFor({ state: 'visible' });
     assert.equal(writes, 0, 'password change is waiting for the other tab cookie lock');
-    const switchedProfile = pageA.waitForResponse(response => response.request().method() === 'GET' && response.url() === `${api}/users/profile`);
     releaseLogin(); await pageB.waitForURL('http://127.0.0.1:3100/');
     await pageB.getByText(accounts[1].username, { exact: true }).waitFor({ state: 'visible' });
-    assert.equal((await switchedProfile).status(), 200, 'the switched account profile read succeeds before checking its form');
-    await pageA.waitForFunction(username => document.querySelector('input[name="username"]')?.value === username, accounts[1].username);
+    // Profile publication keeps the marker through user/session events. The old tab leaves
+    // its protected form before marker removal publishes B's completed profile there too.
+    await pageA.waitForURL('http://127.0.0.1:3100/login');
+    await pageA.getByText(accounts[1].username, { exact: true }).waitFor({ state: 'visible' });
+    assert.equal(await pageA.getByLabel('当前密码', { exact: true }).count(), 0, 'the obsolete password form is gone');
     await pageA.waitForFunction(username => JSON.parse(localStorage.getItem('user'))?.username === username, accounts[1].username);
     // Await the queued callback, rather than ending the test while it still owns/waits on the lock.
     await pageA.evaluate(() => navigator.locks.request('customer-session-cookie', () => undefined));

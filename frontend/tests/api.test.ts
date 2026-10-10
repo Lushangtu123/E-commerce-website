@@ -258,7 +258,7 @@ describe('API client sign-out on 401', () => {
   it.each(['customer', 'admin'] as const)('cannot clear a newly signed-in %s with a late 401 from the earlier session', async (identity) => {
     const tokenKey = identity === 'admin' ? 'admin_session' : 'session';
     const userKey = identity === 'admin' ? 'admin_user' : 'user';
-    const loaded = await setupApi({ [tokenKey]: 'old-session', [userKey]: '{"id":1}' });
+    const loaded = await setupApi({ [tokenKey]: 'old-session', [userKey]: identity === 'customer' ? '{"user_id":1}' : '{"id":1}' });
     const started = deferred<() => void>();
     const adapter: AxiosAdapter = config => new Promise((_, reject) => {
       started.resolve(() => reject(Object.assign(new Error('Unauthorized'), { config, response: { status: 401 } })));
