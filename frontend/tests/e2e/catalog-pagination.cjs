@@ -30,6 +30,13 @@ module.exports = async function catalogPagination({ browser, localPlatformScript
     await waitForProducts(serverPage, titles(second));
     assert.equal(new URL(serverPage.url()).searchParams.get('page'), '2');
     console.log('PASS browser catalog shared page two is present in server HTML with JavaScript disabled');
+    assert.equal(await serverPage.locator(`a[href="/products/${second.products[0].product_id}"] button`).isDisabled(), true);
+    console.log('PASS browser server-rendered product card is disabled before JavaScript hydration');
+    for (const selector of ['#product-sort', '#catalog-category', '#catalog-brand', '#catalog-min_price', '#catalog-max_price']) {
+      assert.equal(await serverPage.locator(selector).isDisabled(), true);
+    }
+    assert.equal(await serverPage.locator('button').filter({ hasText: '下一页' }).isDisabled(), true);
+    console.log('PASS browser server-rendered catalog controls are disabled before JavaScript hydration');
 
     const page = await context.newPage();
     page.setDefaultTimeout(30000);

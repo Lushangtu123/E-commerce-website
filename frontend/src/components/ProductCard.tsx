@@ -4,7 +4,7 @@ import { translate, useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { quickAddToCart } from '@/lib/quick-cart';
 import { useRouter } from 'next/navigation';
 import { storedSessionId, useAuthStore } from '@/store/useAuthStore';
@@ -20,10 +20,17 @@ interface ProductCardProps {
   product: Product;
 }
 
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
 export default function ProductCard({ product }: ProductCardProps) {
   const { t, locale } = useI18n();
   const title = localizedText(product.title, product.title_en, locale);
-  const { isAuthenticated, sessionId, user } = useAuthStore();
+  const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
+  // A hydrated header does not mean this streamed card has its click handler yet.
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
+  const ready = hydrated && isHydrated;
   const context = JSON.stringify([product.product_id, sessionId, user?.user_id]);
   const active = useRef(true);
   const productContext = useRef(context);
@@ -36,6 +43,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
+    if (!ready) return;
     const current = () => {
       const auth = useAuthStore.getState();
       if (!active.current || productContext.current !== context || auth.isAuthenticated !== isAuthenticated ||
@@ -119,7 +127,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
           <button
             onClick={handleAddToCart}
-            disabled={isAdding || soldOut}
+            disabled={!ready || isAdding || soldOut}
             className={`flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-medium transition-colors ${
               soldOut
                 ? 'cursor-not-allowed bg-gray-100 text-gray-400'

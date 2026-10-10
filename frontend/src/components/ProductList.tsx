@@ -109,7 +109,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   }, [query.error]);
 
   const handlePageChange = (next: number) => {
-    if (currentScope.current !== scope || next < 1 || next > totalPages || next === page) return;
+    if (!hydrated || currentScope.current !== scope || next < 1 || next > totalPages || next === page) return;
     const params = new URLSearchParams(search);
     if (next === 1) params.delete('page');
     else params.set('page', String(next));
@@ -135,8 +135,9 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
               <select
                 id="product-sort"
                 value={sort}
+                disabled={!hydrated}
                 onChange={(e) => {
-                  if (currentScope.current !== scope) return;
+                  if (!hydrated || currentScope.current !== scope) return;
                   const params = new URLSearchParams(searchParams);
                   params.set('sort', e.target.value);
                   params.delete('page');
@@ -151,8 +152,8 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
               </select>
             </div>
           </div>
-          <CatalogFilters initial={draft} scope={searchScope} onApply={nextFilters => {
-            if (currentScope.current !== scope) return;
+          <CatalogFilters initial={draft} scope={searchScope} disabled={!hydrated} onApply={nextFilters => {
+            if (!hydrated || currentScope.current !== scope) return;
             const params = new URLSearchParams(searchParams);
             CATALOG_FILTER_KEYS.forEach(key => params.delete(key));
             Object.entries(catalogFilterParams(nextFilters)).forEach(([key, value]) => params.set(key, value));
@@ -197,7 +198,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handlePageChange(pagination.page - 1)}
-                    disabled={pagination.page === 1}
+                    disabled={!hydrated || pagination.page === 1}
                     className="btn btn-secondary disabled:opacity-50"
                   >
                     {t("上一页")}</button>
@@ -213,6 +214,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                         <button
                           key={page}
                           onClick={() => handlePageChange(page)}
+                          disabled={!hydrated}
                           className={`btn ${
                             page === pagination.page ? 'btn-primary' : 'btn-secondary'
                           }`}
@@ -228,7 +230,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                   
                   <button
                     onClick={() => handlePageChange(pagination.page + 1)}
-                    disabled={pagination.page === pagination.totalPages}
+                    disabled={!hydrated || pagination.page === pagination.totalPages}
                     className="btn btn-secondary disabled:opacity-50"
                   >
                     {t("下一页")}</button>
