@@ -2,7 +2,7 @@
 
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { productApi, type ProductList as ProductListResult } from '@/lib/api';
@@ -11,7 +11,7 @@ import { FiPackage } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import CatalogFilters from '@/components/CatalogFilters';
-import { CATALOG_FILTER_KEYS, CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, readCatalogDraft, type CatalogFilters as Filters } from '@/lib/catalog-filters';
+import { CATALOG_FILTER_KEYS, CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, parseCatalogPage, readCatalogDraft, type CatalogFilters as Filters } from '@/lib/catalog-filters';
 
 const LIMIT = 20;
 
@@ -23,8 +23,8 @@ export interface ProductListSeed {
 }
 
 /**
- * The product list. The server renders page one of the URL's search as `seed`, so the HTML carries
- * the products; the client refreshes it after hydration and loads later pages itself.
+ * The URL supplies the applied search and page. A matching server seed carries the products
+ * in the HTML; the client refreshes that same page after hydration.
  */
 export default function ProductListView({ seed = null }: { seed?: ProductListSeed | null }) {
   const { t } = useI18n();
@@ -36,14 +36,27 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   const { filters, error } = parseCatalogFilters(draft);
   const filterError = error || (!CATALOG_SORTS.includes(sort) ? '请选择有效的商品排序' : undefined);
   const searchScope = JSON.stringify([keyword, sort, draft]);
-  // A page belongs to the entire applied search; filter navigation starts on page one.
-  const [pageState, setPageState] = useState({ searchScope, page: 1 });
-  if (pageState.searchScope !== searchScope) setPageState({ searchScope, page: 1 });
-  const page = pageState.searchScope === searchScope ? pageState.page : 1;
-  const scope = JSON.stringify([searchScope, page]);
+  const pageValues = searchParams.getAll('page');
+  const page = parseCatalogPage(pageValues.length === 1 ? pageValues[0] : pageValues);
+  const pageNeedsCorrection = pageValues.length > 0 && (page === 1 || pageValues.length !== 1 || pageValues[0] !== String(page));
+  const search = searchParams.toString();
+  const scope = JSON.stringify([searchScope, page, search]);
   const currentScope = useRef(scope);
-  currentScope.current = scope;
-  const seeded = !filterError && seed && seed.keyword === keyword && seed.sort === sort && JSON.stringify(catalogFilterParams(seed.filters ?? {})) === JSON.stringify(catalogFilterParams(filters)) && page === 1 ? seed.list : undefined;
+  useLayoutEffect(() => { currentScope.current = scope; }, [scope]);
+  const correction = useRef<string | null>(null);
+  const navigate = useCallback((href: string, replace = false) => {
+    // Next may wait for server HTML before committing searchParams. Old results must not
+    // replace a newer requested URL while that navigation is still in progress.
+    if (new URL(href, window.location.origin).search.slice(1) !== search) currentScope.current = `navigation:${href}`;
+    try {
+      if (replace) router.replace(href, { scroll: false });
+      else router.push(href);
+    } catch (error) {
+      currentScope.current = scope;
+      throw error;
+    }
+  }, [router, scope, search]);
+  const seeded = !filterError && seed && seed.keyword === keyword && seed.sort === sort && JSON.stringify(catalogFilterParams(seed.filters ?? {})) === JSON.stringify(catalogFilterParams(filters)) && seed.list.page === page ? seed.list : undefined;
   const query = useQuery({
     queryKey: ['products', keyword, sort, filters, page, filterError],
     queryFn: () => productApi.list({ keyword, sort, ...filters, page, limit: LIMIT }),
@@ -61,10 +74,21 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
   const loading = !filterError && !data && !loadError;
   const pagination = { page, totalPages };
 
-  // Catalog edits may remove the page being read. Hide that response until the valid page loads.
+  // Canonicalize malformed pages and recover from catalog shrinkage without adding history entries.
+  // Hide an out-of-range response until its replacement page loads.
   useEffect(() => {
-    if (beyondLastPage && currentScope.current === scope) setPageState({ searchScope, page: lastPage });
-  }, [beyondLastPage, searchScope, lastPage, scope]);
+    if (currentScope.current !== scope) return;
+    if (!beyondLastPage && !pageNeedsCorrection) { correction.current = null; return; }
+    const params = new URLSearchParams(search);
+    const next = beyondLastPage ? lastPage : page;
+    if (next === 1) params.delete('page');
+    else params.set('page', String(next));
+    const href = `/products${params.size ? `?${params}` : ''}`;
+    const key = JSON.stringify([search, href]);
+    if (correction.current === key) return;
+    correction.current = key;
+    navigate(href, true);
+  }, [beyondLastPage, pageNeedsCorrection, lastPage, page, search, scope, navigate]);
 
   useEffect(() => {
     if (!query.error) return;
@@ -74,7 +98,10 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
 
   const handlePageChange = (next: number) => {
     if (currentScope.current !== scope || next < 1 || next > totalPages || next === page) return;
-    setPageState({ searchScope, page: next });
+    const params = new URLSearchParams(search);
+    if (next === 1) params.delete('page');
+    else params.set('page', String(next));
+    navigate(`/products${params.size ? `?${params}` : ''}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -97,10 +124,11 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
                 id="product-sort"
                 value={sort}
                 onChange={(e) => {
+                  if (currentScope.current !== scope) return;
                   const params = new URLSearchParams(searchParams);
                   params.set('sort', e.target.value);
                   params.delete('page');
-                  router.push(`/products?${params.toString()}`);
+                  navigate(`/products?${params.toString()}`);
                 }}
                 className="input h-10 w-auto py-0 text-sm"
               >
@@ -117,8 +145,7 @@ export default function ProductListView({ seed = null }: { seed?: ProductListSee
             CATALOG_FILTER_KEYS.forEach(key => params.delete(key));
             Object.entries(catalogFilterParams(nextFilters)).forEach(([key, value]) => params.set(key, value));
             params.delete('page');
-            setPageState({ searchScope, page: 1 });
-            router.push(`/products${params.size ? `?${params}` : ''}`);
+            navigate(`/products${params.size ? `?${params}` : ''}`);
           }} />
         </div>
 

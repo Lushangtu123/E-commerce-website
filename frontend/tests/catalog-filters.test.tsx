@@ -1,3 +1,4 @@
+import { installCatalogRouter } from './catalog-router';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductListView from '@/components/ProductList';
@@ -5,16 +6,19 @@ import { productApi, type ProductList } from '@/lib/api';
 import { useLocaleStore } from '@/store/useLocaleStore';
 import { deferred, render, settle } from './helpers';
 
-const router = vi.hoisted(() => ({ push: vi.fn() }));
-const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router, useSearchParams: () => query.current }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+const query = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
+vi.mock('next/navigation', async () => {
+  const { useCatalogSearchParams } = await import('./catalog-router');
+  return { useRouter: () => router, useSearchParams: () => useCatalogSearchParams(query) };
+});
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => ({ default: { error: vi.fn() } }));
 vi.mock('@/components/ProductCard', () => ({ default: ({ product }: { product: { title: string } }) => <div>{product.title}</div>, ProductCardSkeleton: () => <div /> }));
 vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn(), getCategories: vi.fn(async () => [{ category_id: 3, name: 'Clothing' }]) } }));
 
 const result = { products: [], page: 1, limit: 20, total: 60, totalPages: 3 } as ProductList;
-beforeEach(() => { query.current = new URLSearchParams(); vi.mocked(productApi.list).mockResolvedValue(result); vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
+beforeEach(() => { installCatalogRouter(router, query); query.current = new URLSearchParams(); vi.mocked(productApi.list).mockResolvedValue(result); vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
 
 describe('catalog filter form', () => {

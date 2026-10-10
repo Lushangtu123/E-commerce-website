@@ -1,3 +1,4 @@
+import { installCatalogRouter } from './catalog-router';
 import { act, fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,10 +10,13 @@ import { useLocaleStore } from '@/store/useLocaleStore';
 import { captureHandler, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
-const router = vi.hoisted(() => ({ push: vi.fn() }));
-const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+const query = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
 const errors = vi.hoisted(() => [] as string[]);
-vi.mock('next/navigation', () => ({ useRouter: () => router, useSearchParams: () => query.current, usePathname: () => '/' }));
+vi.mock('next/navigation', async () => {
+  const { useCatalogSearchParams } = await import('./catalog-router');
+  return { useRouter: () => router, useSearchParams: () => useCatalogSearchParams(query), usePathname: () => '/' };
+});
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
   const toast = { error: (message: string) => { errors.push(message); }, success: vi.fn() };
@@ -36,6 +40,7 @@ const userB = { user_id: 2, username: 'B', email: 'b@test' };
 const keyword = (text: string) => ({ keyword: text }) as SearchKeyword;
 
 beforeEach(() => {
+  installCatalogRouter(router, query);
   errors.length = 0;
   query.current = new URLSearchParams({ keyword: 'old' });
 });
@@ -312,8 +317,9 @@ describe('product search results', () => {
     await clickPage('3');
 
     fireEvent.change(screen.getByLabelText('排序:'), { target: { value: 'price ASC' } });
-    expect(router.push).toHaveBeenCalledTimes(1);
-    const next = new URL(router.push.mock.calls[0][0], 'http://localhost').searchParams;
+    expect(router.push).toHaveBeenCalledTimes(2);
+    expect(new URL(router.push.mock.calls[0][0], 'http://localhost').searchParams.get('page')).toBe('3');
+    const next = new URL(router.push.mock.lastCall![0], 'http://localhost').searchParams;
     expect(next.get('keyword')).toBe('old');
     expect(next.get('sort')).toBe('price ASC');
 

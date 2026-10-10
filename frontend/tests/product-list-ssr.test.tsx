@@ -1,3 +1,4 @@
+import { installCatalogRouter } from './catalog-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -12,9 +13,12 @@ import { createQueryClient } from '@/lib/query-client';
 import { fetchApiResult, type ApiResult } from '@/lib/site';
 import { CommitLog, captureHandler, deferred, render, settle } from './helpers';
 
-const router = vi.hoisted(() => ({ push: vi.fn() }));
-const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router, useSearchParams: () => query.current }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+const query = vi.hoisted(() => ({ current: new URLSearchParams(), listeners: new Set<() => void>() }));
+vi.mock('next/navigation', async () => {
+  const { useCatalogSearchParams } = await import('./catalog-router');
+  return { useRouter: () => router, useSearchParams: () => useCatalogSearchParams(query) };
+});
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
   const toast = { error: vi.fn(), success: vi.fn() };
@@ -34,7 +38,7 @@ const cards = (root: ParentNode = document.body) => Array.from(root.querySelecto
 
 /** Renders the server page the way Next does: the async page first, then its element to HTML. */
 async function serverRender(search: Record<string, string | string[]>, result: ApiResult<ProductList>) {
-  query.current = new URLSearchParams(Object.entries(search).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]));
+  query.current = new URLSearchParams(Object.entries(search).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map(item => [key, item])));
   vi.mocked(fetchApiResult).mockResolvedValue(result);
   const element = await ProductsPage({ searchParams: Promise.resolve(search) }) as ReactElement;
   const container = document.createElement('div');
@@ -42,7 +46,7 @@ async function serverRender(search: Record<string, string | string[]>, result: A
   return { element, container };
 }
 
-beforeEach(() => { query.current = new URLSearchParams(); });
+beforeEach(() => { installCatalogRouter(router, query); query.current = new URLSearchParams(); });
 
 describe('server-rendered product list', () => {
   it("puts the first page of the URL's search into the server HTML", async () => {
@@ -159,6 +163,8 @@ describe('server-rendered product list', () => {
     await settle();
 
     expect(vi.mocked(productApi.list).mock.lastCall?.[0]).toMatchObject({ page: 2 });
+    expect(query.current.get('page')).toBe('2');
+    expect(router.replace).toHaveBeenCalledTimes(1);
     expect(commits.some(commit => commit.textContent?.includes('暂无商品'))).toBe(false);
     await act(async () => fallback.resolve(list(['Remaining page two'], 2)));
     await settle();
@@ -180,6 +186,8 @@ describe('server-rendered product list', () => {
 
     expect(vi.mocked(productApi.list).mock.lastCall?.[0]).toMatchObject({ page: 1 });
     expect(productApi.list).toHaveBeenCalledTimes(3);
+    expect(query.current.has('page')).toBe(false);
+    expect(router.replace).toHaveBeenCalledTimes(1);
     expect(screen.getByText('暂无商品')).toBeInTheDocument();
   });
 
@@ -230,5 +238,29 @@ describe('catalog filter URL and server rendering', () => {
     await settle();
     expect(cards()).toEqual([]);
     expect(productApi.list).toHaveBeenCalledWith({ keyword: '', sort: 'created_at DESC', brand: 'New brand', page: 1, limit: 20 });
+  });
+});
+
+describe('URL page server rendering', () => {
+  it('seeds the requested later page and hydrates exactly that page', async () => {
+    const pageTwo = { ...list(['Server page two'], 3), page: 2 };
+    const { element, container } = await serverRender({ keyword: 'shirt', page: '2' }, { kind: 'ok', data: pageTwo });
+    expect(new URL(vi.mocked(fetchApiResult).mock.lastCall![0], 'http://api.test').searchParams.get('page')).toBe('2');
+    expect(cards(container)).toEqual(['Server page two']);
+    vi.mocked(productApi.list).mockReturnValue(deferred<ProductList>().promise);
+    document.body.appendChild(container);
+    const mismatches: unknown[] = [];
+    const root = await act(async () => hydrateRoot(container, <QueryClientProvider client={createQueryClient()}>{element}</QueryClientProvider>,
+      { onRecoverableError: error => { mismatches.push(error); } }));
+    expect(mismatches).toEqual([]);
+    expect(cards()).toEqual(['Server page two']);
+    expect(productApi.list).toHaveBeenCalledWith({ keyword: 'shirt', sort: 'created_at DESC', page: 2, limit: 20 });
+    act(() => root.unmount()); container.remove();
+  });
+
+  it.each(['0', '1e2', '2147483648', ['2', '3']])('requests a safe first page for malformed server page %s', async page => {
+    const { container } = await serverRender({ page }, { kind: 'ok', data: list(['Safe first page'], 3) });
+    expect(new URL(vi.mocked(fetchApiResult).mock.lastCall![0], 'http://api.test').searchParams.get('page')).toBe('1');
+    expect(cards(container)).toEqual(['Safe first page']);
   });
 });
