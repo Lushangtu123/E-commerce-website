@@ -9,6 +9,7 @@ import { normalizeAdminLogin } from '../utils/admin-login-validation';
 import { UserValidationError } from '../utils/user-validation';
 import { logAdminAction } from './admin-log.controller';
 import { jwtSecret } from '../utils/jwt-secret';
+import { AdminLogoutReceiptCapacityError, adminRevocationTarget, clearAdminLogoutReceipt, prepareAdminLogoutReceipt, readAdminLogoutReceipt, revokeAdminTargets, setAdminLogoutReceipt } from '../utils/admin-logout-recovery';
 
 // 管理员登录
 export const adminLogin = async (req: Request, res: Response) => {
@@ -41,6 +42,22 @@ export const adminLogin = async (req: Request, res: Response) => {
     const isValidPassword = await bcrypt.compare(password, admin.password_hash);
     if (!isValidPassword) {
       return res.status(401).json({ error: '用户名或密码错误' });
+    }
+
+    // A new login must not overwrite the only proof of an earlier unfinished logout.
+    const pending = readAdminLogoutReceipt(req);
+    if (pending) {
+      try {
+        await revokeAdminTargets(pool, pending.targets);
+        const [fresh] = await pool.query('SELECT auth_version FROM admins WHERE admin_id = ?', [admin.admin_id]);
+        if (!Array.isArray(fresh) || fresh.length !== 1 || !Number.isSafeInteger(Number((fresh[0] as any).auth_version))) {
+          throw new Error('Administrator session version was not confirmed');
+        }
+        admin.auth_version = Number((fresh[0] as any).auth_version);
+      } catch (error) {
+        logger.error({ err: error }, '管理员会话撤销失败');
+        return res.status(503).json({ error: '退出尚未完成，请重试' });
+      }
     }
 
     // 生成 JWT Token
@@ -78,6 +95,7 @@ export const adminLogin = async (req: Request, res: Response) => {
 
     // The signed token travels only in the httpOnly cookie; page scripts never see it.
     setSessionCookie(res, ADMIN_COOKIE, token);
+    clearAdminLogoutReceipt(res);
     res.json({
       admin: {
         admin_id: admin.admin_id,
@@ -137,29 +155,31 @@ export const getAdminProfile = async (req: Request, res: Response) => {
 
 /**
  * 管理员退出登录：清除会话 Cookie，并递增 auth_version，使该管理员所有已签发的令牌立即失效。
- * 即使令牌已过期也能退出，所以不经过管理员认证；只有有效且版本仍为当前值的令牌才会触发撤销。
+ * 撤销失败时保留仅用于重试的签名回执；其身份和版本不能用于认证，也不会影响更新版本的会话。
+ * 即使令牌已过期也能退出，所以不经过管理员认证。
  */
 export const adminLogout = async (req: Request, res: Response) => {
   if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
-  clearSessionCookie(res, ADMIN_COOKIE);
-
-  let session: jwt.JwtPayload | undefined;
+  const receipt = readAdminLogoutReceipt(req);
+  const target = adminRevocationTarget(sessionToken(req, ADMIN_COOKIE).token);
+  let retryToken: string | undefined;
   try {
-    const verified = jwt.verify(sessionToken(req, ADMIN_COOKIE).token || '', jwtSecret());
-    if (typeof verified === 'object' && verified.type === 'admin' && Number.isSafeInteger(verified.adminId) && verified.adminId > 0) session = verified;
-  } catch {
-    // 过期或无效的令牌已无法使用，只需清除 Cookie
+    retryToken = prepareAdminLogoutReceipt(receipt, target);
+  } catch (error) {
+    if (!(error instanceof AdminLogoutReceiptCapacityError)) throw error;
+    // Keep both credentials intact when the browser cannot safely retain another target.
+    return res.status(503).json({ error: '退出尚未完成，请重试' });
   }
-  if (session) {
+  clearSessionCookie(res, ADMIN_COOKIE);
+  if (retryToken) {
+    setAdminLogoutReceipt(res, retryToken);
     try {
-      await getPool().query(
-        'UPDATE admins SET auth_version = auth_version + 1 WHERE admin_id = ? AND auth_version = ?',
-        [session.adminId, session.authVersion ?? 0]
-      );
+      await revokeAdminTargets(getPool(), [...(receipt?.targets ?? []), ...(target ? [target] : [])]);
     } catch (error) {
       logger.error({ err: error }, '管理员会话撤销失败');
       return res.status(503).json({ error: '已在本设备退出，但未能注销其他会话，请稍后重试' });
     }
   }
+  clearAdminLogoutReceipt(res);
   return res.json({ message: '已退出登录' });
 };

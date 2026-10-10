@@ -122,6 +122,7 @@ export const errorTranslations: Record<string, string> = {
   '请求体过大': 'The request body is too large',
   '请求格式无效': 'The request format is invalid',
   '已在本设备退出，但未能注销其他会话，请稍后重试': 'Signed out on this device, but other sessions could not be signed out. Please try again later',
+  '退出尚未完成，请重试': 'Sign-out is not complete. Please try again.',
   '请先登录': 'Please sign in first',
   '未登录，请先登录': 'Please sign in first',
   '未认证': 'Authentication required',
