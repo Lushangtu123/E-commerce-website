@@ -99,6 +99,24 @@ describe('checkout', () => {
     notifications.length = 0;
   });
 
+  it.each([undefined, 101])('confirmed checkout reads and retains newly added quantities for SKU %s after navigation', async skuId => {
+    const item = { ...firstItem, quantity: 1, ...(skuId === undefined ? {} : { sku_id: skuId }) };
+    await setupCheckout({ cartItems: [item] });
+    const canonical = deferred<{ items: CartItem[] }>();
+    vi.mocked(cartApi.list).mockReturnValue(canonical.promise);
+    const readsBeforeCheckout = vi.mocked(cartApi.list).mock.calls.length;
+    await click(checkoutButton());
+    expect(creates()[0].items).toEqual([{ product_id: 12, quantity: 1, ...(skuId === undefined ? {} : { sku_id: skuId }) }]);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+    expect(vi.mocked(cartApi.list).mock.calls.length).toBeGreaterThan(readsBeforeCheckout);
+    expect(useCartStore.getState().syncStatus).toBe('loading');
+    await act(async () => canonical.resolve({ items: [{ ...item, quantity: 2 }] }));
+    await settle();
+    expect(cartItems()).toEqual([{ ...item, quantity: 2 }]);
+    expect(useCartStore.getState().getTotalCount()).toBe(2);
+    expect(useCartStore.getState().syncStatus).toBe('ready');
+  });
+
   it('defaults to no coupon and displays the server product price and payable amount', async () => {
     await setupCheckout();
 
@@ -127,6 +145,7 @@ describe('checkout', () => {
     await click(checkboxes()[2]);
     expect(previews().at(-1)?.items).toEqual([{ product_id: 12, quantity: 2, sku_id: 101 }]);
 
+    vi.mocked(cartApi.list).mockResolvedValue({ items: [variants[1]] });
     await click(checkoutButton());
     expect(creates().at(-1)?.items).toEqual([{ product_id: 12, quantity: 2, sku_id: 101 }]);
     expect(cartItems().map(item => item.sku_id)).toEqual([102]);
@@ -355,6 +374,7 @@ describe('checkout', () => {
     await setupCheckout({ cartItems: [firstItem, secondItem] });
     await click(checkboxes()[2]);
 
+    vi.mocked(cartApi.list).mockResolvedValue({ items: [secondItem] });
     await click(checkoutButton());
 
     expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 41, checkout_key: expect.any(String) }]);

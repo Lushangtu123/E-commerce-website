@@ -25,6 +25,7 @@ import { migrateFulfillment } from '../../database/migrate-fulfillment';
 import addressRoutes from '../../routes/address.routes';
 import { AddressModel } from '../../models/address.model';
 import { MAX_QUANTITY } from '../../services/purchase-items.service';
+import { CartModel } from '../../models/cart.model';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 jest.mock('../../database/redis', () => ({ getRedisClient: () => ({ del: jest.fn().mockResolvedValue(1) }) }));
@@ -956,6 +957,52 @@ integration('真实 MySQL 订单事务及并发', () => {
   const checkoutKey = '11111111-1111-4111-8111-111111111111';
   const checkout = (key = checkoutKey, items = [{ product_id: 1, quantity: 2 }], userId = 1, addressId = 100 + userId, couponId?: number, remark?: string) =>
     createOrderService(userId, items, addressId, remark, couponId, key).then(({ created, ...result }) => result);
+
+  test('旧页面结算只消耗购买数量，保留其他页面提交前新增数量且回执重试不再消耗', async () => {
+    await CartModel.add(1, 1, 1);
+    const items = [{ product_id: 1, quantity: 1 }];
+    await CartModel.add(1, 1, 2);
+    await CartModel.add(1, 2, 1);
+    await CartModel.add(2, 1, 2);
+    const first = await checkout(checkoutKey, items);
+    const [cart] = await db.query<RowDataPacket[]>('SELECT user_id,product_id,quantity FROM cart ORDER BY user_id,product_id');
+    expect(cart).toEqual([
+      { user_id: 1, product_id: 1, quantity: 2 },
+      { user_id: 1, product_id: 2, quantity: 1 },
+      { user_id: 2, product_id: 1, quantity: 2 },
+    ]);
+    await CartModel.add(1, 1, 1);
+    expect(await checkout(checkoutKey, items)).toEqual(first);
+    const [remaining] = await db.query<RowDataPacket[]>('SELECT quantity FROM cart WHERE user_id = 1 AND product_id = 1');
+    expect(remaining).toEqual([{ quantity: 3 }]);
+    const [ordered] = await db.query<RowDataPacket[]>('SELECT quantity FROM order_items WHERE order_id = ?', [first.orderId]);
+    expect(ordered).toEqual([{ quantity: 1 }]);
+    expect(await product()).toMatchObject({ stock: 9 });
+  });
+
+  test('旧规格页面结算保留同规格剩余数量及其他规格，不改变父商品库存', async () => {
+    const firstSku = await SKUModel.create({ product_id: 1, sku_code: 'REMAINDER-A', specs: { size: 'M' }, price: 12, stock: 10 });
+    const otherSku = await SKUModel.create({ product_id: 1, sku_code: 'REMAINDER-B', specs: { size: 'L' }, price: 13, stock: 10 });
+    await CartModel.add(1, 1, 1, firstSku);
+    const items = [{ product_id: 1, sku_id: firstSku, quantity: 1 }];
+    await CartModel.add(1, 1, 2, firstSku);
+    await CartModel.add(1, 1, 1, otherSku);
+    const first = await createOrderService(1, items, 101, undefined, undefined, checkoutKey);
+    const [cart] = await db.query<RowDataPacket[]>('SELECT sku_id,quantity FROM cart WHERE user_id = 1 ORDER BY sku_id');
+    expect(cart).toEqual([{ sku_id: firstSku, quantity: 2 }, { sku_id: otherSku, quantity: 1 }]);
+    expect(await createOrderService(1, items, 101, undefined, undefined, checkoutKey)).toMatchObject({ orderId: first.orderId, created: false });
+    const [stocks] = await db.query<RowDataPacket[]>('SELECT sku_id,stock FROM product_skus ORDER BY sku_id');
+    expect(stocks).toEqual([{ sku_id: firstSku, stock: 9 }, { sku_id: otherSku, stock: 10 }]);
+    expect(await product()).toMatchObject({ stock: 10 });
+    expect(await CartModel.list(1)).toHaveLength(2);
+  });
+
+  test.each([0, 1, 2])('直接购买2件兼容购物车已有%s件，不产生负数或零数量行', async quantity => {
+    if (quantity) await CartModel.add(1, 1, quantity);
+    await checkout();
+    expect(await CartModel.list(1)).toEqual([]);
+    expect(await product()).toMatchObject({ stock: 8 });
+  });
 
   test('同一次结算重试返回原订单，购物车和库存只修改一次', async () => {
     await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,2)');

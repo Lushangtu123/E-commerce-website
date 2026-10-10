@@ -192,10 +192,18 @@ export async function createOrder(
       );
     }
     const productIds = [...new Set(normalizedItems.map(item => item.product_id))];
-    await connection.execute(
-      `DELETE FROM cart WHERE user_id = ? AND (${normalizedItems.map(() => '(product_id = ? AND sku_key = ?)').join(' OR ')})`,
-      [userId, ...normalizedItems.flatMap(item => [item.product_id, item.sku_id ?? 0])]
-    );
+    // The user mutex includes cart writes, but another page may have added units
+    // before this checkout's old snapshot arrived. Consume only what was bought.
+    for (const item of normalizedItems) {
+      await connection.execute(
+        'DELETE FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ? AND quantity <= ?',
+        [userId, item.product_id, item.sku_id ?? 0, item.quantity]
+      );
+      await connection.execute(
+        'UPDATE cart SET quantity = quantity - ? WHERE user_id = ? AND product_id = ? AND sku_key = ? AND quantity > ?',
+        [item.quantity, userId, item.product_id, item.sku_id ?? 0, item.quantity]
+      );
+    }
     await connection.commit();
     return { orderId, productIds, original_amount: totalCents / 100, discount_amount: discountCents / 100, total_amount: (totalCents - discountCents) / 100, created: true };
   } catch (error) {

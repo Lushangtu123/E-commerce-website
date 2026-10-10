@@ -131,7 +131,8 @@ describe('下单原子性', () => {
     expect(matching('INSERT INTO order_items').map(([, params]: [string, any[]]) => params.slice(-2)))
       .toEqual([[3, '19.99'], [1, '19.99']]);
     expect(matching('INSERT INTO orders')[0][1]).toContain('79.96');
-    expect(matching('DELETE FROM cart')).toHaveLength(1);
+    expect(matching('DELETE FROM cart').map(([, params]: [string, any[]]) => params))
+      .toEqual([[7, 1, 0, 3], [7, 2, 0, 1]]);
     expect(connection.commit).toHaveBeenCalledTimes(1);
     expect(connection.rollback).not.toHaveBeenCalled();
     expect(connection.release).toHaveBeenCalledTimes(1);
@@ -155,7 +156,7 @@ describe('下单原子性', () => {
     expect(sendOrderTimeoutCheckMessage).not.toHaveBeenCalled();
   });
 
-  test.each(['INSERT INTO order_items', 'DELETE FROM cart'])('%s 数据库失败时回滚所有变更', async sql => {
+  test.each(['INSERT INTO order_items', 'DELETE FROM cart', 'UPDATE cart'])('%s 数据库失败时回滚所有变更', async sql => {
     failSql = sql;
     const res = response();
     await OrderController.create(request({ items: [{ product_id: 1, quantity: 1 }] }), res);

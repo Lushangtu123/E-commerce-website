@@ -127,7 +127,9 @@ describe('global canonical cart badge', () => {
   });
   it.each(['quantity', 'remove', 'checkout'])('tracks an acknowledged %s operation without an obsolete initial read undoing its count', async operation => {
     rememberBuyer(); const old = deferred<unknown>(); let reads = 0;
-    fixture(async config => config.method === 'get' ? answer(config, ++reads === 1 ? await old.promise : { items: [item] }) : answer(config, {}));
+    fixture(async config => config.method === 'get'
+      ? answer(config, ++reads === 1 ? await old.promise : { items: operation === 'checkout' && reads > 2 ? [] : [item] })
+      : answer(config, {}));
     const view = render(shell()); await settle(); expect(reads).toBe(1);
     // A newer canonical read can arrive through another storefront entry while the global read is pending.
     act(() => useCartStore.getState().setItems([item]));
@@ -144,7 +146,8 @@ describe('global canonical cart badge', () => {
     rememberBuyer(); navigation.pathname = '/cart';
     const old = deferred<unknown>(), receipt = deferred<void>(); let reads = 0;
     fixture(async config => {
-      if (config.method === 'get') return answer(config, ++reads === 1 ? { items: [item] } : await old.promise);
+      if (config.method === 'get') return answer(config, ++reads === 1 ? { items: [item] }
+        : reads === 2 ? await old.promise : { items: [] });
       await receipt.promise; return answer(config, {});
     });
     if (operation === 'checkout') {
