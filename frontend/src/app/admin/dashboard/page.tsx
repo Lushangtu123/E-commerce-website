@@ -7,7 +7,7 @@ import { localizedText } from '@/lib/product-content';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
-import type { DashboardStats, RecentOrder, SalesTrendPoint, TopProduct } from '@/lib/api';
+import { readDashboardStats, readDashboardOrders, readDashboardProducts, readDashboardTrend } from '@/lib/dashboard-response';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { logger } from '@/lib/logger';
 import { useAdminQuery } from '@/hooks/use-admin-query';
@@ -81,19 +81,14 @@ function StatCard({ icon, title, value, growth, color }: StatCardProps) {
 export default function AdminDashboardPage() {
   const { t, formatDate, locale } = useI18n();
   const [mounted, setMounted] = useState(false);
-  const statsQuery = useDashboardQuery('dashboard-stats', () => api.get<unknown, DashboardStats>('/admin/dashboard/stats'));
-  const ordersQuery = useDashboardQuery('dashboard-recent-orders', async () => {
-    const data = await api.get<unknown, RecentOrder[] | { orders?: RecentOrder[] }>('/admin/dashboard/recent-orders', { params: { limit: 5 } });
-    return Array.isArray(data) ? data : data.orders || [];
-  });
-  const productsQuery = useDashboardQuery('dashboard-top-products', async () => {
-    const data = await api.get<unknown, TopProduct[] | { products?: TopProduct[] }>('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } });
-    return Array.isArray(data) ? data : data.products || [];
-  });
-  const trendQuery = useDashboardQuery('dashboard-sales-trend', async () => {
-    const data = await api.get<unknown, SalesTrendPoint[] | { trend?: SalesTrendPoint[] }>('/admin/dashboard/sales-trend', { params: { days: 7 } });
-    return Array.isArray(data) ? data : data.trend || [];
-  });
+  const statsQuery = useDashboardQuery('dashboard-stats', async () =>
+    readDashboardStats(await api.get<unknown, unknown>('/admin/dashboard/stats')));
+  const ordersQuery = useDashboardQuery('dashboard-recent-orders', async () =>
+    readDashboardOrders(await api.get<unknown, unknown>('/admin/dashboard/recent-orders', { params: { limit: 5 } })));
+  const productsQuery = useDashboardQuery('dashboard-top-products', async () =>
+    readDashboardProducts(await api.get<unknown, unknown>('/admin/dashboard/top-products', { params: { days: 7, limit: 5 } })));
+  const trendQuery = useDashboardQuery('dashboard-sales-trend', async () =>
+    readDashboardTrend(await api.get<unknown, unknown>('/admin/dashboard/sales-trend', { params: { days: 7 } })));
   const stats = statsQuery.data;
   const recentOrders = ordersQuery.data ?? [];
   const topProducts = productsQuery.data ?? [];
@@ -151,27 +146,27 @@ export default function AdminDashboardPage() {
           <StatCard
             icon={<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}
             title={t("今日订单")}
-            value={stats?.today_orders || 0}
-            growth={stats?.order_growth}
+            value={stats.today_orders}
+            growth={stats.order_growth}
             color="bg-blue-500"
           />
           <StatCard
             icon={<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             title={t("今日销售额")}
-            value={`¥${stats?.today_revenue ? Number(stats.today_revenue).toFixed(2) : '0.00'}`}
-            growth={stats?.revenue_growth}
+            value={`¥${stats.today_revenue.toFixed(2)}`}
+            growth={stats.revenue_growth}
             color="bg-green-500"
           />
           <StatCard
             icon={<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
             title={t("新增用户")}
-            value={stats?.new_users || 0}
+            value={stats.new_users}
             color="bg-purple-500"
           />
           <StatCard
             icon={<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
             title={t("在售商品")}
-            value={stats?.active_products || 0}
+            value={stats.active_products}
             color="bg-orange-500"
           />
         </div>
@@ -220,8 +215,8 @@ export default function AdminDashboardPage() {
                     <span className="ml-3 text-sm font-medium text-gray-900 truncate">{localizedText(product.title, product.title_en, locale)}</span>
                   </div>
                   <div className="text-right ml-4">
-                    <p className="text-sm font-semibold text-gray-900">{t("销量: {count}", { count: product.total_sales || 0 })}</p>
-                    <p className="text-xs text-gray-500">¥{product.total_revenue ? Number(product.total_revenue).toFixed(2) : '0.00'}</p>
+                    <p className="text-sm font-semibold text-gray-900">{t("销量: {count}", { count: product.total_sales })}</p>
+                    <p className="text-xs text-gray-500">¥{Number(product.total_revenue).toFixed(2)}</p>
                   </div>
                 </div>
               )) : (
@@ -258,7 +253,7 @@ export default function AdminDashboardPage() {
                     <tr key={order.order_id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.order_no}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.username || t("未知用户")}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{order.total_amount ? Number(order.total_amount).toFixed(2) : '0.00'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">¥{Number(order.total_amount).toFixed(2)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(order.status)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(order.created_at)}</td>
                     </tr>
