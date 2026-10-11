@@ -19,6 +19,7 @@ import { requestFailure } from '@/lib/api-error';
 import { validFavoriteAcknowledgement, validFavoriteState } from '@/lib/favorite-response';
 import { storeBuyNow, type BuyNowIntent } from '@/lib/buy-now';
 import { validProductDetailResponse } from '@/lib/product-detail-response';
+import { readProductReviews, readRelatedProducts } from '@/lib/product-region-response';
 
 /**
  * The product page. The server renders `initialProduct` so the HTML carries the product; the
@@ -107,7 +108,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     relatedRequest.current = operation;
     const isCurrentRequest = () => active && isCurrentContext() && relatedRequest.current === operation;
     recommendationApi.getRelated(productId, 4).then(data => {
-      if (isCurrentRequest()) setRelatedState({ context, revision: relatedRetry, products: data.related_products || [], error: false });
+      if (isCurrentRequest()) setRelatedState({ context, revision: relatedRetry, products: readRelatedProducts(data, productId), error: false });
     }).catch(error => {
       if (!isCurrentRequest()) return;
       logger.error('加载相关推荐失败:', error);
@@ -162,12 +163,13 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
       totalPages: previous?.context === context ? previous.totalPages : 0, loading: true, error: false }));
     reviewApi.listByProduct(productId, { page: reviewPage, limit: 5 }).then(data => {
       if (!isCurrentRequest()) return;
-      const totalPages = Math.ceil(data.total / 5);
+      const result = readProductReviews(data, productId, reviewPage);
+      const { totalPages } = result;
       if (reviewPage > Math.max(1, totalPages)) {
         setReviewView({ context, page: Math.max(1, totalPages), revision: reviewRevision });
         return;
       }
-      setReviewState({ context, page: reviewPage, reviews: data.reviews || [], total: data.total,
+      setReviewState({ context, page: reviewPage, reviews: result.reviews, total: result.total,
         totalPages, loading: false, error: false });
     }).catch(error => {
       if (!isCurrentRequest()) return;

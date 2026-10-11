@@ -46,6 +46,8 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Promotion badges and crossed-out original prices appear only when the original price exceeds the selling price, including decimal strings returned by MySQL
 - Product details
 - Product detail replies must match the requested product and contain usable prices, inventory and variant data before purchase controls unlock. Malformed successful replies keep the server-rendered product visible with purchases disabled and offer a bilingual, read-only retry; retrying does not record another browse or submit a purchase.
+- Cards, favorites and browsing history use the same detail validation before quick additions; an invalid read saves no add request and sends no cart write. Existing uncertain additions keep their original recovery identity.
+- Reviews and related products validate their collections and displayed fields before rendering. Invalid successful replies show a bilingual error within that region and offer a read-only retry, preserving the main product and purchase selection. Genuine empty results keep their normal empty state; recommended variant cards support MySQL string inventory aggregates without requiring detail-only SKU rows.
 - **Product SKUs** - Products with multiple variants; the selected variant owns its selling and original prices. A variant without an original price does not inherit a parent discount. Catalog, search and recommendations pair the lowest enabled SKU price with that same SKU’s original price (ties use the lowest SKU ID).
 - Categories and filtering
 - Product search (full-text with Elasticsearch when configured; falls back to MySQL otherwise or when Elasticsearch fails)
