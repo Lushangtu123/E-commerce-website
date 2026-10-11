@@ -50,7 +50,7 @@ router.post('/preview', OrderController.preview);
  *   post:
  *     tags: [订单]
  *     summary: 创建订单
- *     description: 必须选择本人有效地址，服务器保存收货快照。新结算原始商品数组最多1000行，按商品和规格合并后最多100行；超限返回400。已提交历史超限订单可沿用原请求号及原内容只读重放，不重新扣库存或使用券。下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
+ *     description: 必须选择本人有效地址，服务器保存收货快照。携带 expected_quote 时当前服务器金额必须与已确认的原价、优惠和应付金额一致，否则返回409并要求重新确认；省略时兼容旧请求。已提交请求必须保留原确认金额及请求号以安全重放。新结算原始商品数组最多1000行，按商品和规格合并后最多100行；超限返回400。已提交历史超限订单可沿用原请求号及原内容只读重放，不重新扣库存或使用券。下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -73,6 +73,15 @@ router.post('/preview', OrderController.preview);
  *                     quantity: { type: integer, minimum: 1 }
  *               checkout_key: { type: string, format: uuid, description: 同一次结算重试必须沿用；新结算使用新请求号 }
  *               checkout_source: { type: string, enum: [buy_now], description: 立即购买时指定 buy_now，完全保留购物车；省略为购物车结算。同一请求号不能切换来源 }
+ *               expected_quote:
+ *                 type: object
+ *                 additionalProperties: false
+ *                 required: [original_amount, discount_amount, total_amount]
+ *                 description: 用户确认的完整报价。三项均为非负数且最多两位小数，优惠不能超过原价，应付等于原价减优惠；请求重试须保留原值
+ *                 properties:
+ *                   original_amount: { type: number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01 }
+ *                   discount_amount: { type: number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01 }
+ *                   total_amount: { type: number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01 }
  *               shipping_address_id: { type: integer, minimum: 1, description: 本人完整收货地址 ID（必填） }
  *               remark: { type: string, description: 订单备注 }
  *               user_coupon_id: { type: integer, minimum: 1, description: 用户已领取的优惠券 ID }
@@ -80,12 +89,12 @@ router.post('/preview', OrderController.preview);
  *       201:
  *         description: 创建成功，返回订单 ID、原价、优惠额和应付金额
  *       400:
- *         description: 商品不存在 / 库存不足 / 收货地址无效或信息不完整 / 结算来源无效
+ *         description: 商品不存在 / 库存不足 / 收货地址无效或信息不完整 / 结算来源无效 / 确认报价无效
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  *       409:
- *         description: 同一请求号对应的商品、地址、备注、优惠券或结算来源已改变
+ *         description: 同一请求号对应的商品、地址、备注、优惠券、结算来源或确认报价已改变；或当前结算金额不同于确认报价（code 为 CHECKOUT_QUOTE_CHANGED，需重新计算并确认）
  */
 router.post('/', OrderController.create);
 

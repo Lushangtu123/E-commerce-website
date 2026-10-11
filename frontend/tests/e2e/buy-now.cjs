@@ -125,6 +125,7 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
       await page.waitForURL(`${origin}/orders/${orderId}`);
       assert.equal(orderWrites.length, index + 1);
       assert.deepEqual(orderWrites[index].items, [purchase.item]); assert.equal(orderWrites[index].checkout_source, 'buy_now'); assert.equal(orderWrites[index].checkout_key, purchaseId);
+      assert.deepEqual(orderWrites[index].expected_quote, { original_amount: purchase.price, discount_amount: 0, total_amount: purchase.price });
       const detailResponse = await context.request.get(`${api}/orders/${orderId}`); assert.equal(detailResponse.status(), 200);
       const detail = await detailResponse.json();
       assert.deepEqual(normalizedCart(detail.items), normalizedCart([purchase.item]));

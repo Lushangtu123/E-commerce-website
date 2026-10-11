@@ -32,6 +32,7 @@ const consoleErrors = [];
 let expectedLoginFailure = false;
 const expectedLoginErrors = [/status of 401 \(Unauthorized\)/, /^登录请求失败/];
 let expectedCheckoutFailure = false;
+let expectedQuoteChangeFailure = false;
 const checkoutEndpoint = 'http://127.0.0.1:3101/api/orders';
 const expectedCheckoutErrors = [/^Failed to load resource: net::ERR_FAILED$/, /^Failed to load resource: the server responded with a status of (408|429)(?: \([^)]*\))?$/];
 let expectedOrderDetailFailure;
@@ -45,6 +46,7 @@ function watchConsole(page, label) {
     const text = message.text();
     if (expectedLoginFailure && expectedLoginErrors.some(pattern => pattern.test(text))) return;
     if (expectedCheckoutFailure && message.location().url === checkoutEndpoint && expectedCheckoutErrors.some(pattern => pattern.test(text))) return;
+    if (expectedQuoteChangeFailure && message.location().url === checkoutEndpoint && /^Failed to load resource: the server responded with a status of 409(?: \([^)]*\))?$/.test(text)) return;
     if (expectedFavoriteWriteEndpoint && message.location().url === expectedFavoriteWriteEndpoint && /^Failed to load resource: net::ERR_FAILED$/.test(text)) return;
     if (expectedRecoveryWrite && (message.location().url === expectedRecoveryWrite.endpoint && /^Failed to load resource: net::ERR_FAILED$/.test(text) || expectedRecoveryWrite.prefix && text.startsWith(expectedRecoveryWrite.prefix))) return;
     if (expectedOrderDetailFailure &&
@@ -1338,6 +1340,8 @@ async function localPlatformScripts(context) {
   await require('./checkout-remainder.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   await require('./buy-now.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
+  await require('./checkout-quote-confirmation.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
+    setExpectedQuoteChange: value => { expectedQuoteChangeFailure = value; } });
   await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,

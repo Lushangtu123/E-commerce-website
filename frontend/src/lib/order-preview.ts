@@ -1,4 +1,4 @@
-import type { OrderPreview } from '@/lib/api/orders';
+import type { ExpectedCheckoutQuote, OrderPreview } from '@/lib/api/orders';
 
 const MAX_AMOUNT = 99999999.99;
 const MAX_COUPON_ID = 2147483647;
@@ -24,6 +24,16 @@ function moneyCents(value: unknown): number | null {
   // Permit representation noise from valid cent amounts, without rounding sub-cent input into money.
   const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 2;
   return Number.isSafeInteger(cents) && Math.abs(scaled - cents) <= tolerance ? cents : null;
+}
+
+/** Pending retries preserve the exact amounts the shopper confirmed, including zero totals. */
+export function validExpectedQuote(data: unknown): data is ExpectedCheckoutQuote {
+  if (!isRecord(data) || Object.keys(data).length !== 3 ||
+      !Object.keys(data).every(key => ['original_amount', 'discount_amount', 'total_amount'].includes(key))) return false;
+  const original = moneyCents(data.original_amount);
+  const discount = moneyCents(data.discount_amount);
+  const total = moneyCents(data.total_amount);
+  return original !== null && discount !== null && total !== null && discount <= original && total === original - discount;
 }
 
 /** Validate the complete server quote against the coupon requested for this preview. */

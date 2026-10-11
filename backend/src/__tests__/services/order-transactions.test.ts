@@ -85,6 +85,19 @@ beforeEach(() => {
 });
 
 describe('下单原子性', () => {
+  test('确认金额变化时返回专用 409，尚未写订单或扣库存', async () => {
+    const res = response();
+    await OrderController.create(request({
+      items: [{ product_id: 1, quantity: 1 }],
+      expected_quote: { original_amount: 10, discount_amount: 0, total_amount: 10 },
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算金额已变化，请重新确认后下单', code: 'CHECKOUT_QUOTE_CHANGED' });
+    expect(matching('INSERT INTO orders')).toHaveLength(0);
+    expect(matching('stock = stock -')).toHaveLength(0);
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+  });
+
   test.each([undefined, 11])('立即购买 sku=%p 保留已有三件购物车，库存只扣一件且重试复用回执', async skuId => {
     let stock = 3;
     let cartQuantity = 3;
@@ -442,6 +455,148 @@ describe('下单原子性', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.status).not.toHaveBeenCalledWith(500);
     expect(sendOrderTimeoutCheckMessage).toHaveBeenCalledWith(1001, 7);
+  });
+});
+
+describe('确认结算报价', () => {
+  const quote = { original_amount: 19.99, discount_amount: 0, total_amount: 19.99 };
+
+  test.each([undefined, 11])('sku=%p 的售价在确认后改变时不写订单、库存、券或购物车', async skuId => {
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('FROM products')) return [[{ ...PRODUCT, price: '25.00' }], []];
+      if (sql.includes('FROM product_skus')) return [skuId === undefined ? [] : [{
+        sku_id: skuId, product_id: 1, sku_code: 'CHANGED', specs: { size: 'M' }, price: '25.00', stock: 3, status: 1,
+      }], []];
+      return execute(sql, params);
+    });
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 1,
+      ...(skuId === undefined ? {} : { sku_id: skuId }) }], expected_quote: quote }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算金额已变化，请重新确认后下单', code: 'CHECKOUT_QUOTE_CHANGED' });
+    expect(connection.execute.mock.calls.filter(([sql]: [string]) => /^(INSERT|UPDATE|DELETE)\b/.test(sql))).toHaveLength(0);
+    expect(connection.rollback).toHaveBeenCalledTimes(1);
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(sendOrderTimeoutCheckMessage).not.toHaveBeenCalled();
+  });
+
+  test('优惠规则变化导致金额变化时不占用券、记录用券日志或扣库存', async () => {
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('FROM products')) return [[{ ...PRODUCT, price: '20.00' }], []];
+      if (sql.startsWith('SELECT coupon_id FROM user_coupons')) return [[{ coupon_id: 3 }], []];
+      if (sql.includes('FROM coupons')) return [[{ coupon_id: 3, name: '优惠', code: 'RULE', type: 2,
+        discount_value: '10.00', min_amount: '0.00', max_discount: null, usable: 1 }], []];
+      if (sql.includes('FROM user_coupons')) return [[{ coupon_id: 3, status: 1, not_expired: 1 }], []];
+      return execute(sql, params);
+    });
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 1 }], user_coupon_id: 11,
+      expected_quote: { original_amount: 20, discount_amount: 4, total_amount: 16 } }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算金额已变化，请重新确认后下单', code: 'CHECKOUT_QUOTE_CHANGED' });
+    expect(connection.execute.mock.calls.filter(([sql]: [string]) => /^(INSERT|UPDATE|DELETE)\b/.test(sql))).toHaveLength(0);
+  });
+
+  test('应付总额相同但确认的原价和优惠不同也需重新确认', async () => {
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 1 }],
+      expected_quote: { original_amount: 21.99, discount_amount: 2, total_amount: 19.99 } }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算金额已变化，请重新确认后下单', code: 'CHECKOUT_QUOTE_CHANGED' });
+    expect(matching('INSERT INTO orders')).toHaveLength(0);
+  });
+
+  test.each([0, 0.01, 0.29, 19.99, 99999999.99])('合法精确分报价 %p 正常创建服务器金额订单', async amount => {
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('FROM products')) return [[{ ...PRODUCT, price: amount.toFixed(2) }], []];
+      return execute(sql, params);
+    });
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 1 }],
+      expected_quote: { original_amount: amount, discount_amount: 0, total_amount: amount } }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ original_amount: amount, discount_amount: 0, total_amount: amount }));
+    expect(connection.commit).toHaveBeenCalledTimes(1);
+    expect(matching('stock = stock -')).toHaveLength(1);
+  });
+
+  const invalidQuotes: unknown[] = [null, [], {}, '19.99', 19.99,
+    { original_amount: 19.99, total_amount: 19.99 },
+    { ...quote, unknown: true },
+    { ...quote, discount_amount: 20, total_amount: 0 },
+    { ...quote, total_amount: 19.98 },
+    { original_amount: 20, discount_amount: 4, total_amount: 17 },
+  ];
+  for (const field of ['original_amount', 'discount_amount', 'total_amount']) {
+    for (const value of [undefined, null, '19.99', NaN, Infinity, -Infinity, -0.01, 0.001, 1e-12, 99999999.991, 100000000]) {
+      invalidQuotes.push({ ...quote, [field]: value });
+    }
+  }
+  test.each(invalidQuotes)('非法确认报价 %p 在数据库连接之前拒绝', async expected_quote => {
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 1 }], expected_quote }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算报价无效，请重新计算' });
+    expect(getPool).not.toHaveBeenCalled();
+    expect(connection.execute).not.toHaveBeenCalled();
+  });
+
+  test('已提交报价回执在商品停售、价格变化后仍复用；改变确认金额不是报价变化错误', async () => {
+    const execute = connection.execute.getMockImplementation();
+    let receipt: unknown;
+    connection.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('checkout_key =')) return [receipt ? [receipt] : [], []];
+      if (sql.includes('INSERT INTO orders')) receipt = { order_id: 1001, checkout_fingerprint: params.at(-1),
+        original_amount: '19.99', discount_amount: '0.00', total_amount: '19.99' };
+      return execute(sql, params);
+    });
+    const body = { items: [{ product_id: 1, quantity: 1 }], expected_quote: quote };
+    const first = response();
+    await OrderController.create(request(body), first);
+    expect(first.status).toHaveBeenCalledWith(201);
+    productMissing = true;
+    const replay = response();
+    await OrderController.create(request({ ...body,
+      expected_quote: { total_amount: 19.99, original_amount: 19.99, discount_amount: 0 },
+    }), replay);
+    expect(replay.status).toHaveBeenCalledWith(201);
+    expect(replay.json).toHaveBeenCalledWith((first.json as jest.Mock).mock.calls[0][0]);
+    expect(matching('FROM products')).toHaveLength(1);
+    expect(matching('INSERT INTO orders')).toHaveLength(1);
+    expect(matching('stock = stock -')).toHaveLength(1);
+    for (const expected_quote of [{ original_amount: 25, discount_amount: 0, total_amount: 25 }, undefined]) {
+      const conflict = response();
+      await OrderController.create(request({ ...body, expected_quote }), conflict);
+      expect(conflict.status).toHaveBeenCalledWith(409);
+      expect(conflict.json).toHaveBeenCalledWith({ error: '结算请求号已用于其他结算内容，请重新结算' });
+    }
+  });
+
+  test('旧无确认金额的请求指纹及改价后的已提交回执保持兼容', async () => {
+    const execute = connection.execute.getMockImplementation();
+    let receipt: unknown;
+    connection.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('checkout_key =')) return [receipt ? [receipt] : [], []];
+      if (sql.includes('INSERT INTO orders')) receipt = { order_id: 1001, checkout_fingerprint: params.at(-1),
+        original_amount: '19.99', discount_amount: '0.00', total_amount: '19.99' };
+      return execute(sql, params);
+    });
+    const items = [{ product_id: 1, quantity: 1 }];
+    const first = response();
+    await OrderController.create(request({ items }), first);
+    expect(first.status).toHaveBeenCalledWith(201);
+    expect(matching('INSERT INTO orders')[0][1].at(-1)).toBe(createHash('sha256').update(JSON.stringify({
+      items, shippingAddressId: 3, remark: '', userCouponId: null,
+    })).digest('hex'));
+    productMissing = true;
+    const replay = response();
+    await OrderController.create(request({ items }), replay);
+    expect(replay.status).toHaveBeenCalledWith(201);
+    expect(replay.json).toHaveBeenCalledWith((first.json as jest.Mock).mock.calls[0][0]);
+    expect(matching('INSERT INTO orders')).toHaveLength(1);
   });
 });
 

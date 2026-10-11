@@ -63,6 +63,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteFailure, setQuoteFailure] = useState<{ key: string; message: string } | null>(null);
   const [quoteRevision, setQuoteRevision] = useState(0);
+  const [checkoutNotice, setCheckoutNotice] = useState<{ key: string; message: string } | null>(null);
   const linkedCouponId = useRef<number | undefined>(undefined);
   const previousSession = useRef<string | null>(null);
   const submittingRequest = useRef(false);
@@ -216,7 +217,6 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     if (!isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0 || orderItems.length > MAX_CHECKOUT_LINES) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentSession();
-    setQuoteResult(null);
     setQuoteFailure(null);
     setQuoteLoading(true);
     orderApi.preview({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) })
@@ -236,9 +236,13 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       })
       .catch((error) => {
         if (!isCurrentRequest()) return;
-        const message = error.response?.data?.error || error.response?.data?.message || '计算订单金额失败';
+        const failure = requestFailure(error);
+        const message = failure.response?.data?.error || failure.response?.data?.message || '计算订单金额失败';
         setQuoteFailure({ key: quoteKey, message });
-        if (selectedCouponId !== undefined) {
+        const couponUnavailable = failure.response?.status === 400 && [
+          '优惠券已失效或订单金额不满足使用条件，请重新选择', '优惠券ID无效', '优惠券已过期',
+        ].includes(message);
+        if (selectedCouponId !== undefined && couponUnavailable) {
           toast.error(translate(message));
           setSelectedCouponId(undefined);
         }
@@ -384,6 +388,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
 
     await submitCheckout({ items: orderItems, shipping_address_id: selectedAddress.address_id,
+      expected_quote: { original_amount: quote.original_amount, discount_amount: quote.discount_amount, total_amount: quote.total_amount },
       ...(directPurchase && { checkout_source: 'buy_now' as const }),
       ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }), checkout_key: purchase?.intent?.id ?? crypto.randomUUID() });
   };
@@ -397,6 +402,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     }
     submittingRequest.current = true;
     setSubmitting(true);
+    setCheckoutNotice(null);
     pendingCheckout.current = attempt;
     const finishWrite = beginCartWrite();
     try {
@@ -435,9 +441,14 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
         clearPendingCheckout(sessionKey);
         pendingCheckout.current = null;
         setUnconfirmedSession(null);
-        setSelectedCouponId(undefined);
+        const quoteChanged = status === 409 && failure.response?.data?.code === 'CHECKOUT_QUOTE_CHANGED';
+        if (quoteChanged) {
+          setSelectedCouponId(input.user_coupon_id);
+          setCheckoutNotice({ key: sessionKey, message: '结算金额已变化，请核对新报价后再次点击结算' });
+        }
+        else setSelectedCouponId(undefined);
         setQuoteRevision(value => value + 1);
-        setAddressRevision(value => value + 1);
+        if (!quoteChanged) setAddressRevision(value => value + 1);
       }
     } finally {
       await syncDepartedWrite();
@@ -565,6 +576,8 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
               onSelectAddress={id => setAddressSelection({ key: sessionKey, id })}
               onReloadAddresses={() => setAddressRevision(value => value + 1)}
               quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} onRetryQuote={() => setQuoteRevision(value => value + 1)}
+              availableCoupons={quoteResult?.data.available_coupons}
+              confirmationNotice={checkoutNotice?.key === sessionKey ? checkoutNotice.message : null}
               selectedCouponId={selectedCouponId} onSelectCoupon={setSelectedCouponId} onCheckout={handleCheckout} />
           </div>
         </div>

@@ -60,6 +60,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Order cancellation
 - Delivery confirmation
 - Durable checkout retry protection: one order per user and request ID, with pending checkout recovery after network failures
+- The storefront submits the three confirmed amounts as optional `expected_quote` (`original_amount`, `discount_amount`, `total_amount`). New orders compare their integer-cent values with locked product, SKU and coupon prices before any write. A mismatch returns `409` / `CHECKOUT_QUOTE_CHANGED`; the page keeps the chosen coupon, reads a fresh quote and requires another explicit checkout click. Temporary quote-read failures keep the coupon and block checkout until a read-only retry succeeds. Exact retries of a committed request still return its original order before repricing; legacy API requests and saved retries without this field retain their original behavior.
 - Checkout bounds the combined quantity of each product across variants. Cancellation can restore legacy orders across variants without a product total blocking safe inventory restoration; payment checks the remaining sales-counter range.
 - Cart and product loading failures provide an explicit retry; purchasing waits for fresh inventory. Catalog pagination returns to a valid page when listings shrink.
 - Payment rejects orders once their 30-minute deadline passes, using database time after taking the order lock. Timeout batches report failures for retry and keep scan progress in Redis across instances.

@@ -65,7 +65,7 @@ it('quotes and purchases only the chosen quantity, keeping prior cart units and 
     return { order_id: 55, message: '订单创建成功' };
   });
   fireEvent.click(screen.getByRole('button', { name: '结算 (1)' })); await settle();
-  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: expect.any(String), checkout_source: 'buy_now' });
+  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: expect.any(String), checkout_source: 'buy_now', expected_quote: { original_amount: 10, discount_amount: 0, total_amount: 10 } });
   expect(useCartStore.getState().items.map(row => row.quantity)).toEqual([3, 3]);
 });
 
@@ -164,7 +164,7 @@ it('restores a legacy cart-backed purchase without changing its checkout source 
   vi.mocked(orderApi.create).mockResolvedValue({ order_id: 55, message: '订单创建成功' });
   render(<CartPage />); await settle();
   fireEvent.click(screen.getByRole('button', { name: '结算 (1)' })); await settle();
-  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: id });
+  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: id, expected_quote: { original_amount: 10, discount_amount: 0, total_amount: 10 } });
   expect(productApi.getDetail).not.toHaveBeenCalled();
   expect(cartApi.add).not.toHaveBeenCalled();
 });

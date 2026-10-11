@@ -17,8 +17,11 @@ interface Props {
   onReloadAddresses: () => void;
   /** The server's price for the selected items and coupon; null until it arrives. */
   quote: OrderPreview | null;
+  /** Retain the last valid coupon labels while a new quote is unavailable. */
+  availableCoupons?: OrderPreview['available_coupons'];
   quoteLoading: boolean;
   quoteError: string | null;
+  confirmationNotice?: string | null;
   onRetryQuote: () => void;
   selectedCouponId: number | undefined;
   onSelectCoupon: (userCouponId: number | undefined) => void;
@@ -28,7 +31,7 @@ interface Props {
 /** The cart's order summary: shipping address, server-priced totals, coupon and the checkout button. */
 export default function CheckoutSummary({
   itemCount, submitting, cartUpdating = false, addresses, addressLoading, addressError, selectedAddressId, onSelectAddress, onReloadAddresses,
-  quote, quoteLoading, quoteError, onRetryQuote, selectedCouponId, onSelectCoupon, onCheckout,
+  quote, availableCoupons, quoteLoading, quoteError, confirmationNotice, onRetryQuote, selectedCouponId, onSelectCoupon, onCheckout,
 }: Props) {
   const { t } = useI18n();
   const canCheckout = itemCount > 0 && !submitting && !cartUpdating && !!quote && !quoteLoading && !quoteError &&
@@ -76,7 +79,7 @@ export default function CheckoutSummary({
             className="w-full border border-gray-300 rounded-sm px-3 py-2"
           >
             <option value="">{t("不使用优惠券")}</option>
-            {quote?.available_coupons.map(coupon => (
+            {(quote?.available_coupons ?? availableCoupons ?? []).map(coupon => (
               <option key={coupon.user_coupon_id} value={coupon.user_coupon_id}>
                 {t('{name}（优惠¥{amount}）', { name: coupon.name, amount: coupon.discount_amount.toFixed(2) })}
               </option>
@@ -105,6 +108,7 @@ export default function CheckoutSummary({
         )}
       </div>
 
+      {confirmationNotice && <p role="alert" className="mb-4 text-sm text-amber-800">{t(confirmationNotice)}</p>}
       <button onClick={onCheckout} disabled={!canCheckout} className="w-full btn btn-primary disabled:opacity-50">
         <FiShoppingBag className="inline mr-2" />
         {submitting ? t('提交中...') : t('结算 ({count})', { count: itemCount })}
