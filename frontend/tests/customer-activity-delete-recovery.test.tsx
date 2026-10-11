@@ -47,6 +47,9 @@ async function prepare(kind: Kind, { status, applied = true, success = false, ro
       if (applied) canonical = config.url === '/browse/history' ? [] : canonical.filter(row => row.product_id !== Number(config.url!.split('/').at(-1)));
       if (!success) throw failed(status); data = { message: '删除成功' };
     }
+    if (config.method === 'get' && data && typeof data === 'object' && 'pagination' in data && data.pagination && typeof data.pagination === 'object') {
+      data = { ...data, pagination: { page: Number(config.params?.page) || 1, limit: 20, ...data.pagination } };
+    }
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
   const view = render(kind === 'favorites' ? <FavoritesPage /> : <HistoryPage />); await settle();

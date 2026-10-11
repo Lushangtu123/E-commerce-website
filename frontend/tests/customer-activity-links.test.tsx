@@ -38,7 +38,7 @@ async function setup(kind: Kind, rows: Item[] = [item()], total = rows.length) {
   api.defaults.adapter = async config => {
     requests.push({ method: config.method, url: config.url });
     const data = config.url === '/products/1' ? { product: { ...rows[0], stock: 3, has_sku: true } }
-      : { [kind]: config.params?.page === 2 ? [item(21)] : rows, pagination: { total, total_pages: Math.ceil(total / 20) } };
+      : { [kind]: config.params?.page === 2 ? [item(21)] : rows, pagination: { page: config.params?.page || 1, limit: 20, total, total_pages: Math.ceil(total / 20) } };
     return { data, config, status: 200, statusText: 'OK', headers: {} };
   };
   const Page = pages[kind];
