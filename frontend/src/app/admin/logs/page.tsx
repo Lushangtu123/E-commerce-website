@@ -85,12 +85,14 @@ function AdminLogsContent() {
     const normalized = normalizeLogFilters(draft);
     if (normalized.error) { setFormError({ key: viewKey, message: normalized.error }); return; }
     setDraftState({ key: viewKey, filters: normalized.filters }); setFormError(null);
-    navigate(normalized.filters);
+    if (!applied.error && page === 1 && logFilterKeys.every(key => normalized.filters[key] === filters[key])) void query.refetch();
+    else navigate(normalized.filters);
   };
   const resetFilters = () => {
     if (!isCurrentView()) return;
     setDraftState({ key: viewKey, filters: emptyLogFilters }); setFormError(null);
-    navigate(emptyLogFilters);
+    if (!applied.error && page === 1 && logFilterKeys.every(key => !filters[key])) void query.refetch();
+    else navigate(emptyLogFilters);
   };
 
   const getActionBadge = (action: string) => {
