@@ -11,8 +11,11 @@ import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp,
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi, type HotKeyword, type SearchKeyword } from '@/lib/api';
+import { requestFailure } from '@/lib/api-error';
 import { logger } from '@/lib/logger';
 import toast from 'react-hot-toast';
+
+type HistoryAction = { scope: string; status: 'deleting' | 'checking' | 'error' };
 
 export default function Header() {
   const { t } = useI18n();
@@ -26,6 +29,8 @@ export default function Header() {
   const searchRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
   const historyRequest = useRef(0);
+  const pendingHistoryAction = useRef<HistoryAction | null>(null);
+  const [historyAction, setHistoryAction] = useState<HistoryAction | null>(null);
   const scope = isHydrated && isAuthenticated && sessionId && user ? JSON.stringify([sessionId, user.user_id]) : null;
   const currentScope = useRef(scope);
   currentScope.current = scope;
@@ -37,7 +42,10 @@ export default function Header() {
         auth.sessionId === sessionId && auth.user?.user_id === user?.user_id && storedSessionId() === sessionId;
     } catch { return false; }
   };
-  const searchHistory = isCurrentSession() && history.scope === scope ? history.rows : [];
+  const { rows: searchHistory, action: currentHistoryAction } = isCurrentSession() ? {
+    rows: history.scope === scope ? history.rows : [],
+    action: historyAction?.scope === scope ? historyAction : null,
+  } : { rows: [], action: null };
 
   useEffect(() => {
     mounted.current = true;
@@ -47,6 +55,8 @@ export default function Header() {
 
   useEffect(() => {
     historyRequest.current += 1;
+    pendingHistoryAction.current = null;
+    setHistoryAction(null);
     setHistory({ scope: null, rows: [] });
     setSearchKeyword('');
     setShowDropdown(false);
@@ -68,11 +78,27 @@ export default function Header() {
     const request = ++historyRequest.current;
     try {
       const data = await searchApi.getHistory(10);
+      // A checking read must prove it returned history before releasing a deletion.
+      if (!Array.isArray(data?.history) || data.history.some(item => !item || typeof item.keyword !== 'string')) {
+        throw new Error('Invalid search history');
+      }
       if (isCurrentSession() && request === historyRequest.current) {
-        setHistory({ scope, rows: data.history || [] });
+        setHistory({ scope, rows: data.history });
+        const action = pendingHistoryAction.current;
+        if (action?.scope === scope && action.status !== 'deleting') {
+          pendingHistoryAction.current = null;
+          setHistoryAction(null);
+        }
       }
     } catch (error) {
-      if (isCurrentSession() && request === historyRequest.current) logger.error('获取搜索历史失败:', error);
+      if (isCurrentSession() && request === historyRequest.current) {
+        logger.error('获取搜索历史失败:', error);
+        const action = pendingHistoryAction.current;
+        if (action?.scope === scope && action.status !== 'deleting') {
+          action.status = 'error';
+          setHistoryAction({ ...action });
+        }
+      }
     }
   };
 
@@ -116,13 +142,37 @@ export default function Header() {
 
   const handleDeleteHistory = async (keyword: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isCurrentSession()) return;
+    if (!isCurrentSession() || !scope || pendingHistoryAction.current?.scope === scope) return;
+    const action: HistoryAction = { scope, status: 'deleting' };
+    pendingHistoryAction.current = action;
+    setHistoryAction({ ...action });
+    // Retire snapshots requested before the deletion started.
+    historyRequest.current += 1;
     try {
       await searchApi.deleteKeyword(keyword);
-      if (isCurrentSession()) fetchSearchHistory();
     } catch (error) {
+      if (!isCurrentSession() || pendingHistoryAction.current !== action) return;
       logger.error('删除搜索记录失败:', error);
+      const status = requestFailure(error).response?.status;
+      if (status !== undefined && status !== 404 && status !== 408 && status !== 429 && status < 500) {
+        pendingHistoryAction.current = null;
+        setHistoryAction(null);
+        toast.error(translate('删除搜索记录失败'));
+        return;
+      }
     }
+    if (!isCurrentSession() || pendingHistoryAction.current !== action) return;
+    action.status = 'checking';
+    setHistoryAction({ ...action });
+    await fetchSearchHistory();
+  };
+
+  const handleRetryHistory = async () => {
+    const action = pendingHistoryAction.current;
+    if (!isCurrentSession() || action?.scope !== scope || action.status !== 'error') return;
+    action.status = 'checking';
+    setHistoryAction({ ...action });
+    await fetchSearchHistory();
   };
 
   const handleLogout = async () => {
@@ -165,8 +215,15 @@ export default function Header() {
               </button>
 
               {/* 搜索下拉菜单 */}
-              {showDropdown && (searchHistory.length > 0 || hotKeywords.length > 0) && (
+              {showDropdown && (searchHistory.length > 0 || hotKeywords.length > 0 || currentHistoryAction) && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg ring-1 ring-gray-200 max-h-96 overflow-y-auto z-50">
+                  {currentHistoryAction && currentHistoryAction.status !== 'deleting' && (
+                    <div className="p-3 text-sm">
+                      {currentHistoryAction.status === 'error' && <p role="alert" className="mb-2 text-red-600">{t('加载搜索历史失败，请重试')}</p>}
+                      <button type="button" onClick={handleRetryHistory} disabled={currentHistoryAction.status !== 'error'}
+                        className="text-primary-600 disabled:opacity-50">{t('重新加载搜索历史')}</button>
+                    </div>
+                  )}
                   {/* 搜索历史 */}
                   {isAuthenticated && searchHistory.length > 0 && (
                     <div className="p-3 border-b border-gray-100">
@@ -187,6 +244,7 @@ export default function Header() {
                             </button>
                             <button
                               type="button"
+                              disabled={!!currentHistoryAction}
                               onClick={(e) => handleDeleteHistory(item.keyword, e)}
                               className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 hover:bg-gray-200 rounded-sm"
                               title={t("删除")}
