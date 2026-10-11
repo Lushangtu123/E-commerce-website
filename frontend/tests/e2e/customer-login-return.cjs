@@ -62,6 +62,41 @@ module.exports = async function customerLoginReturn({ browser, adminContext, loc
     console.log('PASS browser guest add-to-cart and login/register switches preserve the full product next path and query');
     console.log('PASS browser login returns to actionable product controls without automatically adding items or creating an order');
 
+    for (const replace of [false, true]) {
+      const historyCustomer = await createCustomer(replace ? 'login-replace-state' : 'login-push-state');
+      const historyPage = historyCustomer.page;
+      const initialPath = `/products/${productId}?source=history-initial`;
+      await historyPage.goto(`${origin}/login?next=${encodeURIComponent(initialPath)}`);
+      // A visible translated heading proves the actual Next client is hydrated before using its History API.
+      await historyPage.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+      await historyPage.getByRole('heading', { name: 'Sign in to your account', exact: true }).waitFor({ state: 'visible' });
+      await historyPage.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+      await historyPage.getByRole('heading', { name: '登录账号', exact: true }).waitFor({ state: 'visible' });
+      await historyPage.getByLabel('邮箱', { exact: true }).fill(account.email);
+      const assertRegisterHref = async path => {
+        const href = path === '/' ? '/register' : `/register?next=${encodeURIComponent(path)}`;
+        await historyPage.waitForFunction(expected => Array.from(document.querySelectorAll('a'))
+          .some(link => link.textContent.trim() === '立即注册' && link.getAttribute('href') === expected), href);
+        assert.equal(await historyPage.getByRole('link', { name: '立即注册', exact: true }).getAttribute('href'), href);
+        assert.equal(await historyPage.getByLabel('邮箱', { exact: true }).inputValue(), account.email, 'query changes retain the same login form');
+      };
+      await assertRegisterHref(initialPath);
+      let destination = `/products/${productId}?source=history-push&view=latest`;
+      await historyPage.evaluate(next => window.history.pushState({}, '', `/login?next=${encodeURIComponent(next)}`), destination);
+      await waitForAuth(historyPage, '/login', destination); await assertRegisterHref(destination);
+      if (replace) {
+        await historyPage.evaluate(() => window.history.replaceState({}, '', '/login?next=%2F'));
+        await waitForAuth(historyPage, '/login', '/'); await assertRegisterHref('/');
+        destination = `/products/${productId}?source=history-replace&view=final`;
+        await historyPage.evaluate(next => window.history.replaceState({}, '', `/login?next=${encodeURIComponent(next)}`), destination);
+        await waitForAuth(historyPage, '/login', destination); await assertRegisterHref(destination);
+      }
+      await signIn(historyPage, account, `${origin}${destination}`);
+      await historyPage.getByRole('button', { name: '加入购物车', exact: true }).click({ trial: true });
+      await assertNoPurchase(historyCustomer);
+      console.log(`PASS browser real Next ${replace ? 'pushState and replaceState' : 'pushState'} update the same-route auth link and successful login uses the latest next without a purchase write`);
+    }
+
     const registration = await createCustomer('register-return');
     const registrationPath = `/products/${productId}?source=register-return-browser`;
     await registration.page.goto(`${origin}${registrationPath}`);
