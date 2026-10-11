@@ -120,6 +120,8 @@ Vercel 方案不需要 RabbitMQ 或 Elasticsearch：商品搜索（含 `/api/sea
 
 用自有测试账户在部署上请求一次密码找回，实际检查收信、链接打开、重置成功、重复链接失效及旧会话撤销；不要只根据 API 返回成功判断投递成功。本地回归使用测试 SMTP 服务器，不向真实用户发信。Gmail 的风控可能限制云端登录或发送，需检查 Google 账号与邮箱中的提示。个人 Gmail 的发送额度参见 [Google 官方说明](https://support.google.com/mail/answer/22839)，应用密码设置参见 [Google 官方说明](https://support.google.com/accounts/answer/185833)。修改 Google 登录密码会撤销应用密码，之后需更新 Vercel 凭据并重新部署。若暂不发信，移除 Gmail 应用密码即可恢复未配置状态。
 
-浏览器回归在本机或 CI 使用独立 MySQL 测试库，不访问云端商城数据。在后端编译后，从前端目录执行 `npx playwright install chromium`，再设置本机 `MYSQL_TEST_HOST`、`MYSQL_TEST_PORT`、`MYSQL_TEST_USER`、`MYSQL_TEST_PASSWORD`（或 `MYSQL_TEST_SOCKET`）并运行 `npm run test:e2e`。数据库账户须能创建和删除测试库。测试覆盖注册、地址、结算、演示支付、发货、收货、售后审核和修改密码；缓存接口隔离模拟，交易与账户存储使用真实 MySQL。
+浏览器回归在本机或 CI 使用独立 MySQL 测试库，不访问云端商城数据。后端编译后，前端以 `NEXT_PUBLIC_API_URL=http://127.0.0.1:3101/api`、`ECOMMERCE_SERVERLESS_API=false` 构建，再设置 `ECOMMERCE_E2E_PRODUCTION=true` 运行 `npm run test:e2e`，验证已构建的 `next start` 页面。未设置此开关时仍支持本地开发模式。Chromium 需预先安装；数据库账户须能创建和删除测试库，连接由 `MYSQL_TEST_HOST`、`MYSQL_TEST_PORT`、`MYSQL_TEST_USER`、`MYSQL_TEST_PASSWORD`（或 `MYSQL_TEST_SOCKET`）提供。测试覆盖注册、地址、结算、演示支付、发货、收货、售后审核和修改密码；缓存接口隔离模拟，交易与账户存储使用真实 MySQL。
+
+GitHub CI 保留后端及前端两个检查名称，仅在面向 main 的 PR 和 main 推送时运行；功能分支推送不会再重复启动一套检查。同一 PR 的新提交取消其过时检查，各次 main 推送独立运行。浏览器任务先构建生产前端，再连接临时 MySQL 的回环 API；另一个构建任务继续验证 Vercel 内置 API。CI 去重减少 GitHub Actions 工作量，不改变 Vercel 的部署额度。
 
 免费数据库适用于试用，容量、闲置暂停和配额以平台控制台为准。生产发布前应准备独立配置、商品数据、备份和支付服务。若尚未连接 Git 集成，推送 GitHub 只触发仓库 CI，需要再运行 Vercel CLI 发布。
