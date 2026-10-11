@@ -65,8 +65,8 @@ router.post('/login', authLimiter, adminLogin);
  */
 router.post('/logout', adminLogout);
 
-// 需要认证的路由
-router.use(authenticateAdmin);
+// 仅认证本路由的接口；其他管理员资源由各自路由认证，避免穿透时重复查询身份。
+router.use(['/profile', '/dashboard', '/logs'], authenticateAdmin);
 
 /**
  * @openapi
