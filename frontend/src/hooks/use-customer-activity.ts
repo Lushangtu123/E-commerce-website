@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import type { ActivityPage } from '@/lib/api';
+import { readActivityPage } from '@/lib/activity-response';
 
 interface MutationOptions<T> {
   productId?: number;
@@ -57,14 +58,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
     params: [page],
     load: async () => {
       const data = await load({ page, limit });
-      // A checking read must prove it returned a collection, rather than turn an invalid reply into empty data.
-      if (deletion.current?.session === sessionKey && (!Array.isArray(data[collection]) ||
-        !Number.isSafeInteger(Number(data.pagination?.total)) || Number(data.pagination?.total) < 0 ||
-        !Number.isSafeInteger(Number(data.pagination?.total_pages)) || Number(data.pagination?.total_pages) < 0)) {
-        throw new Error('Invalid activity list');
-      }
-      const total = Number(data.pagination?.total) || 0;
-      return { rows: data[collection] || [], total, totalPages: Number(data.pagination?.total_pages) || Math.ceil(total / limit) };
+      return readActivityPage<T>(data, collection, page, user?.user_id, limit);
     },
   });
 
@@ -73,6 +67,8 @@ export function useCustomerActivity<T extends { product_id: number }>(
   const lastPage = Math.max(1, query.data?.totalPages ?? 0);
   const beyondLastPage = query.data !== undefined && page > lastPage;
   const shown = beyondLastPage ? undefined : query.data;
+  const displayed = useRef(shown);
+  useLayoutEffect(() => { displayed.current = shown; }, [shown]);
   const deletionRecovery = deletionView?.session === sessionKey && isCurrentSession() ? deletionView : null;
   const error = deletionRecovery ? (deletionRecovery.checking ? undefined : '删除结果尚未确认，请重新核对列表后再操作') : query.error
     ? requestFailure(query.error).response?.data?.message || requestFailure(query.error).response?.data?.error || errorMessage
@@ -81,7 +77,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
   const total = shown?.total ?? 0;
   const totalPages = shown?.totalPages ?? 0;
   const loading = !shown && !error;
-  const isCurrentScope = () => isCurrentQuery() && shown !== undefined;
+  const isCurrentScope = () => isCurrentQuery() && shown !== undefined && displayed.current === shown;
   const hasDisplayedRow = (productId: number) => isCurrentScope() && rows.some(row => row.product_id === productId);
   const busy = pendingSession === sessionKey || !!deletionRecovery;
 

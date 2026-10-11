@@ -57,8 +57,10 @@ async function setup(kind: Kind, { list, remove = async () => ({}), clear = asyn
   vi.stubGlobal('confirm', confirm);
   const listing = async (params: Params) => {
     requests.push({ ...params, token: useAuthStore.getState().sessionId });
-    if (list) return list(params);
-    return pageOf(kind, rows.slice((params.page - 1) * params.limit, params.page * params.limit), rows.length, Math.ceil(rows.length / params.limit));
+    const data = list ? await list(params) : pageOf(kind, rows.slice((params.page - 1) * params.limit, params.page * params.limit), rows.length, Math.ceil(rows.length / params.limit));
+    // The real activity API always echoes the page and limit it answered.
+    return { ...data, ...(data.pagination && typeof data.pagination === 'object'
+      ? { pagination: { page: params.page, limit: params.limit, ...data.pagination } } : {}) };
   };
   const deleting = async (id: number) => { mutations.push(['remove', id]); return (await remove(id)) as never; };
   vi.mocked(favoriteApi.list).mockImplementation(listing as never);

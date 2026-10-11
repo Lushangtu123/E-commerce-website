@@ -296,11 +296,11 @@ describe('language changes on rendered pages', () => {
   it.each([['favorites', FavoritesPage], ['history', HistoryPage]] as const)('%s keeps the real names of deleted products in both languages', async (collection, Page) => {
     useAuthStore.getState().login({ user_id: 1, username: 'customer', email: 'customer@example.test' }, 'session');
     const rows = [
-      { product_id: 1, favorite_id: 1, id: 1, title: '原有商品名', status: -1, stock: 0, price: 80 },
-      { product_id: 2, favorite_id: 2, id: 2, title: '商品已不存在', status: -1, stock: 0, price: 0 },
+      { product_id: 1, favorite_id: 1, id: 1, title: '原有商品名', status: -1, stock: 0, price: 80, browsed_at: '2026-10-09T00:00:00Z' },
+      { product_id: 2, favorite_id: 2, id: 2, title: '商品已不存在', status: -1, stock: 0, price: 0, browsed_at: '2026-10-09T00:00:00Z' },
     ];
     const list = collection === 'favorites' ? favoriteApi.list : browseApi.getHistory;
-    vi.mocked(list).mockResolvedValue({ [collection]: rows, pagination: { total: 2, total_pages: 1 } } as never);
+    vi.mocked(list).mockResolvedValue({ [collection]: rows, pagination: { page: 1, limit: 20, total: 2, total_pages: 1 } } as never);
     render(<Page />);
     await settle();
     expect(text()).toMatch(/原有商品名/);
