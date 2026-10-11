@@ -18,6 +18,14 @@ import { cartAddBlocksWrites, useCartAddRecovery } from '@/hooks/use-cart-add-re
 import { beginCartWrite, readCanonicalCart, subscribeCanonicalCart } from '@/lib/cart-sync';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 
+function requireCartAcknowledgement(data: unknown, message: '更新成功' | '删除成功') {
+  if (!data || typeof data !== 'object' || Array.isArray(data) ||
+      !('message' in data) || data.message !== message ||
+      ('success' in data && data.success === false) || ('error' in data && data.error != null)) {
+    throw new Error('Invalid cart acknowledgement');
+  }
+}
+
 export default function CartPage() {
   const router = useRouter();
   const { t } = useI18n();
@@ -243,8 +251,9 @@ export default function CartPage() {
     const finishWrite = beginCartWrite();
     setUpdatingSession(sessionKey);
     try {
-      await cartApi.updateQuantity({ product_id: item.product_id, quantity: newQuantity, ...(item.sku_id != null && { sku_id: item.sku_id }) });
+      const data = await cartApi.updateQuantity({ product_id: item.product_id, quantity: newQuantity, ...(item.sku_id != null && { sku_id: item.sku_id }) });
       if (!isCurrentSession()) return;
+      requireCartAcknowledgement(data, '更新成功');
       if (!isAvailable(item)) {
         const refreshed = await readCanonicalCart(isCurrentSession, { fresh: true });
         if (!isCurrentSession()) return;
@@ -271,8 +280,9 @@ export default function CartPage() {
     const finishWrite = beginCartWrite();
     setUpdatingSession(sessionKey);
     try {
-      await cartApi.remove(item.product_id, item.sku_id);
+      const data = await cartApi.remove(item.product_id, item.sku_id);
       if (!isCurrentSession()) return;
+      requireCartAcknowledgement(data, '删除成功');
       removeItem(item.product_id, item.sku_id);
       setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
       toast.success(translate('已删除'));

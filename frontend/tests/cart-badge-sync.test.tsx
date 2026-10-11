@@ -129,7 +129,7 @@ describe('global canonical cart badge', () => {
     rememberBuyer(); const old = deferred<unknown>(); let reads = 0;
     fixture(async config => config.method === 'get'
       ? answer(config, ++reads === 1 ? await old.promise : { items: operation === 'checkout' && reads > 2 ? [] : [item] })
-      : answer(config, {}));
+      : answer(config, { message: config.method === 'put' ? '更新成功' : '删除成功' }));
     const view = render(shell()); await settle(); expect(reads).toBe(1);
     // A newer canonical read can arrive through another storefront entry while the global read is pending.
     act(() => useCartStore.getState().setItems([item]));
@@ -148,7 +148,7 @@ describe('global canonical cart badge', () => {
     fixture(async config => {
       if (config.method === 'get') return answer(config, ++reads === 1 ? { items: [item] }
         : reads === 2 ? await old.promise : { items: [] });
-      await receipt.promise; return answer(config, {});
+      await receipt.promise; return answer(config, { message: config.method === 'put' ? '更新成功' : '删除成功' });
     });
     if (operation === 'checkout') {
       const adapter = api.defaults.adapter as AxiosAdapter;
@@ -184,7 +184,7 @@ describe('global canonical cart badge', () => {
       await receipt.promise;
       serverItem = { ...initialItem, quantity: operation === 'add' ? 4 : 2, available: true };
       if (operation === 'uncertain quantity') throw lost();
-      return answer(config, operation === 'add' ? { add_key: JSON.parse(config.data).add_key, replayed: false } : {});
+      return answer(config, operation === 'add' ? { add_key: JSON.parse(config.data).add_key, replayed: false } : { message: '更新成功' });
     });
     if (operation === 'checkout retry') {
       storePendingCheckout({ sessionKey: JSON.stringify(['buyer-one', buyer.user_id]), input: {

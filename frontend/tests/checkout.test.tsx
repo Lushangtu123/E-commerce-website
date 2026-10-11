@@ -52,7 +52,7 @@ const cartItems = () => useCartStore.getState().items;
 /** Renders the cart for the first customer and waits until the first server quote is shown. */
 async function setupCheckout({
   preview = async () => quote(), create = async () => ({ message: 'ok', order_id: 55 }), cartItems: rows = [firstItem], search = '',
-  updateQuantity = async () => ({}), remove = async () => ({}), addresses = async () => ({ addresses: [shippingAddress] }),
+  updateQuantity = async () => ({ message: '更新成功' }), remove = async () => ({ message: '删除成功' }), addresses = async () => ({ addresses: [shippingAddress] }),
 }: Setup = {}) {
   if (search) window.history.replaceState(null, '', `/cart${search}`);
   useAuthStore.getState().login(firstUser, 'first-session');
@@ -233,7 +233,7 @@ describe('checkout', () => {
 
     expect(creates()).toEqual([]);
     expect(checkoutButton()).toBeDisabled();
-    await act(async () => mutation.resolve({}));
+    await act(async () => mutation.resolve({ message: operation === 'quantity' ? '更新成功' : '删除成功' }));
     await settle();
     expect(checkoutButton()).toBeDisabled();
     expect(previews().at(-1)?.items).toEqual(operation === 'quantity'
@@ -250,7 +250,7 @@ describe('checkout', () => {
   it('serializes rapid quantity and remove clicks before React renders the disabled controls', async () => {
     const mutation = deferred();
     let calls = 0;
-    await setupCheckout({ updateQuantity: () => ++calls === 1 ? mutation.promise : Promise.resolve({}) });
+    await setupCheckout({ updateQuantity: () => ++calls === 1 ? mutation.promise : Promise.resolve({ message: '更新成功' }) });
 
     clickTogether(increase()[0], decrease()[0], removeButtons()[0]);
 
@@ -260,7 +260,7 @@ describe('checkout', () => {
     expect(decrease()[0]).toBeDisabled();
     expect(removeButtons()[0]).toBeDisabled();
 
-    await act(async () => mutation.resolve({}));
+    await act(async () => mutation.resolve({ message: '更新成功' }));
     await settle();
     expect(cartItems()[0].quantity).toBe(4);
     await click(decrease()[0]);
@@ -299,12 +299,12 @@ describe('checkout', () => {
     await click(increase()[0]);
     expect(checkoutButton()).toBeDisabled();
 
-    await act(async () => pending[0].resolve({}));
+    await act(async () => pending[0].resolve({ message: '更新成功' }));
     await settle();
     expect(checkoutButton()).toBeDisabled();
     expect(cartItems()[0].quantity).toBe(3);
 
-    await act(async () => pending[1].resolve({}));
+    await act(async () => pending[1].resolve({ message: '更新成功' }));
     await settle();
     expect(cartItems()[0].quantity).toBe(4);
     expect(checkoutButton()).toBeEnabled();
@@ -460,7 +460,7 @@ describe('checkout', () => {
 
     switchCustomer();
     await settle();
-    await act(async () => mutation.resolve({}));
+    await act(async () => mutation.resolve({ message: operation === 'quantity' ? '更新成功' : '删除成功' }));
     await settle();
 
     expect(cartItems()).toHaveLength(1);
@@ -485,6 +485,7 @@ describe('checkout', () => {
     await setupCheckout({ cartItems: rows, updateQuantity: async input => {
       updates.push(input);
       rows[0] = { ...rows[0], quantity: input.quantity, available: true, unavailable_reason: null };
+      return { message: '更新成功' };
     } });
     expect(decrease()[0]).toBeEnabled();
 

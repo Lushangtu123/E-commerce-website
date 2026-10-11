@@ -1,6 +1,7 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { AxiosError, type AxiosAdapter } from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import toast from 'react-hot-toast';
 import CartPage from '@/app/cart/page';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -19,8 +20,9 @@ afterEach(() => { api.defaults.adapter = originalAdapter; });
 const item: CartItem = { cart_id: 1, product_id: 11, quantity: 3, title: 'Recovery item', price: '10.00', stock: 5 };
 const failure = (status?: number) => status === undefined ? new AxiosError('Lost reply', 'ERR_NETWORK') : Object.assign(new Error('Uncertain'), { response: { status, data: {} } });
 
-async function prepare({ operation = 'quantity', status, applied = true, read = async (items: CartItem[]) => ({ items }) }: {
+async function prepare({ operation = 'quantity', status, applied = true, reply, read = async (items: CartItem[]) => ({ items }) }: {
   operation?: 'quantity' | 'remove'; status?: number; applied?: boolean;
+  reply?: () => Promise<unknown>;
   read?: (items: CartItem[]) => Promise<unknown>;
 } = {}) {
   useAuthStore.getState().login({ user_id: 1, username: 'Buyer', email: 'buyer@example.test' }, 'buyer-one');
@@ -33,9 +35,11 @@ async function prepare({ operation = 'quantity', status, applied = true, read = 
     else if (config.url === '/orders/preview') {
       const quantity = JSON.parse(config.data).items.reduce((sum: number, row: CartItem) => sum + row.quantity, 0);
       data = { original_amount: quantity * 10, discount_amount: 0, total_amount: quantity * 10, coupon: null, available_coupons: [] };
-    } else if (config.method === 'put' || config.method === 'delete') {
-      writes++; if (applied) canonical = operation === 'remove' ? [] : canonical.map(row => ({ ...row, quantity: JSON.parse(config.data).quantity }));
-      throw failure(status);
+    } else if ((config.url === '/cart' && config.method === 'put') || (config.url === '/cart/11' && config.method === 'delete')) {
+      writes++;
+      if (config.method !== (operation === 'quantity' ? 'put' : 'delete')) throw new Error(`Unexpected cart write ${config.method}`);
+      if (applied) canonical = config.method === 'delete' ? [] : canonical.map(row => ({ ...row, quantity: JSON.parse(config.data).quantity }));
+      if (reply) data = await reply(); else throw failure(status);
     } else if (config.url === '/orders') { orders++; data = { order_id: 9 }; }
     else throw new Error(`Unexpected ${config.method} ${config.url}`);
     return { data, status: 200, statusText: 'OK', headers: {}, config };
@@ -45,6 +49,128 @@ async function prepare({ operation = 'quantity', status, applied = true, read = 
   return { view, counts: () => ({ gets, writes, orders }), canonical: () => canonical };
 }
 const increase = () => screen.getByRole('button', { name: '+' });
+const writeButton = (operation: 'quantity' | 'remove') => screen.getByRole('button', { name: operation === 'quantity' ? '+' : '删除' });
+const acknowledgement = (operation: 'quantity' | 'remove') => ({ message: operation === 'quantity' ? '更新成功' : '删除成功' });
+
+describe.each(['quantity', 'remove'] as const)('cart %s acknowledgement', operation => {
+  it.each(['standard', 'nullable error'] as const)('accepts the endpoint’s %s acknowledgement without an extra read', async variant => {
+    const response = { ...acknowledgement(operation), ...(variant === 'nullable error' && { success: true, error: null }) };
+    const fixture = await prepare({ operation, reply: async () => response });
+    fireEvent.click(writeButton(operation)); await settle();
+    expect(fixture.counts()).toEqual({ gets: 1, writes: 1, orders: 0 });
+    expect(useCartStore.getState()).toMatchObject({ items: fixture.canonical(), syncStatus: 'ready', pendingWrites: 0 });
+    if (operation === 'quantity') expect(screen.getByRole('button', { name: '结算 (4)' })).toBeEnabled();
+    else {
+      expect(screen.getByText('购物车是空的')).toBeVisible();
+      expect(toast.success).toHaveBeenCalledWith('已删除');
+    }
+  });
+
+  const invalidReplies: [string, () => unknown][] = [
+    ['missing body', () => undefined],
+    ['null body', () => null],
+    ['string body', () => '更新成功'],
+    ['number body', () => 1],
+    ['boolean body', () => true],
+    ['array body', () => []],
+    ['array with message', () => Object.assign([], acknowledgement(operation))],
+    ['missing message', () => ({})],
+    ['success without message', () => ({ success: true })],
+    ['other endpoint message', () => acknowledgement(operation === 'quantity' ? 'remove' : 'quantity')],
+    ['explicit refusal', () => ({ success: false, error: 'upstream failed' })],
+    ['negative success', () => ({ ...acknowledgement(operation), success: false })],
+    ['error string', () => ({ ...acknowledgement(operation), error: 'upstream failed' })],
+    ['empty error', () => ({ ...acknowledgement(operation), error: '' })],
+    ['structured error', () => ({ ...acknowledgement(operation), error: { code: 'UNCONFIRMED' } })],
+    ['false error', () => ({ ...acknowledgement(operation), error: false })],
+    ['zero error', () => ({ ...acknowledgement(operation), error: 0 })],
+  ];
+  it.each(invalidReplies)('reconciles %s before confirming an unchanged cart', async (_label, response) => {
+    const fixture = await prepare({ operation, applied: false, reply: async () => response() });
+    fireEvent.click(writeButton(operation)); await settle();
+    expect(fixture.counts()).toEqual({ gets: 2, writes: 1, orders: 0 });
+    expect(useCartStore.getState()).toMatchObject({ items: [item], syncStatus: 'ready', pendingWrites: 0 });
+    expect(screen.getByRole('heading', { name: item.title })).toBeVisible();
+    expect(screen.getByRole('button', { name: '结算 (3)' })).toBeEnabled();
+    expect(toast.success).not.toHaveBeenCalledWith('已删除');
+  });
+
+  it('uses canonical state when an invalid reply follows a committed write', async () => {
+    const fixture = await prepare({ operation, reply: async () => ({ success: false, error: 'invalid reply' }) });
+    fireEvent.click(writeButton(operation)); await settle();
+    expect(fixture.counts()).toEqual({ gets: 2, writes: 1, orders: 0 });
+    expect(useCartStore.getState()).toMatchObject({ items: fixture.canonical(), syncStatus: 'ready', pendingWrites: 0 });
+    if (operation === 'quantity') expect(screen.getByRole('button', { name: '结算 (4)' })).toBeEnabled();
+    else expect(screen.getByText('购物车是空的')).toBeVisible();
+    expect(toast.success).not.toHaveBeenCalledWith('已删除');
+  });
+
+  it.each([false, true])('keeps all writes blocked after a failed read and retries only GET (applied: %s)', async applied => {
+    let recover = false;
+    const fixture = await prepare({ operation, applied, reply: async () => ({}), read: async items => {
+      if (!recover) throw failure(); return { items };
+    } });
+    const staleHandlers = [captureHandler(increase()), captureHandler(screen.getByRole('button', { name: '删除' })),
+      captureHandler(screen.getByRole('button', { name: '结算 (3)' })),
+      captureHandler(screen.getByRole('checkbox', { name: '选择 Recovery item' }), 'onChange'),
+      captureHandler(screen.getByRole('checkbox', { name: '全选' }), 'onChange')];
+    fireEvent.click(writeButton(operation)); await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('购物车操作结果尚未确认，请重新加载后再操作');
+    expect(useCartStore.getState()).toMatchObject({ items: [item], syncStatus: 'error', pendingWrites: 0 });
+    for (const handler of staleHandlers) await handler();
+    await settle(); expect(fixture.counts()).toEqual({ gets: 2, writes: 1, orders: 0 });
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' })); await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('购物车操作结果尚未确认');
+    expect(fixture.counts()).toEqual({ gets: 3, writes: 1, orders: 0 });
+    recover = true;
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' })); await settle();
+    expect(fixture.counts()).toEqual({ gets: 4, writes: 1, orders: 0 });
+    expect(useCartStore.getState()).toMatchObject({ items: fixture.canonical(), syncStatus: 'ready', pendingWrites: 0 });
+    if (operation === 'remove' && applied) expect(screen.getByText('购物车是空的')).toBeVisible();
+    else {
+      expect(screen.getByRole('checkbox', { name: '选择 Recovery item' })).toBeChecked();
+      expect(screen.getByRole('button', { name: `结算 (${applied ? 4 : 3})` })).toBeEnabled();
+    }
+  });
+
+  it('preserves a deselected row when the invalid reply did not change the cart', async () => {
+    const fixture = await prepare({ operation, applied: false, reply: async () => ({}) });
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择 Recovery item' })); await settle();
+    fireEvent.click(writeButton(operation)); await settle();
+    expect(fixture.counts()).toEqual({ gets: 2, writes: 1, orders: 0 });
+    expect(screen.getByRole('checkbox', { name: '选择 Recovery item' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: '结算 (0)' })).toBeDisabled();
+  });
+
+  it.each(['account', 'storage'] as const)('ignores a late invalid acknowledgement after the %s session changes', async change => {
+    const response = deferred<unknown>();
+    const fixture = await prepare({ operation, applied: false, reply: () => response.promise });
+    fireEvent.click(writeButton(operation)); await settle();
+    if (change === 'account') act(() => useAuthStore.getState().login({ user_id: 2, username: 'Other', email: 'other@example.test' }, 'buyer-two'));
+    else localStorage.setItem('session', 'buyer-two');
+    await settle();
+    const getsBeforeReply = fixture.counts().gets;
+    await act(async () => response.resolve({ success: false, error: 'old reply' })); await settle();
+    expect(fixture.counts()).toEqual({ gets: getsBeforeReply, writes: 1, orders: 0 });
+    expect(useCartStore.getState().items).toEqual(change === 'account' ? [] : [item]);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each(['account', 'storage'] as const)('ignores a late canonical recovery after the %s session changes', async change => {
+    const response = deferred<unknown>();
+    const fixture = await prepare({ operation, reply: async () => ({}), read: () => response.promise });
+    fireEvent.click(writeButton(operation)); await settle();
+    expect(fixture.counts()).toEqual({ gets: 2, writes: 1, orders: 0 });
+    if (change === 'account') act(() => useAuthStore.getState().login({ user_id: 2, username: 'Other', email: 'other@example.test' }, 'buyer-two'));
+    else localStorage.setItem('session', 'buyer-two');
+    await settle();
+    await act(async () => response.resolve({ items: fixture.canonical() })); await settle();
+    expect(useCartStore.getState().items).toEqual(change === 'account' ? [] : [item]);
+    expect(fixture.counts().writes).toBe(1);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+});
 
 describe('cart uncertain write recovery', () => {
   it.each(['success', 'failure'])('an older initial cart read %s cannot overwrite a newer acknowledged add read', async outcome => {
