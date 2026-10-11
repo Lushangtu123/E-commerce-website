@@ -665,20 +665,31 @@ async function localPlatformScripts(context) {
   assert.equal(ordinaryAddResponse.status(), 200, JSON.stringify(await ordinaryAddResponse.json()));
   await visibleText(page, '已加入购物车');
   const cartEndpoint = 'http://127.0.0.1:3101/api/cart';
-  let cartAttempts = 0;
-  const failCartOnce = route => ++cartAttempts === 1
-    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) })
-    : route.continue();
+  let cartAttempts = 0, cartUnavailable = true;
+  // Header and the Suspense-mounted cart can read separately. Keep the outage active
+  // until the user's retry, whichever consumer issues the first canonical request.
+  const cartReadFault = route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    cartAttempts++;
+    return cartUnavailable
+      ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic unavailable' }) })
+      : route.continue();
+  };
   expectedShoppingFailure = cartEndpoint;
-  await page.route(cartEndpoint, failCartOnce);
+  await page.route(cartEndpoint, cartReadFault);
   await page.goto('http://127.0.0.1:3100/cart');
   await visibleText(page, '加载购物车失败，请重试');
   await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
   await visibleText(page, 'Unable to load your cart. Please try again.');
   assert.equal(await page.getByText('Your cart is empty', { exact: true }).count(), 0, 'failed loading never claims the cart is empty');
+  const beforeCartRetry = cartAttempts; cartUnavailable = false;
+  assert.ok(beforeCartRetry >= 1, 'the cart outage was observed before the explicit retry');
+  const retriedCartRead = page.waitForResponse(response => response.request().method() === 'GET' && response.url() === cartEndpoint);
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  const retriedCartResponse = await retriedCartRead; assert.equal(retriedCartResponse.status(), 200);
+  assert.deepEqual((await retriedCartResponse.json()).items.map(item => [item.product_id, item.quantity]), [[1, 1]]);
   await page.getByRole('heading', { name: 'Browser checkout product', exact: true }).waitFor({ state: 'visible' });
-  assert.equal(cartAttempts, 2);
+  assert.equal(cartAttempts, beforeCartRetry + 1, 'one explicit cart retry issues exactly one real read');
   let uncertainCartWrites = 0;
   const loseCartWriteReply = async route => {
     if (route.request().method() !== 'PUT') return route.continue();
@@ -695,7 +706,7 @@ async function localPlatformScripts(context) {
   assert.equal(recoveredCart.items[0].quantity, 2);
   await page.unroute(cartEndpoint, loseCartWriteReply); expectedRecoveryWrite = undefined;
   console.log('PASS browser committed cart quantity with a lost reply rereads real MySQL without repeating the write');
-  await page.unroute(cartEndpoint, failCartOnce);
+  await page.unroute(cartEndpoint, cartReadFault);
   expectedShoppingFailure = undefined;
   console.log('PASS browser cart 503 displays an error and explicit retry restores real items');
   await page.getByRole('checkbox', { name: 'Select Browser checkout product', exact: true }).waitFor({ state: 'visible' });
@@ -1326,6 +1337,7 @@ async function localPlatformScripts(context) {
     setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./checkout-remainder.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
+  await require('./buy-now.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
   await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,

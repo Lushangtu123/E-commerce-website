@@ -9,7 +9,7 @@ import { CommitLog, apiError, clickTogether, deferred, render, settle } from './
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const notifications = vi.hoisted(() => [] as string[]);
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search), useRouter: () => router }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
   const toast = { error: (message: string) => { notifications.push(message); }, success: vi.fn() };

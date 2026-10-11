@@ -16,6 +16,7 @@ import ProductReviewList from '@/components/ProductReviewList';
 import RelatedProducts from '@/components/RelatedProducts';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import { storeBuyNow, type BuyNowIntent } from '@/lib/buy-now';
 
 /**
  * The product page. The server renders `initialProduct` so the HTML carries the product; the
@@ -246,7 +247,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     </div>
   );
 
-  const handleAddToCart = async (): Promise<boolean> => {
+  const handleAddToCart = async (purchase = false): Promise<boolean> => {
     if (!product || !ready || !isCurrentContext() || addingRequest.current) return false;
     if (!isAuthenticated) {
       toast.error(translate("请先登录"));
@@ -264,7 +265,15 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     addingRequest.current = context;
     setAdding(true);
     try {
+      const intent: BuyNowIntent | null = purchase ? { id: crypto.randomUUID(), ready: false,
+        input: { product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) } } : null;
+      // Test storage before the add is dispatched; only a confirmed add can open this purchase.
+      if (intent) storeBuyNow(sessionId!, user!.user_id, intent);
       if (!await addToCart({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) }, isCurrentContext)) return false;
+      if (intent && isCurrentContext()) {
+        storeBuyNow(sessionId!, user!.user_id, { ...intent, ready: true });
+        router.push(`/cart?buy_now=${intent.id}`);
+      }
       toast.success(translate("已加入购物车"));
       return true;
     } catch (error) {
@@ -279,7 +288,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   };
 
   const handleBuyNow = async () => {
-    if (await handleAddToCart() && isCurrentContext()) router.push('/cart');
+    await handleAddToCart(true);
   };
 
   const handleToggleFavorite = async () => {
@@ -452,7 +461,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
               </button>
               
               <button
-                onClick={handleAddToCart}
+                onClick={() => handleAddToCart()}
                 disabled={locked || !canPurchase || soldOut}
                 className="flex-1 btn btn-outline inline-flex h-12 items-center justify-center gap-2 disabled:opacity-50"
               >

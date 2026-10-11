@@ -2,9 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
   pull_request:
     branches: [main]
+
+# Supersede older checks for the same PR; each main push remains independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -64,10 +69,19 @@ jobs:
       - name: 安装浏览器回归测试依赖
         run: npm ci --prefix ../frontend
 
+      - name: 构建浏览器测试的生产前端
+        env:
+          NEXT_PUBLIC_API_URL: 'http://127.0.0.1:3101/api'
+          ECOMMERCE_SERVERLESS_API: 'false'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm --prefix ../frontend run build
+
       - name: 安装 Chromium
         run: ../frontend/node_modules/.bin/playwright install --with-deps chromium
 
       - name: 真实 MySQL 浏览器交易流程
+        env:
+          ECOMMERCE_E2E_PRODUCTION: 'true'
         run: npm --prefix ../frontend run test:e2e
 
       - name: 保存浏览器验证截图
