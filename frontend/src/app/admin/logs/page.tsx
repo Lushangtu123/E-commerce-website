@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
 import { logger } from '@/lib/logger';
 import api from '@/lib/api';
-import type { AdminLog } from '@/lib/api';
+import { readAdminLogs } from '@/lib/admin-log-response';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import { requestFailure } from '@/lib/api-error';
 import { emptyLogFilters, logActionLabels, logFilterKeys, logFiltersUrl, normalizeLogFilters, readLogFilters, type LogFilters } from '@/lib/admin-log-filters';
@@ -41,9 +41,9 @@ function AdminLogsContent() {
     name: 'logs',
     params: [page, filters],
     enabled: searchParams !== null && ownsFilters && !applied.error,
-    load: () => api.get<unknown, { logs: AdminLog[]; pagination: { total: number } }>('/admin/logs', {
+    load: async () => readAdminLogs(await api.get<unknown, unknown>('/admin/logs', {
       params: { page, limit: 20, ...Object.fromEntries(logFilterKeys.filter(key => filters[key]).map(key => [key, filters[key]])) },
-    }),
+    }), page),
   });
   const logs = query.data?.logs ?? [];
   const total = query.data?.pagination.total ?? 0;
