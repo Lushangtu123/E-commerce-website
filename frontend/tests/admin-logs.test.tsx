@@ -97,6 +97,112 @@ describe('admin logs', () => {
     expect(requests.at(-1)?.params).toEqual({ page: 1, limit: 20 });
   });
 
+  it('refreshes the applied first-page filters without adding browser history', async () => {
+    act(() => router.replace('/admin/logs?action=LOGIN&adminId=2&trace=keep'));
+    await setup(() => ({ logs: [log(requests.length === 1 ? 'Earlier logs' : 'New administrator action')], pagination: { total: 1 } }));
+    router.push.mockClear();
+
+    await click('筛选');
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].params).toEqual({ page: 1, limit: 20, action: 'LOGIN', adminId: '2' });
+    expect(screen.getByText('New administrator action')).toBeInTheDocument();
+    expect(screen.queryByText('Earlier logs')).not.toBeInTheDocument();
+    expect(window.location.search).toBe('?action=LOGIN&adminId=2&trace=keep');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('refreshes equivalent normalized draft filters instead of navigating', async () => {
+    act(() => router.replace('/admin/logs?trace=keep&adminId=2&page=1'));
+    await setup(() => ({ logs: [log(`Snapshot ${requests.length}`)], pagination: { total: 1 } }));
+    router.push.mockClear();
+    fireEvent.change(screen.getByLabelText('管理员编号'), { target: { value: ' 2 ' } });
+
+    await click('筛选');
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].params).toEqual({ page: 1, limit: 20, adminId: '2' });
+    expect(screen.getByLabelText('管理员编号')).toHaveValue('2');
+    expect(screen.getByText('Snapshot 2')).toBeInTheDocument();
+    expect(window.location.search).toBe('?trace=keep&adminId=2&page=1');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('refreshes an already unfiltered first page while clearing the unapplied draft', async () => {
+    act(() => router.replace('/admin/logs?trace=keep'));
+    await setup(() => ({ logs: [log(`Snapshot ${requests.length}`)], pagination: { total: 1 } }));
+    fireEvent.change(screen.getByLabelText('管理员编号'), { target: { value: 'invalid draft' } });
+    await click('筛选');
+    expect(screen.getByRole('alert')).toHaveTextContent('日志筛选条件无效');
+    router.push.mockClear();
+
+    await click('重置');
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].params).toEqual({ page: 1, limit: 20 });
+    expect(screen.getByLabelText('管理员编号')).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Snapshot 2')).toBeInTheDocument();
+    expect(window.location.search).toBe('?trace=keep');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('shares an in-flight refresh across repeated filter and reset clicks', async () => {
+    const pending = deferred<Logs>();
+    await setup(() => requests.length === 1 ? { logs: [log('Earlier logs')], pagination: { total: 1 } } : pending.promise);
+
+    await click('筛选');
+    expect(requests).toHaveLength(2);
+    await click('筛选');
+    await click('重置');
+    expect(requests).toHaveLength(2);
+
+    await act(async () => pending.resolve({ logs: [log('Refreshed once')], pagination: { total: 1 } }));
+    await settle();
+    expect(screen.getByText('Refreshed once')).toBeInTheDocument();
+    expect(screen.queryByText('Earlier logs')).not.toBeInTheDocument();
+    expect(requests).toHaveLength(2);
+  });
+
+  it('does not replace the initial pending read when the same filters are resubmitted', async () => {
+    const pending = deferred<Logs>();
+    await setup(() => pending.promise);
+
+    await click('筛选');
+    await click('重置');
+    expect(requests).toHaveLength(1);
+
+    await act(async () => pending.resolve({ logs: [log('Initial read completed')], pagination: { total: 1 } }));
+    await settle();
+    expect(screen.getByText('Initial read completed')).toBeInTheDocument();
+  });
+
+  it.each(['筛选', '重置'])('does not refresh through a saved %s handler after another tab replaces the administrator', async label => {
+    await setup(() => ({ logs: [log('First administrator logs')], pagination: { total: 1 } }));
+    const button = screen.getByRole('button', { name: label });
+    const staleHandler = label === '筛选'
+      ? captureHandler(button.closest('form')!, 'onSubmit')
+      : captureHandler(button);
+    switchAdmin({ notify: false });
+
+    await staleHandler();
+    await settle();
+
+    expect(requests).toHaveLength(1);
+  });
+
+  it('resets a changed filter to the first page while preserving unrelated URL parameters', async () => {
+    act(() => router.replace('/admin/logs?trace=keep&action=LOGIN&page=2'));
+    await setup(params => ({ logs: [log(`Page ${params.page}`)], pagination: { total: 41 } }));
+    fireEvent.change(screen.getByLabelText('操作类型'), { target: { value: 'COMPLETE_AFTER_SALES' } });
+
+    await click('筛选');
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].params).toEqual({ page: 1, limit: 20, action: 'COMPLETE_AFTER_SALES' });
+    expect(window.location.search).toBe('?trace=keep&action=COMPLETE_AFTER_SALES');
+  });
+
   it.each(['adminId=0', 'adminId=2x', 'adminId=01', 'adminId=9007199254740992', 'startDate=2026-02-30', 'startDate=2026-10-10&endDate=2026-10-01', 'adminId=1&adminId=2', 'page=2&page=3', 'page=10001', `action=${'x'.repeat(51)}`])('does not silently broaden an invalid deep link (%s)', async params => {
     act(() => router.replace(`/admin/logs?${params}`));
     await setup(() => ({ logs: [], pagination: { total: 0 } }));
