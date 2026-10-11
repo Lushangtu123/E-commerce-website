@@ -14,7 +14,7 @@ import { useLocaleStore } from '@/store/useLocaleStore';
 import { captureHandler, deferred, render, settle } from './helpers';
 
 const navigation = vi.hoisted(() => ({ pathname: '/', push: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => navigation, usePathname: () => navigation.pathname }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search), useRouter: () => navigation, usePathname: () => navigation.pathname }));
 vi.mock('@vercel/analytics/next', () => ({ Analytics: () => null }));
 vi.mock('@vercel/speed-insights/next', () => ({ SpeedInsights: () => null }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));

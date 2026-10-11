@@ -12,7 +12,7 @@ import { storePendingCartAdd } from '@/lib/pending-cart-add';
 import { retryCartAdd } from '@/lib/cart-add';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search), useRouter: () => router }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 const originalAdapter = api.defaults.adapter;

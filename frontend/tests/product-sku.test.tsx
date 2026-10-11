@@ -202,7 +202,7 @@ describe('product SKU purchase', () => {
     await click('立即购买');
     expect(additions()).toEqual([{ product_id: 1, quantity: 2, sku_id: 101, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) }]);
     expect(useCartStore.getState().items[0]).toMatchObject({ sku_id: 101, price: 20, main_image: '/red.jpg', sku_specs: { Color: 'Red', Size: 'M' }, sku_code: 'RED' });
-    expect(router.push.mock.calls).toEqual([['/cart']]);
+    expect(router.push.mock.calls).toEqual([[expect.stringMatching(/^\/cart\?buy_now=[a-f0-9-]{36}$/)]]);
   });
 
   it.each([true, false])('never reports success or opens the cart after a failed add or anonymous buy (signed in: %s)', async (authenticated) => {

@@ -33,6 +33,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - **Search history** - Searches are recorded automatically, with a popular-search ranking. Removing a history entry preserves the current query and page.
 - **Browsing history** - Viewed products are tracked for quick repurchase
 - Shopping cart - Add, remove and change items
+- Buy now confirms only the product, variant and quantity just selected. Refresh retains that purchase in the same tab; existing cart quantities and other items remain after checkout. Expired purchase links require a new selection.
 - The header cart count synchronizes from the server after sign-in and refresh. Failed reads provide a retry, and additions, quantity changes, removals and checkout keep the count consistent across navigation.
 - The checkout item count sums the selected purchasable quantities, including multiple pieces of one product or variant.
 - **Coupons** - Claim coupons, apply them and calculate discounts

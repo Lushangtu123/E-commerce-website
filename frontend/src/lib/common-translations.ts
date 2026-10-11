@@ -1,4 +1,9 @@
 export const commonTranslations: Record<string, string> = {
+  '确认本次购买': 'Confirm this purchase',
+  '仅结算本次选择的商品和数量，其他购物车商品会保留': 'Checkout includes only the product and quantity selected for this purchase. Your other cart items will remain.',
+  '返回完整购物车': 'Back to full cart',
+  '本次购买信息已失效，请返回商品页重新选择': 'This purchase is no longer available. Return to the product page and choose again.',
+  '无法保存本次购买，请恢复浏览器存储后重试': 'Unable to save this purchase. Restore browser storage and try again.',
   '电子产品': 'Electronics',
   '服装鞋包': 'Clothing, shoes and bags',
   '食品生鲜': 'Food and groceries',
