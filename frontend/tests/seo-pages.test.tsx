@@ -169,11 +169,12 @@ describe('robots', () => {
 });
 
 describe('product layout', () => {
+  const snapshot = { product_id: 7, title: 'A', price: 0, stock: 0, sales_count: 0, rating: 0, status: 1 };
   const answer = (result: ApiResult<{ product?: PublicProduct }>) => vi.mocked(fetchApiResult).mockResolvedValue(result);
   const props = (id = '7') => ({ params: Promise.resolve({ id }) });
 
   it('builds metadata from the product and falls back only when the backend is unavailable', async () => {
-    answer({ kind: 'ok', data: { product: { product_id: 7, title: '红色外套', description: '保暖\n舒适', price: '99.00', main_image: 'https://img.example/a.png' } } });
+    answer({ kind: 'ok', data: { product: { ...snapshot, title: '红色外套', description: '保暖\n舒适', price: '99.00', main_image: 'https://img.example/a.png' } } });
     const full = await generateMetadata(props());
     expect(full.title).toBe('红色外套');
     expect(full.description).toBe('¥99.00 · 保暖 舒适');
@@ -194,9 +195,9 @@ describe('product layout', () => {
   });
 
   it.each([
-    ['a shareable URL', { product_id: 7, title: 'A', main_image: 'https://img.example/a.png' }, [['https://img.example/a.png', { as: 'image', fetchPriority: 'high' }]]],
-    ['a script URL', { product_id: 7, title: 'A', main_image: 'javascript:alert(1)' }, []],
-    ['no image', { product_id: 7, title: 'A', main_image: null }, []],
+    ['a shareable URL', { ...snapshot, main_image: 'https://img.example/a.png' }, [['https://img.example/a.png', { as: 'image', fetchPriority: 'high' }]]],
+    ['a script URL', { ...snapshot, main_image: 'javascript:alert(1)' }, []],
+    ['no image', { ...snapshot, main_image: null }, []],
     ['an unavailable backend', null, []],
   ])('preloads the main image only for %s', async (_, product, expected) => {
     answer(product ? { kind: 'ok', data: { product: product as PublicProduct } } : { kind: 'unavailable' });
@@ -212,7 +213,7 @@ describe('product layout', () => {
       return ProductLayout({ children: 'page', ...props(id) });
     };
 
-    expect(await layout({ kind: 'ok', data: { product: { product_id: 7, title: 'A' } } })).toBe('page');
+    expect(await layout({ kind: 'ok', data: { product: { ...snapshot } } })).toBe('page');
     expect(await layout({ kind: 'unavailable' })).toBe('page');
     await expect(layout({ kind: 'missing', status: 404 })).rejects.toBe(NOT_FOUND);
     await expect(layout({ kind: 'missing', status: 400 })).rejects.toBe(NOT_FOUND);
