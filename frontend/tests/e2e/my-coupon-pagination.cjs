@@ -145,7 +145,7 @@ module.exports = async function myCouponPagination({ browser, localPlatformScrip
     assert.equal(preview.coupon.user_coupon_id, selected.user_coupon_id);
     assert.equal(preview.coupon.code, selected.code);
     await page.waitForFunction(id => document.querySelector('#checkout-coupon')?.value === id && !document.querySelector('#checkout-coupon').disabled, String(selected.user_coupon_id));
-    assert.equal(await page.getByLabel('Coupons', { exact: true }).inputValue(), String(selected.user_coupon_id));
+    assert.equal(await page.getByRole('combobox', { name: 'Coupons', exact: true }).inputValue(), String(selected.user_coupon_id));
     assert.deepEqual(unexpectedWrites, [], 'pagination and coupon handoff never claim another coupon or create an order');
     const afterPreview = await context.request.get(endpoint);
     assert.equal(afterPreview.status(), 200);
