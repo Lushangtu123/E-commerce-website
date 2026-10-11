@@ -199,17 +199,17 @@ describe('product SKU purchase', () => {
     fireEvent.change(quantity, { target: { value: '99' } });
     expect(quantity).toHaveValue(2);
 
-    await click('立即购买');
+    await click('加入购物车');
     expect(additions()).toEqual([{ product_id: 1, quantity: 2, sku_id: 101, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) }]);
     expect(useCartStore.getState().items[0]).toMatchObject({ sku_id: 101, price: 20, main_image: '/red.jpg', sku_specs: { Color: 'Red', Size: 'M' }, sku_code: 'RED' });
-    expect(router.push.mock.calls).toEqual([[expect.stringMatching(/^\/cart\?buy_now=[a-f0-9-]{36}$/)]]);
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('never reports success or opens the cart after a failed add or anonymous buy (signed in: %s)', async (authenticated) => {
     vi.mocked(cartApi.add).mockRejectedValue(apiError('库存不足'));
     await setup({ authenticated, detail: async () => ({ product: { ...base, has_sku: false } }) });
 
-    await click('立即购买');
+    await click('加入购物车');
 
     expect(router.push).not.toHaveBeenCalledWith('/cart');
     expect(useCartStore.getState().items).toHaveLength(0);
@@ -289,7 +289,7 @@ describe('product SKU purchase', () => {
     vi.mocked(cartApi.add).mockReturnValue(pending.promise as never);
     const { view, rerender } = await setup();
     await chooseSku('101');
-    fireEvent.click(button('立即购买'));
+    fireEvent.click(button('加入购物车'));
 
     if (change === 'route') {
       params.id = '2';

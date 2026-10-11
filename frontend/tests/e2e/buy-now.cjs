@@ -40,7 +40,7 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
       ['保留的其他购物车商品', 'Preserved other cart product', 5],
     ]) {
       const response = await adminContext.request.post(`${api}/admin/products`, { headers, data: {
-        title, title_en, price, stock: 20, category_id: 1, status: 1,
+        title, title_en, price, stock: products.length === 0 ? 3 : 20, category_id: 1, status: 1,
       } });
       assert.equal(response.status(), 201);
       products.push({ id: (await response.json()).product_id, title, title_en, price });
@@ -49,7 +49,7 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
     const skus = [];
     for (const [name, price] of [['红色', 17.25], ['蓝色', 18.5]]) {
       const response = await adminContext.request.post(`${api}/admin/products/${variant.id}/skus`, { headers, data: {
-        sku_code: `BUY-NOW-${variant.id}-${skus.length}`, specs: { 颜色: name }, price, stock: 20, status: 1,
+        sku_code: `BUY-NOW-${variant.id}-${skus.length}`, specs: { 颜色: name }, price, stock: skus.length === 0 ? 3 : 20, status: 1,
       } });
       assert.equal(response.status(), 201); skus.push((await response.json()).sku_id);
     }
@@ -104,12 +104,8 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
       assert.equal(await page.getByRole('checkbox').isDisabled(), true);
       assert.equal(await page.getByRole('heading', { name: other.title, exact: true }).count(), 0);
       assert.equal(await page.getByRole('button', { name: '删除', exact: true }).isDisabled(), true);
-      const increased = retained.map(item => item.product_id === purchase.item.product_id && (item.sku_id ?? null) === (purchase.item.sku_id ?? null)
-        ? { ...item, quantity: 4 } : item);
-      assert.deepEqual(normalizedCart(await getCart()), normalizedCart(increased), 'only one newly selected unit is added to the old cart');
-      assert.equal(cartWrites.length, index + 1); assert.equal(orderWrites.length, index);
-      const { add_key: addKey, ...added } = cartWrites[index];
-      assert.deepEqual(added, purchase.item); assert.ok(addKey);
+      assert.deepEqual(normalizedCart(await getCart()), normalizedCart(retained), 'direct purchase never increments old cart quantities');
+      assert.equal(cartWrites.length, 0); assert.equal(orderWrites.length, index);
       await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
       await page.getByRole('heading', { name: 'Confirm this purchase', exact: true }).waitFor({ state: 'visible' });
       await page.getByRole('heading', { name: purchase.product.title_en, exact: true }).waitFor({ state: 'visible' });
@@ -118,7 +114,7 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
       assert.equal(restoredQuote.status(), 200); assert.deepEqual(restoredQuote.request().postDataJSON(), { items: [purchase.item] });
       assert.equal((await restoredQuote.json()).total_amount, purchase.price);
       await page.getByRole('button', { name: 'Checkout (1)', exact: true }).click({ trial: true });
-      assert.equal(page.url(), purchaseUrl); assert.equal(cartWrites.length, index + 1); assert.equal(orderWrites.length, index);
+      assert.equal(page.url(), purchaseUrl); assert.equal(cartWrites.length, 0); assert.equal(orderWrites.length, index);
       assert.equal((await getOrders()).total, index, 'confirmation reload never creates an order');
       console.log(`PASS browser ${purchase.item.sku_id ? 'SKU' : 'ordinary'} Buy now quotes only one newly selected unit and bilingual refresh retains the scoped purchase`);
 
@@ -128,7 +124,7 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
       const orderId = (await submitted.json()).order_id; orderIds.push(orderId);
       await page.waitForURL(`${origin}/orders/${orderId}`);
       assert.equal(orderWrites.length, index + 1);
-      assert.deepEqual(orderWrites[index].items, [purchase.item]); assert.equal(orderWrites[index].checkout_key, purchaseId);
+      assert.deepEqual(orderWrites[index].items, [purchase.item]); assert.equal(orderWrites[index].checkout_source, 'buy_now'); assert.equal(orderWrites[index].checkout_key, purchaseId);
       const detailResponse = await context.request.get(`${api}/orders/${orderId}`); assert.equal(detailResponse.status(), 200);
       const detail = await detailResponse.json();
       assert.deepEqual(normalizedCart(detail.items), normalizedCart([purchase.item]));
@@ -138,7 +134,7 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
       await page.goto(purchaseUrl);
       await page.getByRole('alert').getByText('This purchase is no longer available. Return to the product page and choose again.', { exact: true }).waitFor({ state: 'visible' });
       assert.equal(await page.getByRole('button', { name: 'Checkout (1)', exact: true }).count(), 0);
-      assert.equal(orderWrites.length, index + 1); assert.equal(cartWrites.length, index + 1);
+      assert.equal(orderWrites.length, index + 1); assert.equal(cartWrites.length, 0);
       assert.equal((await getOrders()).total, index + 1);
       assert.deepEqual(normalizedCart(await getCart()), normalizedCart(retained));
       await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
@@ -146,13 +142,13 @@ module.exports = async function buyNow({ browser, adminContext, localPlatformScr
     }
     assert.equal(new Set(orderIds).size, 2);
     assert.ok(previews.every(preview => preview.items.length === 1 && preview.items[0].quantity === 1));
-    for (const [product, expected] of [[ordinary, 19], [other, 20]]) {
+    for (const [product, expected] of [[ordinary, 2], [other, 20]]) {
       const response = await context.request.get(`${api}/products/${product.id}`); assert.equal(response.status(), 200);
       assert.equal((await response.json()).product.stock, expected);
     }
     const variantResponse = await context.request.get(`${api}/products/${variant.id}`); assert.equal(variantResponse.status(), 200);
     const currentSkus = (await variantResponse.json()).product.skus;
-    assert.equal(currentSkus.find(sku => sku.sku_id === skus[0]).stock, 19);
+    assert.equal(currentSkus.find(sku => sku.sku_id === skus[0]).stock, 2);
     assert.equal(currentSkus.find(sku => sku.sku_id === skus[1]).stock, 20);
     console.log('PASS browser Buy now deducts only one ordinary unit and one selected SKU unit from real SQL inventory');
 

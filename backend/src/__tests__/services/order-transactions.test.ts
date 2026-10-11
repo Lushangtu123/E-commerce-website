@@ -85,6 +85,92 @@ beforeEach(() => {
 });
 
 describe('下单原子性', () => {
+  test.each([undefined, 11])('立即购买 sku=%p 保留已有三件购物车，库存只扣一件且重试复用回执', async skuId => {
+    let stock = 3;
+    let cartQuantity = 3;
+    let receipt: any;
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation(async (sql: string, params: any[]) => {
+      if (sql.includes('FROM products')) return [[{ ...PRODUCT, stock }], []];
+      if (sql.includes('FROM product_skus')) return [skuId === undefined ? [] : [{
+        sku_id: skuId, product_id: 1, sku_code: 'DIRECT', specs: { size: 'M' },
+        price: '19.99', stock, status: 1,
+      }], []];
+      if (sql.includes('checkout_key =')) return [receipt ? [receipt] : [], []];
+      if (sql.includes('INSERT INTO orders')) receipt = {
+        order_id: 1001, checkout_fingerprint: params.at(-1), original_amount: '19.99',
+        discount_amount: '0.00', total_amount: '19.99',
+      };
+      if (sql.includes('stock = stock -')) stock -= params[0];
+      if (sql.includes('DELETE FROM cart') && cartQuantity <= params[3]) cartQuantity = 0;
+      if (sql.includes('UPDATE cart') && cartQuantity > params[4]) cartQuantity -= params[0];
+      return execute(sql, params);
+    });
+    const body = { items: [{ product_id: 1, quantity: 1, ...(skuId === undefined ? {} : { sku_id: skuId }) }], checkout_source: 'buy_now' };
+    const first = response();
+    await OrderController.create(request(body), first);
+    expect(first.status).toHaveBeenCalledWith(201);
+    expect(stock).toBe(2);
+    expect(cartQuantity).toBe(3);
+    expect(connection.execute.mock.calls.filter(([sql]: [string]) => /\bcart\b/i.test(sql))).toHaveLength(0);
+    expect(matching('stock = stock -')[0][0]).toContain(skuId === undefined ? 'UPDATE products' : 'UPDATE product_skus');
+
+    const replay = response();
+    await OrderController.create(request(body), replay);
+    expect(replay.status).toHaveBeenCalledWith(201);
+    expect(replay.json).toHaveBeenCalledWith((first.json as jest.Mock).mock.calls[0][0]);
+    expect(stock).toBe(2);
+    expect(cartQuantity).toBe(3);
+    expect(matching('INSERT INTO orders')).toHaveLength(1);
+    expect(matching('INSERT INTO order_items')).toHaveLength(1);
+    expect(matching('stock = stock -')).toHaveLength(1);
+    expect(sendOrderTimeoutCheckMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([undefined, 'buy_now'])('同一请求号从 source=%p 切换结算来源返回 409', async source => {
+    let receipt: any;
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation(async (sql: string, params: any[]) => {
+      if (sql.includes('checkout_key =')) return [receipt ? [receipt] : [], []];
+      if (sql.includes('INSERT INTO orders')) receipt = {
+        order_id: 1001, checkout_fingerprint: params.at(-1), original_amount: '19.99',
+        discount_amount: '0.00', total_amount: '19.99',
+      };
+      return execute(sql, params);
+    });
+    const items = [{ product_id: 1, quantity: 1 }];
+    const first = response();
+    await OrderController.create(request({ items, ...(source ? { checkout_source: source } : {}) }), first);
+    expect(first.status).toHaveBeenCalledWith(201);
+    const changed = response();
+    await OrderController.create(request({ items, ...(source ? {} : { checkout_source: 'buy_now' }) }), changed);
+    expect(changed.status).toHaveBeenCalledWith(409);
+    expect(changed.json).toHaveBeenCalledWith({ error: '结算请求号已用于其他结算内容，请重新结算' });
+    expect(matching('INSERT INTO orders')).toHaveLength(1);
+    expect(matching('stock = stock -')).toHaveLength(1);
+  });
+
+  test.each(['cart', '', 'BUY_NOW', null, 0, false, [], {}])('非法 checkout_source=%p 在任何 SQL 前返回 400', async source => {
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 1 }], checkout_source: source }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+    expect(pool.execute).not.toHaveBeenCalled();
+    expect(connection.execute).not.toHaveBeenCalled();
+  });
+
+  test('未指定来源的旧购物车结算保留原指纹字节和购物车消耗', async () => {
+    const res = response();
+    await OrderController.create(request({ items: [{ product_id: 1, quantity: 2 }], remark: '' }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    const legacyFingerprint = createHash('sha256').update(JSON.stringify({
+      items: [{ product_id: 1, quantity: 2 }], shippingAddressId: 3, remark: '', userCouponId: null,
+    })).digest('hex');
+    expect(matching('INSERT INTO orders')[0][1].at(-1)).toBe(legacyFingerprint);
+    expect(matching('DELETE FROM cart')).toHaveLength(1);
+    expect(matching('UPDATE cart')).toHaveLength(1);
+  });
+
   test('新请求超过 100 个商品行时只读核对请求号后拒绝，不取得事务连接', async () => {
     const res = response();
     await OrderController.create(request({ items: Array.from({ length: 101 }, (_, index) => ({

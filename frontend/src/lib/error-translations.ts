@@ -258,6 +258,7 @@ export const errorTranslations: Record<string, string> = {
   '清空购物车失败': 'Unable to clear your cart',
   '订单商品不能为空': 'Your order must contain at least one item',
   '单次结算最多支持100个商品或规格，请分批结算': 'A checkout supports up to 100 products or variants. Split your purchase into smaller orders.',
+  '结算来源无效，请刷新页面后重试': 'The checkout source is invalid. Refresh the page and try again.',
   '结算商品列表最多支持1000行，请分批结算': 'A checkout request supports up to 1,000 item entries. Split your purchase into smaller orders.',
   '订单商品数量无效': 'Invalid order item quantity',
   '订单商品不存在': 'Order item not found',

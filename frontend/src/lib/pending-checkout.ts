@@ -11,6 +11,7 @@ export function readPendingCheckout(sessionKey: string): PendingCheckout | null 
     if (stored?.sessionKey !== sessionKey || !input || typeof input.checkout_key !== 'string' ||
         !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(input.checkout_key) ||
         !Number.isSafeInteger(input.shipping_address_id) || input.shipping_address_id <= 0 ||
+        (input.checkout_source !== undefined && input.checkout_source !== 'buy_now') ||
         !Array.isArray(input.items) || !input.items.length || !input.items.every(item => item &&
           Number.isSafeInteger(item.product_id) && item.product_id > 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0 &&
           (item.sku_id === undefined || Number.isSafeInteger(item.sku_id) && item.sku_id > 0)) ||
