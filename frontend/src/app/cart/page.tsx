@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { addressApi, cartApi, orderApi, type OrderCreateInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
@@ -17,6 +17,7 @@ import { validCartItems } from '@/lib/cart-contents';
 import { cartAddBlocksWrites, useCartAddRecovery } from '@/hooks/use-cart-add-recovery';
 import { beginCartWrite, readCanonicalCart, subscribeCanonicalCart } from '@/lib/cart-sync';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
+import { clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
 
 function requireCartAcknowledgement(data: unknown, message: '更新成功' | '删除成功') {
   if (!data || typeof data !== 'object' || Array.isArray(data) ||
@@ -27,6 +28,17 @@ function requireCartAcknowledgement(data: unknown, message: '更新成功' | '�
 }
 
 export default function CartPage() {
+  return <Suspense fallback={<div role="status" className="py-12 animate-pulse" />}><CartRoute /></Suspense>;
+}
+
+function CartRoute() {
+  const params = useSearchParams();
+  const { sessionId, user } = useAuthStore();
+  const buyNowId = params?.has('buy_now') ? params.get('buy_now') ?? '' : null;
+  return <CartView key={JSON.stringify([sessionId, user?.user_id, buyNowId])} buyNowId={buyNowId} />;
+}
+
+function CartView({ buyNowId }: { buyNowId: string | null }) {
   const router = useRouter();
   const { t } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
@@ -58,6 +70,7 @@ export default function CartPage() {
   const [addressResult, setAddressResult] = useState<{ key: string; addresses: ShippingAddress[]; error?: string } | null>(null);
   const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
   const [addressRevision, setAddressRevision] = useState(0);
+  const [purchase, setPurchase] = useState<{ intent: BuyNowIntent | null } | null>(null);
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const hasUnconfirmedCheckout = unconfirmedSession === sessionKey;
   const cartUpdating = updatingSession === sessionKey || unconfirmedCartSession === sessionKey || hasPendingAdd;
@@ -66,6 +79,12 @@ export default function CartPage() {
   const addressLoading = addressResult?.key !== sessionKey;
   const addressError = addressResult?.key === sessionKey ? addressResult.error : null;
   const selectedAddress = addressSelection?.key === sessionKey ? addresses.find(address => address.address_id === addressSelection.id) : undefined;
+
+  useEffect(() => {
+    if (buyNowId === null || !isHydrated || !isAuthenticated || !sessionId || !user) return;
+    try { setPurchase({ intent: readBuyNow(sessionId, user.user_id, buyNowId) }); }
+    catch { setPurchase({ intent: null }); }
+  }, [buyNowId, isHydrated, isAuthenticated, sessionId, user]);
 
   useEffect(() => {
     mounted.current = true;
@@ -95,7 +114,10 @@ export default function CartPage() {
   }, []);
 
   const availableItems = items.filter(isAvailable);
-  const orderItems = availableItems
+  const purchaseItem = purchase?.intent && items.find(item => cartItemKey(item) === cartItemKey(purchase.intent!.input));
+  const purchaseAvailable = purchaseItem && purchase?.intent && purchaseItem.quantity >= purchase.intent.input.quantity &&
+    purchaseItem.stock >= purchase.intent.input.quantity && (isAvailable(purchaseItem) || purchaseItem.unavailable_reason === '库存不足');
+  const orderItems = buyNowId !== null ? purchaseAvailable && purchase?.intent ? [purchase.intent.input] : [] : availableItems
     .filter(item => selectedItems.includes(cartItemKey(item)))
     .map(item => ({ product_id: item.product_id, quantity: item.quantity, ...(item.sku_id != null && { sku_id: item.sku_id }) }));
   const orderItemsKey = JSON.stringify(orderItems);
@@ -244,7 +266,7 @@ export default function CartPage() {
   };
 
   const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
-    if (newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
+    if (buyNowId !== null || newQuantity < 1 || newQuantity > item.stock || !canReduce(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
 
     const operation = {};
     cartMutation.current = operation;
@@ -274,7 +296,7 @@ export default function CartPage() {
   };
 
   const handleRemove = async (item: CartItem) => {
-    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
+    if (buyNowId !== null || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     const operation = {};
     cartMutation.current = operation;
     const finishWrite = beginCartWrite();
@@ -301,7 +323,7 @@ export default function CartPage() {
   };
 
   const handleSelectAll = () => {
-    if (submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
+    if (buyNowId !== null || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     if (orderItems.length === availableItems.length) {
       setSelectedItems([]);
     } else {
@@ -310,7 +332,7 @@ export default function CartPage() {
   };
 
   const handleToggleSelect = (item: CartItem) => {
-    if (!isAvailable(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
+    if (buyNowId !== null || !isAvailable(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     const key = cartItemKey(item);
     setSelectedItems(selected => selected.includes(key) ? selected.filter(id => id !== key) : [...selected, key]);
   };
@@ -325,7 +347,7 @@ export default function CartPage() {
     if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
 
     await submitCheckout({ items: orderItems, shipping_address_id: selectedAddress.address_id,
-      ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }), checkout_key: crypto.randomUUID() });
+      ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }), checkout_key: purchase?.intent?.id ?? crypto.randomUUID() });
   };
 
   const submitCheckout = async (input: OrderCreateInput) => {
@@ -352,6 +374,10 @@ export default function CartPage() {
       clearPendingCheckout(sessionKey);
       pendingCheckout.current = null;
       setUnconfirmedSession(null);
+      if (buyNowId !== null) {
+        clearBuyNow(sessionId!, user!.user_id, buyNowId);
+        setPurchase({ intent: null });
+      }
       // Another page can add quantities before checkout or after its original commit.
       // Keep this global read alive after navigation; the cart helper checks its session.
       void readCanonicalCart(undefined, { fresh: true }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
@@ -385,7 +411,7 @@ export default function CartPage() {
     }
   };
 
-  if (!isHydrated || !isAuthenticated || (loading && !hasUnconfirmedCheckout)) {
+  if (!isHydrated || !isAuthenticated || ((loading || buyNowId !== null && !purchase) && !hasUnconfirmedCheckout)) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -419,6 +445,14 @@ export default function CartPage() {
     </div></div>;
   }
 
+  if (buyNowId !== null && !purchaseAvailable) {
+    return <div className="py-12 container-custom"><div className="card p-6 space-y-4" role="alert">
+      <h1 className="text-xl font-bold">{t('确认本次购买')}</h1>
+      <p>{t('本次购买信息已失效，请返回商品页重新选择')}</p>
+      <Link href="/cart" className="text-primary-600 underline">{t('返回完整购物车')}</Link>
+    </div></div>;
+  }
+
   if (items.length === 0) {
     return (
       <div className="py-20">
@@ -439,13 +473,17 @@ export default function CartPage() {
   return (
     <div className="py-8">
       <div className="container-custom">
-        <h1 className="text-3xl font-bold mb-8">{t("购物车")}</h1>
+        <h1 className="text-3xl font-bold mb-8">{t(buyNowId !== null ? '确认本次购买' : '购物车')}</h1>
+        {buyNowId !== null && <div className="card p-4 mb-6 space-y-2" role="status">
+          <p>{t('仅结算本次选择的商品和数量，其他购物车商品会保留')}</p>
+          <Link href="/cart" className="text-primary-600 underline">{t('返回完整购物车')}</Link>
+        </div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* 购物车列表 */}
           <div className="lg:col-span-2 space-y-4">
             {/* 全选 */}
-            <div className="card p-4 flex items-center">
+            {buyNowId === null && <div className="card p-4 flex items-center">
               <input
                 type="checkbox"
                 aria-label={t("全选")}
@@ -455,11 +493,11 @@ export default function CartPage() {
                 className="h-5 w-5 rounded-sm accent-primary-600"
               />
               <span className="ml-3 font-medium">{t("全选")}</span>
-            </div>
+            </div>}
 
             {/* 商品列表 */}
-            {items.map((item) => (
-              <CartItemRow key={cartItemKey(item)} item={item} selected={selectedItems.includes(cartItemKey(item))} submitting={submitting || cartUpdating}
+            {(buyNowId !== null && purchaseItem && purchase?.intent ? [{ ...purchaseItem, available: true as const, quantity: purchase.intent.input.quantity }] : items).map((item) => (
+              <CartItemRow key={cartItemKey(item)} item={item} selected={buyNowId !== null || selectedItems.includes(cartItemKey(item))} submitting={buyNowId !== null || submitting || cartUpdating}
                 onToggle={() => handleToggleSelect(item)} onQuantityChange={quantity => handleQuantityChange(item, quantity)}
                 onRemove={() => handleRemove(item)} />
             ))}
