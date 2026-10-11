@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 import { validFavoriteAcknowledgement, validFavoriteState } from '@/lib/favorite-response';
 import { storeBuyNow, type BuyNowIntent } from '@/lib/buy-now';
+import { validProductDetailResponse } from '@/lib/product-detail-response';
 
 /**
  * The product page. The server renders `initialProduct` so the HTML carries the product; the
@@ -202,6 +203,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     setSelectedSkuId(undefined);
     productApi.getDetail(productId).then(data => {
       if (!isCurrentRequest()) return;
+      if (!validProductDetailResponse(data, productId)) throw new Error('Invalid product detail');
       setLoadedProduct(data.product);
       setLoadedContext(context);
     }).catch(error => {

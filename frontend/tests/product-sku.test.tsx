@@ -232,7 +232,7 @@ describe('product SKU purchase', () => {
 
   it.each(['success', 'failure'] as const)("cannot let a late previous product %s replace the route or select a variant on the next product", async (outcome) => {
     const first = deferred<Detail>();
-    const { rerender } = await setup({ detail: id => id === 1 ? first.promise : Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt' } }) });
+    const { rerender } = await setup({ detail: id => id === 1 ? first.promise : Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt', skus: product.skus!.map(row => ({ ...row, product_id: 2 })) } }) });
 
     params.id = '2';
     rerender();
@@ -254,7 +254,7 @@ describe('product SKU purchase', () => {
     const retry = deferred<Detail>();
     let firstRequests = 0;
     const { rerender } = await setup({ detail: id => {
-      if (id !== 1) return Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt' } });
+      if (id !== 1) return Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt', skus: product.skus!.map(row => ({ ...row, product_id: 2 })) } });
       if (++firstRequests === 1) return Promise.reject(new Error('Offline'));
       return retry.promise;
     } });
