@@ -217,6 +217,17 @@ describe('product SKU purchase', () => {
     expect(notifications).not.toContain('已加入购物车');
   });
 
+  it.each(['加入购物车', '立即购买', '收藏'])('returns a guest to this product after %s requests sign-in, without a write', async action => {
+    window.history.replaceState(null, '', '/products/1?sku_id=101&from=search');
+    await setup({ authenticated: false, detail: async () => ({ product: { ...base, has_sku: false } }) });
+    await click(action);
+    expect(router.push.mock.calls).toEqual([['/login?next=%2Fproducts%2F1%3Fsku_id%3D101%26from%3Dsearch']]);
+    expect(additions()).toEqual([]);
+    expect(favoriteApi.add).not.toHaveBeenCalled();
+    expect(favoriteApi.remove).not.toHaveBeenCalled();
+    expect(notifications).not.toContain('已加入购物车');
+  });
+
   it('cannot fall back to plentiful base inventory when every SKU row is disabled', async () => {
     await setup({ detail: async () => ({ product: { ...base, has_sku: true, skus: [] } }) });
     expect(screen.getByText('暂无可用规格')).toBeInTheDocument();

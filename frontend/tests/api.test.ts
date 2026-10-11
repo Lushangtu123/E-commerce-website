@@ -235,6 +235,16 @@ describe('API client sign-out on 401', () => {
     expect(window.location.pathname).toBe('/admin/login');
   });
 
+  it('preserves the original customer destination after an expired-session response without replaying its request', async () => {
+    const { userApi, requests, fail } = await setupApi({ session: 'customer-session' });
+    window.history.replaceState(null, '', '/profile/address?from=checkout');
+    fail(401, 'Unauthorized');
+    await expect(userApi.getProfile()).rejects.toThrow(/Unauthorized/);
+    expect(localStorage.getItem('session')).toBeNull();
+    expect(window.location.pathname + window.location.search).toBe('/login?next=%2Fprofile%2Faddress%3Ffrom%3Dcheckout');
+    expect(requests).toHaveLength(1);
+  });
+
   it.each([401, 403, 500])('keeps the admin identity after a customer %i, and signs the customer out only on 401', async (status) => {
     const { userApi, fail } = await setupApi({ session: 'customer-session', user: '{"user_id":1}', admin_session: 'admin-session', admin_user: '{"admin_id":2}' });
     fail(status);

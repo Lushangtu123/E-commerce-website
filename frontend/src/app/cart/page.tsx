@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -138,7 +139,7 @@ export default function CartPage() {
   useEffect(() => {
     if (!isHydrated) return;
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push(customerLoginHref());
       return;
     }
     loadCart();

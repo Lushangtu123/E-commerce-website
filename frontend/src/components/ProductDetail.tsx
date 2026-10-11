@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { translate, useI18n } from '@/lib/i18n';
 import { localizedText, localizedSpecs, specSummary, specValue } from '@/lib/product-content';
 
@@ -250,7 +251,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     if (!product || !ready || !isCurrentContext() || addingRequest.current) return false;
     if (!isAuthenticated) {
       toast.error(translate("请先登录"));
-      router.push('/login');
+      router.push(customerLoginHref());
       return false;
     }
     if (!canPurchase) {
@@ -286,7 +287,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     if (!ready || !isCurrentContext() || favoriteRequest.current?.context === context) return;
     if (!isAuthenticated) {
       toast.error(translate("请先登录"));
-      router.push('/login');
+      router.push(customerLoginHref());
       return;
     }
     if (visibleFavorite.loading || visibleFavorite.error || favoriteReadRequest.current?.context === context) return;

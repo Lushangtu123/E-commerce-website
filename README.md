@@ -24,6 +24,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 - **Chinese and English interface** - The storefront and admin panel switch between Chinese and English from the language menu. The choice survives refreshes, navigation and signing in again. Dates follow the selected language; product, user and address content stays in its original language, and amounts remain in RMB.
 - Registration, sign-in and profile management
+- Sign-in and registration preserve a safe storefront return path and query parameters. Guest actions and expired sessions return to the original page after sign-in; customers confirm purchase and other write actions themselves.
 - Password change that revokes old sessions; one-time email password reset through configured Gmail SMTP or Resend
 - **Account centre** - One place for profile, orders and coupons
 - Product browsing, search and filtering
