@@ -52,6 +52,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 ### Order Features
 - Order creation and checkout
+- New checkout requests accept at most 100 combined product/variant lines and 1000 input lines. Larger purchases require separate checkouts. Previously committed oversized requests can still recover their original order using the same request ID and contents, without repeating inventory or coupon writes.
 - Simulated payment (enabled explicitly for local and Preview environments, clearly marked as not charging, disabled in production)
 - **Automatic cancellation** - Unpaid orders are cancelled after 30 minutes
 - Order status management (pending payment / paid / shipped / completed)

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import mysql, { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { getPool, query } from '../../database/mysql';
 import { createOrder as createOrderService, previewOrder, transitionOrder } from '../../services/order.service';
@@ -987,6 +988,108 @@ integration('真实 MySQL 订单事务及并发', () => {
   const checkoutKey = '11111111-1111-4111-8111-111111111111';
   const checkout = (key = checkoutKey, items = [{ product_id: 1, quantity: 2 }], userId = 1, addressId = 100 + userId, couponId?: number, remark?: string) =>
     createOrderService(userId, items, addressId, remark, couponId, key).then(({ created, ...result }) => result);
+
+  test('结算行数上限拒绝 101 商品、101 规格及 1001 原始行，不启动事务或改变数据库', async () => {
+    const beforeProduct = await product();
+    const execute = jest.fn((sql: string, values: any[]) => db.execute(sql, values));
+    const getConnection = jest.fn(() => { throw new Error('oversized checkout must not acquire a transaction'); });
+    (getPool as jest.Mock).mockReturnValue({ execute, getConnection });
+    try {
+      for (const [items, message] of [
+        [Array.from({ length: 101 }, (_, index) => ({ product_id: index + 1, quantity: 1 })), '单次结算最多支持100个商品或规格，请分批结算'],
+        [Array.from({ length: 101 }, (_, index) => ({ product_id: 1, sku_id: index + 1, quantity: 1 })), '单次结算最多支持100个商品或规格，请分批结算'],
+        [Array(1001).fill({ product_id: 1, quantity: 1 }), '结算商品列表最多支持1000行，请分批结算'],
+      ] as const) {
+        execute.mockClear();
+        await expect(previewOrder(1, items)).rejects.toMatchObject({ statusCode: 400, message });
+        expect(execute).not.toHaveBeenCalled();
+        await expect(createOrderService(1, items, 101, undefined, undefined, checkoutKey))
+          .rejects.toMatchObject({ statusCode: 400, message });
+        expect(execute).toHaveBeenCalledTimes(1);
+      }
+      expect(getConnection).not.toHaveBeenCalled();
+      expect(await product()).toEqual(beforeProduct);
+      const [orders] = await db.query<RowDataPacket[]>('SELECT * FROM orders');
+      const [cart] = await db.query<RowDataPacket[]>('SELECT * FROM cart');
+      expect(orders).toEqual([]);
+      expect(cart).toEqual([]);
+    } finally { (getPool as jest.Mock).mockReturnValue(db); }
+  });
+
+  test('结算恰好 100 行、1000 原始行保留合并、服务器报价、库存及购物车余量', async () => {
+    await db.query('INSERT INTO products (product_id,title,price,stock) VALUES ?', [
+      Array.from({ length: 98 }, (_, index) => [index + 3, `边界商品${index + 3}`, 1, 11]),
+    ]);
+    await db.query('UPDATE products SET price = 1, stock = 11');
+    await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES ?', [
+      Array.from({ length: 100 }, (_, index) => [1, index + 1, 11]),
+    ]);
+    const items = Array.from({ length: 1000 }, (_, index) => ({ product_id: 100 - (index % 100), quantity: 1 }));
+    expect(await previewOrder(1, items)).toMatchObject({ original_amount: 1000, discount_amount: 0, total_amount: 1000 });
+    const first = await createOrderService(1, items, 101, undefined, undefined, checkoutKey);
+    expect(first).toMatchObject({ original_amount: 1000, total_amount: 1000, created: true });
+    const [lines] = await db.query<RowDataPacket[]>('SELECT product_id,quantity,price FROM order_items ORDER BY product_id');
+    expect(lines).toEqual(Array.from({ length: 100 }, (_, index) => ({ product_id: index + 1, quantity: 10, price: '1.00' })));
+    expect(await createOrderService(1, [...items].reverse(), 101, '', undefined, checkoutKey))
+      .toMatchObject({ ...first, created: false });
+    const [products] = await db.query<RowDataPacket[]>('SELECT stock,sales_count FROM products ORDER BY product_id');
+    const [cart] = await db.query<RowDataPacket[]>('SELECT product_id,quantity FROM cart ORDER BY product_id');
+    expect(products).toEqual(Array(100).fill({ stock: 1, sales_count: 0 }));
+    expect(cart).toEqual(Array.from({ length: 100 }, (_, index) => ({ product_id: index + 1, quantity: 1 })));
+  });
+
+  test.each(['unique', 'duplicates'] as const)('历史超大 %s 已提交订单原请求只读重放，旧券、地址、订单状态和库存完整保留', async shape => {
+    const normalized = shape === 'unique'
+      ? Array.from({ length: 101 }, (_, index) => ({ product_id: index + 1, quantity: 1 }))
+      : [{ product_id: 1, quantity: 1001 }];
+    const raw = shape === 'unique' ? [...normalized].reverse()
+      : Array(1001).fill({ product_id: 1, quantity: 1 });
+    const original = shape === 'unique' ? 101 : 1001;
+    if (shape === 'unique') await db.query('INSERT INTO products (product_id,title,price,stock) VALUES ?', [
+      Array.from({ length: 99 }, (_, index) => [index + 3, `历史商品${index + 3}`, 1, 8]),
+    ]);
+    await receivedCoupon();
+    const fingerprint = createHash('sha256').update(JSON.stringify({
+      items: normalized, shippingAddressId: 101, remark: '', userCouponId: 1,
+    })).digest('hex');
+    const [inserted] = await db.execute<ResultSetHeader>(`INSERT INTO orders
+      (order_no,user_id,total_amount,original_amount,discount_amount,status,user_coupon_id,shipping_address_id,checkout_key,checkout_fingerprint)
+      VALUES ('HISTORICAL-OVERSIZED',1,?,?,?,4,1,101,?,?)`,
+    [(original * 0.8).toFixed(2), original.toFixed(2), (original * 0.2).toFixed(2), checkoutKey, fingerprint]);
+    await db.query('INSERT INTO order_items (order_id,product_id,product_name,quantity,price) VALUES ?', [
+      normalized.map(item => [inserted.insertId, item.product_id, '历史商品', item.quantity, 1]),
+    ]);
+    await db.query('UPDATE user_coupons SET status = 2, used_at = NOW(), order_id = ? WHERE user_coupon_id = 1', [inserted.insertId]);
+    await db.query(`INSERT INTO coupon_usage_logs (user_id,coupon_id,user_coupon_id,order_id,discount_amount,order_amount)
+      VALUES (1,1,1,?,?,?)`, [inserted.insertId, (original * 0.2).toFixed(2), original.toFixed(2)]);
+    await db.query('INSERT INTO cart (user_id,product_id,quantity) VALUES (1,1,3),(2,1,2)');
+    await db.query('DELETE FROM shipping_addresses WHERE address_id = 101');
+    await db.query('UPDATE products SET status = 0, stock = 0');
+    const snapshot = async () => Promise.all(['orders', 'order_items', 'products', 'cart', 'user_coupons', 'coupon_usage_logs']
+      .map(async table => (await db.query<RowDataPacket[]>(`SELECT * FROM ${table} ORDER BY 1`))[0]));
+    const before = await snapshot();
+    const execute = jest.fn((sql: string, values: any[]) => db.execute(sql, values));
+    const getConnection = jest.fn(() => { throw new Error('historical replay must be read only'); });
+    (getPool as jest.Mock).mockReturnValue({ execute, getConnection });
+    try {
+      const result = await createOrderService(1, raw, 101, '', 1, checkoutKey.toUpperCase());
+      expect(result).toMatchObject({ orderId: inserted.insertId, created: false, original_amount: original,
+        discount_amount: Number((original * 0.2).toFixed(2)), total_amount: Number((original * 0.8).toFixed(2)) });
+      expect(execute).toHaveBeenCalledTimes(1);
+      execute.mockClear();
+      await expect(createOrderService(1, raw, 101, 'changed', 1, checkoutKey)).rejects.toMatchObject({ statusCode: 409 });
+      expect(execute).toHaveBeenCalledTimes(1);
+      execute.mockClear();
+      await expect(createOrderService(2, raw, 102, '', 1, checkoutKey)).rejects.toMatchObject({ statusCode: 400 });
+      expect(execute).toHaveBeenCalledTimes(1);
+      execute.mockClear();
+      await expect(createOrderService(1, raw, 101, '', 1, '22222222-2222-4222-8222-222222222222'))
+        .rejects.toMatchObject({ statusCode: 400 });
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(getConnection).not.toHaveBeenCalled();
+      expect(await snapshot()).toEqual(before);
+    } finally { (getPool as jest.Mock).mockReturnValue(db); }
+  });
 
   test('旧页面结算只消耗购买数量，保留其他页面提交前新增数量且回执重试不再消耗', async () => {
     await CartModel.add(1, 1, 1);

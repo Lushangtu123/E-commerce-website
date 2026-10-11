@@ -13,7 +13,7 @@ router.use(authMiddleware);
  *   post:
  *     tags: [订单]
  *     summary: 预览服务器结算金额和可用优惠券
- *     description: 不占用库存或优惠券，下单时重新校验价格与优惠券状态
+ *     description: 不占用库存或优惠券，下单时重新校验价格与优惠券状态。原始商品数组最多1000行，按商品和规格合并后最多100行；超限返回400，请分批结算
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -26,6 +26,8 @@ router.use(authMiddleware);
  *               items:
  *                 type: array
  *                 minItems: 1
+ *                 maxItems: 1000
+ *                 description: 重复商品和规格合并后最多100行
  *                 items:
  *                   type: object
  *                   required: [product_id, quantity]
@@ -48,7 +50,7 @@ router.post('/preview', OrderController.preview);
  *   post:
  *     tags: [订单]
  *     summary: 创建订单
- *     description: 必须选择本人有效地址，服务器保存收货快照。下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
+ *     description: 必须选择本人有效地址，服务器保存收货快照。新结算原始商品数组最多1000行，按商品和规格合并后最多100行；超限返回400。已提交历史超限订单可沿用原请求号及原内容只读重放，不重新扣库存或使用券。下单后通过 RabbitMQ 延迟队列在 30 分钟后检查是否超时未支付
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -60,6 +62,8 @@ router.post('/preview', OrderController.preview);
  *             properties:
  *               items:
  *                 type: array
+ *                 minItems: 1
+ *                 description: 新结算最多1000个原始行及100个合并商品或规格行；历史已提交请求重放兼容原列表
  *                 items:
  *                   type: object
  *                   required: [product_id, quantity]

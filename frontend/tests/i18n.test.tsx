@@ -120,6 +120,8 @@ describe('translation', () => {
     ['加载商品失败，请重试', 'Unable to load this product. Please try again.'],
     ['订单支付已超时，请重新下单', 'The payment deadline has passed. Please place a new order.'],
     ['健康检查请求过于频繁，请稍后再试', 'Too many health checks. Please try again later.'],
+    ['单次结算最多支持100个商品或规格，请分批结算', 'A checkout supports up to 100 products or variants. Split your purchase into smaller orders.'],
+    ['结算商品列表最多支持1000行，请分批结算', 'A checkout request supports up to 1,000 item entries. Split your purchase into smaller orders.'],
   ])('translates recovery message %s', (source, expected) => {
     expect(translate(source, {}, 'en')).toBe(expected);
     expect(translate(source, {}, 'zh-CN')).toBe(source);

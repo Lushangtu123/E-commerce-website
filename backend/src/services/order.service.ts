@@ -13,7 +13,7 @@ import { syncProductsToSearchIndex } from './product-search.service';
 import { PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product-cache-keys';
 import { AdminAuditMetadata, normalizeAdminAuditMetadata } from '../utils/admin-audit-metadata';
 
-import { PurchaseError as OrderError, MAX_QUANTITY, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
+import { PurchaseError as OrderError, MAX_QUANTITY, MAX_CHECKOUT_LINES, MAX_CHECKOUT_INPUT_LINES, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
 
 interface LockedCoupon extends RowDataPacket {
@@ -49,7 +49,11 @@ async function lockCouponDefinition(connection: PoolConnection, userId: number, 
 
 /** Indicative server quote only; createOrder rechecks everything inside its transaction. */
 export async function previewOrder(userId: number, items: unknown, userCouponId?: number) {
+  if (Array.isArray(items) && items.length > MAX_CHECKOUT_INPUT_LINES) {
+    throw new OrderError('结算商品列表最多支持1000行，请分批结算');
+  }
   const normalizedItems = normalizeItems(items);
+  if (normalizedItems.length > MAX_CHECKOUT_LINES) throw new OrderError('单次结算最多支持100个商品或规格，请分批结算');
   validateCouponId(userCouponId);
   const connection = await getPool().getConnection();
   try {
@@ -77,7 +81,9 @@ export async function createOrder(
   userCouponId?: number,
   checkoutKey?: string
 ): Promise<{ orderId: number; productIds: number[]; original_amount: number; discount_amount: number; total_amount: number; created: boolean }> {
-  const normalizedItems = normalizeItems(items);
+  const exceedsInputLimit = Array.isArray(items) && items.length > MAX_CHECKOUT_INPUT_LINES;
+  // Do not traverse huge arrays until a committed historical request is found.
+  let normalizedItems = exceedsInputLimit ? [] : normalizeItems(items);
   validateCouponId(userCouponId);
   if (remark !== undefined && (typeof remark !== 'string' || remark.length > 2000)) throw new OrderError('订单备注无效');
   if (shippingAddressId === undefined || !Number.isSafeInteger(shippingAddressId) || shippingAddressId <= 0) {
@@ -87,9 +93,32 @@ export async function createOrder(
     throw new OrderError('结算请求号无效，请刷新页面后重试');
   }
   const key = checkoutKey?.toLowerCase();
+  const limitMessage = exceedsInputLimit ? '结算商品列表最多支持1000行，请分批结算'
+    : normalizedItems.length > MAX_CHECKOUT_LINES ? '单次结算最多支持100个商品或规格，请分批结算' : undefined;
+  let historicalOrder: RowDataPacket | undefined;
+  if (limitMessage !== undefined) {
+    const limitError = new OrderError(limitMessage);
+    if (key === undefined) throw limitError;
+    // Only committed historical checkouts may exceed today's limit. This read never
+    // takes product locks or changes inventory, and unknown keys cannot create orders.
+    const [existing] = await getPool().execute<RowDataPacket[]>(
+      `SELECT order_id, checkout_fingerprint, original_amount, discount_amount, total_amount
+       FROM orders WHERE user_id = ? AND checkout_key = ?`, [userId, key]
+    );
+    if (!existing[0]) throw limitError;
+    historicalOrder = existing[0];
+    if (exceedsInputLimit) normalizedItems = normalizeItems(items);
+  }
   const fingerprint = createHash('sha256').update(JSON.stringify({
     items: normalizedItems, shippingAddressId, remark: remark ?? '', userCouponId: userCouponId ?? null,
   })).digest('hex');
+  if (historicalOrder) {
+    const order = historicalOrder;
+    if (order.checkout_fingerprint !== fingerprint) throw new OrderError('结算请求号已用于其他结算内容，请重新结算', 409);
+    return { orderId: order.order_id, productIds: [...new Set(normalizedItems.map(item => item.product_id))],
+      original_amount: Number(order.original_amount), discount_amount: Number(order.discount_amount),
+      total_amount: Number(order.total_amount), created: false };
+  }
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
