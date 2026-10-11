@@ -324,6 +324,7 @@ describe('language changes on rendered pages', () => {
       let loads = 0;
       const load = async () => { loads++; return { data: [coupon] }; };
       for (const fn of [couponApi.getAvailable, couponApi.getMyCoupons, adminCouponApi.getList]) vi.mocked(fn).mockImplementation(load as never);
+      vi.mocked(couponApi.getMyCoupons).mockImplementation((async () => ({ ...await load(), pagination: { page: 1, page_size: 20, total: 1, total_pages: 1 } })) as never);
       render(<Page />);
       await settle();
       expect(text()).toMatch(/8折/);

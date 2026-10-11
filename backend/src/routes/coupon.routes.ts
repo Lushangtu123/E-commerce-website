@@ -102,9 +102,17 @@ router.post('/receive', authMiddleware, CouponController.receiveCoupon);
  *         in: query
  *         schema: { type: integer }
  *         description: 按使用状态筛选（未使用/已使用/已过期）
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 10000 }
+ *         description: 提供时返回分页；省略时保留旧版完整列表
+ *       - name: page_size
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *         description: 仅与 page 一起使用
  *     responses:
  *       200:
- *         description: 用户优惠券列表
+ *         description: 用户优惠券列表；分页响应包含 page、page_size、total、total_pages
  */
 router.get('/my/list', authMiddleware, CouponController.getUserCoupons);
 

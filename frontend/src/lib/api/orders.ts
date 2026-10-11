@@ -160,8 +160,10 @@ export const couponApi = {
       ...(claimKey !== undefined && { claim_key: claimKey }) }),
   
   // 获取我的优惠券
-  getMyCoupons: (status?: number) =>
-    api.get<unknown, { data: UserCoupon[] }>('/coupons/my/list', { params: { status } }),
+  getMyCoupons: (status?: number, page?: number, pageSize = 20) =>
+    api.get<unknown, { data: UserCoupon[]; pagination?: CouponPagination }>('/coupons/my/list', {
+      params: { status, ...(page !== undefined ? { page, page_size: pageSize } : {}) },
+    }),
   
   // 获取订单可用优惠券
   getAvailableForOrder: (amount: number) =>

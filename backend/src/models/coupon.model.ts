@@ -59,6 +59,8 @@ export interface UserCoupon {
   expired_at: Date;
 }
 
+const effectiveUserCouponStatus = 'CASE WHEN uc.status = 1 AND (uc.expired_at <= NOW() OR c.end_time <= NOW()) THEN 3 ELSE uc.status END';
+
 export class CouponModel {
   /**
    * 创建优惠券
@@ -289,32 +291,43 @@ export class CouponModel {
    */
   static async getUserCoupons(
     userId: number,
-    status?: UserCouponStatus
+    status?: UserCouponStatus,
+    page?: number,
+    pageSize = 20
   ): Promise<any[]> {
-    const effectiveStatus = 'CASE WHEN uc.status = 1 AND (uc.expired_at <= NOW() OR c.end_time <= NOW()) THEN 3 ELSE uc.status END';
+    if (page !== undefined && (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100)) throw new RangeError('分页参数无效');
     let whereClause = 'WHERE uc.user_id = ?';
     const queryParams: any[] = [userId];
 
     if (status !== undefined) {
-      whereClause += ` AND (${effectiveStatus}) = ?`;
+      whereClause += ` AND (${effectiveUserCouponStatus}) = ?`;
       queryParams.push(status);
     }
 
-    const [rows] = await getPool().execute<RowDataPacket[]>(
-      `SELECT 
+    const sql = `SELECT
         uc.*,
-        ${effectiveStatus} AS status,
+        ${effectiveUserCouponStatus} AS status,
         c.code, c.name, c.description, c.type,
         c.discount_value, c.min_amount, c.max_discount,
         c.status AS coupon_status, c.start_time, c.end_time
        FROM user_coupons uc
        INNER JOIN coupons c ON uc.coupon_id = c.coupon_id
        ${whereClause}
-       ORDER BY uc.received_at DESC`,
-      queryParams
-    );
+       ORDER BY uc.received_at DESC, uc.user_coupon_id DESC`;
+    const [rows] = page === undefined ? await getPool().execute<RowDataPacket[]>(sql, queryParams)
+      : await getPool().query<RowDataPacket[]>(`${sql} LIMIT ? OFFSET ?`, [...queryParams, pageSize, (page - 1) * pageSize]);
 
     return rows;
+  }
+
+  /** Count and bounded rows use the same effective expiry filter; no receipts are changed. */
+  static async getUserCouponsPage(userId: number, status: UserCouponStatus | undefined, page: number, pageSize = 20): Promise<{ coupons: any[]; total: number }> {
+    if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new RangeError('分页参数无效');
+    const [counts] = await getPool().execute<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total FROM user_coupons uc INNER JOIN coupons c ON uc.coupon_id = c.coupon_id
+       WHERE uc.user_id = ?${status === undefined ? '' : ` AND (${effectiveUserCouponStatus}) = ?`}`,
+      status === undefined ? [userId] : [userId, status]);
+    return { coupons: await this.getUserCoupons(userId, status, page, pageSize), total: Number(counts[0].total) };
   }
 
   /** Read-only preview; callers may use their transaction connection for a consistent quote. */
