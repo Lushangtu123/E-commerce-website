@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import toast from 'react-hot-toast';
 import CartPage from '@/app/cart/page';
 import { addressApi, cartApi, orderApi, type CartInput, type OrderCreateInput, type OrderInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -616,6 +617,97 @@ describe('checkout', () => {
     expect(creates()[1]).toEqual(creates()[0]);
     expect(creates()[1].user_coupon_id).toBe(7);
     expect(router.push).toHaveBeenCalledWith('/orders/55');
+  });
+
+  it.each([
+    ['missing body', undefined], ['null body', null], ['empty object', {}],
+    ['array body', []], ['zero ID', { order_id: 0 }], ['negative ID', { order_id: -1 }],
+    ['fractional ID', { order_id: 1.5 }], ['unsafe ID', { order_id: Number.MAX_SAFE_INTEGER + 1 }],
+    ['NaN ID', { order_id: Number.NaN }], ['infinite ID', { order_id: Number.POSITIVE_INFINITY }],
+    ['string ID', { order_id: '55' }], ['boolean ID', { order_id: true }],
+    ['explicit failure', { success: false, order_id: 55 }],
+    ['error envelope', { error: 'Order was not confirmed', order_id: 55 }],
+    ['empty error envelope', { error: '', order_id: 55 }],
+    ['structured error envelope', { error: { code: 'UNCONFIRMED' }, order_id: 55 }],
+  ])('retains the exact checkout after a nominal success with %s and confirms it using the same key', async (_label, response) => {
+    let calls = 0;
+    await setupCheckout({ create: async () => (++calls === 1 ? response : { message: 'ok', order_id: 55 }) as never,
+      preview: async input => quote(90, input.user_coupon_id === 7) });
+    await choose(couponSelect(), '7');
+    const readsBeforeCheckout = vi.mocked(cartApi.list).mock.calls.length;
+    await click(checkoutButton());
+
+    const original = creates()[0];
+    expect(JSON.parse(sessionStorage.getItem('pending-checkout') || 'null')).toEqual({
+      sessionKey: JSON.stringify(['first-session', firstUser.user_id]), input: original,
+    });
+    expect(original.user_coupon_id).toBe(7);
+    expect(original.shipping_address_id).toBe(41);
+    expect(original.items).toEqual([{ product_id: 12, quantity: 3 }]);
+    expect(router.push).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(vi.mocked(cartApi.list).mock.calls.length).toBe(readsBeforeCheckout);
+    expect(cartItems()).toEqual([firstItem]);
+    expect(screen.getByRole('button', { name: '重试确认订单' })).toBeEnabled();
+
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(creates()).toEqual([original, original]);
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/orders/55');
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith('订单创建成功');
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+  });
+
+  it('recovers one committed order after a malformed success and remount without current cart, quote or address data', async () => {
+    const committed = new Map<string, number>();
+    const variant = { ...firstItem, sku_id: 101 };
+    let calls = 0;
+    const { view } = await setupCheckout({ cartItems: [variant], create: async input => {
+      if (!committed.has(input.checkout_key)) committed.set(input.checkout_key, 55 + committed.size);
+      return (++calls === 1 ? {} : { message: 'ok', order_id: committed.get(input.checkout_key)! }) as never;
+    }, preview: async input => quote(90, input.user_coupon_id === 7) });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    const original = creates()[0];
+    expect(router.push).not.toHaveBeenCalled();
+    expect(original.items).toEqual([{ product_id: 12, quantity: 3, sku_id: 101 }]);
+    view.unmount();
+    vi.mocked(cartApi.list).mockResolvedValue({ items: [] });
+    vi.mocked(addressApi.list).mockResolvedValue({ addresses: [] });
+    vi.mocked(orderApi.preview).mockRejectedValue(apiError('商品已下架'));
+    render(<CartPage />);
+    await settle();
+
+    const retry = screen.getByRole('button', { name: '重试确认订单' });
+    clickTogether(retry, retry);
+    await settle();
+    expect(creates()).toEqual([original, original]);
+    expect(committed.size).toBe(1);
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/orders/55');
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+  });
+
+  it('ignores a late malformed acknowledgement for the previous customer and preserves the next customer checkout', async () => {
+    const late = deferred<{ message: string; order_id: number }>();
+    await setupCheckout({ create: () => late.promise });
+    fireEvent.click(checkoutButton());
+    const firstAttempt = sessionStorage.getItem('pending-checkout');
+    switchCustomer();
+    await settle();
+    expect(screen.queryByRole('button', { name: '重试确认订单' })).not.toBeInTheDocument();
+    vi.mocked(orderApi.create).mockResolvedValue({} as never);
+    await click(checkoutButton());
+    const secondAttempt = sessionStorage.getItem('pending-checkout');
+    expect(secondAttempt).not.toBe(firstAttempt);
+    expect(JSON.parse(secondAttempt || 'null')).toEqual({
+      sessionKey: JSON.stringify(['second-session', secondUser.user_id]), input: creates()[1],
+    });
+
+    await act(async () => late.resolve({} as never));
+    await settle();
+    expect(sessionStorage.getItem('pending-checkout')).toBe(secondAttempt);
+    expect(screen.getByRole('button', { name: '重试确认订单' })).toBeEnabled();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it.each([408, 429])('preserves the first checkout after HTTP %s and retries its exact payload', async status => {

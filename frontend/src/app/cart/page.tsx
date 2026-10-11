@@ -332,6 +332,13 @@ export default function CartPage() {
     try {
       const data = await orderApi.create(input);
       if (!isCurrentSession()) return;
+      // A nominal success can still lose the order acknowledgement. Keep the original
+      // request key until a usable receipt confirms which order this checkout created.
+      if (!data || typeof data !== 'object' || Array.isArray(data) ||
+          !Number.isSafeInteger(data.order_id) || data.order_id <= 0 ||
+          ('success' in data && data.success === false) || ('error' in data && data.error != null)) {
+        throw new Error('Invalid order acknowledgement');
+      }
       clearPendingCheckout(sessionKey);
       pendingCheckout.current = null;
       setUnconfirmedSession(null);
