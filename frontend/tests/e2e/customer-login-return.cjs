@@ -34,7 +34,15 @@ module.exports = async function customerLoginReturn({ browser, adminContext, loc
     await page.waitForURL(destination);
     await page.getByText(account.username, { exact: true }).waitFor({ state: 'visible' });
   };
-  const waitForAuth = (page, route, next) => page.waitForURL(url => url.pathname === route && url.searchParams.get('next') === next);
+  const waitForAuth = async (page, route, next) => {
+    await page.waitForURL(url => url.pathname === route && url.searchParams.get('next') === next);
+    // Navigation can finish before useSyncExternalStore replaces the SSR fallback.
+    // Wait for the actual next-bearing switch link, preserving the exact href checks.
+    const otherRoute = route === '/login' ? '/register' : '/login';
+    const href = next === '/' ? otherRoute : `${otherRoute}?next=${encodeURIComponent(next)}`;
+    await page.waitForFunction(expected => Array.from(document.querySelectorAll('a'))
+      .some(link => link.getAttribute('href') === expected), href);
+  };
   try {
     const bootstrap = await browser.newContext(); contexts.push(bootstrap);
     const username = `return${Date.now()}`;
