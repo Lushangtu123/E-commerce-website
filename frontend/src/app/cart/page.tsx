@@ -18,6 +18,7 @@ import { cartAddBlocksWrites, useCartAddRecovery } from '@/hooks/use-cart-add-re
 import { beginCartWrite, readCanonicalCart, subscribeCanonicalCart } from '@/lib/cart-sync';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 import { buyNowItem, clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
+import { validOrderPreview } from '@/lib/order-preview';
 
 
 function requireCartAcknowledgement(data: unknown, message: '更新成功' | '删除成功') {
@@ -215,6 +216,10 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     orderApi.preview({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) })
       .then((data) => {
         if (!isCurrentRequest()) return;
+        if (!validOrderPreview(data, selectedCouponId)) {
+          setQuoteFailure({ key: quoteKey, message: '结算报价无效，请重新计算' });
+          return;
+        }
         setQuoteResult({ key: quoteKey, data });
         if (linkedCouponId.current !== undefined) {
           const carriedId = linkedCouponId.current;

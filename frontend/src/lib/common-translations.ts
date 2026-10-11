@@ -1,4 +1,5 @@
 export const commonTranslations: Record<string, string> = {
+  '结算报价无效，请重新计算': 'The checkout quote is invalid. Recalculate and try again.',
   '加载本次购买失败，请重试': 'Unable to load this purchase. Try again.',
   '确认本次购买': 'Confirm this purchase',
   '仅结算本次选择的商品和数量，其他购物车商品会保留': 'Checkout includes only the product and quantity selected for this purchase. Your other cart items will remain.',

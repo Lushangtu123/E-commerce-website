@@ -96,6 +96,18 @@ function switchCustomer() {
 }
 
 describe('checkout', () => {
+  it.each([{ total_amount: -1 }, { original_amount: '90.00' }, { available_coupons: null }, { success: false }])('blocks an invalid quote %j and retries without creating an order', async malformed => {
+    let invalid = true;
+    await setupCheckout({ preview: async () => invalid ? { ...quote(), ...malformed } as never : quote() });
+    expect(checkoutButton()).toBeDisabled();
+    expect(screen.getByText('结算报价无效，请重新计算')).toBeInTheDocument();
+    expect(creates()).toEqual([]);
+    invalid = false;
+    await click(screen.getByRole('button', { name: '重新计算' }));
+    expect(checkoutButton()).toBeEnabled();
+    expect(screen.queryByText('结算报价无效，请重新计算')).not.toBeInTheDocument();
+    expect(creates()).toEqual([]);
+  });
   beforeEach(() => {
     notifications.length = 0;
   });
