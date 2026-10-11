@@ -19,7 +19,7 @@ vi.mock('@/lib/api', () => ({
   paymentApi: { getSettings: vi.fn() },
   orderApi: {
     list: vi.fn(async () => ({ orders: [{ order_id: 1, order_no: 'ORDER-1', status: 0, total_amount: 10, created_at: '2026-10-02T00:00:00Z' }], total: 1, page: 1, limit: 10, totalPages: 1 })),
-    pay: vi.fn(async () => ({})),
+    pay: vi.fn(async () => ({ message: '模拟支付完成，未实际扣款', payment_mode: 'demo' })),
   },
 }));
 

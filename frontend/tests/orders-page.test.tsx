@@ -42,6 +42,7 @@ const order = (id: number, status = 0, prefix = 'ORDER'): Order =>
   ({ order_id: id, order_no: `${prefix}-${id}`, status, total_amount: '10.00', created_at: '2026-10-02T00:00:00Z' });
 const page = (orders: Order[], total: number, totalPages: number): OrderList => ({ orders, total, page: 1, limit: 10, totalPages });
 const actionLabel = { pay: '模拟支付', cancel: '取消订单', confirm: '确认收货' } as const;
+const acknowledgements = { pay: { message: '模拟支付完成，未实际扣款', payment_mode: 'demo' }, cancel: { message: '订单已取消' }, confirm: { message: '确认收货成功' } };
 
 interface Setup {
   list?: (params: ListParams) => Promise<OrderList>;
@@ -55,7 +56,7 @@ interface Setup {
 let mutations: [Action, number][] = [];
 const requests = () => vi.mocked(orderApi.list).mock.calls.map(([params]) => params);
 
-async function setup({ list, pay = async () => ({}), cancel = async () => ({}), confirmOrder = async () => ({}), search = '', confirm = () => true }: Setup = {}) {
+async function setup({ list, pay = async () => acknowledgements.pay, cancel = async () => acknowledgements.cancel, confirmOrder = async () => acknowledgements.confirm, search = '', confirm = () => true }: Setup = {}) {
   useAuthStore.getState().login(firstUser, 'first-session');
   if (search) window.history.replaceState(null, '', `/orders${search}`);
   vi.stubGlobal('confirm', confirm);
@@ -307,7 +308,7 @@ describe('orders page', () => {
     for (const action of actionButtons()) expect(action).toBeDisabled();
     expect(requests()).toHaveLength(1);
 
-    await act(async () => payment.resolve({}));
+    await act(async () => payment.resolve(acknowledgements.pay));
     await settle();
     expect(requests()).toHaveLength(2);
     expect(notifications).toEqual(['模拟支付完成，未实际扣款']);
@@ -315,7 +316,7 @@ describe('orders page', () => {
 
   it('returns to the remaining last page after cancelling the only order on the final filtered page', async () => {
     let cancelled = false;
-    const { commits } = await setup({ search: '?status=0', cancel: async () => { cancelled = true; }, list: async params => {
+    const { commits } = await setup({ search: '?status=0', cancel: async () => { cancelled = true; return acknowledgements.cancel; }, list: async params => {
       const total = cancelled ? 10 : 11;
       const rows = Array.from({ length: params.page === 1 ? 10 : cancelled ? 0 : 1 }, (_, index) => order((params.page - 1) * 10 + index + 1));
       return { orders: rows, total, page: params.page, limit: 10, totalPages: Math.ceil(total / 10) };
@@ -377,7 +378,7 @@ describe('orders page', () => {
     const lists = requests().length;
 
     await act(async () => {
-      if (outcome === 'success') pending.resolve({});
+      if (outcome === 'success') pending.resolve(acknowledgements[action]);
       else pending.reject(apiError('旧操作失败'));
     });
     await settle();
@@ -391,7 +392,7 @@ describe('orders page', () => {
   it('lets the next customer act while the previous customer\'s payment is still pending', async () => {
     const payment = deferred();
     let calls = 0;
-    await setup({ pay: () => ++calls === 1 ? payment.promise : Promise.resolve({}), list: async () => page([order(1)], 1, 1) });
+    await setup({ pay: () => ++calls === 1 ? payment.promise : Promise.resolve(acknowledgements.pay), list: async () => page([order(1)], 1, 1) });
     fireEvent.click(button('模拟支付'));
 
     act(() => useAuthStore.getState().login(secondUser, 'second-session'));
@@ -410,7 +411,7 @@ describe('orders page', () => {
     const expected = change === 'filter' ? { page: 1, limit: 10, status: 4 } : { page: 2, limit: 10 };
     expect(requests().at(-1)).toEqual(expected);
 
-    await act(async () => payment.resolve({}));
+    await act(async () => payment.resolve(acknowledgements.pay));
     await settle();
 
     expect(requests().at(-1)).toEqual(expected);
@@ -452,7 +453,7 @@ describe('orders page', () => {
 
   it('keeps the orders after a failed payment, reports the server error and allows a retry', async () => {
     let fail = true;
-    await setup({ pay: async () => { if (fail) throw apiError('订单已过期'); } });
+    await setup({ pay: async () => { if (fail) throw apiError('订单已过期'); return acknowledgements.pay; } });
 
     await click(screen.getAllByRole('button', { name: '模拟支付' })[0]);
     expect(notifications).toContain('订单已过期');

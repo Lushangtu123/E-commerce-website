@@ -14,7 +14,7 @@ import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { confirmAction } from '@/lib/confirm';
-import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, validCustomerOrder, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
+import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, validCustomerOrder, validCustomerOrderAcknowledgement, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
 
 type Recovery = { key: string; order: Order; action: CustomerOrderAction; checking: boolean };
 
@@ -168,8 +168,9 @@ function OrdersContent() {
     mutation.current = operation;
     setPendingSession(sessionKey);
     try {
-      await orderApi[action](orderId);
+      const receipt = await orderApi[action](orderId);
       if (!isCurrentSession()) return;
+      if (!validCustomerOrderAcknowledgement(receipt, action)) throw new Error('Invalid order action acknowledgement');
       toast.success(translate(action === 'pay' ? '模拟支付完成，未实际扣款' : action === 'cancel' ? '订单已取消' : '确认收货成功'));
       // The filter or page may have changed meanwhile; this reloads whichever orders are displayed now.
       await refreshOrders();
