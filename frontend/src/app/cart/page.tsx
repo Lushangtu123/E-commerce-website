@@ -20,6 +20,11 @@ import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type P
 import { buyNowItem, clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
 import { validOrderPreview } from '@/lib/order-preview';
 
+const MAX_CHECKOUT_LINES = 100;
+const initialSelection = (rows: CartItem[]) => {
+  const available = rows.filter(isAvailable);
+  return available.length > MAX_CHECKOUT_LINES ? [] : available.map(cartItemKey);
+};
 
 function requireCartAcknowledgement(data: unknown, message: '更新成功' | '删除成功') {
   if (!data || typeof data !== 'object' || Array.isArray(data) ||
@@ -103,7 +108,8 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       cartRecovery.current === sessionKey || cartMutation.current || submittingRequest.current) return;
     const initialRead = cartLoadRequest.current?.key === sessionKey ||
       (cartFailure?.key === sessionKey && cartFailure.message === '加载购物车失败，请重试');
-    if (initialRead) setSelectedItems(confirmedItems.filter(isAvailable).map(cartItemKey));
+    const availableKeys = new Set(confirmedItems.filter(isAvailable).map(cartItemKey));
+    setSelectedItems(previous => initialRead ? initialSelection(confirmedItems) : previous.filter(key => availableKeys.has(key)));
     // Any validated canonical read supersedes this page's initial/ordinary read. Retire that request
     // immediately so a delayed reply cannot hide the canonical cart behind loading or an old error.
     if (cartLoadRequest.current?.key === sessionKey) cartLoadRequest.current = null;
@@ -207,7 +213,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, addressRevision]);
 
   useEffect(() => {
-    if (!isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0) return;
+    if (!isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0 || orderItems.length > MAX_CHECKOUT_LINES) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentSession();
     setQuoteResult(null);
@@ -254,7 +260,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       const recovering = cartRecovery.current === sessionKey;
       if (recovering && !validCartItems(data.items)) throw new Error('invalid cart recovery');
       const availableKeys = (data.items || []).filter(isAvailable).map(cartItemKey);
-      setSelectedItems(previous => recovering ? previous.filter(key => availableKeys.includes(key)) : availableKeys);
+      setSelectedItems(previous => recovering ? previous.filter(key => availableKeys.includes(key)).slice(0, MAX_CHECKOUT_LINES) : initialSelection(data.items));
       if (recovering) {
         cartRecovery.current = null; setUnconfirmedCartSession(null);
         setQuoteRevision(value => value + 1);
@@ -348,6 +354,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
 
   const handleSelectAll = () => {
     if (buyNowId !== null || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
+    if (availableItems.length > MAX_CHECKOUT_LINES) return;
     if (orderItems.length === availableItems.length) {
       setSelectedItems([]);
     } else {
@@ -358,12 +365,18 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const handleToggleSelect = (item: CartItem) => {
     if (buyNowId !== null || !isAvailable(item) || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     const key = cartItemKey(item);
-    setSelectedItems(selected => selected.includes(key) ? selected.filter(id => id !== key) : [...selected, key]);
+    const availableKeys = new Set(useCartStore.getState().items.filter(isAvailable).map(cartItemKey));
+    if (!availableKeys.has(key)) return;
+    setSelectedItems(selected => {
+      const eligible = selected.filter(id => availableKeys.has(id));
+      return eligible.includes(key) ? eligible.filter(id => id !== key) : eligible.length < MAX_CHECKOUT_LINES ? [...eligible, key] : eligible;
+    });
   };
 
   const handleCheckout = async () => {
     if (cartRecovery.current === sessionKey || addBlocksWrites()) return;
     if (pendingCheckout.current?.sessionKey === sessionKey) return;
+    if (orderItems.length > MAX_CHECKOUT_LINES) return;
     if (orderItems.length === 0) {
       toast.error(translate('请选择要结算的商品'));
       return;
@@ -515,22 +528,30 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
           {/* 购物车列表 */}
           <div className="lg:col-span-2 space-y-4">
             {/* 全选 */}
-            {buyNowId === null && <div className="card p-4 flex items-center">
+            {buyNowId === null && <div className="card p-4 flex flex-wrap items-center gap-3">
               <input
                 type="checkbox"
                 aria-label={t("全选")}
                 checked={availableItems.length > 0 && orderItems.length === availableItems.length}
-                disabled={submitting || cartUpdating || availableItems.length === 0}
+                disabled={submitting || cartUpdating || availableItems.length === 0 || availableItems.length > MAX_CHECKOUT_LINES}
                 onChange={handleSelectAll}
                 className="h-5 w-5 rounded-sm accent-primary-600"
               />
               <span className="ml-3 font-medium">{t("全选")}</span>
-
+              <span role="status">{t('已选择 {count} / {max} 项商品或规格', { count: orderItems.length, max: MAX_CHECKOUT_LINES })}</span>
+              {availableItems.length > MAX_CHECKOUT_LINES && <>
+                <p className="w-full text-sm text-gray-600">{t('单次结算最多支持100个商品或规格，请分批结算')}</p>
+                <button className="btn btn-secondary" disabled={submitting || cartUpdating} onClick={() => {
+                  if (!isCurrentSession() || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites()) return;
+                  setSelectedItems(availableItems.slice(0, MAX_CHECKOUT_LINES).map(cartItemKey));
+                }}>{t('选择前 {count} 项', { count: MAX_CHECKOUT_LINES })}</button>
+              </>}
             </div>}
 
             {/* 商品列表 */}
             {(buyNowId !== null && purchaseItem && purchase?.intent ? [{ ...purchaseItem, available: true as const, quantity: purchase.intent.input.quantity }] : items).map((item) => (
               <CartItemRow key={cartItemKey(item)} item={item} selected={buyNowId !== null || selectedItems.includes(cartItemKey(item))} submitting={buyNowId !== null || submitting || cartUpdating}
+                selectionDisabled={orderItems.length >= MAX_CHECKOUT_LINES && !selectedItems.includes(cartItemKey(item))}
                 onToggle={() => handleToggleSelect(item)} onQuantityChange={quantity => handleQuantityChange(item, quantity)}
                 onRemove={() => handleRemove(item)} />
             ))}
