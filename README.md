@@ -371,6 +371,8 @@ MySQL search splits keywords on whitespace and requires every term to appear in 
 - `GET /api/favorites/check/:product_id` - Check whether a product is a favourite
 - `POST /api/favorites/check-multiple` - Check several products; body `{ product_ids }` (1–100 positive integers)
 
+Product details enable favorite writes only after reading an explicit boolean state. Add, already-present and remove acknowledgements must match the API contract before displaying success. An invalid acknowledgement enters the existing read-only reconciliation flow; it never causes another automatic write. Malformed or failed state reads keep writes blocked and expose a retry scoped to the current product and sign-in.
+
 ### Search APIs
 - `GET /api/search/es` - Product search: full-text with Elasticsearch when configured, MySQL otherwise (public; searches by signed-in users are added to their history)
 - `GET /api/search/hot` - Popular searches

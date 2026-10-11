@@ -24,7 +24,7 @@ vi.mock('@/lib/api', () => ({
   cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false })), list: vi.fn() },
   reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [] })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
-  favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功' })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
+  favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功', favorite_id: 1 })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
   browseApi: { record: vi.fn(async () => ({})) },
 }));
 
@@ -83,12 +83,12 @@ describe('product SKU purchase', () => {
   });
 
   it('locks repeated favorite actions synchronously while an addition is pending', async () => {
-    const pending = deferred<{ message: string; is_favorited: boolean }>();
+    const pending = deferred<{ message: string; favorite_id: number }>();
     vi.mocked(favoriteApi.add).mockReturnValue(pending.promise);
     await setup(); const toggle = captureHandler(button('收藏'));
     const first = toggle(); const second = toggle();
     expect(favoriteApi.add).toHaveBeenCalledTimes(1);
-    await act(async () => pending.resolve({ message: '收藏成功', is_favorited: true }));
+    await act(async () => pending.resolve({ message: '收藏成功', favorite_id: 1 }));
     await Promise.all([first, second]); await settle();
     expect(button('取消收藏')).toBeEnabled();
   });
