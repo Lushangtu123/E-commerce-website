@@ -34,6 +34,8 @@ type PageKind = 'detail' | 'list';
 type ListParams = { page: number; limit: number; status?: number };
 const labels = { cancel: '取消订单', pay: '模拟支付', confirm: '确认收货' };
 const target = { cancel: 4, pay: 1, confirm: 3 };
+const acknowledgements = { cancel: { message: '订单已取消' }, pay: { message: '模拟支付完成，未实际扣款', payment_mode: 'demo' }, confirm: { message: '确认收货成功' } };
+const successMessages = { cancel: '订单已取消', pay: '模拟支付完成，未实际扣款', confirm: '确认收货成功' };
 const statusLabels = ['待支付', '已支付', '已发货', '已完成', '已取消'];
 const buyer = { user_id: 1, username: 'buyer', email: 'buyer@example.test' };
 const order = (status = 0, id = 1): Order => ({ order_id: id, order_no: `ORDER-${id}`, status, total_amount: '50.00', created_at: '2026-10-08T00:00:00Z' });
@@ -50,7 +52,7 @@ async function setup(kind: PageKind, initial = 0) {
   vi.stubGlobal('confirm', () => true);
   vi.mocked(orderApi.getDetail).mockResolvedValue(detail(initial));
   vi.mocked(orderApi.list).mockImplementation(async params => list(initial, params as ListParams));
-  for (const action of ['cancel', 'pay', 'confirm'] as const) vi.mocked(orderApi[action]).mockResolvedValue({} as never);
+  for (const action of ['cancel', 'pay', 'confirm'] as const) vi.mocked(orderApi[action]).mockResolvedValue(acknowledgements[action] as never);
   const view = render(kind === 'detail' ? <OrderDetailPage /> : <OrdersPage />);
   await settle();
   return view;
@@ -80,6 +82,90 @@ describe.each(['detail', 'list'] as const)('customer order %s write recovery', k
     expect(orderApi[action]).toHaveBeenCalledTimes(1);
     expect(notices).toContain('已核对，订单状态已更新');
     expect(screen.queryByRole('button', { name: '重新核对订单' })).not.toBeInTheDocument();
+  });
+
+  it.each((['cancel', 'pay', 'confirm'] as const).flatMap(action => [
+    { receipt: {}, label: 'empty' },
+    { receipt: null, label: 'null' },
+    { receipt: { ...acknowledgements[action], success: false }, label: 'explicit failure' },
+    { receipt: { ...acknowledgements[action], error: '订单服务暂不可用' }, label: 'error payload' },
+  ].map(invalid => ({ action, ...invalid }))))('checks an unchanged $action after a $label 2xx receipt without claiming success', async ({ action, receipt }) => {
+    const initial = action === 'confirm' ? 2 : 0;
+    await setup(kind, initial);
+    vi.mocked(orderApi[action]).mockResolvedValue(receipt as never);
+    const checks = vi.mocked(orderApi.getDetail).mock.calls.length;
+    await click(button(labels[action]));
+    expect(notices).toEqual(['已核对，订单尚未更新，请确认信息后重试']);
+    expect(stateText(kind, initial)).toBeInTheDocument();
+    expect(button(labels[action])).toBeEnabled();
+    expect(orderApi.getDetail).toHaveBeenCalledTimes(checks + 1);
+    expect(orderApi[action]).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '重新核对订单' })).not.toBeInTheDocument();
+  });
+
+  it.each(['missing', 'disabled', 'other'] as const)('does not accept a demo payment receipt with %s payment mode', async mode => {
+    await setup(kind);
+    vi.mocked(orderApi.pay).mockResolvedValue({ message: successMessages.pay, ...(mode !== 'missing' && { payment_mode: mode }) } as never);
+    await click(button(labels.pay));
+    expect(notices).toEqual(['已核对，订单尚未更新，请确认信息后重试']);
+    expect(orderApi.pay).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['cancel', 'confirm'] as const)('does not accept another operation acknowledgement for %s', async action => {
+    await setup(kind, action === 'confirm' ? 2 : 0);
+    vi.mocked(orderApi[action]).mockResolvedValue(acknowledgements[action === 'cancel' ? 'confirm' : 'cancel'] as never);
+    await click(button(labels[action]));
+    expect(notices).toEqual(['已核对，订单尚未更新，请确认信息后重试']);
+    expect(orderApi[action]).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['cancel', 'pay', 'confirm'] as const)('confirms an applied %s from a canonical GET after an empty 2xx receipt', async action => {
+    await setup(kind, action === 'confirm' ? 2 : 0);
+    vi.mocked(orderApi[action]).mockImplementation(async () => {
+      vi.mocked(orderApi.getDetail).mockResolvedValue(detail(target[action]));
+      vi.mocked(orderApi.list).mockImplementation(async params => list(target[action], params as ListParams));
+      return {} as never;
+    });
+    await click(button(labels[action]));
+    expect(notices).toEqual(['已核对，订单状态已更新']);
+    expect(stateText(kind, target[action])).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: labels[action] })).not.toBeInTheDocument();
+    expect(orderApi[action]).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['cancel', 'pay', 'confirm'] as const)('preserves a valid %s acknowledgement and its existing success feedback', async action => {
+    await setup(kind, action === 'confirm' ? 2 : 0);
+    vi.mocked(orderApi.getDetail).mockResolvedValue(detail(target[action]));
+    vi.mocked(orderApi.list).mockImplementation(async params => list(target[action], params as ListParams));
+    await click(button(labels[action]));
+    expect(notices).toEqual([successMessages[action]]);
+    expect(stateText(kind, target[action])).toBeInTheDocument();
+    expect(orderApi[action]).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '重新核对订单' })).not.toBeInTheDocument();
+  });
+
+  it.each(['failed', 'malformed'] as const)('retains the action lock after an empty receipt and a %s GET; retry performs one GET only', async outcome => {
+    await setup(kind);
+    vi.mocked(orderApi.cancel).mockResolvedValue({} as never);
+    if (outcome === 'failed') vi.mocked(orderApi.getDetail).mockRejectedValue(failure(503));
+    else vi.mocked(orderApi.getDetail).mockResolvedValue({} as never);
+    await click(button(labels.cancel));
+    expect(button('重新核对订单')).toBeEnabled();
+    actionButtons().forEach(control => expect(control).toBeDisabled());
+    expect(notices).toEqual([]);
+    const pending = deferred<ReturnType<typeof detail>>();
+    vi.mocked(orderApi.getDetail).mockImplementation(() => pending.promise);
+    const checks = vi.mocked(orderApi.getDetail).mock.calls.length;
+    const retry = button('重新核对订单');
+    clickTogether(retry, retry); await settle();
+    expect(retry).toBeDisabled();
+    expect(orderApi.getDetail).toHaveBeenCalledTimes(checks + 1);
+    expect(orderApi.cancel).toHaveBeenCalledTimes(1);
+    vi.mocked(orderApi.list).mockImplementation(async params => list(4, params as ListParams));
+    await act(async () => pending.resolve(detail(4))); await settle();
+    expect(stateText(kind, 4)).toBeInTheDocument();
+    expect(notices).toEqual(['已核对，订单状态已更新']);
+    expect(orderApi.cancel).toHaveBeenCalledTimes(1);
   });
 
   it.each([undefined, 409])('keeps HTTP %s recovery locked after a failed GET, and retry only reads', async status => {

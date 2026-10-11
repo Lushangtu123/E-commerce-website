@@ -3,6 +3,14 @@ import { requestFailure } from '@/lib/api-error';
 
 export type CustomerOrderAction = 'pay' | 'cancel' | 'confirm';
 export const customerOrderTarget = { pay: 1, cancel: 4, confirm: 3 };
+const acknowledgementMessages = { pay: '模拟支付完成，未实际扣款', cancel: '订单已取消', confirm: '确认收货成功' };
+
+export function validCustomerOrderAcknowledgement(value: unknown, action: CustomerOrderAction) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const receipt = value as Record<string, unknown>;
+  return receipt.message === acknowledgementMessages[action] && !('error' in receipt) &&
+    (!('success' in receipt) || receipt.success === true) && (action !== 'pay' || receipt.payment_mode === 'demo');
+}
 
 export function uncertainCustomerOrderWrite(error: unknown) {
   const status = requestFailure(error).response?.status;

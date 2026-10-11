@@ -15,7 +15,7 @@ import OrderAfterSales from '@/components/OrderAfterSales';
 import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { confirmAction } from '@/lib/confirm';
-import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
+import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, validCustomerOrderAcknowledgement, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
 
 type Recovery = { key: string; before: number; action: CustomerOrderAction; checking: boolean };
 
@@ -188,8 +188,9 @@ export default function OrderDetailPage() {
     if (!isCurrentSession() || detailInFlight.current !== null || recovery.current?.key === sessionKey || loadError || !payments.canPay || actionLock.current || order?.status !== 0) return;
     actionLock.current = true; setActionPending(true);
     try {
-      await orderApi.pay(orderId);
+      const receipt = await orderApi.pay(orderId);
       if (!isCurrentSession()) return;
+      if (!validCustomerOrderAcknowledgement(receipt, 'pay')) throw new Error('Invalid order action acknowledgement');
       toast.success(translate('模拟支付完成，未实际扣款'));
       await loadOrder(true);
     } catch (error) {
@@ -208,8 +209,9 @@ export default function OrderDetailPage() {
     actionLock.current = true; setActionPending(true);
 
     try {
-      await orderApi.cancel(orderId);
+      const receipt = await orderApi.cancel(orderId);
       if (!isCurrentSession()) return;
+      if (!validCustomerOrderAcknowledgement(receipt, 'cancel')) throw new Error('Invalid order action acknowledgement');
       toast.success(translate('订单已取消'));
       await loadOrder(true);
     } catch (error) {
@@ -225,8 +227,9 @@ export default function OrderDetailPage() {
     if (!isCurrentSession() || detailInFlight.current !== null || recovery.current?.key === sessionKey || loadError || actionLock.current || order?.status !== 2) return;
     actionLock.current = true; setActionPending(true);
     try {
-      await orderApi.confirm(orderId);
+      const receipt = await orderApi.confirm(orderId);
       if (!isCurrentSession()) return;
+      if (!validCustomerOrderAcknowledgement(receipt, 'confirm')) throw new Error('Invalid order action acknowledgement');
       toast.success(translate('确认收货成功'));
       await loadOrder(true);
     } catch (error) {

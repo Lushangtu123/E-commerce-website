@@ -13,13 +13,14 @@ vi.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => pa
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
   paymentApi: { getSettings: vi.fn(async () => ({ mode: 'demo', canPay: true, isDemo: true })) },
-  orderApi: { getDetail: vi.fn(), pay: vi.fn(), cancel: vi.fn(async () => ({})), confirm: vi.fn() },
+  orderApi: { getDetail: vi.fn(), pay: vi.fn(), cancel: vi.fn(async () => ({ message: '订单已取消' })), confirm: vi.fn() },
   orderTimeoutApi: { getRemainingTime: vi.fn(async () => ({ remaining_minutes: 10 })) },
 }));
 // Both sections load their own data and have their own tests; here they only mark where they render.
 vi.mock('@/components/OrderReviews', () => ({ default: vi.fn(() => <section>order reviews section</section>) }));
 vi.mock('@/components/OrderAfterSales', () => ({ default: vi.fn(() => <section>after-sales section</section>) }));
 
+const acknowledgements = { pay: { message: '模拟支付完成，未实际扣款', payment_mode: 'demo' }, cancel: { message: '订单已取消' }, confirm: { message: '确认收货成功' } };
 const customer = { user_id: 1, username: 'buyer', email: 'buyer@example.test' };
 const baseOrder: Order = { order_id: 1, order_no: 'ORDER-1', status: 3, total_amount: 50, created_at: '2026-10-02T00:00:00Z' };
 const item = (overrides: Partial<OrderItem>): OrderItem =>
@@ -224,7 +225,7 @@ describe('order detail', () => {
     await act(async () => countdown!());
     await settle();
     expect(orderApi.getDetail).toHaveBeenCalledTimes(2);
-    await act(async () => write.resolve({}));
+    await act(async () => write.resolve(acknowledgements[action]));
     await settle();
     await act(async () => oldRead.resolve({ order: { ...baseOrder, status: 0 }, items: [] }));
     await settle();
@@ -253,7 +254,7 @@ describe('order detail', () => {
     vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 });
     await act(async () => countdown!());
     await settle();
-    await act(async () => write.resolve({}));
+    await act(async () => write.resolve(acknowledgements['cancel']));
     await settle();
     await act(async () => oldRead.reject({ response: { status: 404 } }));
     await settle();
@@ -270,7 +271,7 @@ describe('order detail', () => {
     vi.mocked(orderApi.getDetail).mockResolvedValue({ order: baseOrder, items: [] });
     const button = screen.getByRole('button', { name: '确认收货' });
     clickTogether(button, button);
-    await act(async () => write.resolve({}));
+    await act(async () => write.resolve(acknowledgements['confirm']));
     await settle();
     expect(screen.getByText('已完成')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '确认收货' })).not.toBeInTheDocument();
@@ -296,7 +297,7 @@ describe('order detail', () => {
     vi.mocked(orderTimeoutApi.getRemainingTime).mockResolvedValue({ remaining_minutes: 0 });
     await act(async () => countdown!());
     await settle();
-    await act(async () => write.resolve({}));
+    await act(async () => write.resolve(acknowledgements['cancel']));
     await settle();
     await act(async () => oldRead.resolve({ order: { ...baseOrder, status: 0 }, items: [] }));
     await settle();
