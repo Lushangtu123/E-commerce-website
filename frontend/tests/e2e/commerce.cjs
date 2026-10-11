@@ -288,6 +288,7 @@ async function localPlatformScripts(context) {
   assert.equal(myCouponAttempts, 2);
   await page.unroute(`${myCouponsEndpoint}*`, myCouponFault); expectedReadFailure = undefined;
   console.log('PASS browser my coupons 503 shows an error and retry restores the real claimed coupon');
+  await require('./my-coupon-pagination.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   // The shared search header is already hydrated here. A full reload immediately before
   // typing can reset its input while the stored customer session is being restored.
   const searchForm = page.getByRole('search');

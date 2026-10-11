@@ -28,7 +28,15 @@ export const couponIdSchema = Joi.object({ id: positiveId.required() }).unknown(
 export const couponCodeSchema = Joi.object({ code: Joi.string().trim().min(1).max(50).required() }).unknown(false);
 export const couponListSchema = Joi.object(pagination).unknown(false);
 export const adminCouponListSchema = Joi.object({ ...pagination, status: Joi.number().valid(0, 1) }).unknown(false);
-export const userCouponListSchema = Joi.object({ status: Joi.number().valid(1, 2, 3) }).unknown(false);
+const pageInteger = (maximum: number) => Joi.string().pattern(/^[1-9]\d*$/).custom((text: string, helpers) => {
+  const value = Number(text);
+  return Number.isSafeInteger(value) && value <= maximum ? value : helpers.error('any.invalid');
+});
+export const userCouponListSchema = Joi.object({
+  status: Joi.number().valid(1, 2, 3),
+  // Omitted page preserves the legacy unpaged contract used by existing API consumers.
+  page: pageInteger(10000), page_size: pageInteger(100),
+}).with('page_size', 'page').unknown(false);
 export const couponStatusSchema = Joi.object({ status: Joi.number().valid(0, 1).required() })
   .unknown(false).prefs({ convert: false });
 

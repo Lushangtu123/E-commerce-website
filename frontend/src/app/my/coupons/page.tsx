@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { translate, useI18n } from '@/lib/i18n';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { requestFailure } from '@/lib/api-error';
+import { readMyCouponPage } from '@/lib/my-coupon-response';
 
 const STATUS_TABS = [
   { value: 1, label: '未使用' },
@@ -19,20 +20,37 @@ export default function MyCouponsPage() {
   const router = useRouter();
   const { t, locale, formatDate } = useI18n();
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
-  const [activeStatus, setActiveStatus] = useState(1);
-  const requestKey = JSON.stringify([sessionId, user?.user_id, activeStatus]);
+  const sessionKey = JSON.stringify([sessionId, user?.user_id]);
+  const [view, setView] = useState({ sessionKey, status: 1, page: 1 });
+  const activeStatus = view.sessionKey === sessionKey ? view.status : 1;
+  const page = view.sessionKey === sessionKey ? view.page : 1;
+  const requestKey = JSON.stringify([sessionKey, activeStatus, page]);
   const currentScope = useRef(requestKey);
-  useLayoutEffect(() => { currentScope.current = requestKey; }, [requestKey]);
   const query = useSessionQuery({
-    name: 'my-coupons', params: [activeStatus],
+    name: 'my-coupons', params: [activeStatus, page],
     load: async () => {
-      const response = await couponApi.getMyCoupons(activeStatus);
-      return response.data || [];
+      const response = await couponApi.getMyCoupons(activeStatus, page, 20);
+      return readMyCouponPage(response, activeStatus, page, user?.user_id);
     },
   });
-  const coupons = query.data || [];
+  const lastPage = Math.max(1, query.data?.pagination.total_pages ?? 0);
+  const beyondLastPage = query.data !== undefined && page > lastPage;
+  const shown = beyondLastPage ? undefined : query.data;
+  const displayed = useRef(shown);
+  useLayoutEffect(() => { currentScope.current = requestKey; displayed.current = shown; }, [requestKey, shown]);
+  const coupons = shown?.data ?? [];
   const error = query.error ? requestFailure(query.error).response?.data?.message || requestFailure(query.error).response?.data?.error || '加载优惠券失败，请重试' : undefined;
-  const loading = !query.data && !error;
+  const loading = !shown && !error;
+  const isCurrentView = () => query.isCurrentSession() && currentScope.current === requestKey;
+  const isDisplayedView = () => isCurrentView() && shown !== undefined && displayed.current === shown;
+  const navigate = (status: number, nextPage: number) => {
+    if (!isCurrentView()) return;
+    currentScope.current = JSON.stringify([sessionKey, status, nextPage]);
+    setView({ sessionKey, status, page: nextPage });
+  };
+
+  // Correct a page that became empty before committing an empty collection to the screen.
+  if (beyondLastPage) setView({ sessionKey, status: activeStatus, page: lastPage });
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
@@ -86,7 +104,7 @@ export default function MyCouponsPage() {
   };
 
   const handleUse = (coupon: UserCoupon) => {
-    if (!query.isCurrentSession() || currentScope.current !== requestKey || !query.data?.some(row => row.user_coupon_id === coupon.user_coupon_id)) return;
+    if (!isDisplayedView() || !coupons.includes(coupon)) return;
     if (!canUseCoupon(coupon)) {
       toast.error(translate('优惠券当前不可用'));
       return;
@@ -139,7 +157,12 @@ export default function MyCouponsPage() {
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.value}
-                onClick={() => setActiveStatus(tab.value)}
+                onClick={() => {
+                  // Status tabs remain valid across same-account pages; rapid taps choose the last status.
+                  if (!query.isCurrentSession() || currentScope.current === JSON.stringify([sessionKey, tab.value, 1])) return;
+                  currentScope.current = JSON.stringify([sessionKey, tab.value, 1]);
+                  setView({ sessionKey, status: tab.value, page: 1 });
+                }}
                 aria-pressed={activeStatus === tab.value}
                 className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
                   activeStatus === tab.value
@@ -157,7 +180,7 @@ export default function MyCouponsPage() {
         {loading ? <div className="text-center py-12" role="status">{t('加载中...')}</div> : error ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm" role="alert">
             <p className="text-red-600">{t(error)}</p>
-            <button onClick={query.refetch} className="btn btn-secondary mt-4">{t('重新加载优惠券')}</button>
+            <button onClick={() => { if (isCurrentView()) void query.refetch(); }} className="btn btn-secondary mt-4">{t('重新加载优惠券')}</button>
           </div>
         ) : coupons.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
@@ -248,6 +271,11 @@ export default function MyCouponsPage() {
             ))}
           </div>
         )}
+        {shown && shown.pagination.total_pages > 1 && <nav aria-label={t('优惠券分页')} className="mt-6 flex flex-wrap items-center justify-center gap-4">
+          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => { if (isDisplayedView() && page > 1) navigate(activeStatus, page - 1); }}>{t('上一页')}</button>
+          <span className="text-sm text-gray-600">{t('第 {page} 页 / 共 {totalPages} 页', { page, totalPages: shown.pagination.total_pages })}</span>
+          <button className="btn btn-secondary" disabled={page >= lastPage} onClick={() => { if (isDisplayedView() && page < lastPage) navigate(activeStatus, page + 1); }}>{t('下一页')}</button>
+        </nav>}
       </div>
     </div>
   );

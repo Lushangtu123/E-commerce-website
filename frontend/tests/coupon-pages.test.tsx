@@ -23,7 +23,8 @@ vi.mock('@/lib/api', () => ({
 }));
 
 type Coupon = typeof coupon & Record<string, unknown>;
-type Response = { data: Coupon[] };
+type Response = { data: Coupon[]; pagination?: { page: number; page_size: number; total: number; total_pages: number } };
+const myResponse = (data: Coupon[]) => ({ data, pagination: { page: 1, page_size: 20, total: data.length, total_pages: Math.ceil(data.length / 20) } });
 
 const coupon = {
   coupon_id: 1, user_coupon_id: 7, name: 'Summer', code: 'SUMMER', type: 2, discount_value: 20 as number | string,
@@ -40,6 +41,7 @@ async function setup(page: string, coupons: Coupon[] = [coupon]) {
   localStorage.setItem('admin_session', 'admin-session');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin' }));
   for (const fn of [couponApi.getAvailable, couponApi.getMyCoupons, adminCouponApi.getList]) vi.mocked(fn).mockResolvedValue({ data: coupons } as never);
+  vi.mocked(couponApi.getMyCoupons).mockResolvedValue(myResponse(coupons) as never);
   const Page = pages[page];
   const view = render(<Page />);
   await settle();
@@ -74,7 +76,7 @@ describe('my coupons', () => {
     const first = deferred<Response>();
     let calls = 0;
     useAuthStore.getState().login(customerA, 'A');
-    vi.mocked(couponApi.getMyCoupons).mockImplementation((() => ++calls === 1 ? first.promise : Promise.resolve({ data: [{ ...coupon, name: 'B的券' }] })) as never);
+    vi.mocked(couponApi.getMyCoupons).mockImplementation((() => ++calls === 1 ? first.promise : Promise.resolve(myResponse([{ ...coupon, name: 'B的券' }]))) as never);
     render(<MyCouponsPage />);
     await settle();
 
@@ -83,7 +85,7 @@ describe('my coupons', () => {
     expect(calls).toBe(2);
     expect(screen.getByText('B的券')).toBeInTheDocument();
 
-    await act(async () => first.resolve({ data: [{ ...coupon, name: 'A的券' }] }));
+    await act(async () => first.resolve(myResponse([{ ...coupon, name: 'A的券' }])));
     await settle();
     expect(screen.getByText('B的券')).toBeInTheDocument();
     expect(screen.queryByText('A的券')).not.toBeInTheDocument();
@@ -93,7 +95,7 @@ describe('my coupons', () => {
     const used = deferred<Response>();
     useAuthStore.getState().login(customerA, 'A');
     vi.mocked(couponApi.getMyCoupons).mockImplementation(((status?: number) => status === 2 ? used.promise
-      : Promise.resolve({ data: [{ ...coupon, status, name: status === 3 ? '已过期的券' : '未使用的券' }] })) as never);
+      : Promise.resolve(myResponse([{ ...coupon, status, name: status === 3 ? '已过期的券' : '未使用的券' }] as Coupon[]))) as never);
     render(<MyCouponsPage />);
     await settle();
     // Keep the expired tab's handler from before the switch, as a quick second tap would use it.
@@ -104,7 +106,7 @@ describe('my coupons', () => {
     await settle();
     expect(screen.getByText('已过期的券')).toBeInTheDocument();
 
-    await act(async () => used.resolve({ data: [{ ...coupon, name: '旧筛选的券' }] }));
+    await act(async () => used.resolve(myResponse([{ ...coupon, status: 2, name: '旧筛选的券' }])));
     await settle();
     expect(screen.getByText('已过期的券')).toBeInTheDocument();
     expect(screen.queryByText('旧筛选的券')).not.toBeInTheDocument();

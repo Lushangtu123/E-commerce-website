@@ -128,7 +128,13 @@ export class CouponController {
       const userId = req.userId!;
       const { error, value } = userCouponListSchema.validate(req.query);
       if (error) return res.status(400).json({ success: false, message: error.details[0].message });
-      const { status } = value;
+      const { status, page, page_size = 20 } = value;
+
+      if (page !== undefined) {
+        const result = await CouponModel.getUserCouponsPage(userId, status, page, page_size);
+        return res.json({ success: true, data: result.coupons,
+          pagination: { page, page_size, total: result.total, total_pages: Math.ceil(result.total / page_size) } });
+      }
 
       const coupons = await CouponModel.getUserCoupons(userId, status);
 

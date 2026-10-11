@@ -34,9 +34,10 @@ const cases = [
 ];
 
 describe.each(cases)('$name recovery', ({ Page, load, empty }) => {
+  const response = (rows: Coupon[]) => ({ ...centerResponse(rows), pagination: { page: 1, page_size: Page === MyCouponsPage ? 20 : 50, total: rows.length, total_pages: rows.length ? 1 : 0 } });
   it('shows the empty state only after a successful empty response', async () => {
     useAuthStore.getState().login(customerA, 'A');
-    vi.mocked(load).mockResolvedValue(centerResponse([]) as never);
+    vi.mocked(load).mockResolvedValue(response([]) as never);
     render(<Page />); await settle();
     expect(screen.getByText(empty)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -57,7 +58,7 @@ describe.each(cases)('$name recovery', ({ Page, load, empty }) => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(empty)).not.toBeInTheDocument();
     expect(screen.getByText('加载中...')).toBeInTheDocument();
-    await act(async () => recovery.resolve(centerResponse([coupon]))); await settle();
+    await act(async () => recovery.resolve(response([coupon]))); await settle();
     expect(screen.getByText(coupon.name)).toBeInTheDocument();
   });
 
@@ -65,12 +66,12 @@ describe.each(cases)('$name recovery', ({ Page, load, empty }) => {
     const recovery = deferred();
     useAuthStore.getState().login(customerA, 'A');
     vi.mocked(load).mockRejectedValueOnce(apiError('服务暂不可用', 'message'))
-      .mockReturnValueOnce(recovery.promise as never).mockResolvedValue(centerResponse([{ ...coupon, name: 'B的券' }]) as never);
+      .mockReturnValueOnce(recovery.promise as never).mockResolvedValue(response([{ ...coupon, user_id: 2, name: 'B的券' }]) as never);
     render(<Page />); await settle();
     fireEvent.click(screen.getByRole('button', { name: '重新加载优惠券' })); await settle();
     act(() => useAuthStore.getState().login(customerB, 'B')); await settle();
     expect(screen.getByText('B的券')).toBeInTheDocument();
-    await act(async () => recovery.resolve(centerResponse([{ ...coupon, name: 'A的券' }]))); await settle();
+    await act(async () => recovery.resolve(response([{ ...coupon, name: 'A的券' }]))); await settle();
     expect(screen.queryByText('A的券')).not.toBeInTheDocument();
     expect(screen.getByText('B的券')).toBeInTheDocument();
   });
@@ -154,7 +155,7 @@ describe('my coupons filter recovery', () => {
     const recovery = deferred();
     useAuthStore.getState().login(customerA, 'A');
     vi.mocked(couponApi.getMyCoupons).mockRejectedValueOnce(apiError('服务暂不可用', 'message'))
-      .mockReturnValueOnce(recovery.promise as never).mockResolvedValueOnce({ data: [{ ...coupon, status: 2, name: '已使用的券' }] });
+      .mockReturnValueOnce(recovery.promise as never).mockResolvedValueOnce({ data: [{ ...coupon, status: 2, name: '已使用的券' }], pagination: { page: 1, page_size: 20, total: 1, total_pages: 1 } });
     render(<MyCouponsPage />); await settle();
     fireEvent.click(screen.getByRole('button', { name: '重新加载优惠券' })); await settle();
     fireEvent.click(screen.getByRole('button', { name: '已使用' })); await settle();
