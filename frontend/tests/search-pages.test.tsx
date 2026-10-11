@@ -122,9 +122,9 @@ describe('header search history', () => {
     expect(screen.getByText('My search')).toBeVisible();
   });
 
-  it('keeps the history and query in place when deleting fails without submitting a search', async () => {
+  it('keeps the history and query in place after a definitive delete refusal without submitting a search', async () => {
     useAuthStore.getState().login(userA, 'session-A');
-    vi.mocked(searchApi.deleteKeyword).mockRejectedValue(new Error('Delete unavailable'));
+    vi.mocked(searchApi.deleteKeyword).mockRejectedValue(Object.assign(new Error('Delete refused'), { response: { status: 400 } }));
     await setup();
     const input = document.querySelector<HTMLInputElement>('form[role="search"] input')!;
     fireEvent.change(input, { target: { value: 'Other search' } });

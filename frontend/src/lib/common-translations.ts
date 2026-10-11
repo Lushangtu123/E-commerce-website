@@ -198,6 +198,8 @@ export const commonTranslations: Record<string, string> = {
   '搜索商品...': 'Search products...',
   '搜索': 'Search',
   '搜索历史': 'Search history',
+  '加载搜索历史失败，请重试': 'Unable to load search history. Please try again.',
+  '重新加载搜索历史': 'Reload search history',
   '删除': 'Delete',
   '热门搜索': 'Trending searches',
   '{count}次': '{count} searches',
