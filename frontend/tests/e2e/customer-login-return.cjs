@@ -67,19 +67,21 @@ module.exports = async function customerLoginReturn({ browser, adminContext, loc
       const historyPage = historyCustomer.page;
       const initialPath = `/products/${productId}?source=history-initial`;
       await historyPage.goto(`${origin}/login?next=${encodeURIComponent(initialPath)}`);
-      // A visible translated heading proves the actual Next client is hydrated before using its History API.
+      const assertRegisterHref = async (path, checkEmail = true) => {
+        const href = path === '/' ? '/register' : `/register?next=${encodeURIComponent(path)}`;
+        await historyPage.waitForFunction(expected => Array.from(document.querySelectorAll('a'))
+          .some(link => link.textContent.trim() === '立即注册' && link.getAttribute('href') === expected), href);
+        assert.equal(await historyPage.getByRole('link', { name: '立即注册', exact: true }).getAttribute('href'), href);
+        if (checkEmail) assert.equal(await historyPage.getByLabel('邮箱', { exact: true }).inputValue(), account.email, 'query changes retain the same login form');
+      };
+      // SSR uses /register; the next-bearing link proves the client snapshot is active
+      // before interacting with the language selector or the browser History API.
+      await assertRegisterHref(initialPath, false);
       await historyPage.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
       await historyPage.getByRole('heading', { name: 'Sign in to your account', exact: true }).waitFor({ state: 'visible' });
       await historyPage.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
       await historyPage.getByRole('heading', { name: '登录账号', exact: true }).waitFor({ state: 'visible' });
       await historyPage.getByLabel('邮箱', { exact: true }).fill(account.email);
-      const assertRegisterHref = async path => {
-        const href = path === '/' ? '/register' : `/register?next=${encodeURIComponent(path)}`;
-        await historyPage.waitForFunction(expected => Array.from(document.querySelectorAll('a'))
-          .some(link => link.textContent.trim() === '立即注册' && link.getAttribute('href') === expected), href);
-        assert.equal(await historyPage.getByRole('link', { name: '立即注册', exact: true }).getAttribute('href'), href);
-        assert.equal(await historyPage.getByLabel('邮箱', { exact: true }).inputValue(), account.email, 'query changes retain the same login form');
-      };
       await assertRegisterHref(initialPath);
       let destination = `/products/${productId}?source=history-push&view=latest`;
       await historyPage.evaluate(next => window.history.pushState({}, '', `/login?next=${encodeURIComponent(next)}`), destination);
