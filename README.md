@@ -321,6 +321,7 @@ E-commerce-website/
 - `POST /api/users/login` - Sign in
 - `GET /api/users/profile` - Get the current profile
 - `GET /api/users/stats` - Get the user's total orders, unpaid orders, claimed coupons, currently usable coupons and favourites
+The account centre requires all five statistics to be nonnegative integer counts. A null or incomplete successful reply shows a retryable loading error; genuine zero counts display normally.
 - `PUT /api/users/profile` - Update the profile
 - `PUT /api/users/password` - Verify the current password, change it and revoke all older sessions
 - `GET /api/users/password/capabilities` - Check whether password recovery is available
