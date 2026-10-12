@@ -13,6 +13,7 @@ export default function ChangePassword({ onPasswordChanged, onPasswordUnconfirme
   const { t } = useI18n(), router = useRouter();
   const { sessionId, user, isAuthenticated, isHydrated } = useAuthStore();
   const key = JSON.stringify([sessionId, user?.user_id]);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies and handlers compare it with the context they started under.
   const currentKey = useRef(key); currentKey.current = key;
   const mounted = useRef(true), mutation = useRef<object | null>(null);
   const [values, setValues] = useState({ current: '', next: '', confirm: '' });
@@ -25,6 +26,7 @@ export default function ChangePassword({ onPasswordChanged, onPasswordUnconfirme
     catch { return false; }
   };
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another session starts with an empty password form.
     mounted.current = true; setDraftKey(key); setValues({ current: '', next: '', confirm: '' }); setNotice(null); setBusy(false); mutation.current = null;
     return () => { mounted.current = false; };
   }, [key]);
@@ -61,6 +63,7 @@ export default function ChangePassword({ onPasswordChanged, onPasswordUnconfirme
       if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); }
     }
   };
+  // eslint-disable-next-line react-hooks/refs -- Never render the form for a superseded session.
   if (!isHydrated || !isAuthenticated || !active() || draftKey !== key) return null;
   const field = (name: keyof typeof values, label: string, autoComplete: string) => <label className="block"><span className="block mb-2 font-medium">{t(label)}</span><input name={name} type="password" autoComplete={autoComplete} required className="input" value={values[name]} disabled={busy} onChange={event => { if (active() && !mutation.current) { setValues(previous => ({ ...previous, [name]: event.target.value })); setNotice(null); } }} /></label>;
   return <section className="card p-6 sm:p-8 mt-6" aria-labelledby="password-heading">

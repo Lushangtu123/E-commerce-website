@@ -66,10 +66,12 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
   const reviewRevision = reviewView?.context === context ? reviewView.revision : 0;
   const reviewSelection = JSON.stringify([context, reviewPage, reviewRevision]);
   const currentReviewSelection = useRef(reviewSelection);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies and handlers compare it with the context they started under.
   currentReviewSelection.current = reviewSelection;
   const visibleReviews = reviewState?.context === context && reviewState.page === reviewPage
     ? reviewState : { reviews: [], total: 0, totalPages: 0, loading: true, error: false };
   const currentContext = useRef(context);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies and handlers compare it with the context they started under.
   currentContext.current = context;
   const isCurrentContext = useCallback(() => {
     const auth = useAuthStore.getState();
@@ -92,6 +94,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     if (!isHydrated || !productId) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentContext();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- An add-to-cart started for another product or account no longer locks this one.
     setAdding(false);
     addingRequest.current = null;
     setFavoriting(false);
@@ -159,6 +162,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     reviewRequest.current = request;
     const isCurrentRequest = () => active && isCurrentContext() &&
       currentReviewSelection.current === reviewSelection && reviewRequest.current === request;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A new review page shows loading at once instead of the previous page's reviews.
     setReviewState(previous => ({ context, page: reviewPage, reviews: [],
       total: previous?.context === context ? previous.total : 0,
       totalPages: previous?.context === context ? previous.totalPages : 0, loading: true, error: false }));
@@ -198,6 +202,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     const request = { context };
     productRequest.current = request;
     const isCurrentRequest = () => active && isCurrentContext() && productRequest.current === request;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A new product shows loading at once instead of the previous product.
     setLoading(true);
     setLoadedProduct(null);
     setLoadedContext(null);

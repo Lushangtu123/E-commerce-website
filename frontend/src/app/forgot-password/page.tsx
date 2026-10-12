@@ -32,6 +32,7 @@ export default function ForgotPasswordPage() {
   };
   useEffect(() => {
     mounted.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Capabilities load on mount; the request resets its state synchronously.
     void loadCapabilities();
     return () => { mounted.current = false; capabilityRequest.current = null; };
   }, []);
