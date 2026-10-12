@@ -258,75 +258,77 @@ export default function AdminUsersPage() {
             </div>
           ) : (
             <>
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("用户名")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("邮箱")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("手机号")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("订单数")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("消费金额")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("状态")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("注册时间")}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("操作")}</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
-                    <tr key={user.user_id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {user.username}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {user.email || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {user.phone || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {user.order_count || 0}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ¥{(user.total_spent ? Number(user.total_spent) : 0).toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {user.status === 1 ? (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{t("正常")}</span>
-                        ) : (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{t("已禁用")}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(user.created_at, true)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                        {user.status === 1 ? (
-                          <button
-                            onClick={() => handleStatusChange(user.user_id, 0)}
-                            disabled={busy}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            {t("禁用")}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleStatusChange(user.user_id, 1)}
-                            disabled={busy}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            {t("启用")}
-                          </button>
-                        )}
-                        <Link href={`/admin/users/${user.user_id}`} prefetch={false}
-                          onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}
-                          className="text-primary-600 hover:text-primary-800">
-                          {t("详情")}
-                        </Link>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("用户名")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("邮箱")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("手机号")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("订单数")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("消费金额")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("状态")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("注册时间")}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t("操作")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map((user) => (
+                      <tr key={user.user_id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {user.username}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {user.email || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {user.phone || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {user.order_count || 0}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          ¥{(user.total_spent ? Number(user.total_spent) : 0).toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {user.status === 1 ? (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{t("正常")}</span>
+                          ) : (
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{t("已禁用")}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(user.created_at, true)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                          {user.status === 1 ? (
+                            <button
+                              onClick={() => handleStatusChange(user.user_id, 0)}
+                              disabled={busy}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              {t("禁用")}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleStatusChange(user.user_id, 1)}
+                              disabled={busy}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              {t("启用")}
+                            </button>
+                          )}
+                          <Link href={`/admin/users/${user.user_id}`} prefetch={false}
+                            onClick={event => { if (!isDisplayedScope()) event.preventDefault(); }}
+                            className="text-primary-600 hover:text-primary-800">
+                            {t("详情")}
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {/* 分页 */}
               <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
