@@ -35,6 +35,14 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
       if (sidebarWasOpen) await admin.getByRole('button', { name: /^(关闭侧栏|Close sidebar)$/ }).click();
       for (const locale of ['zh-CN', 'en']) {
         await language.selectOption(locale);
+        // Closing the desktop sidebar animates the main margin for 300ms. Measure the
+        // settled phone layout, not a frame in which its narrow card is still moving.
+        await admin.evaluate(() => document.fonts.ready);
+        await admin.waitForFunction(() => {
+          const main = document.getElementById('admin-sidebar')?.nextElementSibling;
+          return main && Math.abs(parseFloat(getComputedStyle(main).marginLeft)) < 0.01 &&
+            document.fonts.status === 'loaded' && !main.getAnimations().some(animation => animation.playState === 'running');
+        }, undefined, { polling: 'raf', timeout: 5000 });
         const action = row.getByRole('button', { name: locale === 'en' ? (enabled ? 'Disable' : 'Enable') : (enabled ? '禁用' : '启用'), exact: true });
         const detail = row.getByRole('link', { name: locale === 'en' ? 'Details' : '详情', exact: true });
         const next = admin.getByRole('button', { name: locale === 'en' ? 'Next' : '下一页', exact: true });
@@ -44,7 +52,13 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
         const scroll = row.locator('xpath=ancestor::table/parent::*');
         await scroll.evaluate(element => { element.scrollLeft = 0; });
         const initial = await action.boundingBox(); assert.ok(initial.x + initial.width > 390);
-        const paginationBefore = await next.boundingBox();
+        const paginationGeometry = () => next.evaluate(element => {
+          const rect = element.getBoundingClientRect(), container = element.closest('.border-t').getBoundingClientRect();
+          // Trial clicks may scroll the document vertically. Table scrolling must
+          // leave the button's position and size within its pagination unchanged.
+          return { left: rect.left - container.left, top: rect.top - container.top, width: rect.width, height: rect.height };
+        });
+        const paginationBefore = await paginationGeometry();
         const geometry = await scroll.evaluate(element => {
           const table = element.querySelector('table');
           element.scrollLeft = element.scrollWidth;
@@ -64,7 +78,7 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
           }), true);
           await control.click({ trial: true });
         }
-        assert.deepEqual(await next.boundingBox(), paginationBefore);
+        assert.deepEqual(await paginationGeometry(), paginationBefore);
         for (const control of [previous, next]) {
           const rect = await control.boundingBox(); assert.ok(rect.x >= 0 && rect.x + rect.width <= 391);
         }
