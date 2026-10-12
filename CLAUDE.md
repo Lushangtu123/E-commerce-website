@@ -17,7 +17,7 @@ Backend (`cd backend`):
 - `npm run build` - compiles to `dist/` and generates the OpenAPI JSON
 - `npm run migrate:dev`, `npm run sync-es:dev` - schema migrations and full Elasticsearch reindex
 
-Frontend (`cd frontend`): `npm test` (Vitest), `npm run lint`, `npm run typecheck`, `npm run build`.
+Frontend (`cd frontend`): `npm test` (Vitest), `npm run lint`, `npm run typecheck`, `npm run build`. Lint fails above the `--max-warnings` cap in `package.json` (the deliberate react-hooks warnings described in `eslint.config.mjs`): never raise the cap, lower it when you remove warnings.
 
 Slash commands: `/verify` (type checks, unit tests, lint), `/integration` (full suite against throwaway MySQL 8.0 + Redis 7 in Docker), `/pr` (branch, commit, push, prefilled PR link).
 
