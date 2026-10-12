@@ -11,12 +11,15 @@
  *   logger.info({ port }, '服务启动');
  *   logger.error({ err }, '数据库连接失败');
  *
+ * HTTP 请求内的每条日志自动带 requestId（见 middleware/request-id.ts）。
+ *
  * 环境变量：
  *   LOG_LEVEL   日志级别（默认开发环境 debug，生产环境 info）
  *   LOG_FILE    日志文件路径（可选）
  */
 import pino from 'pino';
 import { safeError, safeLogArguments } from './log-safety';
+import { logContext } from './request-context';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const level = process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug');
@@ -47,6 +50,7 @@ if (process.env.LOG_FILE) {
 const options: pino.LoggerOptions = {
   level,
   serializers: { err: safeError, error: safeError },
+  mixin: logContext, // 请求内的日志附带 requestId，便于按一次请求串起所有日志
   hooks: { logMethod(args, method) { method.apply(this, safeLogArguments(args) as Parameters<typeof method>); } },
 };
 const logger = targets.length > 0 ? pino(options, pino.transport({ targets })) : pino(options);
