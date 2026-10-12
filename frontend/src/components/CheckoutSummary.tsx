@@ -26,12 +26,14 @@ interface Props {
   selectedCouponId: number | undefined;
   onSelectCoupon: (userCouponId: number | undefined) => void;
   onCheckout: () => void;
+  manageAddressesHref?: string;
+  onManageAddresses?: React.MouseEventHandler<HTMLAnchorElement>;
 }
 
 /** The cart's order summary: shipping address, server-priced totals, coupon and the checkout button. */
 export default function CheckoutSummary({
   itemCount, submitting, cartUpdating = false, addresses, addressLoading, addressError, selectedAddressId, onSelectAddress, onReloadAddresses,
-  quote, availableCoupons, quoteLoading, quoteError, confirmationNotice, onRetryQuote, selectedCouponId, onSelectCoupon, onCheckout,
+  quote, availableCoupons, quoteLoading, quoteError, confirmationNotice, onRetryQuote, selectedCouponId, onSelectCoupon, onCheckout, manageAddressesHref = '/profile/address', onManageAddresses,
 }: Props) {
   const { t } = useI18n();
   const canCheckout = itemCount > 0 && !submitting && !cartUpdating && !!quote && !quoteLoading && !quoteError &&
@@ -57,7 +59,7 @@ export default function CheckoutSummary({
             </option>)}
           </select>
         )}
-        <Link href="/profile/address" className="inline-block text-primary-600 text-sm underline mt-2">{t("管理收货地址")}</Link>
+        <Link href={manageAddressesHref} onClick={onManageAddresses} className="inline-block text-primary-600 text-sm underline mt-2">{t("管理收货地址")}</Link>
       </div>
 
       <div className="space-y-3 mb-6">

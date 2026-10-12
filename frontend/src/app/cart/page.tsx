@@ -1,7 +1,7 @@
 'use client';
 
 import { customerLoginHref } from '@/lib/customer-login-return';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { addressApi, cartApi, productApi, orderApi, type OrderCreateInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
@@ -21,6 +21,8 @@ import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type P
 import { buyNowItem, clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
 import { validOrderPreview } from '@/lib/order-preview';
 import { readAddressList } from '@/lib/address-list-response';
+import { checkoutAddressHref } from '@/lib/checkout-navigation';
+import { readCheckoutSelection, storeCheckoutSelection, clearCheckoutSelection } from '@/lib/checkout-selection';
 
 const MAX_CHECKOUT_LINES = 100;
 const initialSelection = (rows: CartItem[]) => {
@@ -59,6 +61,9 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const [cartFailure, setCartFailure] = useState<{ key: string; message: string } | null>(null);
   const cartLoadRequest = useRef<{ key: string } | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const selectedItemsRef = useRef<string[]>([]);
+  const hasSelectionDraft = useRef(false);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedCouponId, setSelectedCouponId] = useState<number | undefined>(undefined);
   const [quoteResult, setQuoteResult] = useState<{ key: string; data: OrderPreview } | null>(null);
@@ -93,6 +98,24 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const addressError = addressResult?.key === sessionKey ? addressResult.error : null;
   const selectedAddress = addressSelection?.key === sessionKey ? addresses.find(address => address.address_id === addressSelection.id) : undefined;
 
+  const selectItems = useCallback((next: string[] | ((previous: string[]) => string[]), persist: boolean | 'existing' = true) => {
+    const keys = typeof next === 'function' ? next(selectedItemsRef.current) : next;
+    selectedItemsRef.current = keys;
+    setSelectedItems(keys);
+    if (buyNowId === null && (persist === 'existing' ? hasSelectionDraft.current : persist)) {
+      hasSelectionDraft.current = true;
+      if (storeCheckoutSelection(sessionKey, keys)) setSelectionNotice(null);
+    }
+  }, [buyNowId, sessionKey]);
+  const restoredSelection = useCallback((rows: CartItem[]) => {
+    try {
+      const saved = readCheckoutSelection(sessionKey);
+      hasSelectionDraft.current = saved !== null;
+      const eligible = new Set(rows.filter(isAvailable).map(cartItemKey));
+      return saved === null ? initialSelection(rows) : saved.filter(key => eligible.has(key));
+    } catch { return []; }
+  }, [sessionKey]);
+
   useEffect(() => {
     if (buyNowId === null || !isHydrated || !isAuthenticated || !sessionId || !user) return;
     try { setPurchase({ intent: readBuyNow(sessionId, user.user_id, buyNowId) }); }
@@ -112,13 +135,13 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     const initialRead = cartLoadRequest.current?.key === sessionKey ||
       (cartFailure?.key === sessionKey && cartFailure.message === '加载购物车失败，请重试');
     const availableKeys = new Set(confirmedItems.filter(isAvailable).map(cartItemKey));
-    setSelectedItems(previous => initialRead ? initialSelection(confirmedItems) : previous.filter(key => availableKeys.has(key)));
+    selectItems(previous => initialRead ? restoredSelection(confirmedItems) : previous.filter(key => availableKeys.has(key)), 'existing');
     // Any validated canonical read supersedes this page's initial/ordinary read. Retire that request
     // immediately so a delayed reply cannot hide the canonical cart behind loading or an old error.
     if (cartLoadRequest.current?.key === sessionKey) cartLoadRequest.current = null;
     setLoading(false);
     setCartFailure(previous => previous?.key === sessionKey && previous.message === '加载购物车失败，请重试' ? null : previous);
-  }), [sessionId, user?.user_id, sessionKey, cartFailure]);
+  }), [sessionId, user?.user_id, sessionKey, cartFailure, selectItems, restoredSelection]);
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('user_coupon_id');
@@ -266,7 +289,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       const recovering = cartRecovery.current === sessionKey;
       if (recovering && !validCartItems(data.items)) throw new Error('invalid cart recovery');
       const availableKeys = (data.items || []).filter(isAvailable).map(cartItemKey);
-      setSelectedItems(previous => recovering ? previous.filter(key => availableKeys.includes(key)).slice(0, MAX_CHECKOUT_LINES) : initialSelection(data.items));
+      selectItems(previous => recovering ? previous.filter(key => availableKeys.includes(key)).slice(0, MAX_CHECKOUT_LINES) : restoredSelection(data.items), 'existing');
       if (recovering) {
         cartRecovery.current = null; setUnconfirmedCartSession(null);
         setQuoteRevision(value => value + 1);
@@ -278,6 +301,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       if (!recovering) {
         // Forget stale display data without declaring a failed read to be a confirmed empty cart.
         useCartStore.setState(state => ({ items: [], revision: state.revision + 1, syncStatus: 'error' }));
+        selectedItemsRef.current = [];
         setSelectedItems([]);
       }
       setCartFailure({ key: sessionKey, message: recovering ? '购物车操作结果尚未确认，请重新加载后再操作' : '加载购物车失败，请重试' });
@@ -342,7 +366,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       if (!isCurrentSession()) return;
       requireCartAcknowledgement(data, '删除成功');
       removeItem(item.product_id, item.sku_id);
-      setSelectedItems(selected => selected.filter(id => id !== cartItemKey(item)));
+      selectItems(selected => selected.filter(id => id !== cartItemKey(item)));
       toast.success(translate('已删除'));
     } catch (error) {
       const status = requestFailure(error).response?.status;
@@ -362,9 +386,9 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     if (buyNowId !== null || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites() || !isCurrentSession()) return;
     if (availableItems.length > MAX_CHECKOUT_LINES) return;
     if (orderItems.length === availableItems.length) {
-      setSelectedItems([]);
+      selectItems([]);
     } else {
-      setSelectedItems(availableItems.map(cartItemKey));
+      selectItems(availableItems.map(cartItemKey));
     }
   };
 
@@ -373,7 +397,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     const key = cartItemKey(item);
     const availableKeys = new Set(useCartStore.getState().items.filter(isAvailable).map(cartItemKey));
     if (!availableKeys.has(key)) return;
-    setSelectedItems(selected => {
+    selectItems(selected => {
       const eligible = selected.filter(id => availableKeys.has(id));
       return eligible.includes(key) ? eligible.filter(id => id !== key) : eligible.length < MAX_CHECKOUT_LINES ? [...eligible, key] : eligible;
     });
@@ -427,7 +451,9 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       // Another page can add quantities before checkout or after its original commit.
       // Keep this global read alive after navigation; the cart helper checks its session.
       void readCanonicalCart(undefined, { fresh: true }).catch(() => { /* The order is confirmed; cart refresh must not block navigation. */ });
+      selectedItemsRef.current = [];
       setSelectedItems([]);
+      if (buyNowId === null) { hasSelectionDraft.current = false; clearCheckoutSelection(sessionKey); }
       toast.success(translate('订单创建成功'));
       router.push(`/orders/${data.order_id}`);
     } catch (error) {
@@ -537,6 +563,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
           <Link href="/cart" className="text-primary-600 underline">{t('返回完整购物车')}</Link>
         </div>}
 
+        {selectionNotice && <p role="alert" className="mb-4 text-red-600">{t(selectionNotice)}</p>}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* 购物车列表 */}
           <div className="lg:col-span-2 space-y-4">
@@ -556,7 +583,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
                 <p className="w-full text-sm text-gray-600">{t('单次结算最多支持100个商品或规格，请分批结算')}</p>
                 <button className="btn btn-secondary" disabled={submitting || cartUpdating} onClick={() => {
                   if (!isCurrentSession() || submittingRequest.current || cartMutation.current || cartRecovery.current === sessionKey || addBlocksWrites()) return;
-                  setSelectedItems(availableItems.slice(0, MAX_CHECKOUT_LINES).map(cartItemKey));
+                  selectItems(availableItems.slice(0, MAX_CHECKOUT_LINES).map(cartItemKey));
                 }}>{t('选择前 {count} 项', { count: MAX_CHECKOUT_LINES })}</button>
               </>}
             </div>}
@@ -580,7 +607,14 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
               quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} onRetryQuote={() => setQuoteRevision(value => value + 1)}
               availableCoupons={quoteResult?.data.available_coupons}
               confirmationNotice={checkoutNotice?.key === sessionKey ? checkoutNotice.message : null}
-              selectedCouponId={selectedCouponId} onSelectCoupon={setSelectedCouponId} onCheckout={handleCheckout} />
+              selectedCouponId={selectedCouponId} onSelectCoupon={setSelectedCouponId} onCheckout={handleCheckout}
+              manageAddressesHref={checkoutAddressHref(buyNowId)} onManageAddresses={event => {
+                if (!isCurrentSession()) { event.preventDefault(); return; }
+                if (buyNowId === null && !storeCheckoutSelection(sessionKey, selectedItemsRef.current)) {
+                  event.preventDefault();
+                  setSelectionNotice('无法保存结算选择，请恢复浏览器存储后重试');
+                } else setSelectionNotice(null);
+              }} />
           </div>
         </div>
       </div>

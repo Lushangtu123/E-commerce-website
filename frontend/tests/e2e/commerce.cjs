@@ -1363,6 +1363,7 @@ async function localPlatformScripts(context) {
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./list-read-response.cjs')({ browser, admin, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./checkout-address-roundtrip.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
   await require('./checkout-support-read-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, errors });
