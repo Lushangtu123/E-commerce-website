@@ -31,6 +31,54 @@ function defaults() {
 
 describe('independent home section recovery', () => {
   beforeEach(() => useAuthStore.getState().hydrate());
+  it.each(['热门商品', '新品推荐', '猜你喜欢'])('keeps missing %s data retryable in both languages without reloading its neighbors', async title => {
+    defaults();
+    if (title === '热门商品') vi.mocked(productApi.getHotProducts).mockResolvedValueOnce({} as never);
+    if (title === '新品推荐') vi.mocked(productApi.list).mockResolvedValueOnce({} as never);
+    if (title === '猜你喜欢') vi.mocked(recommendationApi.getGuessYouLike).mockResolvedValueOnce({} as never);
+    render(<HomePage />); await settle();
+    const region = section(title);
+    expect(within(region).getByRole('alert')).toBeVisible(); expect(within(region).queryByText('暂无商品')).toBeNull();
+    for (const other of ['热门商品', '新品推荐', '猜你喜欢'].filter(value => value !== title)) expect(cards(other)).toHaveLength(1);
+    act(() => useLocaleStore.getState().setLocale('en'));
+    expect(within(region).getByRole('alert')).toHaveTextContent(title === '热门商品' ? 'Unable to load popular products. Please try again.'
+      : title === '新品推荐' ? 'Unable to load new arrivals. Please try again.' : 'Unable to load recommendations. Please try again.');
+    const retry = captureHandler(within(region).getByRole('button', { name: 'Retry' }));
+    void retry(); void retry(); await settle();
+    expect(within(region).queryByRole('alert')).toBeNull(); expect(within(region).getAllByTestId('product-card')).toHaveLength(1);
+    expect(productApi.getHotProducts).toHaveBeenCalledTimes(title === '热门商品' ? 2 : 1);
+    expect(productApi.list).toHaveBeenCalledTimes(title === '新品推荐' ? 2 : 1);
+    expect(recommendationApi.getGuessYouLike).toHaveBeenCalledTimes(title === '猜你喜欢' ? 2 : 1);
+  });
+
+  it.each([
+    { products: {} }, { products: [null] }, { products: [{ ...product('Bad'), title: {} }] },
+    { products: [{ ...product('Bad'), price: '1e2' }] }, { products: [{ ...product('Bad'), stock: -1 }] },
+    { products: [product('Duplicate'), product('Duplicate')] }, { products: [product('Bad')], error: 'Failed' },
+    { products: [product('Bad')], success: false },
+  ])('does not install malformed hot-card data %j into the homepage', async response => {
+    defaults(); vi.mocked(productApi.getHotProducts).mockResolvedValueOnce(response as never);
+    render(<HomePage />); await settle();
+    expect(within(section('热门商品')).getByRole('alert')).toBeVisible();
+    expect(cards('新品推荐')).toEqual(['New']); expect(cards('猜你喜欢')).toEqual(['Recommended']);
+  });
+
+  it('accepts MySQL aggregate inventory and decimal money for a summary SKU card without requiring detail SKU rows', async () => {
+    defaults(); vi.mocked(productApi.getHotProducts).mockResolvedValue({ products: [{ ...product('Variant'), has_sku: 1,
+      stock: '4294967294', price: '0.00', original_price: null, rating: '4.50', main_image: null }] } as never);
+    render(<HomePage />); await settle();
+    expect(cards('热门商品')).toEqual(['Variant']); expect(within(section('热门商品')).queryByRole('alert')).toBeNull();
+  });
+  it('treats a missing hot-products collection as a regional failure while retaining healthy neighbors', async () => {
+    defaults(); vi.mocked(productApi.getHotProducts).mockResolvedValueOnce({} as never);
+    render(<HomePage />); await settle();
+    expect(within(section('热门商品')).getByRole('alert')).toHaveTextContent('加载热门商品失败，请重试');
+    expect(cards('新品推荐')).toEqual(['New']); expect(cards('猜你喜欢')).toEqual(['Recommended']);
+    const retry = captureHandler(within(section('热门商品')).getByRole('button', { name: '重新加载' }));
+    void retry(); void retry(); await settle();
+    expect(cards('热门商品')).toEqual(['Hot']); expect(productApi.getHotProducts).toHaveBeenCalledTimes(2);
+    expect(productApi.list).toHaveBeenCalledTimes(1); expect(recommendationApi.getGuessYouLike).toHaveBeenCalledTimes(1);
+  });
   it('switches language without refetching and translates a delayed failure in the latest language', async () => {
     defaults();
     const pending = deferred<Awaited<ReturnType<typeof productApi.getHotProducts>>>();

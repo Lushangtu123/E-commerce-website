@@ -1347,6 +1347,10 @@ async function localPlatformScripts(context) {
   await require('./buy-now.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
   await require('./product-detail-response.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./product-read-boundaries.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./home-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./customer-login-return.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
   await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });

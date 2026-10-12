@@ -22,7 +22,7 @@ vi.mock('@/components/ProductCard', () => ({ default: () => null }));
 vi.mock('@/lib/api', () => ({
   productApi: { getDetail: vi.fn() },
   cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false })), list: vi.fn() },
-  reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [] })) },
+  reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [], total: 0, totalPages: 0 })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
   favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功', favorite_id: 1 })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
   browseApi: { record: vi.fn(async () => ({})) },
