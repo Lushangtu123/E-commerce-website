@@ -22,6 +22,7 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
   const { t, formatDate } = useI18n();
   const { sessionId, user, isAuthenticated } = useAuthStore();
   const key = JSON.stringify([sessionId, user?.user_id, orderId]);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies compare it with the order and session they started for.
   const currentKey = useRef(key); currentKey.current = key;
   const mounted = useRef(true), request = useRef(0), mutation = useRef<object | null>(null);
   const [result, setResult] = useState<{ key: string; value: AfterSalesRequest | null; error?: string } | null>(null);
@@ -77,11 +78,14 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
     }
   };
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another order or session starts with empty drafts and notices.
     mounted.current = true; updateResult(null); setReason(''); setParcel({ company: '', tracking_number: '' }); setType('refund'); setNotice(null); setLoadError(null); setBusy(false); setRefreshing(false); mutation.current = null; pendingLoad.current = null; recovery.current = null; setUnconfirmed(null);
     if (isAuthenticated) void load();
     const refreshVisible = () => { if (document.visibilityState === 'visible') void load(); };
     window.addEventListener('focus', refreshVisible); document.addEventListener('visibilitychange', refreshVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Bumping the shared counter retires the read started for this order.
     return () => { mounted.current = false; request.current++; window.removeEventListener('focus', refreshVisible); document.removeEventListener('visibilitychange', refreshVisible); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Load once per order and session; the loaders are rebuilt every render.
   }, [key, isAuthenticated]);
   const mutate = async (withdraw: boolean) => {
     if (!active() || mutation.current || recovery.current?.key === key || pendingLoad.current?.key === key || currentResult.current !== result || result?.key !== key || result.error) return;
@@ -138,6 +142,7 @@ export default function OrderAfterSales({ orderId }: { orderId: number }) {
       }
     } finally { if (active() && mutation.current === operation) { mutation.current = null; setBusy(false); } }
   };
+  // eslint-disable-next-line react-hooks/refs -- Render nothing for a superseded order or session.
   if (!isAuthenticated || !active()) return null;
   const value = result?.key === key ? result.value : null;
   const blocked = unconfirmed === key;

@@ -62,6 +62,7 @@ function OrdersContent() {
   };
   const scopeKey = JSON.stringify([sessionKey, activeTab, page, urlKey]);
   const currentScope = useRef(scopeKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under.
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
@@ -88,6 +89,7 @@ function OrdersContent() {
     : undefined;
   const loading = !shown && !loadError;
   // An authoritative detail check takes precedence over lagging list rows from before the write.
+  // eslint-disable-next-line react-hooks/refs -- A detail check made after a write overrides lagging list rows until a fresh list agrees.
   const checkedOrders = (shown?.orders || []).map(order => {
     const checked = confirmed.current.get(order.order_id);
     return checked?.key === sessionKey && order.status === checked.before ? { ...order, ...checked.order } : order;
@@ -109,6 +111,7 @@ function OrdersContent() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The first session to hydrate claims the URL filters.
     if (filters.session === null) setFilters({ ...filters, session: sessionKey });
     else if (filters.session !== sessionKey) {
       const params = new URLSearchParams(window.location.search);
@@ -122,13 +125,16 @@ function OrdersContent() {
   // A pending action belongs to the session that started it; the next session may act at once.
   useEffect(() => {
     mutation.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Drop the previous session's recoveries and pending writes before the next session acts.
     setPendingSession(null);
     recovery.current.clear(); confirmed.current.clear(); setRecoveries([]);
   }, [sessionKey]);
 
   // Cancelling the only order on the final page leaves that page empty; show the new last page.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A shrunken list moves to its last page once, when the page falls out of range.
     if (beyondLastPage) setPage(lastPage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Clamp only when the page leaves the range, not on every total change.
   }, [beyondLastPage]);
 
   useEffect(() => {

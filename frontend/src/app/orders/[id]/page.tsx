@@ -56,52 +56,13 @@ export default function OrderDetailPage() {
   const unresolved = recoveryView?.key === sessionKey ? recoveryView : null;
   const actionsBlocked = actionPending || loading || !!loadError || !!unresolved;
   const currentSession = useRef(sessionKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies compare it with the order and session they started for.
   currentSession.current = sessionKey;
   const isCurrentSession = () => {
     const current = useAuthStore.getState();
     return mounted.current && currentSession.current === sessionKey && current.isAuthenticated &&
       current.sessionId === sessionId && current.user?.user_id === user?.user_id && storedSessionId() === (sessionId ?? null);
   };
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; detailRequest.current++; };
-  }, []);
-
-  useEffect(() => {
-    setOrder(null);
-    setItems([]);
-    setRemainingTime(null);
-    setLoadedKey(null);
-    setFailure(null);
-    detailRequest.current++;
-    detailInFlight.current = null;
-    actionLock.current = false;
-    setActionPending(false);
-    recovery.current = null;
-    setRecoveryView(null);
-    if (!isHydrated) return;
-    if (!isAuthenticated) {
-      router.push(customerLoginHref());
-      return;
-    }
-    if (!Number.isSafeInteger(orderId)) {
-      toast.error(translate('订单ID无效'));
-      router.push('/orders');
-      return;
-    }
-    loadOrder();
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, router]);
-
-  useEffect(() => {
-    if (isHydrated && isAuthenticated && !loadError && !unresolved && loadedKey === sessionKey && order?.status === 0) {
-      let active = true;
-      const refresh = () => loadRemainingTime(() => active);
-      refresh();
-      const interval = setInterval(refresh, 60000);
-      return () => { active = false; clearInterval(interval); };
-    }
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status, loadError, unresolved]);
 
   const loadOrder = async (afterWrite = false) => {
     if (!isCurrentSession() || recovery.current?.key === sessionKey || (!afterWrite && detailInFlight.current !== null)) return;
@@ -136,6 +97,67 @@ export default function OrderDetailPage() {
     }
   };
 
+  const loadRemainingTime = async (isActive: () => boolean) => {
+    if (!isActive() || !isCurrentSession()) return;
+    try {
+      const data = await orderTimeoutApi.getRemainingTime(orderId);
+      if (!isActive() || !isCurrentSession()) return;
+      setRemainingTime(data.remaining_minutes);
+      
+      // 如果剩余时间为0，刷新订单状态
+      if (data.remaining_minutes === 0) {
+        loadOrder();
+      }
+    } catch (error) {
+      if (!isActive() || !isCurrentSession()) return;
+      logger.error('加载剩余时间失败:', error);
+    }
+  };
+
+  useEffect(() => {
+    mounted.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Bumping the shared counter on unmount retires any in-flight detail read.
+    return () => { mounted.current = false; detailRequest.current++; };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another order or customer starts from an empty view, so the previous snapshot is never actionable.
+    setOrder(null);
+    setItems([]);
+    setRemainingTime(null);
+    setLoadedKey(null);
+    setFailure(null);
+    detailRequest.current++;
+    detailInFlight.current = null;
+    actionLock.current = false;
+    setActionPending(false);
+    recovery.current = null;
+    setRecoveryView(null);
+    if (!isHydrated) return;
+    if (!isAuthenticated) {
+      router.push(customerLoginHref());
+      return;
+    }
+    if (!Number.isSafeInteger(orderId)) {
+      toast.error(translate('订单ID无效'));
+      router.push('/orders');
+      return;
+    }
+    loadOrder();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Reload only when the customer, session or order changes; loadOrder is rebuilt every render.
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, router]);
+
+  useEffect(() => {
+    if (isHydrated && isAuthenticated && !loadError && !unresolved && loadedKey === sessionKey && order?.status === 0) {
+      let active = true;
+      const refresh = () => loadRemainingTime(() => active);
+      refresh();
+      const interval = setInterval(refresh, 60000);
+      return () => { active = false; clearInterval(interval); };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Poll once per loaded unpaid snapshot; loadRemainingTime is rebuilt every render.
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, orderId, loadedKey, order?.status, loadError, unresolved]);
+
   const checkOrder = async (record: Recovery) => {
     if (!isCurrentSession() || recovery.current !== record || record.checking) return;
     record.checking = true;
@@ -166,23 +188,6 @@ export default function OrderDetailPage() {
     const record: Recovery = { key: sessionKey, before: order!.status, action, checking: false };
     recovery.current = record; setRecoveryView({ ...record });
     await checkOrder(record);
-  };
-
-  const loadRemainingTime = async (isActive: () => boolean) => {
-    if (!isActive() || !isCurrentSession()) return;
-    try {
-      const data = await orderTimeoutApi.getRemainingTime(orderId);
-      if (!isActive() || !isCurrentSession()) return;
-      setRemainingTime(data.remaining_minutes);
-      
-      // 如果剩余时间为0，刷新订单状态
-      if (data.remaining_minutes === 0) {
-        loadOrder();
-      }
-    } catch (error) {
-      if (!isActive() || !isCurrentSession()) return;
-      logger.error('加载剩余时间失败:', error);
-    }
   };
 
   const handlePay = async () => {
