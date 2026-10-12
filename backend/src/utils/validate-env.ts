@@ -27,9 +27,10 @@ export function getCorsOrigins(): string[] | true {
  * CORS 配置。会话 Cookie 只允许发给明确列出的来源：未配置 CORS_ORIGIN 时（仅开发环境）
  * 放行所有来源，但不带凭据，否则任何网站都能以访客身份调用接口。
  */
-export function corsOptions(): { origin: string[] | true; credentials: boolean } {
+export function corsOptions(): { origin: string[] | true; credentials: boolean; exposedHeaders: string[] } {
   const origin = getCorsOrigins();
-  return { origin, credentials: origin !== true };
+  // 前端报错时可以读取请求 ID，方便按 ID 查日志
+  return { origin, credentials: origin !== true, exposedHeaders: ['X-Request-Id'] };
 }
 
 /**

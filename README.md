@@ -562,6 +562,7 @@ Administrator status changes and their audit record commit in one transaction. A
 
 ## Monitoring and Logging
 
+- Request IDs: every response carries `X-Request-Id` (an upstream value is reused when it is short and safe, otherwise a UUID is generated), every log line written during the request includes `requestId`, and 500 responses return it in the body
 - Request logging
 - Error logging
 - Performance monitoring
