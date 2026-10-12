@@ -48,5 +48,5 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 
 1. Work on a branch, never on `main`; keep one concern per PR.
 2. Run `/verify` before committing, and `/integration` when SQL, transactions, Redis, migrations or startup code change.
-3. Open the PR with `/pr`. Claude merges it with a merge commit once every CI check has passed, never with a failing or pending check, and does not force-push or push to `main`.
-4. After a merge: delete the branch (remote and local) and fast-forward local `main`.
+3. Open the PR with `/pr` (`gh pr create`). Merge only with `./scripts/dev/merge-pr.sh <number>`: it refuses unless the PR is open, mergeable and every CI check (including both CI jobs) has passed, then merges with a merge commit pinned to the checked head. Direct `gh pr merge`, `gh api`, force-pushes and pushes to `main` are denied in `.claude/settings.json`. If checks are still running, report that and check again later; never merge around a failing check.
+4. After a merge: GitHub deletes the remote branch automatically; delete the local branch and fast-forward local `main`.

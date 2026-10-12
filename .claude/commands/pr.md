@@ -9,9 +9,7 @@ Prepare a pull request for the current change. Title: $ARGUMENTS (if empty, deri
 2. Run `/verify`. Stop and report if any check fails.
 3. Commit with a conventional message (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`) whose body explains why, ending with the attribution trailer the session specifies.
 4. `git push -u origin <branch>`. Never force-push and never push to `main`.
-5. Build the compare URL with Node so the title and body are URL-encoded:
-   `node -e 'console.log("https://github.com/Lushangtu123/E-commerce-website/compare/main...<branch>?" + new URLSearchParams({ expand: "1", title, body }))'`
-   The body has "## What changed", "## Verification" (exact commands and counts from step 2) and any rollout notes (migrations, env vars, Docker volumes).
-6. Give the user the link. If a browser tool is connected and the user asked for it, open the link and click "Create pull request", waiting until GitHub finishes "Checking mergeability" first.
+5. Create the PR with `gh pr create --base main --head <branch> --title "<title>" --body-file <file>`. The body has "## What changed", "## Verification" (exact commands and counts from step 2) and any rollout notes (migrations, env vars, Docker volumes). Report the PR URL.
+6. Check CI with `./scripts/dev/merge-pr.sh <number> --check`. When it reports ready, merge with `./scripts/dev/merge-pr.sh <number>`. If checks are still running, tell the user and check again later; if one failed, report it and stop instead of merging.
 
-Once the PR exists, Claude merges it with a merge commit after every CI check has passed, never with a failing or pending check (if a check fails, report it and stop). After the merge: confirm it via the GitHub API, delete the branch on GitHub and locally, and fast-forward local `main`.
+Never merge any other way: direct `gh pr merge` and `gh api` are denied, and auto-merge is not used. After the merge GitHub deletes the remote branch automatically; delete the local branch and fast-forward local `main`.
