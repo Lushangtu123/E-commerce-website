@@ -73,11 +73,11 @@ export class SearchHistoryModel {
     const results = await query<RowDataPacket[]>(
       `SELECT DISTINCT keyword, COUNT(*) as count
        FROM search_history
-       WHERE keyword LIKE ?
+       WHERE keyword LIKE ? ESCAPE '!'
        GROUP BY keyword
        ORDER BY count DESC
        LIMIT ?`,
-      [`%${keyword}%`, limit]
+      [`%${keyword.replace(/[!%_]/g, '!$&')}%`, limit]
     );
     return results.map(r => r.keyword);
   }

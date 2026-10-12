@@ -89,6 +89,30 @@ integration('真实 MySQL 搜索记录边界和用户归属', () => {
     expect((await invoke(getSearchSuggestions, { query: { keyword: ' Ni ', limit: '100' } })).body.suggestions).toEqual(['Nike']);
   });
 
+  test.each([
+    ['%', 'USB 65% fast charger', 'USB 650 fast charger'],
+    ['_', 'charger_65', 'chargerA65'],
+    ['!', 'Deal! today', 'Deal today'],
+    [String.raw`path\charger`, String.raw`path\charger`, 'pathcharger'],
+    [String.raw`50%_!\'`, String.raw`Offer 50%_!\' charger`, "Offer 500A!' charger"],
+  ])('搜索建议在真实 MySQL 中按字面匹配 %s', async (keyword, expected, unrelated) => {
+    await db.query('INSERT INTO search_history (user_id,keyword,result_count) VALUES (7,?,1),(8,?,1)', [expected, unrelated]);
+    const result = await invoke(getSearchSuggestions, { query: { keyword, limit: '100' } });
+    expect(result.status).toBe(200);
+    expect(result.body.suggestions).toEqual([expected]);
+  });
+
+  test('普通建议保留包含匹配、频率排序和数量限制', async () => {
+    for (const [keyword, count] of [['Fast USB charger', 3], ['USB travel charger', 2], ['Small charger stand', 1]] as const) {
+      for (let occurrence = 0; occurrence < count; occurrence++) {
+        await db.query('INSERT INTO search_history (user_id,keyword,result_count) VALUES (7,?,1)', [keyword]);
+      }
+    }
+    const result = await invoke(getSearchSuggestions, { query: { keyword: 'charger', limit: '2' } });
+    expect(result.status).toBe(200);
+    expect(result.body.suggestions).toEqual(['Fast USB charger', 'USB travel charger']);
+  });
+
   test('删除与清空不会删除另一用户的同名关键词', async () => {
     await invoke(recordSearch, { body: { keyword: 'Nike' } });
     await invoke(recordSearch, { user: { userId: 8 }, userId: 8, body: { keyword: 'Nike' } });
