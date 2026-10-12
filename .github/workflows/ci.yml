@@ -15,40 +15,22 @@ jobs:
   backend:
     name: 后端：编译 + 测试
     runs-on: ubuntu-latest
-    services:
-      # Docker Official Images on ECR avoid shared runner Docker Hub pull limits.
-      redis:
-        image: public.ecr.aws/docker/library/redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
-      mysql:
-        image: public.ecr.aws/docker/library/mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: order_test_password
-          MYSQL_ROOT_HOST: '%'
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -porder_test_password"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
     env:
       MYSQL_TEST_HOST: 127.0.0.1
       MYSQL_TEST_USER: root
       MYSQL_TEST_PASSWORD: order_test_password
-      REDIS_TEST_URL: redis://127.0.0.1:6379
     defaults:
       run:
         working-directory: backend
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+
+      - name: 验证测试服务恢复逻辑
+        run: bash ../scripts/ci/test-services.sh
+
+      - name: 启动隔离 MySQL 与 Redis（官方镜像备用源）
+        run: bash ../scripts/ci/services.sh start
 
       - name: 安装 Node.js
         uses: actions/setup-node@v4
@@ -91,6 +73,10 @@ jobs:
           name: commerce-browser-evidence
           path: frontend/test-results/
           if-no-files-found: ignore
+
+      - name: 清理隔离测试服务
+        if: always()
+        run: bash ../scripts/ci/services.sh stop
 
   frontend:
     name: 前端：构建
