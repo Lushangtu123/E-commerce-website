@@ -79,6 +79,7 @@ async function localPlatformScripts(context) {
   });
   await ready('http://127.0.0.1:3100/register', frontend);
   browser = await chromium.launch({ headless: true });
+  await require('./native-middle-probe.cjs')({ browser, localPlatformScripts });
   const context = await browser.newContext();
   await localPlatformScripts(context);
   const page = await context.newPage();
