@@ -93,7 +93,7 @@ describe('validateEnv', () => {
 describe('validateEnv 配置格式', () => {
   const FORMAT_KEYS = ['PORT', 'DB_PORT', 'REDIS_PORT', 'DB_CONNECTION_LIMIT', 'RATE_LIMIT_WINDOW', 'RATE_LIMIT_MAX',
     'RATE_LIMIT_AUTH_MAX', 'DB_SSL', 'REDIS_TLS', 'RATE_LIMIT_STORE', 'PAYMENT_MODE', 'EMAIL_PROVIDER', 'LOG_LEVEL',
-    'REDIS_URL', 'RABBITMQ_URL', 'ELASTICSEARCH_URL', 'JWT_EXPIRES_IN', 'APP_URL', 'RESEND_API_KEY', 'EMAIL_FROM'];
+    'REDIS_URL', 'RABBITMQ_URL', 'ELASTICSEARCH_URL', 'JWT_EXPIRES_IN', 'APP_URL', 'RESEND_API_KEY', 'EMAIL_FROM', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT'];
   const logged = () => JSON.stringify([...logger.error.mock.calls, ...logger.warn.mock.calls]);
 
   beforeEach(() => {
@@ -110,6 +110,7 @@ describe('validateEnv 配置格式', () => {
       PAYMENT_MODE: 'disabled', EMAIL_PROVIDER: 'resend', LOG_LEVEL: 'info', JWT_EXPIRES_IN: '7d',
       REDIS_URL: 'rediss://default:password@your-endpoint.upstash.io:6379',
       RABBITMQ_URL: 'amqp://admin:admin123@localhost:5672', ELASTICSEARCH_URL: 'http://localhost:9200',
+      SENTRY_DSN: 'https://publickey@o0.ingest.sentry.io/0', SENTRY_ENVIRONMENT: 'production',
     });
     validateEnv();
     expect(exitSpy).not.toHaveBeenCalled();
@@ -131,6 +132,7 @@ describe('validateEnv 配置格式', () => {
     ['REDIS_URL', 'http://cache:6379'], ['RABBITMQ_URL', 'localhost:5672'], ['ELASTICSEARCH_URL', 'es:9200'],
     // jsonwebtoken 把不带单位的字符串当毫秒：3600 会变成 3.6 秒
     ['JWT_EXPIRES_IN', '3600'], ['JWT_EXPIRES_IN', 'forever'],
+    ['SENTRY_DSN', 'not a dsn'], ['SENTRY_ENVIRONMENT', 'prod env'],
   ])('生产环境 %s=%s 格式错误：拒绝启动并指出变量名', (key, value) => {
     process.env[key] = value;
     validateEnv();

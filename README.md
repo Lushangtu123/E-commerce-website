@@ -564,6 +564,7 @@ Administrator status changes and their audit record commit in one transaction. A
 
 ## Monitoring and Logging
 
+- Error reporting (optional): with `SENTRY_DSN` set, error/fatal logs and uncaught exceptions go to Sentry, sanitized like the logs and tagged with the request ID. No request headers, cookies, bodies, user data, local variables or breadcrumbs are sent, and there is no performance tracing
 - Request IDs: every response carries `X-Request-Id` (an upstream value is reused when it is short and safe, otherwise a UUID is generated), every log line written during the request includes `requestId`, and 500 responses return it in the body
 - Request logging
 - Error logging

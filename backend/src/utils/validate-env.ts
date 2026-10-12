@@ -61,6 +61,8 @@ const ENV_FORMAT = Joi.object({
   REDIS_URL: uri('redis', 'rediss'),
   RABBITMQ_URL: uri('amqp', 'amqps'),
   ELASTICSEARCH_URL: uri('http', 'https'),
+  SENTRY_DSN: uri('https', 'http'),
+  SENTRY_ENVIRONMENT: Joi.string().pattern(/^[A-Za-z0-9._-]{1,64}$/),
   // jsonwebtoken 把不带单位的字符串当作毫秒，因此要求写单位
   JWT_EXPIRES_IN: Joi.string().pattern(/^[1-9]\d*(s|m|h|d|w|y)$/)
     .messages({ 'string.pattern.base': '{{#label}} 需要带单位，例如 7d、12h、30m' }),
