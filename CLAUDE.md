@@ -28,6 +28,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 - Validate request input with Joi or the existing `normalize*` helpers; reject unknown fields and answer 400, never 500, for bad input.
 - Domain errors use the existing classes (`OrderError`, `SKUError`, `AddressError`, ...) whose `statusCode` defaults to 400; controllers map them with `res.status(error.statusCode)`.
 - Money is handled in integer cents (`couponMoneyToCents`, `calculateDiscountCents`); order, stock and coupon changes happen in one MySQL transaction with row locks taken in a fixed order (user → address → products → SKUs → coupons).
+- Adding, removing or renaming a route means updating the API lists in both `README.md` and `README_ZH.md` in the same PR; `__tests__/docs/readme-routes.test.ts` fails otherwise.
 - User-facing API messages are Chinese. Every new message the UI can show needs an English entry in `frontend/src/lib/error-translations.ts`.
 - Critical admin product, SKU, coupon and user-status writes save their audit on the same transaction connection. `afterProductWrite` only refreshes cache/search after commit; login logging remains best effort.
 - Server code logs through `utils/logger` (pino); `console` is only for the CLI output of `src/database` scripts. Inside a request every line gets `requestId` from `utils/request-context.ts`, matching the `X-Request-Id` response header.
