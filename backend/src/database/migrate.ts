@@ -13,6 +13,7 @@ import { migrateAfterSalesProgress } from './migrate-after-sales-progress';
 import { migrateProductI18n } from './migrate-product-i18n';
 import { migrateProductCreations } from './migrate-product-creations';
 import { migrateCartAdds } from './migrate-cart-adds';
+import { withMigrationLock } from './migration-lock';
 
 const migrations = [
   // 用户表
@@ -223,24 +224,26 @@ async function runMigrations() {
     logger.info('开始执行数据库迁移...\n');
 
     const pool = getPool();
-    
-    for (let i = 0; i < migrations.length; i++) {
-      logger.info(`执行迁移 ${i + 1}/${migrations.length}...`);
-      await pool.execute(migrations[i]);
-    }
+    // 同一数据库同时只允许一个迁移进程
+    await withMigrationLock(pool, async () => {
+      for (let i = 0; i < migrations.length; i++) {
+        logger.info(`执行迁移 ${i + 1}/${migrations.length}...`);
+        await pool.execute(migrations[i]);
+      }
 
-    await migrateCouponTables(pool);
-    await migrateSkuTables(pool);
-    await migrateAddressTables(pool);
-    await migrateAddressCreations(pool);
-    await migrateReviewTables(pool);
-    await migrateAccountSecurity(pool);
-    await migrateFulfillment(pool);
-    await migrateAfterSalesProgress(pool);
-    await migrateOrderCheckout(pool);
-    await migrateProductI18n(pool);
-    await migrateProductCreations(pool);
-    await migrateCartAdds(pool);
+      await migrateCouponTables(pool);
+      await migrateSkuTables(pool);
+      await migrateAddressTables(pool);
+      await migrateAddressCreations(pool);
+      await migrateReviewTables(pool);
+      await migrateAccountSecurity(pool);
+      await migrateFulfillment(pool);
+      await migrateAfterSalesProgress(pool);
+      await migrateOrderCheckout(pool);
+      await migrateProductI18n(pool);
+      await migrateProductCreations(pool);
+      await migrateCartAdds(pool);
+    });
 
     logger.info('\n✓ 所有迁移执行成功！');
     process.exit(0);

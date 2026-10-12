@@ -252,6 +252,8 @@ cp .env.example .env
 npm run migrate:dev
 ```
 
+The full migration (`migrate` / `migrate:dev`) is repeatable and holds a MySQL named lock for its database while it runs: a second run started at the same time waits up to 30 seconds and then checks every step again, or fails with an error if the first is still running.
+
 For an existing database, run `npm run migrate-review:dev` in `backend` to upgrade only the review constraints; in production run `npm run build` first, then `npm run migrate-review`. The migration can be run repeatedly. It adds a unique constraint on `(order_id, product_id)` and limits ratings to 1–5. Back up the database first: if it finds duplicate historical reviews, invalid ratings or a conflicting constraint with the same name, it stops with an error and keeps the records so they can be checked and fixed by hand before retrying. The full base migration includes this step.
 
 Storefront ratings use the average of published purchase reviews, with `review_count` in product responses. Products without reviews display “No reviews yet”; legacy seeded scores are ignored. Reviews on a product page have five entries per page and can be retried independently of inventory. Saving a review invalidates product caches and refreshes the optional search index; an ancillary cache/index failure does not undo a saved review. Hot-product cache hits reuse only the ranking and hydrate current enabled product data in one bounded database query, including prices, inventory, promotions, translations and review statistics. Removed products are filtered before applying the requested limit. Product details read current product and SKU data on every request, so failed invalidation or a late cache fill cannot revive an older price, stock or enabled variant.
@@ -562,6 +564,7 @@ Administrator status changes and their audit record commit in one transaction. A
 
 ## Monitoring and Logging
 
+- Request IDs: every response carries `X-Request-Id` (an upstream value is reused when it is short and safe, otherwise a UUID is generated), every log line written during the request includes `requestId`, and 500 responses return it in the body
 - Request logging
 - Error logging
 - Performance monitoring

@@ -6,6 +6,8 @@ import compression from 'compression';
 import { rateLimit } from 'express-rate-limit';
 import { apiLimiter } from './middleware/rate-limit';
 import { requestLogger } from './middleware/request-logger';
+import { requestId } from './middleware/request-id';
+import { currentRequestId } from './utils/request-context';
 import { getCachedHealthReport } from './utils/health';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './utils/openapi';
@@ -44,6 +46,7 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
   if (process.env.VERCEL) app.set('trust proxy', 1);
 
   // 中间件
+  app.use(requestId); // 最先执行：之后的所有响应（包括 413/400/404）和日志都带请求 ID
   app.use(helmet()); // 安全头
   app.use(cors(corsOptions())); // 跨域：CORS_ORIGIN 限制来源，只有列出的来源能带会话 Cookie
   app.use(compression()); // 压缩
@@ -139,6 +142,7 @@ export function createApp(options: { serverless?: boolean } = {}): Express {
     logger.error({ err }, '错误');
     res.status(500).json({
       error: '服务器内部错误',
+      requestId: currentRequestId(), // 用户反馈问题时据此定位日志
       message: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   });
