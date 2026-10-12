@@ -40,7 +40,7 @@ const firstUser = { user_id: 1, username: 'first', email: 'first@test' };
 const secondUser = { user_id: 2, username: 'second', email: 'second@test' };
 const order = (id: number, status = 0, prefix = 'ORDER'): Order =>
   ({ order_id: id, order_no: `${prefix}-${id}`, status, total_amount: '10.00', created_at: '2026-10-02T00:00:00Z' });
-const page = (orders: Order[], total: number, totalPages: number): OrderList => ({ orders, total, page: 1, limit: 10, totalPages });
+const page = (orders: Order[], total: number, totalPages: number, requestedPage = 1): OrderList => ({ orders, total, page: requestedPage, limit: 10, totalPages });
 const actionLabel = { pay: '模拟支付', cancel: '取消订单', confirm: '确认收货' } as const;
 const acknowledgements = { pay: { message: '模拟支付完成，未实际扣款', payment_mode: 'demo' }, cancel: { message: '订单已取消' }, confirm: { message: '确认收货成功' } };
 
@@ -143,7 +143,7 @@ describe('orders page', () => {
   });
 
   it('follows Header and history URL changes without remounting and resets pagination', async () => {
-    await setup({ search: '?status=4', list: async params => page([order(params.page, params.status ?? 0)], 13, 2) });
+    await setup({ search: '?status=4', list: async params => page([order(params.page, params.status ?? 0)], 13, 2, params.page) });
     await click(button('下一页'));
     expect(requests().at(-1)).toEqual({ page: 2, limit: 10, status: 4 });
     for (const [url, status] of [['/orders', undefined], ['/orders?status=0', 0], ['/orders?status=4', 4]] as const) {
@@ -176,7 +176,7 @@ describe('orders page', () => {
   it.each(['success', 'failure'] as const)('hides old rows immediately on filter and page changes and ignores a late quick-filter %s', async (outcome) => {
     const pending = deferred<OrderList>();
     const { commits } = await setup({ list: async params => params.status === 0 ? pending.promise
-      : page([order(1, params.status ?? 3, params.status === 4 ? 'CANCELLED' : 'ALL')], 13, 2) });
+      : page([order(1, params.status ?? 3, params.status === 4 ? 'CANCELLED' : 'ALL')], 13, 2, params.page) });
     expect(displayedOrders()).toEqual(['ALL-1']);
 
     let before = commits.length;
@@ -204,7 +204,7 @@ describe('orders page', () => {
     const { commits } = await setup({ search: '?status=0', list: async params => {
       if (useAuthStore.getState().sessionId === 'second-session') return page([order(1, 3, 'SECOND')], 1, 1);
       if (previousState === 'pending' && params.page === 2) return pending.promise;
-      return page([order(1, 0, 'FIRST')], 13, 2);
+      return page([order(1, 0, 'FIRST')], 13, 2, params.page);
     } });
     await click(button('下一页'));
 
@@ -405,7 +405,7 @@ describe('orders page', () => {
   it.each(['filter', 'page'] as const)('refreshes the current query when a mutation finishes after a %s change, without restoring the old scope', async (change) => {
     const payment = deferred();
     await setup({ pay: () => payment.promise,
-      list: async params => page([order(params.page, params.status ?? 0, `${params.status === 4 ? 'CANCELLED' : 'ALL'}-PAGE${params.page}`)], 13, 2) });
+      list: async params => page([order(params.page, params.status ?? 0, `${params.status === 4 ? 'CANCELLED' : 'ALL'}-PAGE${params.page}`)], 13, 2, params.page) });
     fireEvent.click(button('模拟支付'));
     await click(button(change === 'filter' ? '已取消' : '下一页'));
     const expected = change === 'filter' ? { page: 1, limit: 10, status: 4 } : { page: 2, limit: 10 };

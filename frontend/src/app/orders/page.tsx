@@ -14,7 +14,7 @@ import { usePaymentSettings } from '@/hooks/use-payment-settings';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { confirmAction } from '@/lib/confirm';
-import { customerOrderSnapshot, customerOrderCheckMessage, customerOrderTarget, validCustomerOrder, validCustomerOrderAcknowledgement, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
+import { customerOrderSnapshot, customerOrderListSnapshot, customerOrderCheckMessage, customerOrderTarget, validCustomerOrderAcknowledgement, uncertainCustomerOrderWrite, type CustomerOrderAction } from '@/lib/customer-order-recovery';
 
 type Recovery = { key: string; order: Order; action: CustomerOrderAction; checking: boolean };
 
@@ -72,8 +72,9 @@ function OrdersContent() {
     name: 'orders',
     params: [activeTab ?? 'all', page],
     load: async () => {
-      const data = await orderApi.list({ page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) });
-      if (!data || !Array.isArray(data.orders) || !data.orders.every(validCustomerOrder)) throw new Error('Invalid order list');
+      const request = { page, limit: 10, ...(activeTab !== undefined && { status: activeTab }) };
+      const data = customerOrderListSnapshot(await orderApi.list(request), request);
+      if (!data) throw new Error('Invalid order list');
       return data;
     },
   });
