@@ -320,7 +320,7 @@ describe('language changes on rendered pages', () => {
       localStorage.setItem('admin_session', 'admin-session');
       localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin' }));
       const coupon = { coupon_id: 1, user_coupon_id: 7, name: '原始中文券名', code: 'EXAMPLE20', type: 2,
-        discount_value: '20.00', min_amount: 0, max_discount: '50.00', total_quantity: 10, remain_quantity: 5,
+        discount_value: '20.00', min_amount: 0, max_discount: '50.00', total_quantity: 10, remain_quantity: 5, received_count: 5, used_count: 0,
         per_user_limit: 1, status: 1, coupon_status: 1, received_at: '2026-01-01T00:00:00Z',
         start_time: '2026-01-01T00:00:00Z', end_time: '2099-01-01T00:00:00Z', expired_at: '2099-01-01T00:00:00Z' };
       let loads = 0;
@@ -330,6 +330,8 @@ describe('language changes on rendered pages', () => {
         success: true, ...await load(), pagination: { page, page_size: pageSize, total: 1, total_pages: 1 },
       })) as never);
       vi.mocked(couponApi.getMyCoupons).mockImplementation((async () => ({ ...await load(), pagination: { page: 1, page_size: 20, total: 1, total_pages: 1 } })) as never);
+      vi.mocked(adminCouponApi.getList).mockImplementation((async (page = 1, pageSize = 50) => ({ ...await load(),
+        pagination: { page, page_size: pageSize, total: 1, total_pages: 1 } })) as never);
       render(<Page />);
       await settle();
       expect(text()).toMatch(/8折/);

@@ -32,16 +32,23 @@ export function validCouponSnapshot(value: unknown): value is Coupon {
 }
 
 export function validCouponPage(value: unknown): value is AdminCouponPage {
-  if (!record(value) || !Array.isArray(value.data) || !record(value.pagination) ||
+  if (!record(value) || value.success === false || 'error' in value || !Array.isArray(value.data) || !record(value.pagination) ||
     !positiveId(value.pagination.page) || !positiveId(value.pagination.page_size) || Number(value.pagination.page_size) > 100 ||
     !count(value.pagination.total) || !count(value.pagination.total_pages) ||
     value.pagination.total_pages !== Math.ceil(Number(value.pagination.total) / Number(value.pagination.page_size)) ||
-    value.data.length > Number(value.pagination.page_size) || value.data.length > Number(value.pagination.total)) return false;
+    value.data.length > Number(value.pagination.page_size)) return false;
   const ids = new Set<number>();
   return value.data.every(row => {
     if (!validCouponSnapshot(row) || !record(row) || !count(row.received_count) || !count(row.used_count) || ids.has(row.coupon_id)) return false;
     ids.add(row.coupon_id); return true;
   });
+}
+
+/** Both initial reads and write reconciliation must describe the requested view. */
+export function readCouponPage(value: unknown, page: number, pageSize: number, status: string): AdminCouponPage {
+  if (!validCouponPage(value) || value.pagination?.page !== page || value.pagination.page_size !== pageSize ||
+    (status !== '' && value.data.some(coupon => coupon.status !== Number(status)))) throw new Error('Invalid coupon list snapshot');
+  return value;
 }
 
 /** Server DECIMAL strings and its null/zero no-cap convention describe the same submitted rules. */

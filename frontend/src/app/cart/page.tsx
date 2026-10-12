@@ -20,6 +20,7 @@ import { beginCartWrite, readCanonicalCart, subscribeCanonicalCart } from '@/lib
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
 import { buyNowItem, clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
 import { validOrderPreview } from '@/lib/order-preview';
+import { readAddressList } from '@/lib/address-list-response';
 
 const MAX_CHECKOUT_LINES = 100;
 const initialSelection = (rows: CartItem[]) => {
@@ -202,7 +203,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     let active = true;
     addressApi.list().then(data => {
       if (!active || !isCurrentSession()) return;
-      const ownedAddresses = data.addresses || [];
+      const ownedAddresses = readAddressList(data).addresses;
       setAddressResult({ key: sessionKey, addresses: ownedAddresses });
       const preferred = (previousSelection?.key === sessionKey && ownedAddresses.find(address => address.address_id === previousSelection.id)) ||
         ownedAddresses.find(address => address.is_default === true || address.is_default === 1) || ownedAddresses[0];

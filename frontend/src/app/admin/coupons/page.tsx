@@ -14,7 +14,7 @@ import { requestFailure } from '@/lib/api-error';
 import AdminCouponForm, { EMPTY_COUPON_FORM, type CouponFormValues } from '@/components/AdminCouponForm';
 import AdminCouponTable, { type AdminCoupon } from '@/components/AdminCouponTable';
 import { clearCouponWrite, couponCreationDraft, matchesCouponCreation, readCouponWrite, storeCouponWrite,
-  unknownCouponWrite, validCouponPage, validCouponSnapshot, matchesCouponSnapshot, type CouponWriteIntent } from '@/lib/admin-coupon-write';
+  unknownCouponWrite, readCouponPage, validCouponSnapshot, matchesCouponSnapshot, type CouponWriteIntent } from '@/lib/admin-coupon-write';
 import { newSessionId } from '@/lib/session-id';
 
 const PAGE_SIZE = 50;
@@ -46,7 +46,7 @@ export default function AdminCouponsPage() {
   const query = useScopedQuery({
     scope: ['admin', 'coupons', sessionId],
     params: [page, status],
-    load: () => status === '' ? adminCouponApi.getList(page, PAGE_SIZE) : adminCouponApi.getList(page, PAGE_SIZE, Number(status)),
+    load: async () => readCouponPage(status === '' ? await adminCouponApi.getList(page, PAGE_SIZE) : await adminCouponApi.getList(page, PAGE_SIZE, Number(status)), page, PAGE_SIZE, status),
     enabled: !!sessionId && session.ready,
     sessionIsCurrent: session.active,
   });
@@ -117,10 +117,8 @@ export default function AdminCouponsPage() {
     if (!isCurrentScope()) return false;
     await queryClient.cancelQueries({ queryKey: ['admin', 'coupons', sessionId] });
     if (!isCurrentScope()) return false;
-    const actual = status === '' ? await adminCouponApi.getList(page, PAGE_SIZE) : await adminCouponApi.getList(page, PAGE_SIZE, Number(status));
+    const actual = readCouponPage(status === '' ? await adminCouponApi.getList(page, PAGE_SIZE) : await adminCouponApi.getList(page, PAGE_SIZE, Number(status)), page, PAGE_SIZE, status);
     if (!isCurrentScope()) return false;
-    if (!validCouponPage(actual) || actual.pagination?.page !== page || actual.pagination.page_size !== PAGE_SIZE ||
-      (status !== '' && actual.data.some(coupon => coupon.status !== Number(status)))) throw new Error('Invalid coupon list snapshot');
     if (actual.data.some(row => (row.coupon_id === canonical.coupon_id || row.code.toUpperCase() === canonical.code.toUpperCase()) && !matchesCouponSnapshot(row, canonical))) throw new Error('Coupon snapshot changed during confirmation');
     queryClient.setQueryData(['admin', 'coupons', sessionId, page, status], actual);
     return true;

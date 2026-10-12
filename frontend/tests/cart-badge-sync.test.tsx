@@ -38,7 +38,7 @@ function fixture(cart: AxiosAdapter) {
     if (config.url?.startsWith('/cart')) { if (config.method === 'get') reads++; return cart(config); }
     if (config.url === '/search/hot') data = { keywords: [] };
     else if (config.url === '/search/history') data = { history: [] };
-    else if (config.url === '/addresses') data = { addresses: [{ address_id: 1, user_id: 1, receiver_name: 'Buyer', phone: '13800000000', is_default: 1 }] };
+    else if (config.url === '/addresses') data = { addresses: [{ address_id: 1, user_id: 1, receiver_name: 'Buyer', phone: '13800000000', province: null, city: null, district: null, detail_address: null, is_default: 1 }] };
     else if (config.url === '/orders/preview') {
       const quantity = JSON.parse(config.data).items.reduce((count: number, row: CartItem) => count + row.quantity, 0);
       data = { original_amount: quantity * 10, discount_amount: 0, total_amount: quantity * 10, coupon: null, available_coupons: [] };

@@ -22,7 +22,7 @@ vi.mock('@/lib/api', () => ({
 }));
 const owner = { user_id: 1, username: 'Buyer', email: 'buyer@example.test' };
 const product = { product_id: 1, title: 'Current purchase', price: 10, stock: 20, sales_count: 0, rating: 0 };
-const address = { address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: 'P', city: 'C', district: 'D', detail_address: 'Street' };
+const address = { address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: 'P', city: 'C', district: 'D', detail_address: 'Street', is_default: false };
 
 async function buy(rows: CartItem[], skuId?: number) {
   useAuthStore.getState().login(owner, 'buyer-session');
