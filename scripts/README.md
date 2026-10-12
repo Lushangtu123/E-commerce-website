@@ -11,6 +11,7 @@
 | `fix-and-restart.sh` | 停止本项目的 Node 进程、清理后端编译缓存后重启 |
 | `init-admin.sh` | 在 Docker 环境中构建后端并初始化管理后台表和默认管理员 |
 | `integration-tests.sh` | 用临时的 MySQL 8.0 和 Redis 7 容器（随机本机端口）运行后端全部测试，结束后删除容器；额外参数传给 Jest。Claude Code 中对应 `/integration` |
+| `merge-pr.sh` | 仅在 PR 打开、可合并、两个 CI 任务都已运行且所有检查都通过时，以 merge commit 合并（锁定到已检查的提交）；`--check` 只检查不合并。Claude Code 只能通过它合并 PR |
 
 停止进程时只匹配本仓库 `backend/`、`frontend/` 下的 `node_modules` 路径，不会影响编辑器或其他项目的 Node 进程。
 
