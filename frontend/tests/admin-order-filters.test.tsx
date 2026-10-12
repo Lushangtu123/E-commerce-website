@@ -15,7 +15,7 @@ vi.mock('@/components/AdminLayout', () => ({ default: ({ children }: { children:
 vi.mock('react-hot-toast', () => ({ default: { success: (message: string) => notices.push(message), error: (message: string) => notices.push(message) } }));
 
 type Call = { path?: string; params?: { page?: number; status?: string }; data?: Record<string, unknown>; session: string | null };
-const order = (status = 1, id = 1) => ({ order_id: id, order_no: `ORDER-${id}`, status, total_amount: '10.00', shipping_company: status === 2 || status === 3 ? 'SF Express' : null,
+const order = (status = 1, id = 1) => ({ order_id: id, user_id: 7, order_no: `ORDER-${id}`, status, total_amount: '10.00', shipping_company: status === 2 || status === 3 ? 'SF Express' : null,
   tracking_number: status === 2 || status === 3 ? 'SF123456' : null, created_at: '2026-10-04T00:00:00Z' });
 const listResult = (status = 1, total = 1, id = 1) => ({ orders: [order(status, id)], pagination: { total } });
 const detailResult = (status = 2) => ({ order: order(status), items: [] });

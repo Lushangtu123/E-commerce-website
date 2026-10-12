@@ -37,7 +37,7 @@ const pages = { products: AdminProductsPage, users: AdminUsersPage };
 const statusAction = { products: '下架', users: '禁用' } as const;
 const row = (kind: Kind, id: number, title = `Row ${id}`) => kind === 'products'
   ? { product_id: id, title, price: '10.00', stock: 5, category_id: 1, status: 1 }
-  : { user_id: id, username: title, status: 1, created_at: '2026-10-02' };
+  : { user_id: id, username: title, email: `user${id}@example.test`, status: 1, created_at: '2026-10-02' };
 const result = (kind: Kind, rows: unknown[], total = rows.length) => ({ [kind]: rows, pagination: { total, totalPages: Math.ceil(total / 20) } });
 
 const originalAdapter = api.defaults.adapter;
@@ -691,5 +691,19 @@ describe('admin product selection and creation', () => {
 
     const followed = fireEvent.click(screen.getAllByRole('link', { name: '管理规格' })[0]);
     expect(followed, 'navigation must be cancelled').toBe(false);
+  });
+});
+
+
+describe.each(['products', 'users'] as const)('admin %s successful read validation', kind => {
+  it('rejects an incomplete 200 and recovers through a read-only retry', async () => {
+    let calls = 0;
+    await setup(kind, { list: () => ++calls === 1 ? {} : result(kind, [row(kind, 1, 'Recovered row')]) });
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(mutations).toEqual([]);
+    await click(button('重新加载'));
+    expect(screen.getByText('Recovered row')).toBeInTheDocument();
+    expect(mutations).toEqual([]);
   });
 });

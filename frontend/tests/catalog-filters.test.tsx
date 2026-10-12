@@ -18,7 +18,7 @@ vi.mock('@/components/ProductCard', () => ({ default: ({ product }: { product: {
 vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn(), getCategories: vi.fn(async () => [{ category_id: 3, name: 'Clothing' }]) } }));
 
 const result = { products: [], page: 1, limit: 20, total: 60, totalPages: 3 } as ProductList;
-beforeEach(() => { installCatalogRouter(router, query); query.current = new URLSearchParams(); vi.mocked(productApi.list).mockResolvedValue(result); vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
+beforeEach(() => { installCatalogRouter(router, query); query.current = new URLSearchParams(); vi.mocked(productApi.list).mockImplementation(async params => ({ ...result, page: (params as { page: number }).page })); vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
 
 describe('catalog filter form', () => {
@@ -59,7 +59,7 @@ describe('catalog filter form', () => {
 
   it('resets page and draft on a new filtered URL, and ignores a late response for the old filter', async () => {
     const pending = deferred<ProductList>();
-    vi.mocked(productApi.list).mockImplementation(params => (params as { brand?: string }).brand === 'New' ? pending.promise : Promise.resolve({ ...result, products: [{ product_id: 1, title: 'Old item' }] } as ProductList));
+    vi.mocked(productApi.list).mockImplementation(params => (params as { brand?: string }).brand === 'New' ? pending.promise : Promise.resolve({ ...result, page: (params as { page: number }).page, products: [{ product_id: 1, title: 'Old item', price: '10.00', stock: 5, sales_count: 0, rating: 0 }] } as ProductList));
     query.current = new URLSearchParams({ brand: 'Old' });
     const view = render(<ProductListView />); await settle();
     fireEvent.click(screen.getByRole('button', { name: '3' })); await settle();
@@ -69,7 +69,7 @@ describe('catalog filter form', () => {
     expect(screen.queryByText('Old item')).not.toBeInTheDocument();
     expect(screen.getByLabelText('商品品牌')).toHaveValue('New');
     expect(vi.mocked(productApi.list).mock.lastCall![0]).toMatchObject({ brand: 'New', min_price: 0, page: 1 });
-    await act(async () => pending.resolve({ ...result, products: [{ product_id: 2, title: 'New item' }] } as ProductList));
+    await act(async () => pending.resolve({ ...result, products: [{ product_id: 2, title: 'New item', price: '10.00', stock: 5, sales_count: 0, rating: 0 }] } as ProductList));
     await settle();
     expect(screen.getByText('New item')).toBeInTheDocument();
   });

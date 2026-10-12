@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import CatalogFilters from '@/components/CatalogFilters';
 import { CATALOG_FILTER_KEYS, CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, parseCatalogPage, readCatalogDraft, type CatalogFilters as Filters } from '@/lib/catalog-filters';
 
+import { readCatalogList } from '@/lib/catalog-list-response';
+
 const LIMIT = 20;
 const subscribeHydration = () => () => {};
 const clientHydrated = () => true;
@@ -63,10 +65,12 @@ export default function ProductListView({ seed = null, initialSearch }: { seed?:
       throw error;
     }
   }, [router, scope, search]);
-  const seeded = !filterError && seed && seed.keyword === keyword && seed.sort === sort && JSON.stringify(catalogFilterParams(seed.filters ?? {})) === JSON.stringify(catalogFilterParams(filters)) && seed.list.page === page ? seed.list : undefined;
+  let seedList: ProductListResult | undefined;
+  try { if (seed) seedList = readCatalogList(seed.list, page, LIMIT); } catch { /* Invalid seeds fall back to a client read. */ }
+  const seeded = seedList && !filterError && seed && seed.keyword === keyword && seed.sort === sort && JSON.stringify(catalogFilterParams(seed.filters ?? {})) === JSON.stringify(catalogFilterParams(filters)) && seed.list.page === page ? seedList : undefined;
   const query = useQuery({
     queryKey: ['products', keyword, sort, filters, page, filterError],
-    queryFn: () => productApi.list({ keyword, sort, ...filters, page, limit: LIMIT }),
+    queryFn: async () => readCatalogList(await productApi.list({ keyword, sort, ...filters, page, limit: LIMIT }), page, LIMIT),
     enabled: !filterError,
     initialData: seeded,
   });
@@ -164,6 +168,13 @@ export default function ProductListView({ seed = null, initialSearch }: { seed?:
             navigate(`/products${params.size ? `?${params}` : ''}`);
           }} />
         </div>
+
+        {hydrated && data && query.isError && !filterError && (
+          <div role="status" className="mb-6 rounded-lg border border-red-200 p-4">
+            <p className="text-red-600">{t('加载商品失败')}</p>
+            <button onClick={() => void query.refetch({ cancelRefetch: false })} disabled={query.isFetching} className="btn btn-secondary mt-3">{t('重新加载')}</button>
+          </div>
+        )}
 
         {/* 商品列表 */}
         {filterError ? (

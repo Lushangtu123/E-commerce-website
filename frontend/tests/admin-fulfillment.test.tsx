@@ -242,3 +242,15 @@ describe('admin fulfillment', () => {
 });
 
 beforeEach(() => { orderQuery.current = new URLSearchParams(); orderQuery.listeners.clear(); installCatalogRouter(router, orderQuery); window.history.replaceState(null, '', '/admin/orders'); });
+
+
+it('rejects an incomplete successful admin order list and retries without writes', async () => {
+  let calls = 0;
+  await setup('orders', { list: async () => ++calls === 1 ? {} : defaults.orders });
+  expect(screen.getByRole('alert')).toHaveTextContent('获取订单列表失败');
+  expect(screen.queryByText('暂无订单')).not.toBeInTheDocument();
+  expect(writes).toEqual([]);
+  await click('重新加载');
+  expect(screen.getByText('ORDER-1')).toBeInTheDocument();
+  expect(writes).toEqual([]);
+});

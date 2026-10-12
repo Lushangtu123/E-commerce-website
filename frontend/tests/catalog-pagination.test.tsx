@@ -15,7 +15,7 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => ({ default: { error: vi.fn() } }));
 vi.mock('@/components/ProductCard', () => ({ default: ({ product }: { product: Product }) => <div>{product.title}</div>, ProductCardSkeleton: () => <div data-testid="skeleton" /> }));
 vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn(), getCategories: vi.fn(async () => []) } }));
-const pageResult = (page: number): ProductList => ({ products: [{ product_id: page, title: `Page ${page}` } as Product], page, limit: 20, total: 60, totalPages: 3 });
+const pageResult = (page: number): ProductList => ({ products: [{ product_id: page, title: `Page ${page}`, price: '10.00', stock: 5, sales_count: 0, rating: '0.00' } as Product], page, limit: 20, total: 60, totalPages: 3 });
 
 beforeEach(() => {
   query.current = new URLSearchParams();

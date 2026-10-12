@@ -32,8 +32,8 @@ vi.mock('@/components/ProductCard', () => ({
 vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn(), getCategories: vi.fn(async () => []) } }));
 vi.mock('@/lib/site', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/site')>(), fetchApiResult: vi.fn() }));
 
-const list = (titles: string[], totalPages = 1): ProductList =>
-  ({ products: titles.map((title, index) => ({ product_id: index + 1, title }) as Product), total: totalPages * 20, page: 1, limit: 20, totalPages });
+const list = (titles: string[], totalPages = 1, page = 1): ProductList =>
+  ({ products: titles.map((title, index) => ({ product_id: index + 1, title, price: '10.00', stock: 5, sales_count: 0, rating: '0.00' }) as Product), total: totalPages * 20, page, limit: 20, totalPages });
 const cards = (root: ParentNode = document.body) => Array.from(root.querySelectorAll('[data-testid="product-card"]')).map(card => card.textContent);
 
 /** Renders the server page the way Next does: the async page first, then its element to HTML. */
@@ -270,7 +270,7 @@ describe('server-rendered product list', () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     const second = deferred<ProductList>();
     vi.mocked(productApi.list).mockImplementation(async params => (params as { page: number }).page === 2 ? second.promise
-      : list([`Client page ${(params as { page: number }).page}`], 3));
+      : list([`Client page ${(params as { page: number }).page}`], 3, (params as { page: number }).page));
     render(<ProductListView seed={{ keyword: '', sort: 'created_at DESC', list: list(['Server page 1'], 3) }} />);
     await settle();
     expect(cards()).toEqual(['Client page 1']);
@@ -278,7 +278,7 @@ describe('server-rendered product list', () => {
     fireEvent.click(screen.getByRole('button', { name: '2' }));
     await settle();
     expect(cards()).toEqual([]);
-    await act(async () => second.resolve(list(['Client page 2'], 3)));
+    await act(async () => second.resolve(list(['Client page 2'], 3, 2)));
     await settle();
     expect(cards()).toEqual(['Client page 2']);
     expect(vi.mocked(productApi.list).mock.lastCall?.[0]).toEqual({ keyword: '', sort: 'created_at DESC', page: 2, limit: 20 });
@@ -286,7 +286,7 @@ describe('server-rendered product list', () => {
 
   it('ignores a previous-page handler from a page the list has moved past', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-    vi.mocked(productApi.list).mockImplementation(async params => list([`Page ${(params as { page: number }).page}`], 5));
+    vi.mocked(productApi.list).mockImplementation(async params => list([`Page ${(params as { page: number }).page}`], 5, (params as { page: number }).page));
     render(<ProductListView />);
     await settle();
     fireEvent.click(screen.getByRole('button', { name: '2' }));
@@ -306,9 +306,9 @@ describe('server-rendered product list', () => {
     let shrunk = false;
     vi.mocked(productApi.list).mockImplementation(async params => {
       const page = (params as { page: number }).page;
-      if (page === 3) { shrunk = true; return list([], 2); }
+      if (page === 3) { shrunk = true; return list([], 2, page); }
       if (shrunk) return fallback.promise;
-      return list([`Page ${page}`], 3);
+      return list([`Page ${page}`], 3, page);
     });
     const commits: HTMLElement[] = [];
     render(<CommitLog commits={commits}><ProductListView /></CommitLog>);
@@ -320,7 +320,7 @@ describe('server-rendered product list', () => {
     expect(query.current.get('page')).toBe('2');
     expect(router.replace).toHaveBeenCalledTimes(1);
     expect(commits.some(commit => commit.textContent?.includes('暂无商品'))).toBe(false);
-    await act(async () => fallback.resolve(list(['Remaining page two'], 2)));
+    await act(async () => fallback.resolve(list(['Remaining page two'], 2, 2)));
     await settle();
     expect(cards()).toEqual(['Remaining page two']);
     expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled();
@@ -331,7 +331,7 @@ describe('server-rendered product list', () => {
     let empty = false;
     vi.mocked(productApi.list).mockImplementation(async params => {
       if ((params as { page: number }).page === 2) empty = true;
-      return empty ? { ...list([], 0), total: 0 } : list(['Initial products'], 2);
+      return empty ? { ...list([], 0, (params as { page: number }).page), total: 0 } : list(['Initial products'], 2);
     });
     render(<ProductListView />);
     await settle();
@@ -417,4 +417,35 @@ describe('URL page server rendering', () => {
     expect(new URL(vi.mocked(fetchApiResult).mock.lastCall![0], 'http://api.test').searchParams.get('page')).toBe('1');
     expect(cards(container)).toEqual(['Safe first page']);
   });
+});
+
+
+describe('catalog successful response boundary', () => {
+  it.each([null, {}, { products: [], page: 1, limit: 20, total: 0, totalPages: 2 }])('falls back from an invalid server seed %j', async body => {
+    const { container } = await serverRender({}, { kind: 'ok', data: body as ProductList });
+    expect(cards(container)).toEqual([]);
+    expect(container.querySelector('[data-testid="product-skeleton"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('暂无商品');
+  });
+  it('offers a read-only retry for an incomplete 200 rather than an empty catalog', async () => {
+    vi.mocked(productApi.list).mockResolvedValueOnce({} as ProductList).mockResolvedValueOnce(list(['Recovered product']));
+    render(<ProductListView />); await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载商品失败');
+    expect(screen.queryByText('暂无商品')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' })); await settle();
+    expect(cards()).toEqual(['Recovered product']);
+    expect(productApi.list).toHaveBeenCalledTimes(2);
+  });
+});
+
+it('retains validated server cards and offers an explicit retry after a malformed refresh', async () => {
+  vi.mocked(productApi.list).mockResolvedValueOnce({} as ProductList).mockResolvedValueOnce(list(['Fresh product']));
+  render(<ProductListView seed={{ keyword: '', sort: 'created_at DESC', list: list(['Server product']) }} />);
+  await settle();
+  expect(cards()).toEqual(['Server product']);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('加载商品失败');
+  fireEvent.click(screen.getByRole('button', { name: '重新加载' })); await settle();
+  expect(cards()).toEqual(['Fresh product']);
+  expect(productApi.list).toHaveBeenCalledTimes(2);
 });

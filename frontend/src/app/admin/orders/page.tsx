@@ -2,9 +2,10 @@
 
 import '@/lib/admin-i18n';
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { readAdminOrders } from '@/lib/admin-list-response';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
-import type { AdminOrderRow, AdminPage } from '@/lib/api';
+import type { AdminOrderRow } from '@/lib/api';
 import { useAdminSession } from '@/hooks/use-admin-session';
 import { translate, useI18n } from '@/lib/i18n';
 import toast from 'react-hot-toast';
@@ -97,9 +98,10 @@ function AdminOrdersContent() {
     const operation = { key }; pendingLoad.current = operation;
     const revision = ++request.current; setResult(null);
     try {
-      const data = await api.get<unknown, AdminPage & { orders?: AdminOrderRow[] }>('/admin/orders', { params: { page, limit: 20, ...Object.fromEntries(orderFilterKeys.filter(name => filters[name]).map(name => [name, filters[name]])) } });
+      const response = await api.get<unknown, unknown>('/admin/orders', { params: { page, limit: 20, ...Object.fromEntries(orderFilterKeys.filter(name => filters[name]).map(name => [name, filters[name]])) } });
       if (!active() || revision !== request.current) return;
-      let total = Number(data.pagination?.total) || 0;
+      const data = readAdminOrders(response, { page, status: filters.status, userId: filters.userId });
+      let total = data.pagination!.total!;
       if (page > Math.max(1, Math.ceil(total / 20))) { changePage(Math.max(1, Math.min(10000, Math.ceil(total / 20))), true); return; }
       const rows = (data.orders || []).map(order => {
         const checked = confirmed.current.get(order.order_id);

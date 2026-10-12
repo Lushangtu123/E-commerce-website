@@ -30,7 +30,7 @@ const keywordParam = (kind: Kind) => kind === 'orders' ? 'orderNo' : 'keyword';
 const row = (kind: Kind, id = 1, title = 'Current rows') => kind === 'products'
   ? { product_id: id, title, price: '10.00', stock: 5, category_id: 1, status: 1 }
   : kind === 'users'
-    ? { user_id: id, username: title, status: 1, created_at: '2026-10-02' }
+    ? { user_id: id, username: title, email: `user${id}@example.test`, status: 1, created_at: '2026-10-02' }
     : { order_id: id, order_no: title, status: 0, total_amount: '10.00', created_at: '2026-10-02' };
 const result = (kind: Kind, title = 'Current rows') => ({ [kind]: [row(kind, 1, title)], pagination: { total: 40, totalPages: 2 } });
 const originalAdapter = api.defaults.adapter;

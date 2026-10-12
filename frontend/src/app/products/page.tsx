@@ -5,6 +5,8 @@ import type { ProductList } from '@/lib/api';
 import { fetchApiResult } from '@/lib/site';
 import { CATALOG_SORTS, catalogFilterParams, parseCatalogFilters, parseCatalogPage, readCatalogDraft } from '@/lib/catalog-filters';
 
+import { readCatalogList } from '@/lib/catalog-list-response';
+
 type SearchParams = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) || '';
 
@@ -16,7 +18,9 @@ async function loadSeed(params: SearchParams): Promise<ProductListSeed | null> {
   if (error || !CATALOG_SORTS.includes(sort)) return null;
   const search = new URLSearchParams({ ...(keyword && { keyword }), sort, ...catalogFilterParams(filters), page: String(parseCatalogPage(params.page)), limit: '20' });
   const result = await fetchApiResult<ProductList>(`/products?${search}`, { revalidate: 60 });
-  return result.kind === 'ok' && Array.isArray(result.data.products) ? { keyword, sort, filters, list: result.data } : null;
+  if (result.kind !== 'ok') return null;
+  try { return { keyword, sort, filters, list: readCatalogList(result.data, parseCatalogPage(params.page)) }; }
+  catch { return null; }
 }
 
 // Server-rendered so shared links already carry their requested page of products.
