@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getPool } from '../database/mysql';
 import { adminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
+import { literalSubstringPattern } from '../utils/literal-like';
 import logger from '../utils/logger';
 import { AdminQueryError, adminEmptyQuerySchema, adminUserOrdersQuerySchema, adminUserPathId, adminUsersQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 
@@ -15,8 +16,8 @@ export const getAdminUsers = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (keyword) {
-      whereClause += ' AND (u.username LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)';
-      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+      whereClause += " AND (u.username LIKE ? ESCAPE '!' OR u.email LIKE ? ESCAPE '!' OR u.phone LIKE ? ESCAPE '!')";
+      params.push(...Array(3).fill(literalSubstringPattern(keyword)));
     }
     if (status !== undefined) {
       whereClause += ' AND u.status = ?';
