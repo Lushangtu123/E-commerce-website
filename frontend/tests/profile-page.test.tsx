@@ -4,6 +4,7 @@ import ProfilePage from '@/app/profile/page';
 import { userApi, type UserStats } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { CommitLog, deferred, render, settle } from './helpers';
 
 // Next returns the same router on every render; pages list it as an effect dependency.
@@ -17,9 +18,9 @@ const stats: UserStats = { totalOrders: 17, pendingOrders: 3, totalCoupons: 11, 
 const customerA = { user_id: 1, username: 'Customer A', email: 'a@example.test' };
 const customerB = { user_id: 2, username: 'Customer B', email: 'b@example.test' };
 
-async function setup(getStats: () => Promise<Stats> = async () => ({ stats })) {
+async function setup(getStats: () => Promise<unknown> = async () => ({ stats })) {
   useAuthStore.getState().login(customerA, 'A');
-  vi.mocked(userApi.getStats).mockImplementation(getStats);
+  vi.mocked(userApi.getStats).mockImplementation(async () => await getStats() as Stats);
   const commits: HTMLElement[] = [];
   const view = render(<CommitLog commits={commits}><ProfilePage /></CommitLog>);
   await settle();
@@ -58,6 +59,80 @@ describe('profile page', () => {
     expect(attempts).toBe(2);
     expect(counts('我的订单')).toContain('17');
     expect(screen.queryByText(/统计数据加载失败/)).not.toBeInTheDocument();
+  });
+
+  it.each(['zh-CN', 'en'] as const)('recovers from a null stats reply with a read-only retry in %s', async locale => {
+    useLocaleStore.getState().setLocale(locale);
+    let attempts = 0;
+    await setup(async () => ++attempts === 1 ? null : { stats });
+    const error = locale === 'en' ? 'Could not load account statistics. Please try again' : '统计数据加载失败，请重试';
+    const retry = locale === 'en' ? 'Reload statistics' : '重新加载统计';
+    const orders = locale === 'en' ? 'My orders' : '我的订单';
+
+    expect(screen.getByRole('alert')).toHaveTextContent(error);
+    expect(counts(orders)).toContain('—');
+    await settle();
+    expect(attempts).toBe(1);
+    expect(userApi.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem('session')).toBe('A');
+
+    fireEvent.click(screen.getByRole('button', { name: retry }));
+    await settle();
+
+    expect(attempts).toBe(2);
+    expect(counts(orders)).toContain('17');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(userApi.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem('session')).toBe('A');
+  });
+
+  it.each([
+    undefined, {}, [], 'stats', { stats: null }, { stats: [] }, { stats: {} },
+    { stats, success: false }, { stats, error: '获取个人统计失败' },
+  ].map(response => ({ response })))('rejects a malformed stats envelope $response without publishing counts', async ({ response }) => {
+    await setup(async () => response);
+    expect(screen.getByRole('alert')).toHaveTextContent('统计数据加载失败，请重试');
+    expect(counts('我的订单')).toContain('—');
+    expect(screen.getByRole('button', { name: '重新加载统计' })).toBeInTheDocument();
+    expect(userApi.getStats).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(Object.keys(stats) as (keyof UserStats)[])('rejects an invalid %s count before publishing other counts', async field => {
+    await setup(async () => ({ stats: { ...stats, [field]: '4' } }));
+    expect(screen.getByRole('alert')).toHaveTextContent('统计数据加载失败，请重试');
+    expect(counts('我的订单')).toContain('—');
+    expect(counts('可用优惠券')).toContain('—');
+    expect(counts('我的收藏')).toContain('—');
+    expect(counts('待支付')).toContain('—');
+  });
+
+  it.each([undefined, null, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, true])('rejects a non-count value %s', async value => {
+    await setup(async () => ({ stats: { ...stats, totalOrders: value } }));
+    expect(screen.getByRole('alert')).toHaveTextContent('统计数据加载失败，请重试');
+    expect(counts('我的订单')).toContain('—');
+  });
+
+  it('preserves a successful snapshot with all five counts at zero', async () => {
+    await setup(async () => ({ stats: { totalOrders: 0, pendingOrders: 0, totalCoupons: 0, availableCoupons: 0, favoriteCount: 0 } }));
+    for (const label of ['我的订单', '可用优惠券', '我的收藏', '待支付']) expect(counts(label)).toContain('0');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重新加载统计' })).not.toBeInTheDocument();
+    expect(userApi.getStats).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores customer A's late malformed stats after customer B signs in", async () => {
+    const previous = deferred<unknown>();
+    let attempts = 0;
+    await setup(() => ++attempts === 1 ? previous.promise : Promise.resolve({ stats: { ...stats, totalOrders: 29 } }));
+    switchToB();
+    await settle();
+
+    await act(async () => previous.resolve(null));
+    await settle();
+
+    expect(counts('我的订单')).toContain('29');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it("ignores customer A's late counts after customer B signs in", async () => {

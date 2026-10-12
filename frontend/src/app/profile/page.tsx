@@ -1,10 +1,12 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { signOut } from '@/lib/sign-out';
 import { userApi } from '@/lib/api';
+import { readProfileStatsResponse } from '@/lib/profile-stats-response';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -34,7 +36,7 @@ export default function ProfilePage() {
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const avatarKey = JSON.stringify([user?.user_id, user?.avatar_url]);
   const avatar = user?.avatar_url && /^https?:\/\/\S+$/i.test(user.avatar_url) && failedAvatar !== avatarKey ? user.avatar_url : null;
-  const query = useSessionQuery({ name: 'user-stats', params: [], load: () => userApi.getStats() });
+  const query = useSessionQuery({ name: 'user-stats', params: [], load: async () => readProfileStatsResponse(await userApi.getStats()) });
   const stats = query.data?.stats;
   const error = query.error ? '统计数据加载失败，请重试' : undefined;
   const loading = !query.data && !error;
@@ -44,7 +46,7 @@ export default function ProfilePage() {
   }, [query.error]);
 
   useEffect(() => {
-    if (isHydrated && !isAuthenticated) router.push('/login');
+    if (isHydrated && !isAuthenticated) router.push(customerLoginHref());
   }, [isHydrated, isAuthenticated, router]);
 
   const handleLogout = () => {

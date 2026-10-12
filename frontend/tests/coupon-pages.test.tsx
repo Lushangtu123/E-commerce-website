@@ -41,6 +41,8 @@ async function setup(page: string, coupons: Coupon[] = [coupon]) {
   localStorage.setItem('admin_session', 'admin-session');
   localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin' }));
   for (const fn of [couponApi.getAvailable, couponApi.getMyCoupons, adminCouponApi.getList]) vi.mocked(fn).mockResolvedValue({ data: coupons } as never);
+  vi.mocked(couponApi.getAvailable).mockResolvedValue({ success: true, data: coupons,
+    pagination: { page: 1, page_size: 50, total: coupons.length, total_pages: Math.ceil(coupons.length / 50) } } as never);
   vi.mocked(couponApi.getMyCoupons).mockResolvedValue(myResponse(coupons) as never);
   const Page = pages[page];
   const view = render(<Page />);
