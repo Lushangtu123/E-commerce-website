@@ -4,7 +4,7 @@ import '@/lib/admin-i18n';
 import { useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
 import { readDashboardStats, readDashboardOrders, readDashboardProducts, readDashboardTrend } from '@/lib/dashboard-response';
@@ -78,9 +78,12 @@ function StatCard({ icon, title, value, growth, color }: StatCardProps) {
   );
 }
 
+const subscribeNever = () => () => {};
+
 export default function AdminDashboardPage() {
   const { t, formatDate, locale } = useI18n();
-  const [mounted, setMounted] = useState(false);
+  // Charts render only in the browser: false during server rendering and hydration, true afterwards.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const statsQuery = useDashboardQuery('dashboard-stats', async () =>
     readDashboardStats(await api.get<unknown, unknown>('/admin/dashboard/stats')));
   const ordersQuery = useDashboardQuery('dashboard-recent-orders', async () =>
@@ -97,10 +100,6 @@ export default function AdminDashboardPage() {
   const ordersError = dashboardError(ordersQuery.error);
   const productsError = dashboardError(productsQuery.error);
   const trendError = dashboardError(trendQuery.error);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const getStatusBadge = (status: number) => {
     const statusMap: Record<number, { text: string; class: string }> = {
