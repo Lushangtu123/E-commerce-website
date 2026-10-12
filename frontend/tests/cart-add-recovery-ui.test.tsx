@@ -18,7 +18,7 @@ vi.mock('@vercel/analytics/next', () => ({ Analytics: () => null }));
 vi.mock('@vercel/speed-insights/next', () => ({ SpeedInsights: () => null }));
 vi.mock('react-hot-toast', () => ({ Toaster: () => null, default: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
-  productApi: { getDetail: vi.fn(async () => ({ product: { product_id: 1, title: 'Item', price: 10, stock: 20, has_sku: true,
+  productApi: { getDetail: vi.fn(async () => ({ product: { product_id: 1, title: 'Item', price: 10, stock: 20, sales_count: 0, rating: 0, has_sku: true,
     skus: [{ sku_id: 5, product_id: 1, sku_code: 'RED', specs: { Color: 'Red' }, price: 12, stock: 10, status: 1 },
       { sku_id: 6, product_id: 1, sku_code: 'BLUE', specs: { Color: 'Blue' }, price: 15, stock: 10, status: 1 }] } })) },
   cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: true })), list: vi.fn(async () => ({ items: [] })) },

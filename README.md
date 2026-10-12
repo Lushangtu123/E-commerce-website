@@ -46,6 +46,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 - Product list (pagination and sorting)
 - Promotion badges and crossed-out original prices appear only when the original price exceeds the selling price, including decimal strings returned by MySQL
 - Product details
+- Product detail replies must match the requested product and contain usable prices, inventory and variant data before purchase controls unlock. Malformed successful replies keep the server-rendered product visible with purchases disabled and offer a bilingual, read-only retry; retrying does not record another browse or submit a purchase.
 - **Product SKUs** - Products with multiple variants; the selected variant owns its selling and original prices. A variant without an original price does not inherit a parent discount. Catalog, search and recommendations pair the lowest enabled SKU price with that same SKU’s original price (ties use the lowest SKU ID).
 - Categories and filtering
 - Product search (full-text with Elasticsearch when configured; falls back to MySQL otherwise or when Elasticsearch fails)
@@ -372,6 +373,8 @@ MySQL search splits keywords on whitespace and requires every term to appear in 
 - `GET /api/favorites/check/:product_id` - Check whether a product is a favourite
 - `POST /api/favorites/check-multiple` - Check several products; body `{ product_ids }` (1–100 positive integers)
 
+Product details enable favorite writes only after reading an explicit boolean state. Add, already-present and remove acknowledgements must match the API contract before displaying success. An invalid acknowledgement enters the existing read-only reconciliation flow; it never causes another automatic write. Malformed or failed state reads keep writes blocked and expose a retry scoped to the current product and sign-in.
+
 ### Search APIs
 - `GET /api/search/es` - Product search: full-text with Elasticsearch when configured, MySQL otherwise (public; searches by signed-in users are added to their history)
 - `GET /api/search/hot` - Popular searches
@@ -379,6 +382,8 @@ MySQL search splits keywords on whitespace and requires every term to appear in 
 - `POST /api/search/record` - Record a search
 - `GET /api/search/history` - The user's search history (sign-in required)
 - `DELETE /api/search/history` - Clear the user's search history (sign-in required)
+
+The header distinguishes an initial history read failure from an empty history and offers a bilingual read-only retry. Repeated clicks share one active read; account changes retire old responses, and recording or deleting a search supersedes older snapshots. Existing uncertain deletion recovery remains available.
 - `DELETE /api/search/history/:keyword` - Delete one search entry (sign-in required)
 
 ### Browsing History APIs

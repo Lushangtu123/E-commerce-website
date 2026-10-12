@@ -17,7 +17,9 @@ import ProductReviewList from '@/components/ProductReviewList';
 import RelatedProducts from '@/components/RelatedProducts';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import { validFavoriteAcknowledgement, validFavoriteState } from '@/lib/favorite-response';
 import { storeBuyNow, type BuyNowIntent } from '@/lib/buy-now';
+import { validProductDetailResponse } from '@/lib/product-detail-response';
 
 /**
  * The product page. The server renders `initialProduct` so the HTML carries the product; the
@@ -130,7 +132,9 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     favoriteReadRequest.current = operation;
     const isCurrentRequest = () => active && isCurrentContext() && favoriteReadRequest.current === operation;
     favoriteApi.check(productId).then(data => {
-      if (isCurrentRequest()) setFavoriteState({ context, revision: favoriteRetry, selected: data.is_favorited, error: false });
+      if (!isCurrentRequest()) return;
+      if (!validFavoriteState(data)) throw new Error('Invalid favorite state');
+      setFavoriteState({ context, revision: favoriteRetry, selected: data.is_favorited, error: false });
     }).catch(error => {
       if (!isCurrentRequest()) return;
       logger.error('检查收藏状态失败:', error);
@@ -200,6 +204,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     setSelectedSkuId(undefined);
     productApi.getDetail(productId).then(data => {
       if (!isCurrentRequest()) return;
+      if (!validProductDetailResponse(data, productId)) throw new Error('Invalid product detail');
       setLoadedProduct(data.product);
       setLoadedContext(context);
     }).catch(error => {
@@ -307,6 +312,7 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     try {
       const data = await (selected ? favoriteApi.add(productId) : favoriteApi.remove(productId));
       if (!isCurrentContext()) return;
+      if (!validFavoriteAcknowledgement(data, selected)) throw new Error('Invalid favorite acknowledgement');
       setFavoriteState({ context, revision: favoriteRetry, selected, error: false });
       toast.success(translate(data.message));
     } catch (error) {

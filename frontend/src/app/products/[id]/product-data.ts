@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import type { Product } from '@/lib/api';
 import { fetchApiResult, type ApiResult } from '@/lib/site';
+import { validProductDetailResponse } from '@/lib/product-detail-response';
 
 const isProductId = (id: string) => /^[1-9]\d{0,9}$/.test(id);
 
@@ -17,5 +18,5 @@ export async function resolveProduct(id: string): Promise<Product | null> {
   if (!isProductId(id)) notFound();
   const result = await loadProduct(id);
   if (result.kind === 'missing') notFound();
-  return result.kind === 'ok' && result.data.product?.title ? result.data.product : null;
+  return result.kind === 'ok' && validProductDetailResponse(result.data, Number(id)) ? result.data.product : null;
 }

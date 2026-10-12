@@ -46,7 +46,7 @@ function transport({ initial = false, loseWrite = false, commitFirst = true, rea
         saved = config.url === '/favorites/toggle' ? !saved : config.method === 'post';
       }
       if (writes === 1 && loseWrite) throw new AxiosError('Response lost', AxiosError.ERR_NETWORK, config);
-      data = { message: saved ? '收藏成功' : '取消收藏成功', is_favorited: saved };
+      data = saved ? { message: '收藏成功', favorite_id: 1 } : { message: '取消收藏成功' };
     } else throw new Error(`Unexpected request ${config.method} ${config.url}`);
     return { config, status: 200, statusText: 'OK', headers: {}, data };
   };
