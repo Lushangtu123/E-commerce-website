@@ -426,6 +426,7 @@ The account centre shows statistics from the server and can retry failed loads; 
 - `POST /api/orders/:id/after-sales/return-tracking` - Submit one return parcel for an approved, open return request owned by the customer
 - `POST /api/admin/after-sales/:id/complete` - Record manual processing and close an approved request, with `order:edit`; nonzero refunds require a reference and cannot exceed the amount paid, demo payments allow zero only, returns require a parcel first
 - `GET /api/admin/after-sales`, `POST /api/admin/after-sales/:id/review` - Admin list and review; at most one request per order, and approval does not refund or restore stock automatically
+- `GET /api/admin/after-sales/:id` - Latest progress of one request by its ID, with `order:view`; 404 if it does not exist
 
 After-sales progress requires eight nullable columns. Before deploying, back up `after_sales_requests`, build the backend, then check using the target database configuration with `npm run schema:after-sales` in `backend`. If it reports `migration_required`, run `npm run migrate:after-sales` after approval and check again for `ready`. The migration is repeatable and preserves legacy request status, orders, stock and payments; keep the new columns when rolling code back. Builds and API requests never run it automatically.
 
@@ -474,6 +475,7 @@ Available-coupon reads validate rules, quantities and requested pagination befor
 - `GET /api/admin/coupons` - Coupon list
 - `GET /api/admin/coupons/:id` - Coupon details
 - `PUT /api/admin/coupons/:id/status` - Update coupon status
+- `GET /api/admin/coupons/by-code/:code` - Look up a coupon by its unique code to confirm a creation result, with `coupon:view`
 
 ### Recommendation APIs
 - `GET /api/recommendations/personalized` - Personalised recommendations from browsing history (sign-in required)
@@ -528,6 +530,7 @@ Administrator status changes and their audit record commit in one transaction. A
 
 ### Operations
 - `GET /health`, `GET /api/health` - Health check; returns 503 only when MySQL or Redis is down (RabbitMQ and Elasticsearch are reported as optional)
+- `GET /api/openapi.json` - OpenAPI specification (also browsable at `/api-docs`)
 - `POST /api/internal/order-timeouts` - Cancels timed-out orders for an external scheduler; requires `Authorization: Bearer <CRON_SECRET>`
 
 ## Performance
