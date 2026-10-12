@@ -21,11 +21,25 @@ beforeEach(() => {
   vi.spyOn(reviewApi, 'listByProduct').mockResolvedValue({ reviews: [], total: 0, totalPages: 0 });
   vi.spyOn(browseApi, 'record').mockResolvedValue({} as never);
   vi.spyOn(favoriteApi, 'check').mockResolvedValue({ is_favorited: true });
-  vi.spyOn(favoriteApi, 'add').mockResolvedValue({ message: '收藏成功' });
+  vi.spyOn(favoriteApi, 'add').mockResolvedValue({ message: '收藏成功', favorite_id: 1 });
   vi.spyOn(favoriteApi, 'remove').mockResolvedValue({ message: '取消收藏成功' });
   vi.spyOn(favoriteApi, 'toggle');
 });
 describe('favorite state recovery', () => {
+  it('an invalid favorite read stays locked until a read-only retry confirms the state', async () => {
+    vi.mocked(favoriteApi.check).mockResolvedValueOnce({} as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载收藏状态失败，请重试');
+    const action = screen.getByRole('button', { name: '收藏' });
+    expect(action).toBeDisabled(); await captureHandler(action)();
+    expect(favoriteApi.add).not.toHaveBeenCalled(); expect(favoriteApi.remove).not.toHaveBeenCalled();
+    const retry = screen.getByRole('button', { name: '重新加载收藏状态' });
+    clickTogether(retry, retry); await settle();
+    expect(favoriteApi.check).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: '取消收藏' })).toBeEnabled();
+    expect(productApi.getDetail).toHaveBeenCalledTimes(1);
+    expect(browseApi.record).toHaveBeenCalledTimes(1);
+  });
   it('blocks both the rendered action and a captured handler until the state is known', async () => {
     const pending = deferred<{ is_favorited: boolean }>();
     vi.mocked(favoriteApi.check).mockReturnValueOnce(pending.promise);

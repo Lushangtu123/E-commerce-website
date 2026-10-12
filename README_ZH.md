@@ -350,6 +350,8 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - `GET /api/favorites/check/:product_id` - 检查是否已收藏
 - `POST /api/favorites/check-multiple` - 批量检查，body 为 `{ product_ids }`（1–100 个正整数）
 
+商品详情仅在读到明确的布尔收藏状态后允许修改；添加、已收藏和取消的回执需符合接口契约才提示成功。回执异常会进入已有的只读状态核对流程，不自动重复写入；状态响应异常或读取失败时继续阻止修改，提供针对当前商品和登录会话的重试。
+
 ### 搜索相关 (Search APIs) 🆕
 - `GET /api/search/es` - 商品搜索：配置 Elasticsearch 时全文搜索，否则回退 MySQL（公开，登录用户记入本人搜索历史）
 - `GET /api/search/hot` - 获取热门搜索
