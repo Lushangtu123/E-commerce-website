@@ -15,6 +15,7 @@ async function traceMiddleClick(context, page, perform) {
   };
   const trace = [];
   const popups = [];
+  const pendingRequests = new Map();
   const cdp = await context.newCDPSession(page);
   await cdp.send('Page.enable');
   cdp.on('Page.windowOpen', event => trace.push({ event: 'windowOpen', url: safeUrl(event.url), userGesture: event.userGesture }));
@@ -27,9 +28,16 @@ async function traceMiddleClick(context, page, perform) {
     popup.on('crash', () => trace.push({ event: 'crash' }));
   };
   const onFailure = request => {
+    pendingRequests.delete(request);
     if (request.isNavigationRequest()) trace.push({ event: 'navigationFailure', url: safeUrl(request.url()), error: request.failure()?.errorText });
   };
+  const onRequest = request => pendingRequests.set(request, { url: safeUrl(request.url()), method: request.method(), type: request.resourceType() });
+  const onFinished = request => pendingRequests.delete(request);
+  const onResponse = response => {
+    if (response.request().isNavigationRequest()) trace.push({ event: 'navigationResponse', url: safeUrl(response.url()), status: response.status() });
+  };
   context.on('page', onPage); context.on('requestfailed', onFailure);
+  context.on('request', onRequest); context.on('requestfinished', onFinished); context.on('response', onResponse);
   await page.evaluate(() => {
     window.__ecommerceMiddleClickTrace = [];
     if (window.__ecommerceMiddleClickObserver) return;
@@ -72,12 +80,24 @@ async function traceMiddleClick(context, page, perform) {
       });
       return { url: safeUrl(popup.url()), ...state };
     }));
-    console.error('NATIVE_MIDDLE_CLICK_DIAGNOSTICS', JSON.stringify({ source: safeUrl(page.url()), input, trace,
-      pages: context.pages().map(popup => safeUrl(popup.url())), documents, lifecycleReplay,
+    const beforeActivation = { trace: trace.slice(), pendingRequests: [...pendingRequests.values()] };
+    // A real user inspects a middle-clicked background tab by switching to it. Observe whether
+    // that releases the stalled document, only after preserving the original failure evidence.
+    const activation = await Promise.all(popups.map(async popup => {
+      const switched = await sample(async () => { await popup.bringToFront(); return { switched: true }; });
+      const loaded = await sample(async () => { await popup.waitForLoadState('load', { timeout: 1000 }); return { loaded: true }; });
+      const document = await sample(() => popup.evaluate(() => ({ readyState: document.readyState,
+        heading: document.querySelector('h1')?.textContent })));
+      return { url: safeUrl(popup.url()), switched, loaded, document };
+    }));
+    console.error('NATIVE_MIDDLE_CLICK_DIAGNOSTICS', JSON.stringify({ source: safeUrl(page.url()), input, ...beforeActivation,
+      pages: context.pages().map(popup => safeUrl(popup.url())), documents, lifecycleReplay, activation,
+      activationEvents: trace.slice(beforeActivation.trace.length),
       targets: (targets.targetInfos || []).filter(target => target.type === 'page').map(target => ({ url: safeUrl(target.url), attached: target.attached })) }));
     throw error;
   } finally {
     context.off('page', onPage); context.off('requestfailed', onFailure);
+    context.off('request', onRequest); context.off('requestfinished', onFinished); context.off('response', onResponse);
     // A closed source page may already detach CDP; cleanup must retain the navigation failure.
     await cdp.detach().catch(() => {});
   }
