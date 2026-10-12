@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -47,7 +47,9 @@ export default function AdminSKUPage() {
   const sessionId = useAdminSessionId();
   const queryClient = useQueryClient();
   const key = JSON.stringify([sessionId, productId]);
-  const currentKey = useRef(key); currentKey.current = key;
+  const currentKey = useRef(key);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
+  currentKey.current = key;
   const [editor, setEditor] = useState<Editor | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const mutation = useRef<object | null>(null);
@@ -69,13 +71,14 @@ export default function AdminSKUPage() {
   });
   const data = query.data;
   // Handlers act only on the list they were rendered with, not on one a refresh has since replaced.
-  const displayedData = useRef(data); displayedData.current = data;
+  const displayedData = useRef(data);
+  useLayoutEffect(() => { displayedData.current = data; });
   const loadError = query.error
     ? refreshAfterSave === key ? '规格已保存，但列表刷新失败，请重新加载' : requestFailure(query.error).response?.data?.error || '获取SKU列表失败'
     : undefined;
   const loading = !data && !loadError;
   const isCurrent = () => query.isCurrentSession() && currentKey.current === key;
-  const unresolved = recovering?.key === key && isCurrent() ? recovering : null;
+  const unresolved = recovering?.key === key && query.isCurrentSession() ? recovering : null;
   const busy = pendingKey === key || !!unresolved;
   const writeLocked = () => !!mutation.current || recovery.current?.key === key;
   const isDisplayed = () => isCurrent() && !!data && displayedData.current === data;
@@ -83,6 +86,7 @@ export default function AdminSKUPage() {
 
   // The editor, a pending change and notices belong to the administrator and product they were made for.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The editor, pending change and notices belong to the previous administrator or product.
     replaceEditor(null); mutation.current = null; recovery.current = null; setRecovering(null); setPendingKey(null); setNotice(null); setRefreshAfterSave(null);
   }, [key]);
 

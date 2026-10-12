@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
@@ -58,11 +58,13 @@ export default function AdminUserDetailPage() {
   const sessionId = useAdminSessionId();
   const detailKey = JSON.stringify([sessionId, userId]);
   const currentDetail = useRef(detailKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
   currentDetail.current = detailKey;
   const [view, setView] = useState({ key: detailKey, page: 1 });
   const page = view.key === detailKey ? view.page : 1;
   const orderKey = JSON.stringify([detailKey, page]);
   const currentOrders = useRef(orderKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
   currentOrders.current = orderKey;
   const detailQuery = useAdminQuery({
     name: 'user-detail', params: [userId], enabled: userId !== null,
@@ -91,9 +93,10 @@ export default function AdminUserDetailPage() {
   const beyondLastPage = ordersQuery.data !== undefined && page > lastPage;
   const shownOrders = beyondLastPage ? undefined : ordersQuery.data;
   const displayedOrders = useRef(shownOrders);
-  displayedOrders.current = shownOrders;
+  useLayoutEffect(() => { displayedOrders.current = shownOrders; });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A shrunken list moves to its last page once, when the page falls out of range.
     if (beyondLastPage) setView({ key: detailKey, page: lastPage });
   }, [beyondLastPage, detailKey, lastPage]);
   useEffect(() => {

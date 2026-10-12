@@ -2,7 +2,7 @@
 
 import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '@/components/AdminLayout';
 import { adminCouponApi } from '@/lib/api';
@@ -32,9 +32,9 @@ export default function AdminCouponsPage() {
   const ownsDraft = draft.sessionId === sessionId;
   const scopeKey = JSON.stringify([sessionId, page, status]);
   const currentScope = useRef(scopeKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
   currentScope.current = scopeKey;
   const displayedDraft = useRef(ownsDraft ? draft : undefined);
-  displayedDraft.current = ownsDraft ? draft : undefined;
   const mutation = useRef<object | null>(null);
   const retry = useRef<object | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
@@ -56,7 +56,8 @@ export default function AdminCouponsPage() {
   const shown = beyondLastPage ? undefined : query.data;
   // Retire actions captured from rows a refresh has replaced, even within the same page and filter.
   const displayed = useRef(shown);
-  displayed.current = shown;
+  // Committed values only: handlers compare them with the values they captured.
+  useLayoutEffect(() => { displayed.current = shown; displayedDraft.current = ownsDraft ? draft : undefined; });
   const coupons = shown?.data || [];
   const total = Number(shown?.pagination?.total) || coupons.length;
   const loadError = query.error ? requestFailure(query.error).response?.data?.error || requestFailure(query.error).response?.data?.message || '获取优惠券列表失败' : undefined;
@@ -82,6 +83,7 @@ export default function AdminCouponsPage() {
   useEffect(() => {
     mutation.current = null;
     retry.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Drop the previous administrator's recovery, drafts and pending writes before the new session acts.
     recovery.current = null; setRecovering(null); setStorageError(null);
     setPendingSessionId(null);
     setDraft({ sessionId, open: false, values: EMPTY_COUPON_FORM });
@@ -96,6 +98,7 @@ export default function AdminCouponsPage() {
   }, [sessionId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A shrunken list moves to its last page once, when the page falls out of range.
     if (beyondLastPage) setView({ sessionId, page: lastPage, status });
   }, [beyondLastPage, lastPage, sessionId, status]);
 
@@ -113,16 +116,18 @@ export default function AdminCouponsPage() {
 
   // Install only a valid snapshot for the currently displayed page. Cancel older list requests
   // before this read, so they cannot put stale actionable rows back after reconciliation.
-  latestRead.current = async canonical => {
-    if (!isCurrentScope()) return false;
-    await queryClient.cancelQueries({ queryKey: ['admin', 'coupons', sessionId] });
-    if (!isCurrentScope()) return false;
-    const actual = readCouponPage(status === '' ? await adminCouponApi.getList(page, PAGE_SIZE) : await adminCouponApi.getList(page, PAGE_SIZE, Number(status)), page, PAGE_SIZE, status);
-    if (!isCurrentScope()) return false;
-    if (actual.data.some(row => (row.coupon_id === canonical.coupon_id || row.code.toUpperCase() === canonical.code.toUpperCase()) && !matchesCouponSnapshot(row, canonical))) throw new Error('Coupon snapshot changed during confirmation');
-    queryClient.setQueryData(['admin', 'coupons', sessionId, page, status], actual);
-    return true;
-  };
+  useLayoutEffect(() => {
+    latestRead.current = async canonical => {
+      if (!isCurrentScope()) return false;
+      await queryClient.cancelQueries({ queryKey: ['admin', 'coupons', sessionId] });
+      if (!isCurrentScope()) return false;
+      const actual = readCouponPage(status === '' ? await adminCouponApi.getList(page, PAGE_SIZE) : await adminCouponApi.getList(page, PAGE_SIZE, Number(status)), page, PAGE_SIZE, status);
+      if (!isCurrentScope()) return false;
+      if (actual.data.some(row => (row.coupon_id === canonical.coupon_id || row.code.toUpperCase() === canonical.code.toUpperCase()) && !matchesCouponSnapshot(row, canonical))) throw new Error('Coupon snapshot changed during confirmation');
+      queryClient.setQueryData(['admin', 'coupons', sessionId, page, status], actual);
+      return true;
+    };
+  });
 
   const changeStatus = (next: string) => {
     if (!isCurrentScope() || !['', '0', '1'].includes(next) || (page === 1 && status === next)) return;

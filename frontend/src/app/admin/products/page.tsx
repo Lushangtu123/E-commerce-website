@@ -3,7 +3,7 @@
 import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import type { AdminProductRow } from '@/lib/api';
@@ -51,6 +51,7 @@ export default function AdminProductsPage() {
 
   const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
   const currentScope = useRef(scopeKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
   const recovery = useRef<Recovery | null>(null);
@@ -78,7 +79,8 @@ export default function AdminProductsPage() {
   const shown = beyondLastPage ? undefined : query.data;
   // Handlers act only on the rows they were rendered with, not on rows a refresh has since replaced.
   const displayed = useRef(shown);
-  displayed.current = shown;
+  // Committed rows only: handlers compare them with the rows they captured.
+  useLayoutEffect(() => { displayed.current = shown; });
   const products = shown?.products || [];
   const total = Number(shown?.pagination?.total) || 0;
   const loadError = query.error ? requestFailure(query.error).response?.data?.error || '获取商品列表失败' : undefined;
@@ -108,18 +110,20 @@ export default function AdminProductsPage() {
 
   // Cancel earlier list reads before replacing the cache with this recovery snapshot.
   // A filter change during the read is checked again through the latest render's loader.
-  latestRead.current = async () => {
-    if (!isCurrentScope()) return false;
-    await queryClient.cancelQueries({ queryKey: ['admin', 'products', sessionId] });
-    if (!isCurrentScope()) return false;
-    const actual = await api.get<unknown, unknown>('/admin/products', { params: {
-      page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
-    } });
-    if (!isCurrentScope()) return false;
-    const snapshot = readAdminProducts(actual, { page, status: filters.status });
-    queryClient.setQueryData(['admin', 'products', sessionId, page, filters.keyword, filters.status], snapshot);
-    return true;
-  };
+  useLayoutEffect(() => {
+    latestRead.current = async () => {
+      if (!isCurrentScope()) return false;
+      await queryClient.cancelQueries({ queryKey: ['admin', 'products', sessionId] });
+      if (!isCurrentScope()) return false;
+      const actual = await api.get<unknown, unknown>('/admin/products', { params: {
+        page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
+      } });
+      if (!isCurrentScope()) return false;
+      const snapshot = readAdminProducts(actual, { page, status: filters.status });
+      queryClient.setQueryData(['admin', 'products', sessionId, page, filters.keyword, filters.status], snapshot);
+      return true;
+    };
+  });
 
   const selectableProducts = products.filter(product => product.status === 0 || product.status === 1);
   const selectedIds = shown && selection?.key === scopeKey ? selection.ids.filter(id => selectableProducts.some(product => product.product_id === id)) : [];
@@ -133,6 +137,7 @@ export default function AdminProductsPage() {
   useEffect(() => {
     mutation.current = null;
     recovery.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Drop the previous administrator's recovery and pending writes before the new session acts.
     setRecovering(null);
     setPendingSessionId(null);
     setShowAddModal(false);
@@ -152,12 +157,15 @@ export default function AdminProductsPage() {
 
   // A selection belongs to the page and filters it was made on, even when they are visited again.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear on every scope change so revisiting a page starts without a selection.
     setSelection(null);
   }, [scopeKey]);
 
   // Taking the only product on the final filtered page off sale leaves that page empty; show the new last page.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A shrunken list moves to its last page once, when the page falls out of range.
     if (beyondLastPage) setView({ sessionId, page: lastPage, filters });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Clamp only when the page leaves the range, not on every filter or total change.
   }, [beyondLastPage]);
 
   useEffect(() => {
