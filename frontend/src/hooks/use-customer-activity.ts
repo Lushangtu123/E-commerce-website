@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -95,7 +96,7 @@ export function useCustomerActivity<T extends { product_id: number }>(
   }, [beyondLastPage]);
 
   useEffect(() => {
-    if (isHydrated && (!isAuthenticated || !user)) router.push('/login');
+    if (isHydrated && (!isAuthenticated || !user)) router.push(customerLoginHref());
   }, [isHydrated, isAuthenticated, user, router]);
 
   const checkDeletion = async (record: DeletionRecovery) => {

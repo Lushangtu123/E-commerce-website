@@ -24,7 +24,7 @@ vi.mock('@/lib/api', () => ({
   cartApi: { add: vi.fn(async ({ add_key }) => ({ message: '添加成功', add_key, replayed: false })), list: vi.fn() },
   reviewApi: { listByProduct: vi.fn(async () => ({ reviews: [] })) },
   recommendationApi: { getRelated: vi.fn(async () => ({ related_products: [] })) },
-  favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功' })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
+  favoriteApi: { check: vi.fn(async () => ({ is_favorited: false })), add: vi.fn(async () => ({ message: '收藏成功', favorite_id: 1 })), remove: vi.fn(async () => ({ message: '取消收藏成功' })) },
   browseApi: { record: vi.fn(async () => ({})) },
 }));
 
@@ -83,12 +83,12 @@ describe('product SKU purchase', () => {
   });
 
   it('locks repeated favorite actions synchronously while an addition is pending', async () => {
-    const pending = deferred<{ message: string; is_favorited: boolean }>();
+    const pending = deferred<{ message: string; favorite_id: number }>();
     vi.mocked(favoriteApi.add).mockReturnValue(pending.promise);
     await setup(); const toggle = captureHandler(button('收藏'));
     const first = toggle(); const second = toggle();
     expect(favoriteApi.add).toHaveBeenCalledTimes(1);
-    await act(async () => pending.resolve({ message: '收藏成功', is_favorited: true }));
+    await act(async () => pending.resolve({ message: '收藏成功', favorite_id: 1 }));
     await Promise.all([first, second]); await settle();
     expect(button('取消收藏')).toBeEnabled();
   });
@@ -217,6 +217,17 @@ describe('product SKU purchase', () => {
     expect(notifications).not.toContain('已加入购物车');
   });
 
+  it.each(['加入购物车', '立即购买', '收藏'])('returns a guest to this product after %s requests sign-in, without a write', async action => {
+    window.history.replaceState(null, '', '/products/1?sku_id=101&from=search');
+    await setup({ authenticated: false, detail: async () => ({ product: { ...base, has_sku: false } }) });
+    await click(action);
+    expect(router.push.mock.calls).toEqual([['/login?next=%2Fproducts%2F1%3Fsku_id%3D101%26from%3Dsearch']]);
+    expect(additions()).toEqual([]);
+    expect(favoriteApi.add).not.toHaveBeenCalled();
+    expect(favoriteApi.remove).not.toHaveBeenCalled();
+    expect(notifications).not.toContain('已加入购物车');
+  });
+
   it('cannot fall back to plentiful base inventory when every SKU row is disabled', async () => {
     await setup({ detail: async () => ({ product: { ...base, has_sku: true, skus: [] } }) });
     expect(screen.getByText('暂无可用规格')).toBeInTheDocument();
@@ -232,7 +243,7 @@ describe('product SKU purchase', () => {
 
   it.each(['success', 'failure'] as const)("cannot let a late previous product %s replace the route or select a variant on the next product", async (outcome) => {
     const first = deferred<Detail>();
-    const { rerender } = await setup({ detail: id => id === 1 ? first.promise : Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt' } }) });
+    const { rerender } = await setup({ detail: id => id === 1 ? first.promise : Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt', skus: product.skus!.map(row => ({ ...row, product_id: 2 })) } }) });
 
     params.id = '2';
     rerender();
@@ -254,7 +265,7 @@ describe('product SKU purchase', () => {
     const retry = deferred<Detail>();
     let firstRequests = 0;
     const { rerender } = await setup({ detail: id => {
-      if (id !== 1) return Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt' } });
+      if (id !== 1) return Promise.resolve({ product: { ...product, product_id: 2, title: 'Second shirt', skus: product.skus!.map(row => ({ ...row, product_id: 2 })) } });
       if (++firstRequests === 1) return Promise.reject(new Error('Offline'));
       return retry.promise;
     } });

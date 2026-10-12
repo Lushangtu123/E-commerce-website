@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -113,7 +114,7 @@ export default function AddressPage() {
   }, [sessionKey]);
 
   useEffect(() => {
-    if (isHydrated && !isAuthenticated) router.push('/login');
+    if (isHydrated && !isAuthenticated) router.push(customerLoginHref());
   }, [isHydrated, isAuthenticated, router]);
 
   const refreshCanonical = async () => {
