@@ -13,6 +13,12 @@ import { requestFailure } from '@/lib/api-error';
 import { customerAuthHref, customerReturnPath, subscribeCustomerReturnPath } from '@/lib/customer-login-return';
 import { customerAuthAttempt, CustomerAuthAbandoned, CustomerAuthUnconfirmed, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
 
+/** The password-change result arrives in the URL; read it like the return path so back/forward stay in sync. */
+function loginPasswordNotice(): 'changed' | 'unconfirmed' | null {
+  const query = new URLSearchParams(window.location.search);
+  return query.get('passwordChangeUnconfirmed') === '1' ? 'unconfirmed' : query.get('passwordChanged') === '1' ? 'changed' : null;
+}
+
 export default function LoginPage() {
   const { t } = useI18n();
   const [email, setEmail] = useState('');
@@ -22,11 +28,9 @@ export default function LoginPage() {
   const returnPath = useSyncExternalStore(subscribeCustomerReturnPath, customerReturnPath, () => '/');
   const { login } = useAuthStore();
   const mounted = useRef(true), mutation = useRef<object | null>(null);
-  const [passwordNotice, setPasswordNotice] = useState<'changed' | 'unconfirmed' | null>(null);
+  const passwordNotice = useSyncExternalStore(subscribeCustomerReturnPath, loginPasswordNotice, () => null);
   useEffect(() => {
     mounted.current = true;
-    const query = new URLSearchParams(window.location.search);
-    setPasswordNotice(query.get('passwordChangeUnconfirmed') === '1' ? 'unconfirmed' : query.get('passwordChanged') === '1' ? 'changed' : null);
     return () => { mounted.current = false; mutation.current = null; };
   }, []);
 
