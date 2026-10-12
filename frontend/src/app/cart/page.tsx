@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -184,7 +185,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   useEffect(() => {
     if (!isHydrated) return;
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push(customerLoginHref());
       return;
     }
     if (buyNowId !== null && !purchase) return;

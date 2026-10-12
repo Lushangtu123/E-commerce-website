@@ -1,6 +1,7 @@
 import { productApi } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { addToCart } from '@/lib/cart-add';
+import { validProductDetailResponse } from '@/lib/product-detail-response';
 
 /** Shared by cards, favorites and history; SKU choices always happen on the detail page. */
 export async function quickAddToCart(productId: number, isActive: () => boolean = () => true): Promise<'select' | 'added' | null> {
@@ -15,6 +16,7 @@ export async function quickAddToCart(productId: number, isActive: () => boolean 
   try {
     const data = await productApi.getDetail(productId);
     if (!current()) return null;
+    if (!validProductDetailResponse(data, productId)) throw new Error('加载商品失败，请重试');
     const product = data.product;
     if (product.has_sku) return 'select';
     if (Number(product.stock) <= 0) throw new Error('商品已售罄');

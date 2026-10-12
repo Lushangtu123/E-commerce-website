@@ -90,6 +90,52 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
     expect(notices.success).toHaveBeenCalledTimes(1);
   });
 
+  it('returns to the original customer page with its query after sign-in, without replaying a write', async () => {
+    window.history.replaceState(null, '', `/${route}?next=${encodeURIComponent('/cart?coupon_id=42&source=coupons')}`);
+    serve({ [endpoint]: () => ({ user: userA }) });
+    render(<Page />); await settle(); fill(route);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint]);
+    expect(routing.pushes).toEqual(['/cart?coupon_id=42&source=coupons']);
+    expect(notices.success).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the customer return destination when switching between login and registration', async () => {
+    const path = '/products/1?sku_id=101';
+    window.history.replaceState(null, '', `/${route}?next=${encodeURIComponent(path)}`);
+    render(<Page />); await settle();
+    const other = route === 'login' ? 'register' : 'login';
+    const link = screen.getByRole('link', { name: route === 'login' ? '立即注册' : '立即登录' });
+    expect(link).toHaveAttribute('href', `/${other}?next=${encodeURIComponent(path)}`);
+    expect(requests).toEqual([]);
+  });
+
+  it('updates the auth-switch link when browser history changes the return destination on the same page', async () => {
+    window.history.replaceState(null, '', `/${route}?next=${encodeURIComponent('/cart?coupon_id=42')}`);
+    render(<Page />); await settle();
+    const name = route === 'login' ? '立即注册' : '立即登录';
+    const other = route === 'login' ? 'register' : 'login';
+    expect(screen.getByRole('link', { name })).toHaveAttribute('href', `/${other}?next=%2Fcart%3Fcoupon_id%3D42`);
+    act(() => {
+      window.history.replaceState(null, '', `/${route}?next=${encodeURIComponent('/orders/7')}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await settle();
+    expect(screen.getByRole('link', { name })).toHaveAttribute('href', `/${other}?next=%2Forders%2F7`);
+    expect(requests).toEqual([]);
+  });
+
+  it.each(['https://outside.test', '//outside.test', '/%2f%2foutside.test', '/admin/orders', '/login?next=/cart', 'javascript:alert(1)'])('never navigates to unsafe destination %s after sign-in', async destination => {
+    window.history.replaceState(null, '', `/${route}?next=${encodeURIComponent(destination)}`);
+    serve({ [endpoint]: () => ({ user: userA }) });
+    render(<Page />); await settle(); fill(route);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual([endpoint]);
+    expect(routing.pushes).toEqual(['/']);
+    expect(notices.success).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('link', { name: route === 'login' ? '立即注册' : '立即登录' })).toHaveAttribute('href', route === 'login' ? '/register' : '/login');
+  });
+
   it('locks duplicate submissions synchronously before React commits', async () => {
     const answer = pending();
     serve({ [endpoint]: () => answer.promise });

@@ -2,7 +2,7 @@
 
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { userApi } from '@/lib/api';
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
+import { customerAuthHref, customerReturnPath, subscribeCustomerReturnPath } from '@/lib/customer-login-return';
 import { passwordError } from '@/lib/password-validation';
 import { customerAuthAttempt, CustomerAuthAbandoned, CustomerAuthUnconfirmed, type CustomerAuthAttempt } from '@/lib/customer-auth-flow';
 
@@ -23,6 +24,7 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const returnPath = useSyncExternalStore(subscribeCustomerReturnPath, customerReturnPath, () => '/');
   const { login } = useAuthStore();
   const mounted = useRef(true), mutation = useRef<object | null>(null);
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function RegisterPage() {
       // login confirms storage in the cookie queue; only its still-published state may announce success.
       if (alive() && publishedSessionId && useAuthStore.getState().sessionId === publishedSessionId) {
         toast.success(translate('注册成功'));
-        router.push('/');
+        router.push(customerReturnPath());
       }
     } catch (error) {
       if (!alive() || error instanceof CustomerAuthAbandoned) return;
@@ -178,7 +180,7 @@ export default function RegisterPage() {
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              {t("已有账号？")}<Link href="/login" className="text-primary-600 hover:text-primary-700 font-medium ml-1">
+              {t("已有账号？")}<Link href={customerAuthHref('/login', returnPath)} className="text-primary-600 hover:text-primary-700 font-medium ml-1">
                 {t("立即登录")}</Link>
             </p>
           </div>
