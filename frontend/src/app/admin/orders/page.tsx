@@ -75,7 +75,9 @@ function AdminOrdersContent() {
   const request = useRef(0), mutation = useRef<object | null>(null), latestLoad = useRef<(() => Promise<void>) | null>(null);
   const pendingLoad = useRef<{ key: string } | null>(null);
   const key = JSON.stringify([session.sessionId, page, filters, urlKey]);
-  const currentKey = useRef(key); currentKey.current = waitingNavigation ? '' : key;
+  const currentKey = useRef(key);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the key they started under, and navigation clears it before the URL commits.
+  currentKey.current = waitingNavigation ? '' : key;
   const active = () => searchParams !== null && ownsFilters && session.active() && currentKey.current === key && new URLSearchParams(window.location.search).toString() === urlKey;
   const visible = result?.key === key && session.active() ? result : null;
   const displayed = useRef(visible);
@@ -121,11 +123,15 @@ function AdminOrdersContent() {
     }
   };
   // A completed write needs a fresh snapshot even when an older list read is still pending.
-  latestLoad.current = () => fetchOrders(true);
+  useLayoutEffect(() => { latestLoad.current = () => fetchOrders(true); });
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Drop every draft, recovery and pending write of the previous admin session.
   useEffect(() => { setShipment(null); mutation.current = null; setPendingSession(null); recovery.current.clear(); retainedDrafts.current.clear(); confirmed.current.clear(); setRecoveries([]); setLastChecked(null); }, [session.sessionId]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- A new view closes the shipment form before its list arrives.
   useEffect(() => { setShipment(null); void fetchOrders(); return () => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Bumping the shared counter retires the read started for this view.
     request.current++;
     if (pendingLoad.current?.key === key) pendingLoad.current = null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Each view loads once; fetchOrders is rebuilt every render and must not retrigger it.
   }; }, [key, paramsReady, ownsFilters]);
   // A tab opened during publication has no in-flight read to resume.
   useEffect(() => { if (session.ready && !pendingLoad.current) void latestLoad.current?.(); }, [session.ready]);
@@ -247,6 +253,7 @@ function AdminOrdersContent() {
       <p>{t(record.checking ? '订单更新结果未知，正在核对实际状态...' : '订单更新结果尚未确认，请重新核对订单；确认前不会再次提交')}</p>
       <button type="button" className="btn btn-secondary" disabled={busy || record.checking} onClick={() => void retryOrderCheck(record)}>{t('重新核对订单')}</button>
     </div>)}
+    {/* eslint-disable-next-line react-hooks/refs -- Never show the shipment form for a superseded view. */}
     {shipment?.key === key && active() && <form className="card p-6 space-y-4" onSubmit={event => { event.preventDefault(); void handleUpdate(shipment.id, 2); }}>
       <h2 className="font-bold text-lg">{t('填写发货信息')}</h2>
       <label className="block"><span className="block mb-2">{t('快递公司')}</span><input className="input" name="shipping_company" value={shipment.company} maxLength={60} required disabled={busy || unresolved.some(record => record.order.order_id === shipment.id)} onChange={event => { if (active() && !mutation.current && currentShipment.current === shipment && !recovery.current.has(shipment.id)) setShipment({ ...shipment, company: event.target.value }); }} /></label>

@@ -18,7 +18,7 @@ Backend (`cd backend`):
 - `npm run build` - compiles to `dist/` and generates the OpenAPI JSON
 - `npm run migrate:dev`, `npm run sync-es:dev` - schema migrations and full Elasticsearch reindex. Every migration step is idempotent and verifies the existing structure (refusing incompatible schemas); add new steps to `runMigrations` in `database/migrate.ts`, which runs them inside the per-database lock from `database/migration-lock.ts`
 
-Frontend (`cd frontend`): `npm test` (Vitest; `npm run test:coverage` adds the floors in `vitest.config.mts`), `npm run lint`, `npm run typecheck`, `npm run build`. Lint fails above the `--max-warnings` cap in `package.json` (the deliberate react-hooks warnings described in `eslint.config.mjs`): never raise the cap, lower it when you remove warnings.
+Frontend (`cd frontend`): `npm test` (Vitest; `npm run test:coverage` adds the floors in `vitest.config.mts`), `npm run lint`, `npm run typecheck`, `npm run build`. Lint fails above the `--max-warnings` cap in `package.json` (the deliberate react-hooks warnings described in `eslint.config.mjs`): never raise the cap, lower it when you remove warnings. Fix a react-hooks warning only when effects keep firing exactly as before; otherwise keep it with `// eslint-disable-next-line <rule> -- reason` (unused disables are errors). Do not wrap session/view guards in `useEffectEvent`: it reads the latest render and would accept a late reply for the previous session.
 
 Slash commands: `/verify` (type checks, unit tests, lint), `/integration` (full suite against throwaway MySQL 8.0 + Redis 7 in Docker), `/pr` (branch, commit, push, prefilled PR link).
 

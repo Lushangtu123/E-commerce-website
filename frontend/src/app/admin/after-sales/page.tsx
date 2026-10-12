@@ -1,7 +1,7 @@
 'use client';
 
 import '@/lib/admin-i18n';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { afterSalesApi, type AfterSalesRequest } from '@/lib/api';
 import { AFTER_SALES_STATUS } from '@/components/OrderAfterSales';
@@ -56,7 +56,9 @@ export default function AdminAfterSalesPage() {
   const updateReview = useCallback((value: typeof review) => { currentReview.current = value; setReview(value); }, []);
   const updateCompletion = useCallback((value: typeof completion) => { currentCompletion.current = value; setCompletion(value); }, []);
   const updateResult = useCallback((value: typeof result) => { currentResult.current = value; setResult(value); }, []);
-  const key = JSON.stringify([session.sessionId, page, status]), currentKey = useRef(key); currentKey.current = key;
+  const key = JSON.stringify([session.sessionId, page, status]), currentKey = useRef(key);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the key they started under, and navigation clears it before the URL commits.
+  currentKey.current = key;
   const request = useRef(0), mutation = useRef<{ key: string } | null>(null), latestLoad = useRef<((operation?: { key: string }) => Promise<void>) | null>(null);
   const pendingLoad = useRef<{ key: string } | null>(null);
   const active = () => session.active() && currentKey.current === key;
@@ -113,11 +115,15 @@ export default function AdminAfterSalesPage() {
     }
     finally { if (pendingLoad.current === operation) { pendingLoad.current = null; setLoading(false); } }
   };
-  latestLoad.current = load;
+  useLayoutEffect(() => { latestLoad.current = load; });
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset filters, drafts and pending writes of the previous admin session.
   useEffect(() => { setPage(1); setStatus('requested'); updateReview(null); updateCompletion(null); updateTarget(null); mutation.current = null; setBusy(false); setLoading(false); recovery.current = null; receipt.current = null; setUnconfirmed(null); }, [session.sessionId, updateCompletion, updateReview, updateTarget]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- A new view closes drafts that belong to the previous one before loading.
   useEffect(() => { updateReview(null); updateCompletion(null); updateTarget(null); load(); return () => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Bumping the shared counter retires the read started for this view.
     request.current++;
     if (pendingLoad.current?.key === key) pendingLoad.current = null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Each view loads once; load is rebuilt every render and must not retrigger it.
   }; }, [key, updateCompletion, updateReview, updateTarget]);
   useEffect(() => { if (session.ready && !pendingLoad.current) void latestLoad.current?.(); }, [session.ready]);
   const submit = async (event: React.FormEvent) => {
@@ -181,6 +187,7 @@ export default function AdminAfterSalesPage() {
   return <AdminLayout><div className="space-y-6">
     <div><h1 className="text-2xl font-bold">{t('售后管理')}</h1><p className="mt-2 text-amber-800">{t('售后审核、退货运单和人工处理进度在此查看，不会自动退款')}</p></div>
     <div className="card p-4 flex gap-4"><select className="input max-w-xs" disabled={busy || blocked} value={status} aria-label={t('审核状态')} onChange={event => { if (!active() || mutation.current || recovery.current === key) return; currentKey.current = ''; setStatus(event.target.value); setPage(1); updateReview(null); }}><option value="">{t('全部状态')}</option>{Object.entries(AFTER_SALES_STATUS).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select><button className="btn btn-secondary" disabled={busy || loading} onClick={() => void load()}>{t('重新加载')}</button></div>
+    {/* eslint-disable-next-line react-hooks/refs -- Never show a review form for a superseded view. */}
     {review?.key === key && active() && <form className="card p-6 space-y-4" onSubmit={submit}><h2 className="font-bold">{t(review.decision === 'approved' ? '通过售后审核' : '拒绝售后申请')}</h2><label className="block"><span className="block mb-2">{t('审核说明')}</span><textarea className="input min-h-[100px]" maxLength={500} required disabled={busy || blocked || loading} value={review.note} onChange={event => { if (active() && !mutation.current && !pendingLoad.current && recovery.current !== key) updateReview({ ...review, note: event.target.value }); }} /></label><div className="flex gap-3"><button className="btn btn-primary" disabled={busy || blocked || loading}>{t('保存审核结果')}</button><button type="button" className="btn btn-secondary" disabled={busy || blocked || loading} onClick={() => { if (active() && !mutation.current && !pendingLoad.current && recovery.current !== key) updateReview(null); }}>{t('取消')}</button></div></form>}
     {completion?.key === key && session.active() && <form className="card p-6 space-y-4" onSubmit={complete}>
       <h2 className="font-bold">{t('记录处理并结案')}</h2>
