@@ -5,6 +5,7 @@ import { transitionOrder, invalidateOrderProductCache, OrderError } from '../ser
 import logger from '../utils/logger';
 import { orderPathId } from '../utils/order-id';
 import { AdminQueryError, adminDatesQuerySchema, adminOrdersQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
+import { literalSubstringPattern } from '../utils/literal-like';
 
 // 获取订单列表（管理员）
 export const getAdminOrders = async (req: Request, res: Response) => {
@@ -17,8 +18,8 @@ export const getAdminOrders = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (orderNo) {
-      whereClause += ' AND o.order_no LIKE ?';
-      params.push(`%${orderNo}%`);
+      whereClause += " AND o.order_no LIKE ? ESCAPE '!'";
+      params.push(literalSubstringPattern(orderNo));
     }
     if (userId) {
       whereClause += ' AND o.user_id = ?';

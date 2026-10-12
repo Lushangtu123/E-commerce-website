@@ -6,6 +6,7 @@ import { productCreateSchema, productUpdateSchema, positiveId } from '../utils/p
 import { afterProductWrite } from './admin-product-write';
 import { AdminQueryError, adminProductsQuerySchema, parseAdminQuery } from '../utils/admin-query-validation';
 import { adminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
+import { literalSubstringPattern } from '../utils/literal-like';
 
 function normalizedProductBody(body: any) {
   const { image_url, ...fields } = body;
@@ -23,8 +24,8 @@ export const getAdminProducts = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (keyword) {
-      whereClause += ' AND (p.title LIKE ? OR p.description LIKE ? OR p.title_en LIKE ? OR p.description_en LIKE ?)';
-      params.push(...Array(4).fill(`%${keyword}%`));
+      whereClause += " AND (p.title LIKE ? ESCAPE '!' OR p.description LIKE ? ESCAPE '!' OR p.title_en LIKE ? ESCAPE '!' OR p.description_en LIKE ? ESCAPE '!')";
+      params.push(...Array(4).fill(literalSubstringPattern(keyword)));
     }
     if (categoryId) {
       whereClause += ' AND p.category_id = ?';
