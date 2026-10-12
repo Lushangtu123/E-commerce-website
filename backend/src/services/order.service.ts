@@ -16,6 +16,40 @@ import { AdminAuditMetadata, normalizeAdminAuditMetadata } from '../utils/admin-
 import { PurchaseError as OrderError, MAX_QUANTITY, MAX_CHECKOUT_LINES, MAX_CHECKOUT_INPUT_LINES, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
 export { PurchaseError as OrderError } from './purchase-items.service';
 
+export class CheckoutQuoteChangedError extends OrderError {
+  readonly code = 'CHECKOUT_QUOTE_CHANGED';
+  constructor() { super('结算金额已变化，请重新确认后下单', 409); }
+}
+
+interface ExpectedQuoteCents {
+  originalCents: number;
+  discountCents: number;
+  totalCents: number;
+}
+
+function normalizeExpectedQuote(input: unknown): ExpectedQuoteCents | undefined {
+  if (input === undefined) return undefined;
+  const invalid = () => new OrderError('结算报价无效，请重新计算');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid();
+  const fields = input as Record<string, unknown>;
+  if (Object.keys(fields).length !== 3 || Object.keys(fields).some(key =>
+    !['original_amount', 'discount_amount', 'total_amount'].includes(key))) throw invalid();
+  const cents = (value: unknown): number => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 99999999.99) throw invalid();
+    const scaled = value * 100;
+    const rounded = Math.round(scaled);
+    // Accept only cent values, allowing the representation noise of JSON numbers.
+    const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 2;
+    if (!Number.isSafeInteger(rounded) || (rounded === 0 && value !== 0) || Math.abs(scaled - rounded) > tolerance) throw invalid();
+    return rounded;
+  };
+  const originalCents = cents(fields.original_amount);
+  const discountCents = cents(fields.discount_amount);
+  const totalCents = cents(fields.total_amount);
+  if (discountCents > originalCents || totalCents !== originalCents - discountCents) throw invalid();
+  return { originalCents, discountCents, totalCents };
+}
+
 interface LockedCoupon extends RowDataPacket {
   coupon_id: number;
   name: string;
@@ -80,11 +114,13 @@ export async function createOrder(
   remark?: string,
   userCouponId?: number,
   checkoutKey?: string,
-  checkoutSource?: 'buy_now'
+  checkoutSource?: 'buy_now',
+  expectedQuote?: unknown
 ): Promise<{ orderId: number; productIds: number[]; original_amount: number; discount_amount: number; total_amount: number; created: boolean }> {
   if (checkoutSource !== undefined && checkoutSource !== 'buy_now') {
     throw new OrderError('结算来源无效，请刷新页面后重试');
   }
+  const quoteCents = normalizeExpectedQuote(expectedQuote);
   const exceedsInputLimit = Array.isArray(items) && items.length > MAX_CHECKOUT_INPUT_LINES;
   // Do not traverse huge arrays until a committed historical request is found.
   let normalizedItems = exceedsInputLimit ? [] : normalizeItems(items);
@@ -115,8 +151,9 @@ export async function createOrder(
   }
   const fingerprint = createHash('sha256').update(JSON.stringify({
     items: normalizedItems, shippingAddressId, remark: remark ?? '', userCouponId: userCouponId ?? null,
-    // Absent source preserves historical cart fingerprints byte for byte.
+    // Omitted optional fields preserve historical fingerprints byte for byte.
     ...(checkoutSource === undefined ? {} : { checkoutSource }),
+    ...(quoteCents === undefined ? {} : { expectedQuote: quoteCents }),
   })).digest('hex');
   if (historicalOrder) {
     const order = historicalOrder;
@@ -186,6 +223,12 @@ export async function createOrder(
       try { discountCents = calculateDiscountCents(coupon, totalCents); }
       catch { throw new OrderError('优惠券配置无效'); }
       if (discountCents <= 0) throw new OrderError('订单金额不满足优惠券使用条件');
+    }
+    // Existing matching receipts return above, even when current prices or coupons changed.
+    // A new order must match all amounts the customer confirmed before any domain write.
+    if (quoteCents !== undefined && (quoteCents.originalCents !== totalCents ||
+        quoteCents.discountCents !== discountCents || quoteCents.totalCents !== totalCents - discountCents)) {
+      throw new CheckoutQuoteChangedError();
     }
     const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO orders (order_no, user_id, total_amount, shipping_address_id, remark, status,

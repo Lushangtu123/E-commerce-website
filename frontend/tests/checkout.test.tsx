@@ -5,6 +5,7 @@ import CartPage from '@/app/cart/page';
 import { addressApi, cartApi, orderApi, type CartInput, type OrderCreateInput, type OrderInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore, type CartItem } from '@/store/useCartStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 import { CommitLog, apiError, clickTogether, deferred, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -96,6 +97,101 @@ function switchCustomer() {
 }
 
 describe('checkout', () => {
+  it('binds a new checkout to the exact displayed original, discount and payable amounts', async () => {
+    await setupCheckout({ preview: async input => quote(90, input.user_coupon_id === 7) });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    expect(creates()[0]).toMatchObject({
+      expected_quote: { original_amount: 90, discount_amount: 20, total_amount: 70 },
+    });
+  });
+
+  it('requires another click after amounts change, retaining the selected coupon while requoting', async () => {
+    const replacement = deferred<OrderPreview>();
+    let changed = false;
+    await setupCheckout({
+      preview: input => changed ? replacement.promise : Promise.resolve(quote(90, input.user_coupon_id === 7)),
+      create: async () => {
+        changed = true;
+        throw { response: { status: 409, data: { code: 'CHECKOUT_QUOTE_CHANGED', error: '结算金额已变化，请重新确认后下单' } } };
+      },
+    });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    expect(screen.getByRole('alert')).toHaveTextContent('结算金额已变化，请核对新报价后再次点击结算');
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Checkout amounts changed. Check the new quote and click Checkout again.');
+    act(() => useLocaleStore.setState({ locale: 'zh-CN' }));
+    expect(checkoutButton()).toBeDisabled();
+    expect(previews().at(-1)?.user_coupon_id).toBe(7);
+    expect(creates()).toHaveLength(1);
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
+    await act(async () => replacement.resolve(quote(150, true)));
+    await settle();
+    expect(amountRow('应付金额')).toBe('应付金额¥130.00');
+    expect(checkoutButton()).toBeEnabled();
+    expect(couponSelect()).toHaveValue('7');
+    expect(creates()).toHaveLength(1);
+    vi.mocked(orderApi.create).mockResolvedValue({ message: 'ok', order_id: 55 });
+    await click(checkoutButton());
+    expect(creates()).toHaveLength(2);
+    expect(creates()[1]).toMatchObject({ expected_quote: { original_amount: 150, discount_amount: 20, total_amount: 130 }, user_coupon_id: 7 });
+    expect(creates()[1].checkout_key).not.toBe(creates()[0].checkout_key);
+    expect(router.push).toHaveBeenCalledWith('/orders/55');
+  });
+
+  it.each([undefined, 503, 400])('retains a valid coupon after quote-change recovery has a non-coupon read failure, status %s', async status => {
+    let changed = false, unavailable = true;
+    await setupCheckout({
+      preview: async input => {
+        if (changed && input.user_coupon_id === 7 && unavailable) throw { response: { status, data: { error: status === 400 ? '商品库存不足' : '计算订单金额失败' } } };
+        return quote(changed ? 150 : 90, input.user_coupon_id === 7);
+      },
+      create: async () => {
+        changed = true;
+        throw { response: { status: 409, data: { code: 'CHECKOUT_QUOTE_CHANGED', error: '结算金额已变化，请重新确认后下单' } } };
+      },
+    });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    expect(previews().at(-1)?.user_coupon_id).toBe(7);
+    expect(couponSelect()).toHaveValue('7');
+    expect(checkoutButton()).toBeDisabled();
+    expect(creates()).toHaveLength(1);
+    unavailable = false;
+    await click(screen.getByRole('button', { name: '重新计算' }));
+    expect(previews().at(-1)?.user_coupon_id).toBe(7);
+    expect(couponSelect()).toHaveValue('7');
+    expect(amountRow('应付金额')).toBe('应付金额¥130.00');
+    expect(checkoutButton()).toBeEnabled();
+    expect(creates()).toHaveLength(1);
+  });
+
+  it('restores the original coupon when a remounted pending checkout returns changed amounts', async () => {
+    let calls = 0, changed = false;
+    const { view } = await setupCheckout({
+      preview: async input => quote(changed ? 150 : 90, input.user_coupon_id === 7),
+      create: async () => {
+        if (++calls === 1) throw new Error('Lost response');
+        changed = true;
+        throw { response: { status: 409, data: { code: 'CHECKOUT_QUOTE_CHANGED', error: '结算金额已变化，请重新确认后下单' } } };
+      },
+    });
+    await choose(couponSelect(), '7');
+    await click(checkoutButton());
+    const original = creates()[0];
+    view.unmount(); render(<CartPage />); await settle();
+    await click(screen.getByRole('button', { name: '重试确认订单' }));
+    expect(creates()[1]).toEqual(original);
+    expect(previews().at(-1)?.user_coupon_id).toBe(7);
+    expect(couponSelect()).toHaveValue('7');
+    expect(amountRow('应付金额')).toBe('应付金额¥130.00');
+    expect(sessionStorage.getItem('pending-checkout')).toBeNull();
+    expect(creates()).toHaveLength(2);
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
   it.each([{ total_amount: -1 }, { original_amount: '90.00' }, { available_coupons: null }, { success: false }])('blocks an invalid quote %j and retries without creating an order', async malformed => {
     let invalid = true;
     await setupCheckout({ preview: async () => invalid ? { ...quote(), ...malformed } as never : quote() });
@@ -196,7 +292,7 @@ describe('checkout', () => {
     expect(amountRow('应付金额')).toBe('应付金额¥70.00');
 
     await click(checkoutButton());
-    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7, shipping_address_id: 41, checkout_key: expect.any(String) }]);
+    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], user_coupon_id: 7, shipping_address_id: 41, checkout_key: expect.any(String), expected_quote: { original_amount: 90, discount_amount: 20, total_amount: 70 } }]);
     expect(router.push.mock.calls).toEqual([['/orders/55']]);
   });
 
@@ -390,7 +486,7 @@ describe('checkout', () => {
     vi.mocked(cartApi.list).mockResolvedValue({ items: [secondItem] });
     await click(checkoutButton());
 
-    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 41, checkout_key: expect.any(String) }]);
+    expect(creates()).toEqual([{ items: [{ product_id: 12, quantity: 3 }], shipping_address_id: 41, checkout_key: expect.any(String), expected_quote: { original_amount: 90, discount_amount: 0, total_amount: 90 } }]);
     expect(cartItems().map(item => item.product_id)).toEqual([22]);
     expect(useCartStore.getState().getTotalCount()).toBe(1);
     expect(router.push.mock.calls).toEqual([['/orders/55']]);

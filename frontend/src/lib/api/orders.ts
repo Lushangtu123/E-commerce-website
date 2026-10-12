@@ -29,7 +29,10 @@ export interface OrderCreateInput extends OrderInput {
   shipping_address_id: number;
   checkout_key: string;
   checkout_source?: 'buy_now';
+  expected_quote?: ExpectedCheckoutQuote;
 }
+
+export type ExpectedCheckoutQuote = Pick<OrderPreview, 'original_amount' | 'discount_amount' | 'total_amount'>;
 
 export interface OrderPreview {
   original_amount: number;

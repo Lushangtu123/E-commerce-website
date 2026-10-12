@@ -604,6 +604,77 @@ integration('真实 MySQL 订单事务及并发', () => {
     expect(after[0].count).toBe(before[0].count);
   });
 
+  test.each([false, true])('确认金额 sku=%s 改价后无副作用拒绝，重算后同请求号可下单并安全重放', async withSku => {
+    await receivedCoupon();
+    const skuId = withSku ? await SKUModel.create({ product_id: 1, sku_code: 'QUOTED', specs: { size: 'M' }, price: 12, stock: 10 }) : undefined;
+    await CartModel.add(1, 1, 2, skuId);
+    const items = [{ product_id: 1, quantity: 1, ...(skuId === undefined ? {} : { sku_id: skuId }) }];
+    const amounts = ({ original_amount, discount_amount, total_amount }: Awaited<ReturnType<typeof previewOrder>>) =>
+      ({ original_amount, discount_amount, total_amount });
+    const expected_quote = amounts(await previewOrder(1, items, 1));
+    const key = '33333333-3333-4333-8333-333333333333';
+    if (withSku) await db.query('UPDATE product_skus SET price = 20 WHERE sku_id = ?', [skuId]);
+    else await db.query('UPDATE products SET price = 20 WHERE product_id = 1');
+    const app = express(); app.use(express.json()); app.use('/orders', orderRoutes);
+    const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
+    const body = { items, shipping_address_id: 101, user_coupon_id: 1, checkout_key: key, expected_quote };
+    const before = await Promise.all(['orders', 'order_items', 'cart', 'user_coupons', 'coupon_usage_logs', 'products', 'product_skus']
+      .map(async table => (await db.query<RowDataPacket[]>(`SELECT * FROM ${table}`))[0]));
+    await request(app).post('/orders').set(auth).send(body).expect(409, {
+      error: '结算金额已变化，请重新确认后下单', code: 'CHECKOUT_QUOTE_CHANGED',
+    });
+    const after = await Promise.all(['orders', 'order_items', 'cart', 'user_coupons', 'coupon_usage_logs', 'products', 'product_skus']
+      .map(async table => (await db.query<RowDataPacket[]>(`SELECT * FROM ${table}`))[0]));
+    expect(after).toEqual(before);
+
+    const confirmed = { ...body, expected_quote: amounts(await previewOrder(1, items, 1)) };
+    const first = await request(app).post('/orders').set(auth).send(confirmed).expect(201);
+    expect(first.body).toMatchObject({ original_amount: 20, discount_amount: 4, total_amount: 16 });
+    if (withSku) await db.query('UPDATE product_skus SET price = 50, status = 0 WHERE sku_id = ?', [skuId]);
+    else await db.query('UPDATE products SET price = 50, status = 0 WHERE product_id = 1');
+    await db.query('UPDATE coupons SET status = 0');
+    await db.query('DELETE FROM shipping_addresses WHERE address_id = 101');
+    expect((await request(app).post('/orders').set(auth).send(confirmed).expect(201)).body).toEqual(first.body);
+    await request(app).post('/orders').set(auth).send({ ...confirmed,
+      expected_quote: { original_amount: 50, discount_amount: 10, total_amount: 40 },
+    }).expect(409, { error: '结算请求号已用于其他结算内容，请重新结算' });
+    const [orders] = await db.query<RowDataPacket[]>('SELECT order_id,original_amount,discount_amount,total_amount FROM orders');
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+    const [logs] = await db.query<RowDataPacket[]>('SELECT order_id FROM coupon_usage_logs');
+    const [cart] = await db.query<RowDataPacket[]>('SELECT quantity FROM cart');
+    expect(orders).toEqual([{ order_id: first.body.order_id, original_amount: '20.00', discount_amount: '4.00', total_amount: '16.00' }]);
+    expect(coupons).toEqual([{ status: 2, order_id: first.body.order_id }]);
+    expect(logs).toEqual([{ order_id: first.body.order_id }]);
+    expect(cart).toEqual([{ quantity: 1 }]);
+    const inventory = withSku ? (await db.query<RowDataPacket[]>('SELECT stock FROM product_skus WHERE sku_id = ?', [skuId]))[0][0].stock : (await product()).stock;
+    expect(inventory).toBe(9);
+  });
+
+  test('确认金额的优惠规则变化不占券，重新确认后才写订单、库存和用券日志', async () => {
+    await receivedCoupon();
+    const items = [{ product_id: 1, quantity: 1 }];
+    const amounts = ({ original_amount, discount_amount, total_amount }: Awaited<ReturnType<typeof previewOrder>>) =>
+      ({ original_amount, discount_amount, total_amount });
+    const expected_quote = amounts(await previewOrder(1, items, 1));
+    expect(expected_quote).toEqual({ original_amount: 10.1, discount_amount: 2.02, total_amount: 8.08 });
+    await db.query('UPDATE coupons SET discount_value = 10 WHERE coupon_id = 1');
+    const key = '44444444-4444-4444-8444-444444444444';
+    await expect(createOrderService(1, items, 101, undefined, 1, key, undefined, expected_quote)).rejects.toMatchObject({
+      statusCode: 409, code: 'CHECKOUT_QUOTE_CHANGED',
+    });
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+    const [orders] = await db.query<RowDataPacket[]>('SELECT order_id FROM orders');
+    const [logs] = await db.query<RowDataPacket[]>('SELECT order_id FROM coupon_usage_logs');
+    expect(coupons).toEqual([{ status: 1, order_id: null }]);
+    expect(orders).toEqual([]);
+    expect(logs).toEqual([]);
+    expect(await product()).toMatchObject({ stock: 10 });
+    const confirmed = amounts(await previewOrder(1, items, 1));
+    expect(confirmed).toEqual({ original_amount: 10.1, discount_amount: 1.01, total_amount: 9.09 });
+    await expect(createOrderService(1, items, 101, undefined, 1, key, undefined, confirmed)).resolves.toMatchObject(confirmed);
+    expect(await product()).toMatchObject({ stock: 9 });
+  });
+
   test('真实驱动创建省略可选字段的券并分页查询', async () => {
     const couponId = await CouponModel.create({ code: 'MINIMAL', name: '测试券', type: CouponType.NO_THRESHOLD,
       discount_value: 1, total_quantity: 10, start_time: new Date(Date.now() - 60000), end_time: new Date(Date.now() + 60000) });

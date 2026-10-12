@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { OrderModel, OrderStatus, OrderListError, orderListQuerySchema } from '../models/order.model';
-import { createOrder, previewOrder, transitionOrder, invalidateOrderProductCache, OrderError } from '../services/order.service';
+import { createOrder, previewOrder, transitionOrder, invalidateOrderProductCache, OrderError, CheckoutQuoteChangedError } from '../services/order.service';
 import { getOrderRemainingTime } from '../services/order-timeout.service';
 import { sendOrderTimeoutCheckMessage } from '../services/message-queue.service';
 import logger from '../utils/logger';
@@ -23,9 +23,9 @@ export class OrderController {
   // 创建订单
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { items, shipping_address_id, remark, user_coupon_id, checkout_key, checkout_source } = req.body || {};
+      const { items, shipping_address_id, remark, user_coupon_id, checkout_key, checkout_source, expected_quote } = req.body || {};
       if (checkout_key === undefined) throw new OrderError('结算请求号无效，请刷新页面后重试');
-      const { orderId, productIds, created, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id, checkout_key, checkout_source);
+      const { orderId, productIds, created, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id, checkout_key, checkout_source, expected_quote);
       if (created) await invalidateOrderProductCache(productIds);
 
       // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）
@@ -45,7 +45,10 @@ export class OrderController {
         ...amounts,
       });
     } catch (error) {
-      if (error instanceof OrderError) return res.status(error.statusCode).json({ error: error.message });
+      if (error instanceof OrderError) return res.status(error.statusCode).json({
+        error: error.message,
+        ...(error instanceof CheckoutQuoteChangedError ? { code: error.code } : {}),
+      });
       logger.error({ err: error }, '创建订单失败');
       res.status(500).json({ error: '创建订单失败' });
     }

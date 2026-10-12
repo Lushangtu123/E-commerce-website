@@ -32,7 +32,7 @@ it.each([undefined, 5])('buys one unit when the existing cart already equals sto
   render(<CartPage />); await settle();
   fireEvent.click(screen.getByRole('button', { name: '结算 (1)' })); await settle();
   expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ checkout_source: 'buy_now', shipping_address_id: 41,
-    checkout_key: new URL(target, 'http://localhost').searchParams.get('buy_now'), items: [{ product_id: 1, quantity: 1, ...(sku && { sku_id: sku }) }] });
+    checkout_key: new URL(target, 'http://localhost').searchParams.get('buy_now'), items: [{ product_id: 1, quantity: 1, ...(sku && { sku_id: sku }) }], expected_quote: { original_amount: 10, discount_amount: 0, total_amount: 10 } });
   expect(router.push).toHaveBeenLastCalledWith('/orders/55');
 });
 
@@ -72,6 +72,6 @@ it('confirms an older cart checkout without consuming the newer direct purchase 
   expect(JSON.parse(sessionStorage.getItem('buy-now:buyer-session:1')!)).toEqual(intent);
   view.unmount(); render(<CartPage />); await settle();
   fireEvent.click(screen.getByRole('button', { name: '结算 (1)' })); await settle();
-  expect(orderApi.create).toHaveBeenLastCalledWith({ items: [intent.input], shipping_address_id: 41, checkout_key: intent.id, checkout_source: 'buy_now' });
+  expect(orderApi.create).toHaveBeenLastCalledWith({ items: [intent.input], shipping_address_id: 41, checkout_key: intent.id, checkout_source: 'buy_now', expected_quote: { original_amount: 10, discount_amount: 0, total_amount: 10 } });
   expect(cartApi.add).not.toHaveBeenCalled();
 });
