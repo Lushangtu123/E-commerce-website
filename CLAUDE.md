@@ -30,6 +30,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 - Money is handled in integer cents (`couponMoneyToCents`, `calculateDiscountCents`); order, stock and coupon changes happen in one MySQL transaction with row locks taken in a fixed order (user → address → products → SKUs → coupons).
 - User-facing API messages are Chinese. Every new message the UI can show needs an English entry in `frontend/src/lib/error-translations.ts`.
 - Critical admin product, SKU, coupon and user-status writes save their audit on the same transaction connection. `afterProductWrite` only refreshes cache/search after commit; login logging remains best effort.
+- CodeQL (`.github/workflows/codeql.yml`, `security-extended`) scans TypeScript and workflows on PRs, `main` and weekly: fix new alerts, or dismiss one in GitHub only with a written reason.
 - Route params are always strings; follow the existing `req.params.id as string` / `positiveId()` idiom.
 - Tests live in `backend/src/__tests__` and `frontend/tests`. Write the failing test first for bug fixes, and keep MySQL/Redis integration tests self-contained (own database name, skip without env vars).
 
