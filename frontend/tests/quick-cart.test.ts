@@ -17,7 +17,8 @@ const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 describe('quick add to cart', () => {
   it.each([true, false])('sends SKU products to explicit selection and adds ordinary ones directly (has_sku=%s)', async (has_sku) => {
     signIn();
-    vi.mocked(productApi.getDetail).mockResolvedValue({ product: product({ has_sku, price: '15.00' }) });
+    vi.mocked(productApi.getDetail).mockResolvedValue({ product: product({ has_sku, price: '15.00',
+      skus: has_sku ? [{ sku_id: 11, product_id: 1, sku_code: 'RED', specs: { Color: 'Red' }, price: 15, stock: 3, status: 1 }] : undefined }) });
 
     expect(await quickAddToCart(1)).toBe(has_sku ? 'select' : 'added');
 
