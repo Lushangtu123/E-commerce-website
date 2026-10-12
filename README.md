@@ -381,6 +381,8 @@ Product details enable favorite writes only after reading an explicit boolean st
 - `POST /api/search/record` - Record a search
 - `GET /api/search/history` - The user's search history (sign-in required)
 - `DELETE /api/search/history` - Clear the user's search history (sign-in required)
+
+The header distinguishes an initial history read failure from an empty history and offers a bilingual read-only retry. Repeated clicks share one active read; account changes retire old responses, and recording or deleting a search supersedes older snapshots. Existing uncertain deletion recovery remains available.
 - `DELETE /api/search/history/:keyword` - Delete one search entry (sign-in required)
 
 ### Browsing History APIs
