@@ -78,7 +78,7 @@ async function localPlatformScripts(context) {
     NODE_ENV: production ? 'production' : 'development', VERCEL: '', VERCEL_ENV: '', NEXT_TELEMETRY_DISABLED: '1',
   });
   await ready('http://127.0.0.1:3100/register', frontend);
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, channel: 'chromium' });
   await require('./native-middle-probe.cjs')({ browser, localPlatformScripts });
   const context = await browser.newContext();
   await localPlatformScripts(context);
