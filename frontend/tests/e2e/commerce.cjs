@@ -1238,6 +1238,7 @@ async function localPlatformScripts(context) {
   await visibleText(page, '演示订单未实际付款，仅记录人工处理完成');
   await page.getByRole('button', { name: '提交退货运单', exact: true }).waitFor({ state: 'hidden' });
   console.log('PASS browser admin manual closure and customer closure record');
+  await require('./after-sales-category-read-safety.cjs')({ page, admin, orderUrl, afterSalesWriteEndpoint, setExpectedRead: value => { expectedReadFailure = value; } });
   fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
   await page.screenshot({ path: path.join(root, 'test-results/commerce-after-sales.png'), fullPage: true });
   const capabilityEndpoint = 'http://127.0.0.1:3101/api/users/password/capabilities';

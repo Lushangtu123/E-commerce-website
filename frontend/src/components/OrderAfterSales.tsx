@@ -6,13 +6,13 @@ import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import AfterSalesProgress from '@/components/AfterSalesProgress';
-import { validAfterSalesRequest } from '@/lib/after-sales-response';
+import { validAfterSalesEnvelope, validAfterSalesRequest } from '@/lib/after-sales-response';
 
 export const AFTER_SALES_STATUS = { requested: '待审核', approved: '审核通过', rejected: '审核拒绝', withdrawn: '已撤回' };
 
 class InvalidAfterSalesResponse extends Error {}
 function responseValue(data: unknown, orderId: number): AfterSalesRequest | null {
-  if (!data || typeof data !== 'object' || !('after_sales' in data)) throw new InvalidAfterSalesResponse();
+  if (!validAfterSalesEnvelope(data) || !('after_sales' in data)) throw new InvalidAfterSalesResponse();
   const value = data.after_sales;
   if (value !== null && (!validAfterSalesRequest(value) || value.order_id !== orderId)) throw new InvalidAfterSalesResponse();
   return value;

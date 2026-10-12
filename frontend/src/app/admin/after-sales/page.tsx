@@ -12,7 +12,7 @@ import { requestFailure } from '@/lib/api-error';
 import AfterSalesProgress from '@/components/AfterSalesProgress';
 import Link from 'next/link';
 import { moneyToCents } from '@/lib/money';
-import { validAfterSalesRequest } from '@/lib/after-sales-response';
+import { validAfterSalesEnvelope, validAfterSalesRequest } from '@/lib/after-sales-response';
 import { matchesAfterSalesWrite, validAfterSalesWriteSnapshot, type AfterSalesWrite } from '@/lib/admin-after-sales-write';
 
 type DraftIdentity = { key: string; id: number; orderId: number };
@@ -72,13 +72,13 @@ export default function AdminAfterSalesPage() {
     try {
       const data = await afterSalesApi.list({ page, limit: 20, ...(status && { status }) });
       if (!active() || revision !== request.current) return;
-      if (!Array.isArray(data.requests) || !data.requests.every(validAfterSalesRequest) || !Number.isSafeInteger(data.pagination?.total) || data.pagination.total < 0) throw new Error('invalid after-sales list');
+      if (!validAfterSalesEnvelope(data) || !Array.isArray(data.requests) || !data.requests.every(validAfterSalesRequest) || !Number.isSafeInteger(data.pagination?.total) || data.pagination.total < 0) throw new Error('invalid after-sales list');
       let requests = data.requests, total = data.pagination.total;
       if (draft) {
         // A missing row on this page can simply have moved to another page or filter.
         const detail = await afterSalesApi.adminGet(draft.id);
         if (!active() || revision !== request.current) return;
-        if (!validAfterSalesRequest(detail.after_sales) || detail.after_sales.request_id !== draft.id || detail.after_sales.order_id !== draft.orderId) throw new Error('invalid after-sales detail');
+        if (!validAfterSalesEnvelope(detail) || !validAfterSalesRequest(detail.after_sales) || detail.after_sales.request_id !== draft.id || detail.after_sales.order_id !== draft.orderId) throw new Error('invalid after-sales detail');
         if (completionDraft && !validCompletionContext(detail.after_sales)) throw new Error('invalid after-sales completion context');
         if ((reviewDraft && currentReview.current !== reviewDraft) || (completionDraft && currentCompletion.current !== completionDraft)) return;
         if (requests.some(value => value.request_id === draft.id)) {

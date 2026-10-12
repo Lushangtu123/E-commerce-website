@@ -66,7 +66,7 @@ describe('admin after-sales drafts use the exact request identity', () => {
     state.submit(); await settle(); expect(state.counts().writes).toBe(2);
   });
   it.each(['review', 'complete'] as const)('retires an externally finished %s draft on a normal refresh with visible feedback', async kind => {
-    const state = await setup(kind, { target: async () => ({ after_sales: { ...row(1, kind), ...(kind === 'review' ? { status: 'approved' } : { completed_at: '2026-10-09' }) } }), list: count => ({ requests: count === 1 ? [row(1, kind)] : [], pagination: { total: count === 1 ? 1 : 0 } }) });
+    const state = await setup(kind, { target: async () => ({ after_sales: { ...row(1, kind), ...(kind === 'review' ? { status: 'approved' } : { completed_at: '2026-10-09', refund_amount: '0.00', completion_note: 'Handled externally' }) } }), list: count => ({ requests: count === 1 ? [row(1, kind)] : [], pagination: { total: count === 1 ? 1 : 0 } }) });
     const stale = captureHandler(document.querySelector('form')!, 'onSubmit'); state.reload(); await settle();
     expect(state.targets).toEqual([1]); expect(screen.queryByLabelText(t(state.label))).toBeNull();
     expect(notices.error).toHaveBeenCalledWith(t('售后申请状态已改变，已关闭当前草稿，请核对最新进度'));

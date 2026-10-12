@@ -24,7 +24,7 @@ async function setup(kind: 'create'|'withdraw'|'tracking'|'review'|'complete', o
   localStorage.setItem('admin_session', 'admin-session'); localStorage.setItem('admin_user', JSON.stringify({ admin_id: 1, username: 'Admin' }));
   const admin = ['review', 'complete'].includes(kind); let reads = 0, writes = 0, saved = false;
   const initial = kind === 'create' ? null : { ...row, ...(kind === 'tracking' ? { status: 'approved', type: 'return' } : kind === 'complete' ? { status: 'approved' } : {}) };
-  const canonical = kind === 'create' ? row : { ...initial, ...(kind === 'withdraw' ? { status: 'withdrawn' } : kind === 'tracking' ? { return_submitted_at: '2026-10-08', return_tracking_number: 'FIXTURE-1', return_company: 'Carrier' } : kind === 'review' ? { status: 'approved' } : { completed_at: '2026-10-08' }) };
+  const canonical = kind === 'create' ? row : { ...initial, ...(kind === 'withdraw' ? { status: 'withdrawn' } : kind === 'tracking' ? { return_submitted_at: '2026-10-08', return_tracking_number: 'FIXTURE-1', return_company: 'Carrier' } : kind === 'review' ? { status: 'approved' } : { completed_at: '2026-10-08', refund_amount: '0.00', refund_reference: null, completion_note: 'Fixture closure' }) };
   api.defaults.adapter = (async config => {
     if (config.method === 'get') {
       reads++;
