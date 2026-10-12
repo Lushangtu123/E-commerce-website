@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { createHash } from 'crypto';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 jest.mock('../../database/redis', () => ({ getRedisClient: jest.fn() }));
@@ -11,6 +12,7 @@ import { OrderController } from '../../controllers/order.controller';
 import { cancelTimeoutOrder, checkAndCancelTimeoutOrders } from '../../services/order-timeout.service';
 import { getAdminOrderDetail, getOrderStatistics, updateOrderStatus } from '../../controllers/admin-order.controller';
 import { MAX_QUANTITY } from '../../services/purchase-items.service';
+import { CouponModel } from '../../models/coupon.model';
 
 const ADDRESS = { receiver_name: '收件人', phone: '13800138000', province: '浙江省', city: '杭州市', district: '西湖区', detail_address: '测试路1号' };
 const PRODUCT = { product_id: 1, title: '商品', price: '19.99', stock: 10, main_image: 'image.jpg', status: 1 };
@@ -83,6 +85,175 @@ beforeEach(() => {
 });
 
 describe('下单原子性', () => {
+  test('新请求超过 100 个商品行时只读核对请求号后拒绝，不取得事务连接', async () => {
+    const res = response();
+    await OrderController.create(request({ items: Array.from({ length: 101 }, (_, index) => ({
+      product_id: index + 1, quantity: 1,
+    })) }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '单次结算最多支持100个商品或规格，请分批结算' });
+    expect(pool.getConnection).not.toHaveBeenCalled();
+    expect(connection.beginTransaction).not.toHaveBeenCalled();
+    expect(pool.execute).toHaveBeenCalledTimes(1);
+    expect(matching('INSERT INTO orders')).toHaveLength(0);
+  });
+
+  test('预览超过 100 个商品行时拒绝，尚未取得数据库连接', async () => {
+    const available = jest.spyOn(CouponModel, 'getAvailableForOrder').mockResolvedValue([]);
+    try {
+      const res = response();
+      await OrderController.preview(request({ items: Array.from({ length: 101 }, (_, index) => ({
+        product_id: index + 1, quantity: 1,
+      })) }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '单次结算最多支持100个商品或规格，请分批结算' });
+      expect(pool.getConnection).not.toHaveBeenCalled();
+      expect(pool.execute).not.toHaveBeenCalled();
+    } finally { available.mockRestore(); }
+  });
+
+  test.each(['create', 'preview'] as const)('%s 原始数组超过 1000 行时拒绝，即使合并后只有一个商品', async operation => {
+    const execute = connection.execute.getMockImplementation();
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('FROM products')) return Promise.resolve([[{ ...PRODUCT, stock: 2000 }], []]);
+      return execute(sql, params);
+    });
+    const available = jest.spyOn(CouponModel, 'getAvailableForOrder').mockResolvedValue([]);
+    try {
+      const res = response();
+      await OrderController[operation](request({ items: Array.from({ length: 1001 }, () => ({
+        product_id: 1, quantity: 1,
+      })) }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '结算商品列表最多支持1000行，请分批结算' });
+      expect(pool.getConnection).not.toHaveBeenCalled();
+      expect(connection.beginTransaction).not.toHaveBeenCalled();
+      expect(pool.execute).toHaveBeenCalledTimes(operation === 'create' ? 1 : 0);
+      expect(matching('INSERT INTO orders')).toHaveLength(0);
+    } finally { available.mockRestore(); }
+  });
+
+  test('未知请求号的巨大原始数组不遍历商品字段，最多执行一次只读查询', async () => {
+    const readProductId = jest.fn(() => 1);
+    const item = { get product_id() { return readProductId(); }, quantity: 1 };
+    const res = response();
+    await OrderController.create(request({ items: Array(10000).fill(item) }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算商品列表最多支持1000行，请分批结算' });
+    expect(readProductId).not.toHaveBeenCalled();
+    expect(pool.execute).toHaveBeenCalledTimes(1);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+    expect(connection.execute).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([100, 1000])('恰好 %s 个原始行、100 个合并商品行仍下单，保持排序和数量合并', async rawCount => {
+    const copies = rawCount / 100;
+    const res = response();
+    await OrderController.create(request({ items: Array.from({ length: rawCount }, (_, index) => ({
+      product_id: 100 - (index % 100), quantity: 1,
+    })) }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(matching('FROM products').map(([, params]: [string, number[]]) => params[0]))
+      .toEqual(Array.from({ length: 100 }, (_, index) => index + 1));
+    expect(matching('INSERT INTO order_items')).toHaveLength(100);
+    expect(matching('INSERT INTO order_items').map(([, params]: [string, unknown[]]) => params.at(-2)))
+      .toEqual(Array(100).fill(copies));
+    expect(connection.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test('同一商品的 101 个独立 SKU 计为 101 行，合并前拒绝事务', async () => {
+    const res = response();
+    await OrderController.create(request({ items: Array.from({ length: 101 }, (_, index) => ({
+      product_id: 1, sku_id: index + 1, quantity: 1,
+    })) }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '单次结算最多支持100个商品或规格，请分批结算' });
+    expect(pool.getConnection).not.toHaveBeenCalled();
+    expect(pool.execute).toHaveBeenCalledTimes(1);
+  });
+
+  test('同一商品的 100 个独立 SKU 仍可下单，父商品锁仍先于所有规格锁', async () => {
+    const execute = connection.execute.getMockImplementation();
+    const skus = Array.from({ length: 100 }, (_, index) => ({
+      sku_id: index + 1, product_id: 1, sku_code: `SKU-${index + 1}`,
+      specs: { size: index + 1 }, specs_en: null, stock: 10, price: '1.00', status: 1,
+    }));
+    connection.execute.mockImplementation((sql: string, params: unknown[]) => {
+      if (sql.includes('FROM product_skus')) return Promise.resolve([skus, []]);
+      return execute(sql, params);
+    });
+    const res = response();
+    await OrderController.create(request({ items: [...skus].reverse().map(sku => ({
+      product_id: 1, sku_id: sku.sku_id, quantity: 1,
+    })) }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(matching('FROM products')).toHaveLength(1);
+    expect(matching('FROM product_skus')).toHaveLength(1);
+    const sqls = connection.execute.mock.calls.map(([sql]: [string]) => sql);
+    expect(sqls.findIndex((sql: string) => sql.includes('FROM products')))
+      .toBeLessThan(sqls.findIndex((sql: string) => sql.includes('FROM product_skus')));
+    expect(matching('INSERT INTO order_items').map(([, params]: [string, unknown[]]) => params[5]))
+      .toEqual(Array.from({ length: 100 }, (_, index) => index + 1));
+    expect(matching('stock = stock -')).toHaveLength(100);
+    expect(connection.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['unique', 'duplicates'] as const)('历史超限 %s 请求使用原规范化指纹只读恢复，不动库存、券或消息', async shape => {
+    const items = shape === 'unique'
+      ? Array.from({ length: 101 }, (_, index) => ({ product_id: index + 1, quantity: 1 }))
+      : [{ product_id: 1, quantity: 1001 }];
+    const raw = shape === 'unique' ? [...items].reverse()
+      : Array.from({ length: 1001 }, () => ({ product_id: 1, quantity: 1 }));
+    const fingerprint = createHash('sha256').update(JSON.stringify({
+      items, shippingAddressId: 3, remark: '', userCouponId: 11,
+    })).digest('hex');
+    pool.execute.mockResolvedValueOnce([[{
+      order_id: 1234, checkout_fingerprint: fingerprint, original_amount: '111.11',
+      discount_amount: '22.22', total_amount: '88.89',
+    }], []]);
+    const res = response();
+    await OrderController.create(request({ items: raw, user_coupon_id: 11,
+      checkout_key: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      order_id: 1234, original_amount: 111.11, discount_amount: 22.22, total_amount: 88.89,
+    }));
+    expect(pool.execute).toHaveBeenCalledTimes(1);
+    expect(pool.execute.mock.calls[0][1]).toEqual([7, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+    expect(connection.execute).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
+    expect(sendOrderTimeoutCheckMessage).not.toHaveBeenCalled();
+  });
+
+  test('历史超限请求号不能用于不同内容，固定只读后返回 409', async () => {
+    pool.execute.mockResolvedValueOnce([[{ checkout_fingerprint: 'different' }], []]);
+    const res = response();
+    await OrderController.create(request({ items: Array.from({ length: 101 }, (_, index) => ({
+      product_id: index + 1, quantity: 1,
+    })) }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: '结算请求号已用于其他结算内容，请重新结算' });
+    expect(pool.execute).toHaveBeenCalledTimes(1);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+    expect(connection.execute).not.toHaveBeenCalled();
+  });
+
+  test.each(['invalid-key', 'unkeyed', 'invalid-address', 'invalid-coupon'] as const)('超大原始列表 %s 在任何查询前拒绝', async invalid => {
+    const res = response();
+    await OrderController.create(request({
+      items: Array(1001).fill({ product_id: 1, quantity: 1 }),
+      ...(invalid === 'invalid-key' ? { checkout_key: 'invalid' } : {}),
+      ...(invalid === 'unkeyed' ? { checkout_key: undefined } : {}),
+      ...(invalid === 'invalid-address' ? { shipping_address_id: 0 } : {}),
+      ...(invalid === 'invalid-coupon' ? { user_coupon_id: -1 } : {}),
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(pool.execute).not.toHaveBeenCalled();
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+
   test.each(['create', 'preview'] as const)('%s 拒绝跨规格商品总量超限，尚未取得数据库连接', async operation => {
     const res = response();
     await OrderController[operation](request({ items: [

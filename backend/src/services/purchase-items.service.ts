@@ -8,6 +8,8 @@ export class PurchaseError extends Error {
 }
 
 export const MAX_QUANTITY = 2147483647;
+export const MAX_CHECKOUT_LINES = 100;
+export const MAX_CHECKOUT_INPUT_LINES = 1000;
 export interface PurchaseItem { product_id: number; sku_id?: number; quantity: number }
 interface Product extends RowDataPacket {
   product_id: number; title: string; title_en: string | null; price: number | string; stock: number; status: number; main_image: string | null;
