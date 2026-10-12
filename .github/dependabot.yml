@@ -1,0 +1,36 @@
+# Weekly dependency updates. Minor and patch bumps are grouped into one PR per directory;
+# major bumps arrive one per PR so each can be reviewed and tested on its own.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 drops the compiler API that ts-jest and ts-node need (see CLAUDE.md).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # The client major must match the Elasticsearch server major.
+      - dependency-name: "@elastic/elasticsearch"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions:
+        patterns: ["*"]
