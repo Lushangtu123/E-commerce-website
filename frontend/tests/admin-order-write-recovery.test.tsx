@@ -81,7 +81,7 @@ describe('administrator order write recovery', () => {
 
   it('keeps an unresolved shipment locked across filters and lets the operator retry only its detail read', async () => {
     let checks = 0;
-    await setup({ detail: async () => { if (++checks === 1) throw failure(503); return detailResult(); }, list: async () => listResult(writes.length && checks > 1 ? 2 : 1) });
+    await setup({ detail: async () => { if (++checks === 1) throw failure(503); return detailResult(); }, list: async call => call.params?.status === '1' && writes.length && checks > 1 ? { orders: [], pagination: { total: 0 } } : listResult(writes.length && checks > 1 ? 2 : 1) });
     await fillShipment();
     const stale = captureHandler(shipmentForm(), 'onSubmit');
     submitTogether(shipmentForm(), shipmentForm()); await settle();

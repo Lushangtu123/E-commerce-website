@@ -258,8 +258,8 @@ describe('product search results', () => {
     };
   }
 
-  const result = (title: string, pages = 1): ProductList =>
-    ({ products: [{ product_id: 1, title } as Product], total: pages * 20, page: 1, limit: 20, totalPages: pages });
+  const result = (title: string, pages = 1, page = 1): ProductList =>
+    ({ products: [{ product_id: 1, title, price: '10.00', stock: 5, sales_count: 0, rating: '0.00' } as Product], total: pages * 20, page, limit: 20, totalPages: pages });
   const cards = () => screen.queryAllByTestId('product-card').map(card => card.textContent);
   const lastRequest = () => vi.mocked(productApi.list).mock.lastCall?.[0] as { page?: number } | undefined;
 
@@ -284,7 +284,7 @@ describe('product search results', () => {
 
   it('requests page one and hides old cards at once when the keyword changes from a later page', async () => {
     const next = deferred<ProductList>();
-    const { setQuery } = await setup(params => params.keyword === 'old' ? Promise.resolve(result(`Old page ${params.page}`, 3)) : next.promise);
+    const { setQuery } = await setup(params => params.keyword === 'old' ? Promise.resolve(result(`Old page ${params.page}`, 3, params.page)) : next.promise);
     await clickPage('3');
     expect(cards()).toEqual(['Old page 3']);
 
@@ -313,7 +313,7 @@ describe('product search results', () => {
   });
 
   it('navigates within the product list when sorting and resets a later page', async () => {
-    const { setQuery } = await setup(async params => result(`${params.sort} page ${params.page}`, 3));
+    const { setQuery } = await setup(async params => result(`${params.sort} page ${params.page}`, 3, params.page));
     await clickPage('3');
 
     fireEvent.change(screen.getByLabelText('排序:'), { target: { value: 'price ASC' } });
@@ -330,7 +330,7 @@ describe('product search results', () => {
 
   it('starts at page one when returning to an earlier keyword while its replacement is pending', async () => {
     const pending = deferred<ProductList>();
-    const { setQuery } = await setup(params => params.keyword === 'new' ? pending.promise : Promise.resolve(result(`Old page ${params.page}`, 3)));
+    const { setQuery } = await setup(params => params.keyword === 'new' ? pending.promise : Promise.resolve(result(`Old page ${params.page}`, 3, params.page)));
     await clickPage('3');
 
     await setQuery({ keyword: 'new' });

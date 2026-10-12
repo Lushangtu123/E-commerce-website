@@ -7,10 +7,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import api from '@/lib/api';
-import type { AdminPage, AdminUserRow } from '@/lib/api';
 import { adminUserApi } from '@/lib/api/admin';
-import { unknownUserStatusWrite, userStatusAcknowledged, validAdminUserDetail, validAdminUserSnapshot } from '@/lib/admin-user-read';
+import { unknownUserStatusWrite, userStatusAcknowledged, validAdminUserDetail } from '@/lib/admin-user-read';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
+import { readAdminUsers } from '@/lib/admin-list-response';
 import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
@@ -40,11 +40,11 @@ export default function AdminUsersPage() {
   const query = useAdminQuery({
     name: 'users',
     params: [page, filters.keyword, filters.status],
-    load: () => api.get<unknown, AdminPage & { users?: AdminUserRow[] }>('/admin/users', { params: {
+    load: async () => readAdminUsers(await api.get<unknown, unknown>('/admin/users', { params: {
       page, limit: 20,
       ...(filters.keyword && { keyword: filters.keyword }),
       ...(filters.status !== '' && { status: filters.status }),
-    } }),
+    } }), { page, status: filters.status }),
   });
   const lastPage = Math.max(1, Number(query.data?.pagination?.totalPages) || Math.ceil((Number(query.data?.pagination?.total) || 0) / 20));
   const beyondLastPage = query.data !== undefined && page > lastPage;
@@ -73,10 +73,11 @@ export default function AdminUsersPage() {
       page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
     } });
     if (!isCurrentScope()) return false;
-    if (!validAdminUserSnapshot(actual, page) || actual.users.some(row => row.user_id === userId && row.status !== actualStatus)) {
+    const snapshot = readAdminUsers(actual, { page, status: filters.status });
+    if (snapshot.users.some(row => row.user_id === userId && row.status !== actualStatus)) {
       throw new Error('Invalid user snapshot');
     }
-    queryClient.setQueryData(['admin', 'users', sessionId, page, filters.keyword, filters.status], actual);
+    queryClient.setQueryData(['admin', 'users', sessionId, page, filters.keyword, filters.status], snapshot);
     return true;
   };
 

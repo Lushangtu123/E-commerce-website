@@ -6,8 +6,9 @@ import { translate, useI18n } from '@/lib/i18n';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import type { AdminPage, AdminProductRow, Category } from '@/lib/api';
+import type { AdminProductRow, Category } from '@/lib/api';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
+import { readAdminProducts } from '@/lib/admin-list-response';
 import AdminLayout from '@/components/AdminLayout';
 import ProductImage from '@/components/ProductImage';
 import AdminProductForm, { EMPTY_PRODUCT_FORM, isProductFormComplete, toProductPayload, toProductChanges, type ProductFormValues } from '@/components/AdminProductForm';
@@ -17,7 +18,7 @@ import { logger } from '@/lib/logger';
 import { requestFailure } from '@/lib/api-error';
 import { localizedText } from '@/lib/product-content';
 import { clearPendingProductCreation, readPendingProductCreation, storePendingProductCreation, type PendingProductCreation } from '@/lib/pending-product-creation';
-import { inventoryUpdateAcknowledged, unknownInventoryWrite, validProductSnapshot } from '@/lib/admin-inventory-write';
+import { inventoryUpdateAcknowledged, unknownInventoryWrite } from '@/lib/admin-inventory-write';
 
 type EditProductForm = ProductFormValues & { product_id: number; has_sku: boolean; previous: ProductFormValues };
 type Recovery = { sessionId: string | null; checking: boolean };
@@ -58,11 +59,11 @@ export default function AdminProductsPage() {
   const query = useAdminQuery({
     name: 'products',
     params: [page, filters.keyword, filters.status],
-    load: () => api.get<unknown, AdminPage & { products?: AdminProductRow[] }>('/admin/products', { params: {
+    load: async () => readAdminProducts(await api.get<unknown, unknown>('/admin/products', { params: {
       page, limit: 20,
       ...(filters.keyword && { keyword: filters.keyword }),
       ...(filters.status !== '' && { status: filters.status }),
-    } }),
+    } }), { page, status: filters.status }),
   });
   const categoriesQuery = useAdminQuery({ name: 'categories', params: [], load: () => api.get<unknown, Category[]>('/products/categories') });
   const { isCurrentSession } = query;
@@ -113,8 +114,8 @@ export default function AdminProductsPage() {
       page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
     } });
     if (!isCurrentScope()) return false;
-    if (!validProductSnapshot(actual)) throw new Error('Invalid product snapshot');
-    queryClient.setQueryData(['admin', 'products', sessionId, page, filters.keyword, filters.status], actual);
+    const snapshot = readAdminProducts(actual, { page, status: filters.status });
+    queryClient.setQueryData(['admin', 'products', sessionId, page, filters.keyword, filters.status], snapshot);
     return true;
   };
 
