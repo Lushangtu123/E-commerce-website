@@ -31,6 +31,57 @@ beforeEach(() => {
 });
 
 describe('product review recovery and pagination', () => {
+  it('preserves optional nullable review text and translates the same read failure before recovery', async () => {
+    vi.mocked(reviewApi.listByProduct).mockResolvedValueOnce({ reviews: null } as never)
+      .mockResolvedValueOnce({ reviews: [{ review_id: 1, product_id: 1, rating: 5, username: null, content: null, created_at: null }], total: 1, totalPages: 1 } as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(within(reviewSection()).getByRole('alert')).toBeVisible();
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    const region = screen.getByRole('heading', { name: 'Customer reviews' }).parentElement!;
+    expect(within(region).getByRole('alert')).toHaveTextContent('Unable to load reviews. Please try again.');
+    clickTogether(within(region).getByRole('button', { name: 'Retry' })); await settle();
+    expect(within(region).queryByRole('alert')).toBeNull();
+    expect(within(region).getByLabelText('5 stars')).toBeVisible();
+    expect(reviewApi.listByProduct).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    { total: '12' }, { total: -1 }, { total: 1.5 }, { totalPages: 4 }, { page: 2 }, { limit: 20 },
+    { reviews: {} }, { reviews: [pageData().reviews[0], pageData().reviews[0]] },
+    { reviews: Array.from({ length: 6 }, (_, i) => ({ ...pageData().reviews[0], review_id: i + 1 })) },
+    { success: false }, { error: 'Failed' },
+  ])('rejects malformed review pagination or envelope %j', async changes => {
+    vi.mocked(reviewApi.listByProduct).mockResolvedValueOnce({ ...pageData(), ...changes } as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(within(reviewSection()).getByRole('alert')).toBeVisible();
+    expect(screen.getByRole('heading', { name: product.title })).toBeVisible();
+    expect(screen.getByRole('button', { name: '加入购物车' })).toBeEnabled();
+  });
+  it.each([
+    ['object content', { content: {} }], ['object username', { username: {} }],
+    ['invalid rating', { rating: 0 }], ['another product', { product_id: 2 }],
+  ])('keeps a review with %s out of the page and recovers by read-only retry', async (_, changes) => {
+    useAuthStore.getState().login({ user_id: 1, username: 'Synthetic', email: 'synthetic@example.test' }, 'review-session');
+    vi.mocked(reviewApi.listByProduct).mockResolvedValueOnce({ ...pageData(), reviews: [{ ...pageData().reviews[0], ...changes }] } as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(screen.getByRole('heading', { name: product.title })).toBeVisible();
+    expect(within(reviewSection()).getByRole('alert')).toHaveTextContent('加载评价失败，请重试');
+    expect(screen.getByRole('button', { name: '加入购物车' })).toBeEnabled();
+    clickTogether(within(reviewSection()).getByRole('button', { name: '重新加载' })); await settle();
+    expect(screen.getByText('Review 1')).toBeVisible();
+    expect(productApi.getDetail).toHaveBeenCalledTimes(1); expect(browseApi.record).toHaveBeenCalledTimes(1);
+    expect(reviewApi.listByProduct).toHaveBeenCalledTimes(2);
+  });
+  it('treats a missing list as a regional failure and retries without changing the product', async () => {
+    vi.mocked(reviewApi.listByProduct).mockResolvedValueOnce({} as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(screen.getByRole('heading', { name: product.title })).toBeVisible();
+    expect(within(reviewSection()).getByRole('alert')).toHaveTextContent('加载评价失败，请重试');
+    expect(within(reviewSection()).queryByText('暂无评价')).toBeNull();
+    clickTogether(within(reviewSection()).getByRole('button', { name: '重新加载' })); await settle();
+    expect(screen.getByText('Review 1')).toBeVisible();
+    expect(productApi.getDetail).toHaveBeenCalledTimes(1);
+    expect(browseApi.record).not.toHaveBeenCalled();
+  });
   it('shows loading instead of a false empty state until reviews arrive', async () => {
     const pending = deferred<ReturnType<typeof pageData>>();
     vi.mocked(reviewApi.listByProduct).mockReturnValueOnce(pending.promise);
