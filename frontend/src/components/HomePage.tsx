@@ -48,6 +48,7 @@ function useProductSection(scope: string, load: () => Promise<Product[]>, isCurr
 
   useEffect(() => {
     mounted.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Recommendations load on mount and whenever the account scope changes.
     void retry();
     return () => { mounted.current = false; pending.current = null; };
   }, [retry]);

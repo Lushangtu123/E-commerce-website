@@ -123,6 +123,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
 
   useEffect(() => {
     if (buyNowId === null || !isHydrated || !isAuthenticated || !sessionId || !user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The buy-now intent lives in session storage and is read once the customer session is known.
     try { setPurchase({ intent: readBuyNow(sessionId, user.user_id, buyNowId) }); }
     catch { setPurchase({ intent: null }); }
   }, [buyNowId, isHydrated, isAuthenticated, sessionId, user]);
@@ -278,10 +279,12 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     }
     if (buyNowId !== null && !hasPurchase) return;
     if (directPurchase || buyNowId !== null && !purchase?.intent) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A load marks the cart as loading at once, so checkout never treats a stale cart as ready.
     loadCart();
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router, buyNowId, hasPurchase, purchase?.intent, directPurchase, loadCart]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Addresses are cleared first, so a retry or session change never offers a stale address.
     setAddressResult(null);
     setAddressSelection(null);
     if (!isHydrated || !isAuthenticated || !isCurrentSession()) return;
@@ -308,6 +311,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     if (!choicesReady || !isHydrated || !isAuthenticated || loading && !directPurchase || lines.length === 0 || lines.length > MAX_CHECKOUT_LINES) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentSession();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A new quote clears the old failure and blocks checkout until it settles.
     setQuoteFailure(null);
     setQuoteLoading(true);
     orderApi.preview({ items: lines, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) })

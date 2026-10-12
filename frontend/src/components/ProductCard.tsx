@@ -35,6 +35,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const context = JSON.stringify([product.product_id, sessionId, user?.user_id]);
   const active = useRef(true);
   const productContext = useRef(context);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies and handlers compare it with the context they started under.
   productContext.current = context;
   const pending = useRef<{ context: string } | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);

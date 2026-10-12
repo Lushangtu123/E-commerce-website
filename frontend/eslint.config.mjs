@@ -13,10 +13,10 @@ export default defineConfig([
       '@typescript-eslint/no-explicit-any': 'error',
       // Product images are arbitrary admin-entered URLs, so next/image host allowlists do not fit.
       '@next/next/no-img-element': 'off',
-      // React Compiler rules added by react-hooks v7 (eslint-config-next 16). They flag deliberate
-      // session/stale-request guards (refs written during render, state reset in effects).
-      // The compiler is not enabled; tracked as warnings until those pages are reworked. Deliberate cases are
-      // fixed or disabled line by line with an `-- reason`, page by page, and the cap in package.json goes down.
+      // React Compiler rules added by react-hooks v7 (eslint-config-next 16). They also flag the deliberate
+      // session/stale-request guards (refs written during render, state reset in effects). The compiler is
+      // not enabled. Lint runs with --max-warnings 0: fix a warning when effects keep firing exactly as
+      // before, otherwise disable that line with an `-- reason`.
       // `npm run lint` caps warnings at the current count (package.json --max-warnings), so new
       // code cannot add more; lower the cap when a page is reworked.
       'react-hooks/refs': 'warn',

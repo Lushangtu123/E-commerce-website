@@ -40,6 +40,7 @@ export default function ProfileSettingsPage() {
   const { user, sessionId, isAuthenticated, isHydrated } = useAuthStore();
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const currentKey = useRef(sessionKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies and handlers compare it with the context they started under.
   currentKey.current = sessionKey;
   const [result, setResult] = useState<Loaded | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -127,12 +128,14 @@ export default function ProfileSettingsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another session starts from an empty profile, draft and notice.
     setResult(null); loaded.current = null; replaceDraft(null); setNotice(null); setSaving(null); mutation.current = null; recovery.current = null; setUnconfirmed(null);
     if (!isHydrated) return;
     if (!isAuthenticated) { router.push(passwordRedirect.current ?? '/login'); return; }
     passwordRedirect.current = null;
     loadProfile();
     return () => { revision.current += 1; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Load once per session; loadProfile is rebuilt every render.
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
 
   const handleChange = (name: keyof Draft, value: string) => {
@@ -197,6 +200,7 @@ export default function ProfileSettingsPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/refs -- Never render a profile for a superseded session.
   if (!isHydrated || !isAuthenticated || !isCurrent() || result?.key !== sessionKey) return <div className="container-custom py-12 text-gray-600" role="status">{t('个人资料加载中...')}</div>;
 
   return (

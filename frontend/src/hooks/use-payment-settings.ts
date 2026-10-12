@@ -8,6 +8,7 @@ export function usePaymentSettings(enabled = true) {
   const [demo, setDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Disabling resets to the safe state, so a later enable never reuses an old demo answer.
     if (!enabled) { setDemo(false); setLoading(true); return; }
     let active = true;
     (async () => {

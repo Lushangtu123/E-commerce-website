@@ -95,6 +95,7 @@ export default function AddressPage() {
 
   // An open form and a pending action belong to the account that started them.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- An open form and a pending action belong to the account that started them.
     setEditing(undefined);
     setForm(emptyForm);
     setFormError('');

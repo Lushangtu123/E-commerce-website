@@ -40,6 +40,7 @@ export function useScopedQuery<T>({ scope, params, load, enabled, sessionIsCurre
   }, []);
 
   const isCurrentSession = () => mounted.current && sessionIsCurrent();
+  // eslint-disable-next-line react-hooks/refs -- Data and errors are exposed only while the session that loaded them is current.
   const live = isCurrentSession();
   return {
     data: live && query.isSuccess ? query.data : undefined,

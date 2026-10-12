@@ -130,6 +130,7 @@ export default function MyCouponsPage() {
   };
 
   const canUseCoupon = (coupon: UserCoupon) => {
+    // eslint-disable-next-line react-hooks/purity -- Validity is checked against the clock on every render, so an expired coupon is never offered.
     const now = Date.now();
     return coupon.status === 1 && coupon.coupon_status !== 0 &&
       new Date(coupon.expired_at).getTime() > now &&

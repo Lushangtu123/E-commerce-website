@@ -36,6 +36,7 @@ export default function Header() {
   const [historyAction, setHistoryAction] = useState<HistoryAction | null>(null);
   const scope = isHydrated && isAuthenticated && sessionId && user ? JSON.stringify([sessionId, user.user_id]) : null;
   const currentScope = useRef(scope);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies and handlers compare it with the context they started under.
   currentScope.current = scope;
 
   const isCurrentSession = () => {
@@ -45,39 +46,12 @@ export default function Header() {
         auth.sessionId === sessionId && auth.user?.user_id === user?.user_id && storedSessionId() === sessionId;
     } catch { return false; }
   };
+  // eslint-disable-next-line react-hooks/refs -- Show search history only for the session that is current right now.
   const { rows: searchHistory, action: currentHistoryAction, read: currentHistoryRead } = isCurrentSession() ? {
     rows: history.scope === scope ? history.rows : [],
     action: historyAction?.scope === scope ? historyAction : null,
     read: historyRead?.scope === scope ? historyRead : null,
   } : { rows: [], action: null, read: null };
-
-  useEffect(() => {
-    mounted.current = true;
-    fetchHotKeywords();
-    return () => { mounted.current = false; historyRequest.current += 1; };
-  }, []);
-
-  useEffect(() => {
-    historyRequest.current += 1;
-    pendingHistoryRead.current = null;
-    setHistoryRead(null);
-    pendingHistoryAction.current = null;
-    setHistoryAction(null);
-    setHistory({ scope: null, rows: [] });
-    setSearchKeyword('');
-    setShowDropdown(false);
-    if (scope) fetchSearchHistory();
-  }, [scope]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const fetchSearchHistory = async (supersede = false) => {
     if (!isCurrentSession() || !scope || (!supersede && pendingHistoryRead.current?.scope === scope)) return;
@@ -125,6 +99,37 @@ export default function Header() {
       logger.error('获取热搜失败:', error);
     }
   };
+
+  useEffect(() => {
+    mounted.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hot keywords load once on mount.
+    fetchHotKeywords();
+    return () => { mounted.current = false; historyRequest.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    historyRequest.current += 1;
+    pendingHistoryRead.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another account starts with empty search history and no pending deletion.
+    setHistoryRead(null);
+    pendingHistoryAction.current = null;
+    setHistoryAction(null);
+    setHistory({ scope: null, rows: [] });
+    setSearchKeyword('');
+    setShowDropdown(false);
+    if (scope) fetchSearchHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Reload history once per account; fetchSearchHistory is rebuilt every render.
+  }, [scope]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,6 +203,7 @@ export default function Header() {
   const handleLogout = async () => {
     // A full page load would cancel the request that clears the session cookie, so wait for it.
     await signOut();
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- A full page load after sign-out drops every client cache and store of the previous account.
     window.location.href = '/';
   };
 
