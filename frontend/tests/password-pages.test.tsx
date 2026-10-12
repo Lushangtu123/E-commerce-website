@@ -12,7 +12,7 @@ import { passwordError } from '@/lib/password-validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import { useLocaleStore } from '@/store/useLocaleStore';
-import { CommitLog, apiError, captureHandler, deferred, render, settle, submitTogether } from './helpers';
+import { CommitLog, apiError, captureHandler, clickTogether, deferred, render, settle, submitTogether } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/profile/settings' }));
@@ -267,6 +267,52 @@ describe('forgot password', () => {
     expect(screen.getByText(/如果该邮箱已注册/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('secret.invalid');
     expect(document.body.textContent).not.toContain('DO-NOT-DISPLAY');
+  });
+
+  it('retries an invalid capability response without sending email until an explicit submission', async () => {
+    const retry = deferred();
+    let reads = 0;
+    await setup({ capabilities: () => ++reads === 1 ? {} : retry.promise });
+    expect(screen.getByRole('alert')).toHaveTextContent('加载邮件服务状态失败，请重试');
+    expect(screen.getByRole('button', { name: '发送重置邮件' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'customer@example.test' } });
+    fireEvent.submit(form()!);
+    expect(payloads).toEqual([]);
+
+    const reload = screen.getByRole('button', { name: '重新加载' });
+    clickTogether(reload, reload);
+    await settle();
+    expect(screen.getByRole('status')).toHaveTextContent('正在确认邮件服务...');
+    expect(screen.getByRole('button', { name: '发送重置邮件' })).toBeDisabled();
+    fireEvent.submit(form()!);
+    expect(payloads).toEqual([]);
+
+    await act(async () => retry.resolve({ passwordResetAvailable: true }));
+    await settle();
+    expect(reads).toBe(2);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '发送重置邮件' })).toBeEnabled();
+    expect(payloads).toEqual([]);
+    submitTogether(form()!, form()!);
+    await settle();
+    expect(payloads).toEqual([{ email: 'customer@example.test' }]);
+    expect(screen.getByRole('status')).toHaveTextContent('如果该邮箱已注册');
+  });
+
+  it.each([
+    null, [], 'unavailable', { passwordResetAvailable: 'true' }, { passwordResetAvailable: 1 },
+    { passwordResetAvailable: null }, { error: 'Temporary error' },
+    { passwordResetAvailable: true, error: 'Temporary error' },
+    { passwordResetAvailable: true, success: false },
+  ])('keeps invalid capabilities %j retryable and prevents email submission', async capabilities => {
+    await setup({ capabilities: () => capabilities });
+    expect(screen.getByRole('alert')).toHaveTextContent('加载邮件服务状态失败，请重试');
+    expect(screen.getByRole('button', { name: '重新加载' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '发送重置邮件' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'customer@example.test' } });
+    fireEvent.submit(form()!);
+    await settle();
+    expect(payloads).toEqual([]);
   });
 });
 

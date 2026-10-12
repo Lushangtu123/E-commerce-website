@@ -19,8 +19,11 @@ export default function ForgotPasswordPage() {
     setAvailable(null); setCapabilityError(false);
     const active = () => mounted.current && capabilityRequest.current === operation;
     try {
-      const data = await userApi.passwordCapabilities();
-      if (active()) setAvailable(data.passwordResetAvailable === true);
+      const data: unknown = await userApi.passwordCapabilities();
+      if (!data || typeof data !== 'object' || Array.isArray(data) || !('passwordResetAvailable' in data) ||
+        typeof data.passwordResetAvailable !== 'boolean' || ('error' in data && data.error != null) ||
+        ('success' in data && data.success === false)) throw new Error('Invalid password capabilities');
+      if (active()) setAvailable(data.passwordResetAvailable);
     } catch {
       if (active()) setCapabilityError(true);
     } finally {
