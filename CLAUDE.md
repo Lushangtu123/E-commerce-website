@@ -21,7 +21,7 @@ Frontend (`cd frontend`): `npm test` (Vitest), `npm run lint`, `npm run typechec
 
 Slash commands: `/verify` (type checks, unit tests, lint), `/integration` (full suite against throwaway MySQL 8.0 + Redis 7 in Docker), `/pr` (branch, commit, push, prefilled PR link).
 
-CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `main`, without a duplicate feature-branch push run. New commits cancel older runs for the same PR; main pushes remain independent. It checks backend build + tests on Node 24 and MySQL 8.0, a Playwright browser checkout flow against a production frontend build, frontend tests, lint and a separate embedded-API build. Browser fixtures use only a loopback API and an isolated MySQL database. `scripts/ci/services.sh` starts throwaway MySQL 8.0 / Redis 7 with bounded ECR → Docker Hub pulls, loopback-only random ports and readiness checks; CI always removes those containers and their volumes.
+CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `main`, without a duplicate feature-branch push run. New commits cancel older runs for the same PR; main pushes remain independent. It checks backend build + tests on Node 24 and MySQL 8.0, a Playwright browser checkout flow against a production frontend build, frontend tests, lint and a separate embedded-API build. Browser fixtures use only a loopback API and an isolated MySQL database. `scripts/ci/services.sh` starts throwaway MySQL 8.0 / Redis 7 with bounded ECR → Docker Hub pulls, loopback-only random ports and readiness checks; CI always removes those containers and their volumes. Workflows run with read-only `contents` permission and actions pinned to commit SHAs; `.github/dependabot.yml` opens weekly update PRs (grouped minor/patch per directory, majors one by one, never TypeScript or Elasticsearch-client majors).
 
 ## Conventions
 
@@ -31,6 +31,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 - User-facing API messages are Chinese. Every new message the UI can show needs an English entry in `frontend/src/lib/error-translations.ts`.
 - Critical admin product, SKU, coupon and user-status writes save their audit on the same transaction connection. `afterProductWrite` only refreshes cache/search after commit; login logging remains best effort.
 - Server code logs through `utils/logger` (pino); `console` is only for the CLI output of `src/database` scripts. Inside a request every line gets `requestId` from `utils/request-context.ts`, matching the `X-Request-Id` response header.
+- CodeQL (`.github/workflows/codeql.yml`, `security-extended`) scans TypeScript and workflows on PRs, `main` and weekly: fix new alerts, or dismiss one in GitHub only with a written reason.
 - Route params are always strings; follow the existing `req.params.id as string` / `positiveId()` idiom.
 - Tests live in `backend/src/__tests__` and `frontend/tests`. Write the failing test first for bug fixes, and keep MySQL/Redis integration tests self-contained (own database name, skip without env vars).
 

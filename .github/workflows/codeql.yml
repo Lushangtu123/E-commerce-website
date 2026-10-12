@@ -1,0 +1,38 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 3 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL 安全扫描
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # TypeScript is analysed from source, so no build step is needed.
+      - name: 初始化 CodeQL
+        uses: github/codeql-action/init@cee97f86b972a3ded3c58d04148362b193ddc518 # v4.38.3
+        with:
+          languages: javascript-typescript, actions
+          queries: security-extended
+
+      - name: 分析
+        uses: github/codeql-action/analyze@cee97f86b972a3ded3c58d04148362b193ddc518 # v4.38.3
