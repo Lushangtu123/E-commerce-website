@@ -36,7 +36,11 @@ async function traceMiddleClick(context, page, perform) {
       pages: context.pages().map(popup => safeUrl(popup.url())),
       targets: targets.targetInfos.filter(target => target.type === 'page').map(target => ({ url: safeUrl(target.url), attached: target.attached })) }));
     throw error;
-  } finally { context.off('page', onPage); context.off('requestfailed', onFailure); await cdp.detach(); }
+  } finally {
+    context.off('page', onPage); context.off('requestfailed', onFailure);
+    // A closed source page may already detach CDP; cleanup must retain the navigation failure.
+    await cdp.detach().catch(() => {});
+  }
 }
 
 /** Real cookies and SQL-backed saved products; keyboard and middle clicks exercise native Next Links. */
