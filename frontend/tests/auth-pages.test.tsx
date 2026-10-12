@@ -38,7 +38,7 @@ const pages: [string, ComponentType, number][] = [
   ['profile/address', ProfileAddressPage, 1], ['my/coupons', MyCouponsPage, 1],
 ];
 
-describe.each(pages)('protected page %s', (_, Page, expectedRequests) => {
+describe.each(pages)('protected page %s', (route, Page, expectedRequests) => {
   beforeEach(() => {
     requests.length = 0;
   });
@@ -60,6 +60,8 @@ describe.each(pages)('protected page %s', (_, Page, expectedRequests) => {
   });
 
   it('redirects an anonymous visitor to login only after hydration finishes', async () => {
+    const path = `/${route.replace('[id]', '1')}?coupon_id=42&source=test`;
+    window.history.replaceState(null, '', path);
     render(<Page />);
     await settle();
     expect(router.push).not.toHaveBeenCalled();
@@ -67,7 +69,7 @@ describe.each(pages)('protected page %s', (_, Page, expectedRequests) => {
     act(() => useAuthStore.getState().hydrate());
     await settle();
 
-    expect(router.push.mock.calls).toEqual([['/login']]);
+    expect(router.push.mock.calls).toEqual([[`/login?next=${encodeURIComponent(path)}`]]);
     expect(requests).toEqual([]);
   });
 });

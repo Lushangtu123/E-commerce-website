@@ -1,11 +1,11 @@
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 import ProductCard from '@/components/ProductCard';
 import { cartApi, productApi, type Product } from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { render, settle } from './helpers';
+import { captureHandler, render, settle } from './helpers';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
@@ -20,14 +20,18 @@ it.each([false, true])('keeps server-rendered purchase controls disabled before 
   expect(container.querySelector('button')).toBeDisabled();
 });
 
-it('waits for session restoration, then lets an anonymous customer open sign-in', () => {
+it('waits for session restoration, then lets an anonymous customer open sign-in', async () => {
+  window.history.replaceState(null, '', '/products?category=2&page=3');
   render(<ProductCard product={product} />);
   const button = screen.getByRole('button', { name: '加入' });
   expect(button).toBeDisabled();
   act(() => useAuthStore.getState().hydrate());
   expect(button).toBeEnabled();
-  fireEvent.click(button);
-  expect(router.push).toHaveBeenCalledWith('/login');
+  // happy-dom follows the enclosing product anchor before React cancels its default click.
+  // Invoke the published handler against the current list URL to test the return destination.
+  await captureHandler(button)();
+  expect(router.push).toHaveBeenCalledWith('/login?next=%2Fproducts%3Fcategory%3D2%26page%3D3');
+  expect(useAuthStore.getState().isAuthenticated).toBe(false);
 });
 
 it('hydrates the disabled server control without mismatch and preserves one add for repeated clicks', async () => {

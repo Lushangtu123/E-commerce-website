@@ -78,6 +78,24 @@ describe.each(cases)('$name recovery', ({ Page, load, empty }) => {
 });
 
 describe('coupon center pagination and claims', () => {
+  it('keeps page two retry read-only after a successful reply echoes the wrong page', async () => {
+    useAuthStore.getState().login(customerA, 'A');
+    vi.mocked(couponApi.getAvailable).mockResolvedValueOnce(centerResponse(firstPage, 51))
+      .mockResolvedValueOnce(centerResponse([{ ...coupon, coupon_id: 51, name: 'Wrong page coupon' }], 51, 1))
+      .mockResolvedValueOnce(centerResponse([{ ...coupon, coupon_id: 51, name: 'Page two coupon' }], 51, 2));
+    render(<CouponsPage />); await settle();
+    fireEvent.click(screen.getByRole('button', { name: '下一页' })); await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('加载优惠券失败，请重试');
+    expect(screen.queryByText('Wrong page coupon')).not.toBeInTheDocument();
+    expect(screen.queryByText('暂无可领取的优惠券')).not.toBeInTheDocument();
+    expect(couponApi.getAvailable).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: '重新加载优惠券' })); await settle();
+    expect(couponApi.getAvailable).toHaveBeenLastCalledWith(2, 50);
+    expect(screen.getByText('Page two coupon')).toBeInTheDocument();
+    expect(screen.getByText('第 2 / 2 页')).toBeInTheDocument();
+    expect(couponApi.receive).not.toHaveBeenCalled();
+  });
+
   it('loads the older coupon on page two and retains that page when a load needs retry', async () => {
     useAuthStore.getState().login(customerA, 'A');
     vi.mocked(couponApi.getAvailable).mockResolvedValueOnce(centerResponse(firstPage, 51))
