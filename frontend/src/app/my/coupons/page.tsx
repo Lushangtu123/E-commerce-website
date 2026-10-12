@@ -10,6 +10,7 @@ import { translate, useI18n } from '@/lib/i18n';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { requestFailure } from '@/lib/api-error';
 import { readMyCouponPage } from '@/lib/my-coupon-response';
+import { readCheckoutChoices, storeCheckoutChoices, type CheckoutChoices } from '@/lib/checkout-choices';
 
 const STATUS_TABS = [
   { value: 1, label: '未使用' },
@@ -108,6 +109,21 @@ export default function MyCouponsPage() {
     if (!isDisplayedView() || !coupons.includes(coupon)) return;
     if (!canUseCoupon(coupon)) {
       toast.error(translate('优惠券当前不可用'));
+      return;
+    }
+    // A new explicit use action supersedes the ordinary cart's saved coupon, while
+    // stale coupon URLs on reload still respect the customer's later choices.
+    let choices: CheckoutChoices;
+    try { choices = readCheckoutChoices(sessionKey, null); }
+    catch {
+      toast.error(translate('无法读取结算选择，请重新选择收货地址和优惠券'));
+      return;
+    }
+    if (!storeCheckoutChoices(sessionKey, null, { ...choices, couponId: coupon.user_coupon_id })) {
+      // Failed readback can follow a successful write. Restore the previous choice
+      // best effort; further storage failures still block navigation and show the error.
+      void storeCheckoutChoices(sessionKey, null, choices);
+      toast.error(translate('无法保存结算选择，请恢复浏览器存储后重试'));
       return;
     }
     router.push(`/cart?user_coupon_id=${coupon.user_coupon_id}`);
