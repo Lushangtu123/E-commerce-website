@@ -1,6 +1,7 @@
 import { installCatalogRouter } from './catalog-router';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Component, type ReactNode } from 'react';
 import ProductListView from '@/components/ProductList';
 import { productApi, type ProductList } from '@/lib/api';
 import { useLocaleStore } from '@/store/useLocaleStore';
@@ -20,8 +21,57 @@ vi.mock('@/lib/api', () => ({ productApi: { list: vi.fn(), getCategories: vi.fn(
 const result = { products: [], page: 1, limit: 20, total: 60, totalPages: 3 } as ProductList;
 beforeEach(() => { installCatalogRouter(router, query); query.current = new URLSearchParams(); vi.mocked(productApi.list).mockImplementation(async params => ({ ...result, page: (params as { page: number }).page })); vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
+class RenderBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? <p>Unexpected rendering failure</p> : this.props.children; }
+}
 
 describe('catalog filter form', () => {
+  it.each([
+    null, {}, { error: 'Unavailable' }, [{ category_id: 3 }], [{ category_id: 0, name: 'Invalid' }],
+    [{ category_id: 3, name: {} }], [{ category_id: 3, name: ' ' }],
+    [{ category_id: 3, name: 'Clothing' }, { category_id: 3, name: 'Duplicate' }],
+  ])('keeps valid products and the URL category when the category success response is malformed: %j', async body => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(productApi.getCategories).mockResolvedValueOnce(body as never).mockResolvedValue([{ category_id: 3, name: 'Clothing' }]);
+    vi.mocked(productApi.list).mockResolvedValue({ ...result, products: [{ product_id: 1, title: 'Validated product', price: '10.00', stock: 5, sales_count: 0, rating: 0 }] });
+    query.current = new URLSearchParams({ category_id: '3' });
+    render(<RenderBoundary><ProductListView /></RenderBoundary>); await settle();
+    expect(screen.getByRole('status')).toHaveTextContent('分类暂时无法加载');
+    expect(screen.getByLabelText('商品分类')).toHaveValue('3');
+    expect(screen.getByText('Validated product')).toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+    act(() => useLocaleStore.getState().setLocale('en'));
+    expect(screen.getByRole('status')).toHaveTextContent('Categories are temporarily unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' })); await settle();
+    expect(screen.getByRole('option', { name: 'Clothing' })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(productApi.getCategories).toHaveBeenCalledTimes(2);
+    expect(productApi.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a real empty category array without inventing an error or clearing the applied category', async () => {
+    vi.mocked(productApi.getCategories).mockResolvedValue([]);
+    query.current = new URLSearchParams({ category_id: '3' });
+    render(<ProductListView />); await settle();
+    expect(screen.queryByText('分类暂时无法加载')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('商品分类')).toHaveValue('3');
+    expect(screen.getByRole('option', { name: '分类编号：3' })).toBeInTheDocument();
+  });
+
+  it('joins a pending explicit category retry without requesting another read', async () => {
+    const pending = deferred<{ category_id: number; name: string }[]>();
+    vi.mocked(productApi.getCategories).mockResolvedValueOnce({} as never).mockImplementation(() => pending.promise);
+    render(<RenderBoundary><ProductListView /></RenderBoundary>); await settle();
+    const retry = screen.getByRole('button', { name: '重试' });
+    fireEvent.click(retry); fireEvent.click(retry); await settle();
+    expect(retry).toBeDisabled();
+    expect(productApi.getCategories).toHaveBeenCalledTimes(2);
+    await act(async () => pending.resolve([{ category_id: 3, name: 'Clothing' }])); await settle();
+    expect(screen.getByRole('option', { name: 'Clothing' })).toBeInTheDocument();
+  });
+
   it('keeps editing local, applies all constraints to the URL, and preserves search and sort', async () => {
     query.current = new URLSearchParams({ keyword: 'shirt', sort: 'price ASC', page: '3' });
     render(<ProductListView />);

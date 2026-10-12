@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { productApi } from '@/lib/api';
 import { CATALOG_FILTER_KEYS, parseCatalogFilters, type CatalogFilterDraft, type CatalogFilters as Filters } from '@/lib/catalog-filters';
 import { useI18n } from '@/lib/i18n';
+import { readCategories } from '@/lib/category-list-response';
 
 export default function CatalogFilters({ initial, scope, onApply, disabled = false }: { initial: CatalogFilterDraft; scope: string; onApply: (filters: Filters) => void; disabled?: boolean }) {
   const { t } = useI18n();
@@ -12,8 +13,9 @@ export default function CatalogFilters({ initial, scope, onApply, disabled = fal
   // Navigation restores the URL's applied filters; a draft stays local until Apply is pressed.
   if (state.scope !== scope) setState({ scope, draft: initial, error: '' });
   const draft = state.scope === scope ? state.draft : initial;
-  const categoriesQuery = useQuery({ queryKey: ['catalog-categories'], queryFn: () => productApi.getCategories(), staleTime: 60_000 });
+  const categoriesQuery = useQuery({ queryKey: ['catalog-categories'], queryFn: async () => readCategories(await productApi.getCategories()), staleTime: 60_000 });
   const categories = categoriesQuery.data ?? [];
+  const categoriesFailed = categoriesQuery.isError || (categoriesQuery.isFetching && categoriesQuery.errorUpdatedAt > categoriesQuery.dataUpdatedAt);
   const missingCategory = draft.category_id !== '' && !categories.some(category => String(category.category_id) === draft.category_id);
   const change = (key: keyof CatalogFilterDraft, value: string) => setState({ scope, draft: { ...draft, [key]: value }, error: '' });
 
@@ -32,9 +34,9 @@ export default function CatalogFilters({ initial, scope, onApply, disabled = fal
           {missingCategory && <option value={draft.category_id}>{t('分类编号：{id}', { id: draft.category_id })}</option>}
           {categories.map(category => <option key={category.category_id} value={category.category_id}>{t(category.name)}</option>)}
         </select>
-        {categoriesQuery.isError && <div className="mt-1 text-sm" role="status">
+        {categoriesFailed && <div className="mt-1 text-sm" role="status">
           <span>{t('分类暂时无法加载')}</span>{' '}
-          <button type="button" className="text-gray-900 underline" disabled={disabled} onClick={() => void categoriesQuery.refetch()}>{t('重试')}</button>
+          <button type="button" className="text-gray-900 underline" disabled={disabled || categoriesQuery.isFetching} onClick={() => void categoriesQuery.refetch({ cancelRefetch: false })}>{t('重试')}</button>
         </div>}
       </div>
       <div>

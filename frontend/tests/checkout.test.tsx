@@ -615,6 +615,71 @@ describe('checkout', () => {
     expect(screen.getByRole('link', { name: '管理收货地址' })).toHaveAttribute('href', '/profile/address');
   });
 
+  it.each([
+    {}, { addresses: null }, { addresses: [null] },
+    { addresses: [{ ...shippingAddress, address_id: 0 }] },
+    { addresses: [{ ...shippingAddress, address_id: -1 }] },
+    { addresses: [{ ...shippingAddress, address_id: '41' }] },
+    { addresses: [{ ...shippingAddress, address_id: Number.MAX_SAFE_INTEGER + 1 }] },
+    { addresses: [shippingAddress, { ...shippingAddress }] },
+    { addresses: [{ ...shippingAddress, receiver_name: {} }] },
+    { addresses: [{ ...shippingAddress, is_default: 2 }] },
+    { addresses: [shippingAddress], success: false },
+    { addresses: [shippingAddress], error: 'Invalid result' },
+  ])('rejects malformed successful address reads %j and recovers with only GET', async malformed => {
+    let invalid = true;
+    await setupCheckout({ addresses: async () => invalid ? malformed as never : { addresses: [shippingAddress] } });
+    expect(screen.getByRole('alert')).toHaveTextContent('加载收货地址失败');
+    expect(screen.queryByText('请先添加收货地址')).not.toBeInTheDocument();
+    expect(addressSelect()).not.toBeInTheDocument();
+    expect(checkoutButton()).toBeDisabled();
+    await click(checkoutButton());
+    expect(creates()).toEqual([]);
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load your shipping addresses');
+    invalid = false;
+    await click(screen.getByRole('button', { name: 'Reload addresses' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Shipping address' })).toHaveValue('41');
+    expect(screen.getByRole('button', { name: /^Checkout \(/ })).toBeEnabled();
+    expect(addressApi.list).toHaveBeenCalledTimes(2);
+    expect(previews()).toHaveLength(1);
+    expect(creates()).toEqual([]);
+    expect(cartApi.updateQuantity).not.toHaveBeenCalled();
+    expect(cartApi.remove).not.toHaveBeenCalled();
+  });
+
+  it('accepts actual empty address lists without an error or a retry and never submits', async () => {
+    await setupCheckout({ addresses: async () => ({ addresses: [] }) });
+    expect(screen.getByText('请先添加收货地址')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重新加载地址' })).not.toBeInTheDocument();
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByText('Please add a shipping address first')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Checkout \(/ })).toBeDisabled();
+    expect(creates()).toEqual([]);
+  });
+
+  it('accepts nullable database address regions without blocking valid checkout', async () => {
+    await setupCheckout({ addresses: async () => ({ addresses: [{ ...shippingAddress, province: null, city: null, district: null }] }) });
+    expect(checkoutButton()).toBeEnabled();
+    await click(checkoutButton());
+    expect(creates()[0].shipping_address_id).toBe(41);
+  });
+
+  it('ignores a late malformed address result from the previous customer', async () => {
+    const old = deferred<{ addresses: ShippingAddress[] }>();
+    let calls = 0;
+    await setupCheckout({ addresses: () => ++calls === 1 ? old.promise : Promise.resolve({ addresses: [{ ...shippingAddress, address_id: 42, receiver_name: 'Second Receiver' }] }) });
+    switchCustomer(); await settle();
+    await act(async () => old.resolve({ addresses: [{ ...shippingAddress, address_id: 0 }] }));
+    await settle();
+    expect(addressSelect()).toHaveTextContent('Second Receiver');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(checkoutButton()).toBeEnabled();
+    expect(creates()).toEqual([]);
+  });
+
   it('selects the default address and submits an explicitly chosen address ID', async () => {
     const other = { ...shippingAddress, address_id: 42, receiver_name: 'Other Receiver', is_default: false };
     await setupCheckout({ addresses: async () => ({ addresses: [other, shippingAddress] }) });

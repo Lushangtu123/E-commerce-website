@@ -28,7 +28,7 @@ const myResponse = (data: Coupon[]) => ({ data, pagination: { page: 1, page_size
 
 const coupon = {
   coupon_id: 1, user_coupon_id: 7, name: 'Summer', code: 'SUMMER', type: 2, discount_value: 20 as number | string,
-  min_amount: 0, total_quantity: 10, remain_quantity: 5, per_user_limit: 1,
+  min_amount: 0, total_quantity: 10, remain_quantity: 5, received_count: 5, used_count: 0, per_user_limit: 1,
   status: 1, coupon_status: 1, received_at: '2026-01-01T00:00:00Z',
   start_time: '2026-01-01T00:00:00Z', end_time: '2099-01-01T00:00:00Z', expired_at: '2099-01-01T00:00:00Z',
 };
@@ -44,6 +44,8 @@ async function setup(page: string, coupons: Coupon[] = [coupon]) {
   vi.mocked(couponApi.getAvailable).mockResolvedValue({ success: true, data: coupons,
     pagination: { page: 1, page_size: 50, total: coupons.length, total_pages: Math.ceil(coupons.length / 50) } } as never);
   vi.mocked(couponApi.getMyCoupons).mockResolvedValue(myResponse(coupons) as never);
+  vi.mocked(adminCouponApi.getList).mockImplementation((async (page = 1, pageSize = 50) => ({ data: coupons,
+    pagination: { page, page_size: pageSize, total: coupons.length, total_pages: Math.ceil(coupons.length / pageSize) } })) as never);
   const Page = pages[page];
   const view = render(<Page />);
   await settle();

@@ -60,6 +60,24 @@ describe('address management', () => {
     notifications.length = 0;
   });
 
+  it.each([
+    { addresses: [address, { ...address }] },
+    { addresses: [address], success: false },
+    { addresses: [address], error: 'Invalid result' },
+  ])('rejects contradictory or ambiguous address lists %j before enabling address writes', async malformed => {
+    let invalid = true;
+    await setup(async () => invalid ? malformed as never : { addresses: [address] });
+    expect(screen.getByRole('alert')).toHaveTextContent('加载收货地址失败');
+    expect(screen.queryByRole('button', { name: '编辑' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新增地址' })).not.toBeInTheDocument();
+    invalid = false;
+    await click('重新加载地址');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '编辑' })).toBeEnabled();
+    expect(writes()).toEqual([]);
+    expect(addressApi.list).toHaveBeenCalledTimes(2);
+  });
+
   const fillNew = async () => {
     await click('新增地址');
     for (const name of fields) fireEvent.change(input(name), { target: { value: address[name] } });

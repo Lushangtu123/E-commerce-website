@@ -1362,6 +1362,8 @@ async function localPlatformScripts(context) {
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./list-read-response.cjs')({ browser, admin, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./checkout-support-read-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./admin-publication-guard.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   assert.deepEqual(errors, [], 'browser runtime errors');

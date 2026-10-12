@@ -20,6 +20,7 @@ module.exports = async function listReadResponse({ browser, admin, localPlatform
       [admin, '/admin/orders', '/admin/orders', 'orders', 'Failed to load orders', undefined],
       [admin, '/admin/products', '/admin/products', 'products', 'Failed to load products', '获取商品列表失败:'],
       [admin, '/admin/users', '/admin/users', 'users', 'Failed to load users', '获取用户列表失败:'],
+      [admin, '/admin/coupons', '/admin/coupons', 'data', 'Unable to load coupons', '获取优惠券列表失败:'],
     ]) {
       writes = []; reads = 0;
       const endpoint = api + endpointPath;

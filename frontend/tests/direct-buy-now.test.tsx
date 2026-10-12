@@ -20,7 +20,7 @@ it.each([undefined, 5])('buys one unit when the existing cart already equals sto
     ...(sku && { has_sku: true, skus: [{ product_id: 1, sku_id: sku, sku_code: 'RED', specs: { Color: 'Red' }, stock: 3, price: 10, status: 1 }] }) } });
   vi.mocked(cartApi.list).mockResolvedValue({ items: [{ cart_id: 1, product_id: 1, title: 'Only this purchase', price: 10, quantity: 3, stock: 3, ...(sku && { sku_id: sku }) }] });
   vi.mocked(cartApi.add).mockRejectedValue({ response: { status: 400, data: { error: '商品库存不足' } } });
-  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [{ address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street' }] });
+  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [{ address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street', is_default: false }] });
   vi.mocked(orderApi.preview).mockResolvedValue({ original_amount: 10, discount_amount: 0, total_amount: 10, coupon: null, available_coupons: [] });
   vi.mocked(orderApi.create).mockResolvedValue({ order_id: 55, message: '订单创建成功' });
   const product = render(<ProductDetail />); await settle();
@@ -42,7 +42,7 @@ function storedDirectPurchase() {
   sessionStorage.setItem('buy-now:buyer-session:1', JSON.stringify(intent));
   window.history.replaceState(null, '', `/cart?buy_now=${intent.id}`);
   vi.mocked(productApi.getDetail).mockResolvedValue({ product: { product_id: 1, title: 'Direct purchase', price: 10, stock: 3, status: 1, sales_count: 0, rating: 0 } });
-  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [{ address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street' }] });
+  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [{ address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street', is_default: false }] });
   vi.mocked(orderApi.preview).mockResolvedValue({ original_amount: 10, discount_amount: 0, total_amount: 10, coupon: null, available_coupons: [] });
   vi.mocked(cartApi.list).mockResolvedValue({ items: [] });
   return intent;

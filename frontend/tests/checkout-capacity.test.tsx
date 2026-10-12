@@ -14,7 +14,7 @@ it('requires an explicit batch choice for 101 variants and never requests oversi
   useAuthStore.getState().login({ user_id: 1, username: 'Buyer', email: 'buyer@example.test' }, 'capacity-session');
   const rows = Array.from({ length: 101 }, (_, index) => ({ cart_id: index + 1, product_id: 1, sku_id: index + 1, title: `Variant ${index + 1}`, quantity: 2, price: 10, stock: 5 }));
   vi.mocked(cartApi.list).mockResolvedValue({ items: rows });
-  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [{ address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street' }] });
+  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [{ address_id: 41, receiver_name: 'Buyer', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street', is_default: false }] });
   vi.mocked(orderApi.preview).mockImplementation(async input => ({ original_amount: input.items.length * 20, discount_amount: 0, total_amount: input.items.length * 20, coupon: null, available_coupons: [] }));
   render(<CartPage />); await settle();
   expect(orderApi.preview).not.toHaveBeenCalled();

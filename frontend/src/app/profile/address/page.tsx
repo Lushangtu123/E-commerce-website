@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import toast from 'react-hot-toast';
 import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
+import { readAddressList } from '@/lib/address-list-response';
 import { useSessionQuery } from '@/hooks/use-session-query';
 import { confirmAction } from '@/lib/confirm';
 import { useQueryClient } from '@tanstack/react-query';
@@ -36,16 +37,7 @@ interface CapacityRecovery {
 }
 
 async function readAddresses(): Promise<{ addresses: ShippingAddress[] }> {
-  const result = await addressApi.list();
-  if (!result || !Array.isArray(result.addresses) || result.addresses.some(address =>
-    !address || !Number.isSafeInteger(address.address_id) || address.address_id <= 0 ||
-    typeof address.receiver_name !== 'string' || typeof address.phone !== 'string' ||
-    ![true, false, 0, 1].includes(address.is_default as boolean | number) ||
-    ['province', 'city', 'district', 'detail_address'].some(name => {
-      const value = address[name as keyof ShippingAddress];
-      return value !== null && typeof value !== 'string';
-    }))) throw new Error('Invalid address list');
-  return result;
+  return readAddressList(await addressApi.list());
 }
 
 export default function AddressPage() {

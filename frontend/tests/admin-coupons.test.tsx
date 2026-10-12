@@ -1,10 +1,12 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import toast from 'react-hot-toast';
 import AdminCouponsPage from '@/app/admin/coupons/page';
 import { adminCouponApi } from '@/lib/api';
 import { apiError, render, settle } from './helpers';
+import { useLocaleStore } from '@/store/useLocaleStore';
+import { validCouponPage } from '@/lib/admin-coupon-write';
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => {
@@ -50,6 +52,54 @@ beforeEach(() => {
 });
 
 describe('admin coupons', () => {
+  it.each([
+    ['missing list', {}],
+    ['rejected success', { data: [active], pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 }, success: false }],
+    ['error response', { data: [active], pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 }, error: 'Invalid result' }],
+    ['wrong page', { data: [active], pagination: { page: 2, page_size: 50, total: 1, total_pages: 1 } }],
+    ['wrong page size', { data: [active], pagination: { page: 1, page_size: 20, total: 1, total_pages: 1 } }],
+    ['missing row fields', { data: [{ coupon_id: 3 }], pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 } }],
+  ])('rejects %s on the initial read and retries only the list', async (_label, bad) => {
+    list.mockResolvedValueOnce(bad as never).mockResolvedValue({ data: [active], pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 } } as never);
+    render(<AdminCouponsPage />);
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('获取优惠券列表失败');
+    expect(screen.queryByText('暂无优惠券')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    act(() => useLocaleStore.getState().setLocale('en'));
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load coupons');
+    await click('Retry');
+    expect(screen.getByText('Save ten')).toBeInTheDocument();
+    expect(list.mock.calls).toEqual([[1, 50], [1, 50]]);
+    expect(create).not.toHaveBeenCalled();
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects rows outside the requested status without exposing their actions', async () => {
+    await setup([active]);
+    list.mockResolvedValueOnce({ data: [active], pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 } } as never)
+      .mockResolvedValueOnce({ data: [disabled], pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 } } as never);
+    fireEvent.change(screen.getByRole('combobox', { name: '优惠券状态' }), { target: { value: '0' } });
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('获取优惠券列表失败');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    await click('重新加载');
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    expect(list.mock.calls).toEqual([[1, 50], [1, 50, 0], [1, 50, 0]]);
+    expect(create).not.toHaveBeenCalled();
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('accepts a row appearing between COUNT and SELECT without treating it as a failed read', async () => {
+    const actual = { data: [active], pagination: { page: 1, page_size: 50, total: 0, total_pages: 0 } };
+    expect(validCouponPage(actual)).toBe(true);
+    list.mockResolvedValue(actual as never);
+    render(<AdminCouponsPage />);
+    await settle();
+    expect(screen.getByText('Save ten')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
   it('lists each coupon with its type, value, quantities, usage and status', async () => {
     await setup();
     expect(list).toHaveBeenCalledWith(1, 50);
