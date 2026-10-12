@@ -1328,6 +1328,8 @@ async function localPlatformScripts(context) {
   await require('./admin-inventory-recovery.cjs')({ admin, context, adminContext,
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   await require('./admin-sku-indicators.cjs')({ admin, adminContext });
+  await require('./coupon-center-read-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
   await require('./customer-publication-guard.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
