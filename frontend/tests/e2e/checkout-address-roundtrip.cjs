@@ -72,6 +72,24 @@ module.exports = async function checkoutAddressRoundtrip({ browser, adminContext
 
     console.log('PASS browser chosen receiver and coupon survive real address management with fresh SQL amount');
 
+    await page.getByRole('combobox', { name: '优惠券', exact: true }).selectOption('');
+    await page.getByRole('button', { name: '结算 (1)', exact: true }).click({ trial: true });
+    assert.equal(await page.getByText('应付金额', { exact: true }).locator('..').textContent(), '应付金额¥10.00');
+    await page.goto(`${origin}/my/coupons`);
+    const explicitCount = previews.length;
+    const explicitQuote = page.waitForResponse(response => response.request().method() === 'POST' && response.url() === `${api}/orders/preview`);
+    await page.getByRole('button', { name: '立即使用', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/cart' && url.searchParams.get('user_coupon_id') === String(userCouponId));
+    assert.equal((await explicitQuote).status(), 200);
+    await page.getByRole('button', { name: '结算 (1)', exact: true }).click({ trial: true });
+    assert.ok(previews.length > explicitCount);
+    assert.deepEqual(previews.at(-1).items, [{ product_id: products[0].id, quantity: 1 }]);
+    assert.equal(previews.at(-1).user_coupon_id, userCouponId);
+    assert.equal(await page.getByRole('combobox', { name: '优惠券', exact: true }).inputValue(), String(userCouponId));
+    assert.equal(await page.getByLabel('收货地址', { exact: true }).inputValue(), String(chosenAddressId));
+    assert.equal(await page.getByText('应付金额', { exact: true }).locator('..').textContent(), '应付金额¥8.00');
+    console.log('PASS browser explicit My Coupons use supersedes saved no-coupon choice while retaining chosen address and subset with a fresh SQL quote');
+
     await page.getByRole('checkbox', { name: `选择 ${products[0].title}`, exact: true }).uncheck();
     await page.getByRole('button', { name: '结算 (0)', exact: true }).waitFor({ state: 'visible' });
     await roundtrip();
