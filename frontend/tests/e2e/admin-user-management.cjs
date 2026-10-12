@@ -23,8 +23,76 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
     const row = admin.getByRole('row').filter({ hasText: customerEmail }); await row.waitFor({ state: 'visible' });
     return row;
   };
+  // Exercise actual SQL-backed rows at a phone width; never submit an extra status write.
+  const verifyMobileActions = async (row, enabled) => {
+    const originalViewport = admin.viewportSize();
+    const language = admin.getByRole('combobox', { name: /^(界面语言|Interface language)$/ });
+    const originalLanguage = await language.inputValue();
+    const toggle = admin.getByRole('button', { name: /^(切换侧栏|Toggle sidebar)$/ });
+    const sidebarWasOpen = await toggle.getAttribute('aria-expanded') === 'true';
+    try {
+      await admin.setViewportSize({ width: 390, height: 844 });
+      if (sidebarWasOpen) await admin.getByRole('button', { name: /^(关闭侧栏|Close sidebar)$/ }).click();
+      for (const locale of ['zh-CN', 'en']) {
+        await language.selectOption(locale);
+        // Closing the desktop sidebar animates the main margin for 300ms. Measure the
+        // settled phone layout, not a frame in which its narrow card is still moving.
+        await admin.evaluate(() => document.fonts.ready);
+        await admin.waitForFunction(() => {
+          const main = document.getElementById('admin-sidebar')?.nextElementSibling;
+          return main && Math.abs(parseFloat(getComputedStyle(main).marginLeft)) < 0.01 &&
+            document.fonts.status === 'loaded' && !main.getAnimations().some(animation => animation.playState === 'running');
+        }, undefined, { polling: 'raf', timeout: 5000 });
+        const action = row.getByRole('button', { name: locale === 'en' ? (enabled ? 'Disable' : 'Enable') : (enabled ? '禁用' : '启用'), exact: true });
+        const detail = row.getByRole('link', { name: locale === 'en' ? 'Details' : '详情', exact: true });
+        const next = admin.getByRole('button', { name: locale === 'en' ? 'Next' : '下一页', exact: true });
+        const previous = admin.getByRole('button', { name: locale === 'en' ? 'Previous' : '上一页', exact: true });
+        // A single searched user has only one page; both controls must remain correctly disabled.
+        assert.equal(await next.isDisabled(), true); assert.equal(await previous.isDisabled(), true);
+        const scroll = row.locator('xpath=ancestor::table/parent::*');
+        await scroll.evaluate(element => { element.scrollLeft = 0; });
+        const initial = await action.boundingBox(); assert.ok(initial.x + initial.width > 390);
+        const paginationGeometry = () => next.evaluate(element => {
+          const rect = element.getBoundingClientRect(), container = element.closest('.border-t').getBoundingClientRect();
+          // Trial clicks may scroll the document vertically. Table scrolling must
+          // leave the button's position and size within its pagination unchanged.
+          return { left: rect.left - container.left, top: rect.top - container.top, width: rect.width, height: rect.height };
+        });
+        const paginationBefore = await paginationGeometry();
+        const geometry = await scroll.evaluate(element => {
+          const table = element.querySelector('table');
+          element.scrollLeft = element.scrollWidth;
+          const rect = element.getBoundingClientRect();
+          return { overflow: getComputedStyle(element).overflowX, width: element.clientWidth,
+            contentWidth: element.scrollWidth, moved: element.scrollLeft, left: rect.left, right: rect.right,
+            paginationOutside: !element.contains(table.closest('.overflow-hidden').querySelector('.border-t')) };
+        });
+        assert.equal(geometry.overflow, 'auto'); assert.ok(geometry.contentWidth > geometry.width && geometry.moved > 0);
+        assert.ok(geometry.left >= 0 && geometry.right <= 390); assert.equal(geometry.paginationOutside, true);
+        await action.scrollIntoViewIfNeeded();
+        for (const control of [action, detail]) {
+          const rect = await control.boundingBox(); assert.ok(rect.x >= geometry.left && rect.x + rect.width <= geometry.right + 1);
+          assert.equal(await control.evaluate(element => {
+            const rect = element.getBoundingClientRect();
+            return element.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+          }), true);
+          await control.click({ trial: true });
+        }
+        assert.deepEqual(await paginationGeometry(), paginationBefore);
+        for (const control of [previous, next]) {
+          const rect = await control.boundingBox(); assert.ok(rect.x >= 0 && rect.x + rect.width <= 391);
+        }
+      }
+      console.log(`PASS browser phone-width admin user ${enabled ? 'disable' : 'enable'} and details remain reachable in both languages with fixed pagination`);
+    } finally {
+      await language.selectOption(originalLanguage);
+      if (originalViewport) await admin.setViewportSize(originalViewport);
+      if (sidebarWasOpen) await toggle.click();
+    }
+  };
   await admin.getByRole('combobox', { name: /^(界面语言|Interface language)$/ }).selectOption('zh-CN');
-  const row = await findUser(); await row.getByRole('link', { name: '详情', exact: true }).click();
+  const row = await findUser(); await verifyMobileActions(row, true);
+  await row.getByRole('link', { name: '详情', exact: true }).click();
   await admin.getByRole('heading', { name: '用户详情', exact: true }).waitFor({ state: 'visible' });
   await admin.getByText(customerEmail, { exact: true }).waitFor({ state: 'visible' });
   await admin.getByText(addresses[0].receiver_name, { exact: true }).waitFor({ state: 'visible' });
@@ -69,6 +137,7 @@ module.exports = async function adminUserManagement({ admin, context, adminConte
   readUnavailable = false; await admin.getByRole('button', { name: 'Reload user status', exact: true }).click();
   await target.getByText('Disabled', { exact: true }).waitFor({ state: 'visible' });
   await target.getByRole('button', { name: 'Enable', exact: true }).click({ trial: true });
+  await verifyMobileActions(target, false);
   assert.equal(writes, 1);
   await admin.unroute(endpoint, lostWrite); await admin.unroute(detailEndpoint, failRead); setExpectedWrite(undefined); setExpectedRead(undefined);
   await target.getByRole('button', { name: 'Enable', exact: true }).click();
