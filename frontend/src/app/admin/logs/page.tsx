@@ -33,6 +33,7 @@ function AdminLogsContent() {
   const { filters, page } = applied;
   const viewKey = JSON.stringify([sessionId, urlKey]);
   const currentView = useRef(viewKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
   currentView.current = viewKey;
   const [draftState, setDraftState] = useState({ key: viewKey, filters });
   const draft = draftState.key === viewKey ? draftState.filters : filters;

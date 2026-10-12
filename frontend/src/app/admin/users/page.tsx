@@ -3,7 +3,7 @@
 import '@/lib/admin-i18n';
 import { translate, useI18n } from '@/lib/i18n';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -31,6 +31,7 @@ export default function AdminUsersPage() {
   const keywordDraft = draft.sessionId === sessionId ? draft.keyword : '';
   const scopeKey = JSON.stringify([sessionId, page, filters.keyword, filters.status]);
   const currentScope = useRef(scopeKey);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: handlers and late replies compare it with the scope they started under, and navigation moves it before React commits.
   currentScope.current = scopeKey;
   const mutation = useRef<object | null>(null);
   const recovery = useRef<Recovery | null>(null);
@@ -51,7 +52,8 @@ export default function AdminUsersPage() {
   const shown = beyondLastPage ? undefined : query.data;
   // Handlers act only on the rows they were rendered with, not on rows a refresh has since replaced.
   const displayed = useRef(shown);
-  displayed.current = shown;
+  // Committed rows only: handlers compare them with the rows they captured.
+  useLayoutEffect(() => { displayed.current = shown; });
   const users = shown?.users || [];
   const total = Number(shown?.pagination?.total) || 0;
   const loadError = query.error ? requestFailure(query.error).response?.data?.error || '获取用户列表失败' : undefined;
@@ -65,33 +67,38 @@ export default function AdminUsersPage() {
 
   // A recovery read replaces only the current administrator's current page. A scope change
   // leaves the lock in place and offers an explicit retry, without chasing changing filters.
-  latestRead.current = async (actualStatus, userId) => {
-    if (!isCurrentScope()) return false;
-    await queryClient.cancelQueries({ queryKey: ['admin', 'users', sessionId] });
-    if (!isCurrentScope()) return false;
-    const actual = await api.get<unknown, unknown>('/admin/users', { params: {
-      page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
-    } });
-    if (!isCurrentScope()) return false;
-    const snapshot = readAdminUsers(actual, { page, status: filters.status });
-    if (snapshot.users.some(row => row.user_id === userId && row.status !== actualStatus)) {
-      throw new Error('Invalid user snapshot');
-    }
-    queryClient.setQueryData(['admin', 'users', sessionId, page, filters.keyword, filters.status], snapshot);
-    return true;
-  };
+  useLayoutEffect(() => {
+    latestRead.current = async (actualStatus, userId) => {
+      if (!isCurrentScope()) return false;
+      await queryClient.cancelQueries({ queryKey: ['admin', 'users', sessionId] });
+      if (!isCurrentScope()) return false;
+      const actual = await api.get<unknown, unknown>('/admin/users', { params: {
+        page, limit: 20, ...(filters.keyword && { keyword: filters.keyword }), ...(filters.status !== '' && { status: filters.status }),
+      } });
+      if (!isCurrentScope()) return false;
+      const snapshot = readAdminUsers(actual, { page, status: filters.status });
+      if (snapshot.users.some(row => row.user_id === userId && row.status !== actualStatus)) {
+        throw new Error('Invalid user snapshot');
+      }
+      queryClient.setQueryData(['admin', 'users', sessionId, page, filters.keyword, filters.status], snapshot);
+      return true;
+    };
+  });
 
   // A pending action belongs to the administrator who started it; the next one may act at once.
   useEffect(() => {
     mutation.current = null;
     recovery.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Drop the previous administrator's recovery and pending writes before the new session acts.
     setRecovering(null);
     setPendingSessionId(null);
   }, [sessionId]);
 
   // Disabling the only user on the final filtered page leaves that page empty; show the new last page.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A shrunken list moves to its last page once, when the page falls out of range.
     if (beyondLastPage) setView({ sessionId, page: lastPage, filters });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Clamp only when the page leaves the range, not on every filter or total change.
   }, [beyondLastPage]);
 
   useEffect(() => {
