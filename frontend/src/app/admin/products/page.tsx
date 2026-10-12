@@ -6,9 +6,10 @@ import { translate, useI18n } from '@/lib/i18n';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import type { AdminProductRow, Category } from '@/lib/api';
+import type { AdminProductRow } from '@/lib/api';
 import { useAdminQuery, useAdminSessionId } from '@/hooks/use-admin-query';
 import { readAdminProducts } from '@/lib/admin-list-response';
+import { readCategories } from '@/lib/category-list-response';
 import AdminLayout from '@/components/AdminLayout';
 import ProductImage from '@/components/ProductImage';
 import AdminProductForm, { EMPTY_PRODUCT_FORM, isProductFormComplete, toProductPayload, toProductChanges, type ProductFormValues } from '@/components/AdminProductForm';
@@ -65,7 +66,8 @@ export default function AdminProductsPage() {
       ...(filters.status !== '' && { status: filters.status }),
     } }), { page, status: filters.status }),
   });
-  const categoriesQuery = useAdminQuery({ name: 'categories', params: [], load: () => api.get<unknown, Category[]>('/products/categories') });
+  const categoriesQuery = useAdminQuery({ name: 'categories', params: [],
+    load: async () => readCategories(await api.get<unknown, unknown>('/products/categories')) });
   const { isCurrentSession } = query;
   const sessionReady = isCurrentSession();
   const categories = categoriesQuery.data ?? [];
