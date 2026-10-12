@@ -16,13 +16,14 @@ interface Props {
   item: CartItem;
   selected: boolean;
   submitting: boolean;
+  selectionDisabled?: boolean;
   onToggle: () => void;
   onQuantityChange: (quantity: number) => void;
   onRemove: () => void;
 }
 
 /** One cart line: its selection, product details, quantity stepper, subtotal and remove button. */
-export default function CartItemRow({ item, selected, submitting, onToggle, onQuantityChange, onRemove }: Props) {
+export default function CartItemRow({ item, selected, submitting, selectionDisabled = false, onToggle, onQuantityChange, onRemove }: Props) {
   const router = useRouter();
   const { t, locale } = useI18n();
   const title = localizedText(item.title, item.title_en, locale);
@@ -35,7 +36,7 @@ export default function CartItemRow({ item, selected, submitting, onToggle, onQu
           type="checkbox"
           aria-label={t("选择 {title}", { title })}
           checked={available && selected}
-          disabled={submitting || !available}
+          disabled={submitting || selectionDisabled || !available}
           onChange={onToggle}
           className="h-5 w-5 rounded-sm accent-primary-600"
         />
