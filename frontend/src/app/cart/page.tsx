@@ -182,12 +182,15 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const quoteKey = JSON.stringify([sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
   const quote = quoteResult?.key === quoteKey ? quoteResult.data : null;
   const quoteError = quoteFailure?.key === quoteKey ? quoteFailure.message : null;
-  const isSameCustomerSession = () => {
+  // Each guard belongs to the session of the render that created it, so a reply for an earlier
+  // session is still rejected after a switch. Effects depend on it to re-run when the session changes.
+  const userId = user?.user_id;
+  const isSameCustomerSession = useCallback(() => {
     const currentAuth = useAuthStore.getState();
-    return currentAuth.isAuthenticated && currentAuth.sessionId === sessionId && currentAuth.user?.user_id === user?.user_id &&
+    return currentAuth.isAuthenticated && currentAuth.sessionId === sessionId && currentAuth.user?.user_id === userId &&
       storedSessionId() === (sessionId ?? null);
-  };
-  const isCurrentSession = () => mounted.current && isSameCustomerSession();
+  }, [sessionId, userId]);
+  const isCurrentSession = useCallback(() => mounted.current && isSameCustomerSession(), [isSameCustomerSession]);
   const syncDepartedWrite = async () => {
     if (mounted.current || !isSameCustomerSession()) return;
     // Navigation retires page-local effects, while the same customer's global count still needs the result.
@@ -205,7 +208,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       if (active && isCurrentSession()) setPurchaseCatalog({ revision: purchaseRevision, item: null, error: true });
     });
     return () => { active = false; };
-  }, [directPurchase, purchase?.intent, purchaseRevision]);
+  }, [directPurchase, purchase?.intent, purchaseRevision, isCurrentSession]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -227,78 +230,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     setUnconfirmedSession(pendingCheckout.current ? session : null);
   }, [isHydrated, sessionId, user?.user_id]);
 
-  useEffect(() => {
-    if (!isHydrated) return;
-    if (!isAuthenticated) {
-      router.push(customerLoginHref());
-      return;
-    }
-    if (buyNowId !== null && !purchase) return;
-    if (directPurchase || buyNowId !== null && !purchase?.intent) return;
-    loadCart();
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router, buyNowId, purchase?.intent, directPurchase]);
-
-  useEffect(() => {
-    setAddressResult(null);
-    setAddressSelection(null);
-    if (!isHydrated || !isAuthenticated || !isCurrentSession()) return;
-    let active = true;
-    addressApi.list().then(data => {
-      if (!active || !isCurrentSession()) return;
-      const ownedAddresses = readAddressList(data).addresses;
-      setAddressResult({ key: sessionKey, addresses: ownedAddresses });
-      const desiredId = choices.current.addressId;
-      const preferred = desiredId !== undefined ? ownedAddresses.find(address => address.address_id === desiredId) :
-        ownedAddresses.find(address => address.is_default === true || address.is_default === 1) || ownedAddresses[0];
-      if (desiredId !== undefined && desiredId !== null && !preferred) setChoicesNotice('原收货地址已不可用，请重新选择收货地址');
-      if (preferred) setAddressSelection({ key: sessionKey, id: preferred.address_id });
-    }).catch(error => {
-      if (!active || !isCurrentSession()) return;
-      setAddressResult({ key: sessionKey, addresses: [], error: error.response?.data?.error || '加载收货地址失败' });
-    });
-    return () => { active = false; };
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, addressRevision]);
-
-  useEffect(() => {
-    if (!choicesReady || !isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0 || orderItems.length > MAX_CHECKOUT_LINES) return;
-    let active = true;
-    const isCurrentRequest = () => active && isCurrentSession();
-    setQuoteFailure(null);
-    setQuoteLoading(true);
-    orderApi.preview({ items: orderItems, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) })
-      .then((data) => {
-        if (!isCurrentRequest()) return;
-        if (!validOrderPreview(data, selectedCouponId)) {
-          setQuoteFailure({ key: quoteKey, message: '结算报价无效，请重新计算' });
-          return;
-        }
-        setQuoteResult({ key: quoteKey, data });
-        if (linkedCouponId.current !== undefined) {
-          const carriedId = linkedCouponId.current;
-          linkedCouponId.current = undefined;
-          if (data.available_coupons.some(coupon => coupon.user_coupon_id === carriedId)) persistCoupon(carriedId);
-          else toast.error(translate('所选优惠券当前不可用，请重新选择'));
-        }
-      })
-      .catch((error) => {
-        if (!isCurrentRequest()) return;
-        const failure = requestFailure(error);
-        const message = failure.response?.data?.error || failure.response?.data?.message || '计算订单金额失败';
-        setQuoteFailure({ key: quoteKey, message });
-        const couponUnavailable = failure.response?.status === 400 && [
-          '优惠券已失效或订单金额不满足使用条件，请重新选择', '优惠券ID无效', '优惠券已过期',
-        ].includes(message);
-        if (selectedCouponId !== undefined && couponUnavailable) {
-          toast.error(translate(message));
-          persistCoupon(undefined);
-          setChoicesNotice('所选优惠券当前不可用，请重新选择');
-        }
-      })
-      .finally(() => { if (isCurrentRequest()) setQuoteLoading(false); });
-    return () => { active = false; };
-  }, [choicesReady, isHydrated, isAuthenticated, loading, directPurchase, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision, persistCoupon]);
-
-  const loadCart = async () => {
+  const loadCart = useCallback(async () => {
     if (!isCurrentSession() || cartLoadRequest.current?.key === sessionKey) return;
     const request = { key: sessionKey };
     const previousItems = useCartStore.getState().items;
@@ -335,7 +267,81 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
         if (isCurrentSession()) setLoading(false);
       }
     }
-  };
+  }, [sessionKey, isCurrentSession, selectItems, restoredSelection]);
+
+  const hasPurchase = purchase !== null;
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (!isAuthenticated) {
+      router.push(customerLoginHref());
+      return;
+    }
+    if (buyNowId !== null && !hasPurchase) return;
+    if (directPurchase || buyNowId !== null && !purchase?.intent) return;
+    loadCart();
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router, buyNowId, hasPurchase, purchase?.intent, directPurchase, loadCart]);
+
+  useEffect(() => {
+    setAddressResult(null);
+    setAddressSelection(null);
+    if (!isHydrated || !isAuthenticated || !isCurrentSession()) return;
+    let active = true;
+    addressApi.list().then(data => {
+      if (!active || !isCurrentSession()) return;
+      const ownedAddresses = readAddressList(data).addresses;
+      setAddressResult({ key: sessionKey, addresses: ownedAddresses });
+      const desiredId = choices.current.addressId;
+      const preferred = desiredId !== undefined ? ownedAddresses.find(address => address.address_id === desiredId) :
+        ownedAddresses.find(address => address.is_default === true || address.is_default === 1) || ownedAddresses[0];
+      if (desiredId !== undefined && desiredId !== null && !preferred) setChoicesNotice('原收货地址已不可用，请重新选择收货地址');
+      if (preferred) setAddressSelection({ key: sessionKey, id: preferred.address_id });
+    }).catch(error => {
+      if (!active || !isCurrentSession()) return;
+      setAddressResult({ key: sessionKey, addresses: [], error: error.response?.data?.error || '加载收货地址失败' });
+    });
+    return () => { active = false; };
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, sessionKey, isCurrentSession, addressRevision]);
+
+  useEffect(() => {
+    // The effect re-runs only when the lines change (orderItemsKey), not on every newly built array.
+    const lines = JSON.parse(orderItemsKey) as typeof orderItems;
+    if (!choicesReady || !isHydrated || !isAuthenticated || loading && !directPurchase || lines.length === 0 || lines.length > MAX_CHECKOUT_LINES) return;
+    let active = true;
+    const isCurrentRequest = () => active && isCurrentSession();
+    setQuoteFailure(null);
+    setQuoteLoading(true);
+    orderApi.preview({ items: lines, ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }) })
+      .then((data) => {
+        if (!isCurrentRequest()) return;
+        if (!validOrderPreview(data, selectedCouponId)) {
+          setQuoteFailure({ key: quoteKey, message: '结算报价无效，请重新计算' });
+          return;
+        }
+        setQuoteResult({ key: quoteKey, data });
+        if (linkedCouponId.current !== undefined) {
+          const carriedId = linkedCouponId.current;
+          linkedCouponId.current = undefined;
+          if (data.available_coupons.some(coupon => coupon.user_coupon_id === carriedId)) persistCoupon(carriedId);
+          else toast.error(translate('所选优惠券当前不可用，请重新选择'));
+        }
+      })
+      .catch((error) => {
+        if (!isCurrentRequest()) return;
+        const failure = requestFailure(error);
+        const message = failure.response?.data?.error || failure.response?.data?.message || '计算订单金额失败';
+        setQuoteFailure({ key: quoteKey, message });
+        const couponUnavailable = failure.response?.status === 400 && [
+          '优惠券已失效或订单金额不满足使用条件，请重新选择', '优惠券ID无效', '优惠券已过期',
+        ].includes(message);
+        if (selectedCouponId !== undefined && couponUnavailable) {
+          toast.error(translate(message));
+          persistCoupon(undefined);
+          setChoicesNotice('所选优惠券当前不可用，请重新选择');
+        }
+      })
+      .finally(() => { if (isCurrentRequest()) setQuoteLoading(false); });
+    return () => { active = false; };
+  }, [choicesReady, isHydrated, isAuthenticated, loading, directPurchase, sessionId, user?.user_id, orderItemsKey, quoteKey, selectedCouponId, quoteRevision, persistCoupon, isCurrentSession]);
 
   const handleCartFailure = async (error: unknown, message: string) => {
     if (!isCurrentSession()) return;
