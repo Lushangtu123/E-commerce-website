@@ -363,6 +363,8 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - `POST /api/search/record` - 记录搜索历史
 - `GET /api/search/history` - 获取本人搜索历史（需登录）
 - `DELETE /api/search/history` - 清空本人搜索历史（需登录）
+
+页头首次读取历史失败时显示双语错误及只读重试入口，与真实空历史区分；连续点击不会重复发起当前读取。切换账号会丢弃迟到响应，记录或删除搜索词会使旧快照失效；原有删除结果不确定时的核对流程继续保留。
 - `DELETE /api/search/history/:keyword` - 删除一条搜索记录（需登录）
 
 ### 浏览历史 (Browse History APIs) 🆕
