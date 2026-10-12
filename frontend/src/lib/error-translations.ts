@@ -3,6 +3,8 @@
  * values (including product titles); their contents must not be translated.
  */
 export const errorTranslations: Record<string, string> = {
+  '原收货地址已不可用，请重新选择收货地址': 'Your previous shipping address is unavailable. Choose a shipping address again.',
+  '无法读取结算选择，请重新选择收货地址和优惠券': 'Unable to restore your checkout choices. Choose your shipping address and coupon again.',
   '结算金额已变化，请重新确认后下单': 'Checkout amounts changed. Confirm the new quote before placing your order.',
   '正在加载购物车...': 'Loading your cart...',
   '重新加载购物车': 'Reload cart',
