@@ -79,6 +79,7 @@ async function localPlatformScripts(context) {
   });
   await ready('http://127.0.0.1:3100/register', frontend);
   browser = await chromium.launch({ headless: true });
+  await require('./native-middle-probe.cjs')({ browser, localPlatformScripts });
   const context = await browser.newContext();
   await localPlatformScripts(context);
   const page = await context.newPage();
@@ -1338,6 +1339,8 @@ async function localPlatformScripts(context) {
   await require('./checkout-remainder.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   await require('./buy-now.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
+  await require('./product-detail-response.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,

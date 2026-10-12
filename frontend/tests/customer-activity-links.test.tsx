@@ -37,7 +37,8 @@ async function setup(kind: Kind, rows: Item[] = [item()], total = rows.length) {
   useAuthStore.getState().login(customer, 'links-session');
   api.defaults.adapter = async config => {
     requests.push({ method: config.method, url: config.url });
-    const data = config.url === '/products/1' ? { product: { ...rows[0], stock: 3, has_sku: true } }
+    const data = config.url === '/products/1' ? { product: { ...rows[0], stock: 3, sales_count: 0, rating: 0, has_sku: true,
+      skus: [{ sku_id: 11, product_id: 1, sku_code: 'RED', specs: { Color: 'Red' }, price: '10.00', stock: 3, status: 1 }] } }
       : { [kind]: config.params?.page === 2 ? [item(21)] : rows, pagination: { page: config.params?.page || 1, limit: 20, total, total_pages: Math.ceil(total / 20) } };
     return { data, config, status: 200, statusText: 'OK', headers: {} };
   };

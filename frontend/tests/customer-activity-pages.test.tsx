@@ -34,7 +34,7 @@ const firstUser = { user_id: 1, username: 'first', email: 'first@test' };
 const secondUser = { user_id: 2, username: 'second', email: 'second@test' };
 const pages = { favorites: FavoritesPage, history: HistoryPage };
 const product = (id: number, title: string | null = `Product ${id}`) =>
-  ({ favorite_id: id, id, product_id: id, title, price: '10.00' as string | null, stock: 3 as number | string | null, status: 1 as number | null, has_sku: false, browsed_at: '2026-10-02T00:00:00Z' });
+  ({ favorite_id: id, id, product_id: id, title, price: '10.00' as string | null, stock: 3 as number | string | null, sales_count: 0, rating: 0, status: 1 as number | null, has_sku: false, browsed_at: '2026-10-02T00:00:00Z' });
 const pageOf = (kind: Kind, rows: Row[], total = rows.length, totalPages = Math.ceil(total / 20)) =>
   ({ [kind]: rows, pagination: { total, total_pages: totalPages } });
 
@@ -376,7 +376,8 @@ describe.each(['favorites', 'history'] as const)('%s page', (kind) => {
   });
 
   it('sends a SKU product to its detail page to choose a variant', async () => {
-    await setup(kind, { rows: [{ ...product(1), has_sku: true }], detail: async () => ({ product: { ...product(1), has_sku: true } }) });
+    await setup(kind, { rows: [{ ...product(1), has_sku: true }], detail: async () => ({ product: { ...product(1), has_sku: true,
+      skus: [{ sku_id: 11, product_id: 1, sku_code: 'RED', specs: { Color: 'Red' }, price: '10.00', stock: 3, status: 1 }] } }) });
 
     await click(button('选择规格'));
 

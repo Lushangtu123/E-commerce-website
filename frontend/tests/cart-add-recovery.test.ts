@@ -16,7 +16,7 @@ function server({ fail, read = async () => ({ items: [row] }), post = async () =
   const writes: Record<string, unknown>[] = []; let gets = 0;
   const adapter: AxiosAdapter = async config => {
     let data: unknown;
-    if (config.url?.startsWith('/products/')) data = { product: { product_id: 1, title: 'Item', price: 10, stock: 20, has_sku: false } };
+    if (config.url?.startsWith('/products/')) data = { product: { product_id: Number(config.url.split('/').at(-1)), title: 'Item', price: 10, stock: 20, sales_count: 0, rating: 0, has_sku: false } };
     else if (config.url === '/cart' && config.method === 'get') { gets++; data = await read(); }
     else if (config.url === '/cart' && config.method === 'post') {
       writes.push(JSON.parse(config.data)); await post();

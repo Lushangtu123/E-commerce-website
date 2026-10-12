@@ -3,20 +3,41 @@ const assert = require('node:assert/strict');
 // Diagnose the native popup boundary without retrying or replacing the user gesture.
 async function traceMiddleClick(context, page, perform) {
   const safeUrl = value => { try { const url = new URL(value); return url.origin + url.pathname; } catch { return '<uncommitted>'; } };
+  // Diagnostics are best effort and bounded; an unresponsive tab must retain the original error.
+  const sample = async probe => {
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(probe).catch(() => ({ unavailable: true })),
+        new Promise(resolve => { timer = setTimeout(() => resolve({ unavailable: true }), 1000); }),
+      ]);
+    } finally { clearTimeout(timer); }
+  };
   const trace = [];
+  const popups = [];
+  const pendingRequests = new Map();
   const cdp = await context.newCDPSession(page);
   await cdp.send('Page.enable');
   cdp.on('Page.windowOpen', event => trace.push({ event: 'windowOpen', url: safeUrl(event.url), userGesture: event.userGesture }));
   const onPage = popup => {
+    popups.push(popup);
     trace.push({ event: 'page', url: safeUrl(popup.url()) });
     popup.on('framenavigated', frame => { if (frame === popup.mainFrame()) trace.push({ event: 'navigation', url: safeUrl(frame.url()) }); });
+    for (const event of ['domcontentloaded', 'load']) popup.on(event, () => trace.push({ event, url: safeUrl(popup.url()) }));
     popup.on('close', () => trace.push({ event: 'close' }));
     popup.on('crash', () => trace.push({ event: 'crash' }));
   };
   const onFailure = request => {
+    pendingRequests.delete(request);
     if (request.isNavigationRequest()) trace.push({ event: 'navigationFailure', url: safeUrl(request.url()), error: request.failure()?.errorText });
   };
+  const onRequest = request => pendingRequests.set(request, { url: safeUrl(request.url()), method: request.method(), type: request.resourceType() });
+  const onFinished = request => pendingRequests.delete(request);
+  const onResponse = response => {
+    if (response.request().isNavigationRequest()) trace.push({ event: 'navigationResponse', url: safeUrl(response.url()), status: response.status() });
+  };
   context.on('page', onPage); context.on('requestfailed', onFailure);
+  context.on('request', onRequest); context.on('requestfinished', onFinished); context.on('response', onResponse);
   await page.evaluate(() => {
     window.__ecommerceMiddleClickTrace = [];
     if (window.__ecommerceMiddleClickObserver) return;
@@ -24,19 +45,62 @@ async function traceMiddleClick(context, page, perform) {
     for (const type of ['mousedown', 'mouseup', 'auxclick']) document.addEventListener(type, event => {
       if (event.button !== 1) return;
       const anchor = event.target.closest?.('a');
-      queueMicrotask(() => window.__ecommerceMiddleClickTrace.push({ type, button: event.button, trusted: event.isTrusted,
-        prevented: event.defaultPrevented, href: anchor?.getAttribute('href'), target: event.target.tagName }));
+      const sample = { type, button: event.button, trusted: event.isTrusted, prevented: event.defaultPrevented,
+        href: anchor?.getAttribute('href')?.split(/[?#]/, 1)[0], target: event.target.tagName, namespace: event.target.namespaceURI };
+      window.__ecommerceMiddleClickTrace.push(sample);
+      setTimeout(() => Object.assign(sample, { finalPrevented: event.defaultPrevented,
+        connected: event.target.isConnected, anchorConnected: anchor?.isConnected }), 0);
     });
   });
   try { return await perform(); }
   catch (error) {
-    const targets = await cdp.send('Target.getTargets').catch(() => ({ targetInfos: [] }));
-    const input = await page.evaluate(() => window.__ecommerceMiddleClickTrace).catch(() => []);
-    console.error('NATIVE_MIDDLE_CLICK_DIAGNOSTICS', JSON.stringify({ source: safeUrl(page.url()), input, trace,
-      pages: context.pages().map(popup => safeUrl(popup.url())),
-      targets: targets.targetInfos.filter(target => target.type === 'page').map(target => ({ url: safeUrl(target.url), attached: target.attached })) }));
+    const targets = await sample(() => cdp.send('Target.getTargets'));
+    const input = await sample(() => page.evaluate(() => window.__ecommerceMiddleClickTrace));
+    const documents = await Promise.all(context.pages().map(async tab => ({
+      url: safeUrl(tab.url()),
+      ...await sample(() => tab.evaluate(() => {
+        const navigation = performance.getEntriesByType('navigation')[0];
+        return { readyState: document.readyState, heading: document.querySelector('h1')?.textContent,
+          domContentLoadedEventEnd: navigation?.domContentLoadedEventEnd, loadEventEnd: navigation?.loadEventEnd };
+      })),
+    })));
+    const lifecycleReplay = await Promise.all(popups.map(async popup => {
+      let popupCdp;
+      const events = [];
+      const state = await sample(async () => {
+        popupCdp = await context.newCDPSession(popup);
+        try {
+          popupCdp.on('Page.lifecycleEvent', event => events.push(event.name));
+          await popupCdp.send('Page.enable');
+          // Chromium replays lifecycle milestones when they are enabled after a committed load.
+          await popupCdp.send('Page.setLifecycleEventsEnabled', { enabled: true });
+          await popupCdp.send('Runtime.evaluate', { expression: 'document.readyState' });
+          return { events };
+        } finally { await popupCdp.detach().catch(() => {}); }
+      });
+      return { url: safeUrl(popup.url()), ...state };
+    }));
+    const beforeActivation = { trace: trace.slice(), pendingRequests: [...pendingRequests.values()] };
+    // A real user inspects a middle-clicked background tab by switching to it. Observe whether
+    // that releases the stalled document, only after preserving the original failure evidence.
+    const activation = await Promise.all(popups.map(async popup => {
+      const switched = await sample(async () => { await popup.bringToFront(); return { switched: true }; });
+      const loaded = await sample(async () => { await popup.waitForLoadState('load', { timeout: 1000 }); return { loaded: true }; });
+      const document = await sample(() => popup.evaluate(() => ({ readyState: document.readyState,
+        heading: document.querySelector('h1')?.textContent })));
+      return { url: safeUrl(popup.url()), switched, loaded, document };
+    }));
+    console.error('NATIVE_MIDDLE_CLICK_DIAGNOSTICS', JSON.stringify({ source: safeUrl(page.url()), input, ...beforeActivation,
+      pages: context.pages().map(popup => safeUrl(popup.url())), documents, lifecycleReplay, activation,
+      activationEvents: trace.slice(beforeActivation.trace.length),
+      targets: (targets.targetInfos || []).filter(target => target.type === 'page').map(target => ({ url: safeUrl(target.url), attached: target.attached })) }));
     throw error;
-  } finally { context.off('page', onPage); context.off('requestfailed', onFailure); await cdp.detach(); }
+  } finally {
+    context.off('page', onPage); context.off('requestfailed', onFailure);
+    context.off('request', onRequest); context.off('requestfinished', onFinished); context.off('response', onResponse);
+    // A closed source page may already detach CDP; cleanup must retain the navigation failure.
+    await cdp.detach().catch(() => {});
+  }
 }
 
 /** Real cookies and SQL-backed saved products; keyboard and middle clicks exercise native Next Links. */

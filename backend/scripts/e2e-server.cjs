@@ -1,5 +1,6 @@
 // Local-only real MySQL fixture. Never reads cloud environment files or uses DB_NAME.
 const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 const mysql = require('mysql2/promise');
 const backend = path.resolve(__dirname, '..');
@@ -100,5 +101,10 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
       VALUES(?, ?, ?, 3, 5, ?, ?, 1, DATE_SUB(NOW(),INTERVAL 1 DAY), DATE_ADD(NOW(),INTERVAL 1 DAY), '2026-01-01 00:00:00')`,
       [id, `BROWSER${id}`, `浏览器优惠券${id}`, id === 1 ? 1 : 3, id === 1 ? 1 : 3]);
   }
-  listener = app.listen(3101, '127.0.0.1', () => console.log('E2E fixture ready on 127.0.0.1:3101'));
+  // Playwright's request agent can reuse a socket past the advertised idle deadline.
+  // Keep fixture writes on fresh connections instead of retrying an uncertain mutation.
+  listener = http.createServer((request, response) => {
+    response.setHeader('Connection', 'close');
+    app(request, response);
+  }).listen(3101, '127.0.0.1', () => console.log('E2E fixture ready on 127.0.0.1:3101'));
 })().catch(async () => { console.error('E2E fixture initialization failed'); await stop(); process.exit(1); });
