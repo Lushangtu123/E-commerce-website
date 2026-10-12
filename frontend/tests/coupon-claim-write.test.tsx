@@ -16,13 +16,15 @@ const original = api.defaults.adapter;
 afterEach(() => { api.defaults.adapter = original; });
 const customer = { user_id: 1, username: 'Fixture', email: 'fixture@example.test' };
 const coupon = { coupon_id: 1, name: 'Fixture', code: 'FIXTURE', type: 3, discount_value: 5, min_amount: 0, total_quantity: 10, remain_quantity: 10, per_user_limit: 2, status: 1, start_time: '2020-01-01', end_time: '2099-01-01' };
+const centerResponse = (data: typeof coupon[]) => ({ success: true, data,
+  pagination: { page: 1, page_size: 50, total: data.length, total_pages: Math.ceil(data.length / 50) } });
 const t = (key: string) => translate(key);
 const receive = () => screen.getByRole('button', { name: new RegExp(`^(${t('立即领取')}|${t('重试领取')})$`) });
 async function setup(mode: 'committed' | 'not_committed' | 'rejected' | 'success' = 'committed', firstResponse?: unknown) {
   useAuthStore.getState().login(customer, 'claim-session');
   const writes: { coupon_id?: number; code?: string; claim_key?: string }[] = [], receipts = new Map<string, number>();
   api.defaults.adapter = (async config => {
-    if (config.method === 'get') return { config, status: 200, statusText: 'OK', headers: {}, data: { data: [{ ...coupon, remain_quantity: 10 - receipts.size }], pagination: { total: 1, total_pages: 1 } } };
+    if (config.method === 'get') return { config, status: 200, statusText: 'OK', headers: {}, data: centerResponse([{ ...coupon, remain_quantity: 10 - receipts.size }]) };
     const body = JSON.parse(config.data); writes.push(body);
     const key = body.claim_key ?? `unprotected-${writes.length}`;
     if (!(writes.length === 1 && ['not_committed', 'rejected'].includes(mode)) && !receipts.has(key)) receipts.set(key, receipts.size + 1);
@@ -146,7 +148,7 @@ describe('coupon deliberate retry identity', () => {
   it.each([408, 429, 500])('retains the receipt identity after HTTP %s', async status => {
     useAuthStore.getState().login(customer, 'claim-session'); const writes: { claim_key?: string }[] = []; const receipts = new Map<string, number>();
     api.defaults.adapter = (async config => {
-      if (config.method === 'get') return { config, status: 200, statusText: 'OK', headers: {}, data: { data: [coupon], pagination: { total: 1, total_pages: 1 } } };
+      if (config.method === 'get') return { config, status: 200, statusText: 'OK', headers: {}, data: centerResponse([coupon]) };
       const body = JSON.parse(config.data); writes.push(body); const key = body.claim_key ?? `unprotected-${writes.length}`;
       if (!receipts.has(key)) receipts.set(key, receipts.size + 1);
       if (writes.length === 1) throw new AxiosError('Uncertain', AxiosError.ERR_BAD_RESPONSE, config, undefined, { config, status, statusText: 'Uncertain', headers: {}, data: { message: 'Uncertain' } });
@@ -159,7 +161,7 @@ describe('coupon deliberate retry identity', () => {
   it.each(['lost response', 'invalid receipt'])('recovers the last allocation after reload following a %s even though the available list no longer contains it', async failure => {
     useAuthStore.getState().login(customer, 'claim-session'); let receipt = 0; const writes: { claim_key?: string }[] = [];
     api.defaults.adapter = (async config => {
-      if (config.method === 'get') return { config, status: 200, statusText: 'OK', headers: {}, data: { data: receipt ? [] : [{ ...coupon, remain_quantity: 1 }], pagination: { total: receipt ? 0 : 1, total_pages: receipt ? 0 : 1 } } };
+      if (config.method === 'get') return { config, status: 200, statusText: 'OK', headers: {}, data: centerResponse(receipt ? [] : [{ ...coupon, remain_quantity: 1 }]) };
       const body = JSON.parse(config.data); writes.push(body);
       if (!receipt) {
         receipt = 7;
