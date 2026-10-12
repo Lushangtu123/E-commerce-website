@@ -15,7 +15,7 @@ Backend (`cd backend`):
 - `npx tsc --noEmit` - type check (also run automatically by a hook after backend edits)
 - `npm test` - Jest; MySQL/Redis integration suites skip unless `MYSQL_TEST_SOCKET` or `MYSQL_TEST_HOST` (+ `_PORT`, `_USER`, `_PASSWORD`) and `REDIS_TEST_URL` are set
 - `npm run build` - compiles to `dist/` and generates the OpenAPI JSON
-- `npm run migrate:dev`, `npm run sync-es:dev` - schema migrations and full Elasticsearch reindex
+- `npm run migrate:dev`, `npm run sync-es:dev` - schema migrations and full Elasticsearch reindex. Every migration step is idempotent and verifies the existing structure (refusing incompatible schemas); add new steps to `runMigrations` in `database/migrate.ts`, which runs them inside the per-database lock from `database/migration-lock.ts`
 
 Frontend (`cd frontend`): `npm test` (Vitest), `npm run lint`, `npm run typecheck`, `npm run build`. Lint fails above the `--max-warnings` cap in `package.json` (the deliberate react-hooks warnings described in `eslint.config.mjs`): never raise the cap, lower it when you remove warnings.
 
