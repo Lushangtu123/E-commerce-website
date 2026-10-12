@@ -9,11 +9,12 @@ import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { logger } from '@/lib/logger';
+import { readProductCards } from '@/lib/product-region-response';
 import { FiArrowRight, FiGift, FiRotateCcw, FiShoppingBag, FiTruck } from 'react-icons/fi';
 
-const loadHotProducts = async () => (await productApi.getHotProducts(8)).products || [];
-const loadNewProducts = async () => (await productApi.list({ sort: 'created_at DESC', limit: 8 })).products || [];
-const loadRecommendations = async () => (await recommendationApi.getGuessYouLike(8)).recommendations || [];
+const loadHotProducts = async () => readProductCards(await productApi.getHotProducts(8), 'products', 8);
+const loadNewProducts = async () => readProductCards(await productApi.list({ sort: 'created_at DESC', limit: 8 }), 'products', 8);
+const loadRecommendations = async () => readProductCards(await recommendationApi.getGuessYouLike(8), 'recommendations', 8);
 const publicCatalog = () => true;
 
 type SectionResult = { scope: string; products: Product[]; loading: boolean; error?: string };

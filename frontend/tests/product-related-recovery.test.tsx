@@ -22,6 +22,47 @@ beforeEach(() => {
   vi.spyOn(browseApi, 'record').mockResolvedValue({} as never);
 });
 describe('related product recovery', () => {
+  it.each([true, 1])('preserves valid SKU card fields with has_sku=%s and MySQL decimal aggregates', async has_sku => {
+    vi.mocked(recommendationApi.getRelated).mockResolvedValue({ related_products: [{ ...related, title_en: 'English related',
+      price: '0.00', original_price: null, stock: '4294967294', rating: '4.50', has_sku, main_image: null }] } as never);
+    useLocaleStore.setState({ locale: 'en' });
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(screen.getByText('English related')).toBeVisible(); expect(screen.getByText('¥0.00')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Options' })).toBeEnabled();
+    expect(within(section()).queryByRole('alert')).toBeNull();
+  });
+  it.each([
+    { related_products: [null] }, { related_products: [related, related] }, { related_products: [product] },
+    { related_products: [{ ...related, title: {} }] }, { related_products: [{ ...related, title_en: {} }] },
+    { related_products: [{ ...related, price: {} }] }, { related_products: [{ ...related, price: '1e2' }] },
+    { related_products: [{ ...related, stock: 'unknown' }] }, { related_products: [{ ...related, rating: {} }] },
+    { related_products: [{ ...related, sales_count: undefined }] }, { related_products: [{ ...related, status: 0 }] },
+    { related_products: [{ ...related, has_sku: 'false' }] }, { related_products: [{ ...related, main_image: {} }] },
+    { related_products: [{ ...related, original_price: {} }] },
+    { related_products: Array.from({ length: 5 }, (_, i) => ({ ...related, product_id: i + 2 })) },
+    { related_products: [related], total: 4 }, { related_products: [related], success: false },
+    { related_products: [related], error: 'Failed' },
+  ])('keeps invalid card data %j in the regional retry state', async response => {
+    useLocaleStore.setState({ locale: 'en' });
+    vi.mocked(recommendationApi.getRelated).mockResolvedValueOnce(response as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(screen.getByRole('heading', { name: product.title })).toBeVisible();
+    expect(within(section()).getByRole('alert')).toHaveTextContent('Unable to load recommendations. Please try again.');
+    expect(screen.getByRole('button', { name: 'Add to cart' })).toBeEnabled();
+    clickTogether(within(section()).getByRole('button', { name: 'Retry' })); await settle();
+    expect(screen.getByText('Related fixture')).toBeVisible();
+    expect(recommendationApi.getRelated).toHaveBeenCalledTimes(2); expect(productApi.getDetail).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a missing recommendation list visible as a local error until explicitly retried', async () => {
+    vi.mocked(recommendationApi.getRelated).mockResolvedValueOnce({} as never);
+    render(<ProductDetail initialProduct={product} />); await settle();
+    expect(within(section()).getByRole('alert')).toHaveTextContent('加载推荐失败，请重试');
+    expect(screen.getByRole('heading', { name: product.title })).toBeVisible();
+    clickTogether(within(section()).getByRole('button', { name: '重新加载' })); await settle();
+    expect(screen.getByText('Related fixture')).toBeVisible();
+    expect(recommendationApi.getRelated).toHaveBeenCalledTimes(2);
+    expect(productApi.getDetail).toHaveBeenCalledTimes(1); expect(browseApi.record).not.toHaveBeenCalled();
+  });
   it('shows loading during an initially empty pending request', async () => {
     const pending = deferred<{ related_products: Product[] }>();
     vi.mocked(recommendationApi.getRelated).mockReturnValueOnce(pending.promise);
