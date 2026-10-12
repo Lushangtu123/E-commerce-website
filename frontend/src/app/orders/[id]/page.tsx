@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { orderApi, orderTimeoutApi, type Order, type OrderItem } from '@/lib/api';
@@ -81,7 +82,7 @@ export default function OrderDetailPage() {
     setRecoveryView(null);
     if (!isHydrated) return;
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push(customerLoginHref());
       return;
     }
     if (!Number.isSafeInteger(orderId)) {

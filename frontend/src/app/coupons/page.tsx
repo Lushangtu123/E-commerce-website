@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { couponApi, type Coupon } from '@/lib/api';
@@ -9,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { translate, useI18n } from '@/lib/i18n';
 import { requestFailure } from '@/lib/api-error';
 import { useSessionQuery } from '@/hooks/use-session-query';
+import { readCouponCenterPage } from '@/lib/coupon-center-response';
 import { clearPendingCouponClaim, listPendingCouponClaims, prepareCouponClaim, readPendingCouponClaim } from '@/lib/pending-coupon-claim';
 
 const pageSize = 50;
@@ -38,9 +40,8 @@ export default function CouponsPage() {
   const query = useSessionQuery({
     name: 'customer-coupon-center', params: [page, pageSize],
     load: async () => {
-      const response = await couponApi.getAvailable(page, pageSize);
-      const total = Number(response.pagination?.total ?? response.data?.length ?? 0);
-      return { coupons: response.data || [], total, totalPages: Number(response.pagination?.total_pages ?? Math.ceil(total / pageSize)) };
+      const response = readCouponCenterPage(await couponApi.getAvailable(page, pageSize), page, pageSize);
+      return { coupons: response.data, total: response.pagination.total, totalPages: response.pagination.total_pages };
     },
   });
   const { isCurrentSession } = query;
@@ -71,7 +72,7 @@ export default function CouponsPage() {
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
       toast.error(translate('请先登录'));
-      router.push('/login');
+      router.push(customerLoginHref());
     }
   }, [isHydrated, isAuthenticated, router]);
 

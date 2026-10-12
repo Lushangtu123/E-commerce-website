@@ -24,6 +24,7 @@ A modern e-commerce platform with a separate frontend and backend. The backend i
 
 - **Chinese and English interface** - The storefront and admin panel switch between Chinese and English from the language menu. The choice survives refreshes, navigation and signing in again. Dates follow the selected language; product, user and address content stays in its original language, and amounts remain in RMB.
 - Registration, sign-in and profile management
+- Sign-in and registration preserve a safe storefront return path and query parameters. Guest actions and expired sessions return to the original page after sign-in; customers confirm purchase and other write actions themselves.
 - Password change that revokes old sessions; one-time email password reset through configured Gmail SMTP or Resend
 - **Account centre** - One place for profile, orders and coupons
 - Product browsing, search and filtering
@@ -324,6 +325,7 @@ E-commerce-website/
 - `POST /api/users/login` - Sign in
 - `GET /api/users/profile` - Get the current profile
 - `GET /api/users/stats` - Get the user's total orders, unpaid orders, claimed coupons, currently usable coupons and favourites
+The account centre requires all five statistics to be nonnegative integer counts. A null or incomplete successful reply shows a retryable loading error; genuine zero counts display normally.
 - `PUT /api/users/profile` - Update the profile
 - `PUT /api/users/password` - Verify the current password, change it and revoke all older sessions
 - `GET /api/users/password/capabilities` - Check whether password recovery is available
@@ -463,6 +465,7 @@ Product content is stored separately from interface translations: `title_en`, `d
 - `GET /api/coupons/:id` - Coupon details
 
 The coupon centre confirms a claim only when the response contains `success: true` and a valid positive `user_coupon_id`. A malformed response or unverified browser-storage cleanup retains the original request ID; "Retry claim" recovers the same allocation instead of claiming another coupon.
+Available-coupon reads validate rules, quantities and requested pagination before showing claim controls. A malformed successful body shows a read-only retry instead of an empty list; genuine empty pages and concurrent allocation changes remain supported.
 
 **Admin:**
 - `POST /api/admin/coupons` - Create a coupon

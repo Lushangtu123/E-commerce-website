@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -134,7 +135,7 @@ function OrdersContent() {
   }, [query.error]);
 
   useEffect(() => {
-    if (isHydrated && !isAuthenticated) router.push('/login');
+    if (isHydrated && !isAuthenticated) router.push(customerLoginHref());
   }, [isHydrated, isAuthenticated, router]);
 
   const syncRecovery = () => setRecoveries(Array.from(recovery.current.values()));

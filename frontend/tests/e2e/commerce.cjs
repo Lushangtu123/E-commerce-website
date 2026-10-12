@@ -78,7 +78,7 @@ async function localPlatformScripts(context) {
     NODE_ENV: production ? 'production' : 'development', VERCEL: '', VERCEL_ENV: '', NEXT_TELEMETRY_DISABLED: '1',
   });
   await ready('http://127.0.0.1:3100/register', frontend);
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, channel: 'chromium' });
   await require('./native-middle-probe.cjs')({ browser, localPlatformScripts });
   const context = await browser.newContext();
   await localPlatformScripts(context);
@@ -1329,6 +1329,10 @@ async function localPlatformScripts(context) {
   await require('./admin-inventory-recovery.cjs')({ admin, context, adminContext,
     setExpectedWrite: value => { expectedRecoveryWrite = value; } });
   await require('./admin-sku-indicators.cjs')({ admin, adminContext });
+  await require('./profile-stats-read-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./coupon-center-read-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
   await require('./customer-publication-guard.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
@@ -1345,6 +1349,7 @@ async function localPlatformScripts(context) {
     setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./home-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./customer-login-return.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors });
   await require('./session-and-activity-recovery.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedWrite: value => { expectedRecoveryWrite = value; }, setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./admin-user-management.cjs')({ admin, context, adminContext, customerEmail,

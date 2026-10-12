@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { translate, useI18n } from '@/lib/i18n';
 import { localizedText } from '@/lib/product-content';
 
@@ -55,7 +56,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     
     if (!isAuthenticated) {
       toast.error(translate("请先登录"));
-      router.push('/login');
+      router.push(customerLoginHref());
       return;
     }
 

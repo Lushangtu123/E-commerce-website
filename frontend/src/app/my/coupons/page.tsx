@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { couponApi, type UserCoupon } from '@/lib/api';
@@ -55,7 +56,7 @@ export default function MyCouponsPage() {
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
       toast.error(translate('请先登录'));
-      router.push('/login');
+      router.push(customerLoginHref());
     }
   }, [isHydrated, isAuthenticated, router]);
 
