@@ -29,12 +29,6 @@ fi
 
 echo ""
 
-# 编译后端代码
-echo "🔨 编译后端代码..."
-docker-compose exec -T backend npm run build
-
-echo ""
-
 # 运行管理员数据库迁移
 echo "📊 初始化管理员数据库..."
 docker-compose exec -T backend node dist/database/admin-migrate.js
