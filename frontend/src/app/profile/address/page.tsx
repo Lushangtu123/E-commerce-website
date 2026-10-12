@@ -1,7 +1,8 @@
 'use client';
 
-import { customerLoginHref } from '@/lib/customer-login-return';
-import { useEffect, useRef, useState } from 'react';
+import { addressCheckoutReturn } from '@/lib/checkout-navigation';
+import { customerLoginHref, subscribeCustomerReturnPath } from '@/lib/customer-login-return';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { addressApi, type AddressInput, type ShippingAddress } from '@/lib/api';
@@ -42,6 +43,7 @@ async function readAddresses(): Promise<{ addresses: ShippingAddress[] }> {
 
 export default function AddressPage() {
   const router = useRouter();
+  const checkoutReturn = useSyncExternalStore(subscribeCustomerReturnPath, addressCheckoutReturn, () => '/cart');
   const { t } = useI18n();
   const { isHydrated, isAuthenticated, sessionId, user } = useAuthStore();
   const [form, setForm] = useState<AddressInput>(emptyForm);
@@ -323,7 +325,7 @@ export default function AddressPage() {
     <div className="container-custom py-8 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold">{t("收货地址")}</h1><p className="text-sm text-gray-600 mt-2">{t('已保存 {count} / 20 个地址', { count: addresses.length })}</p></div>
-        <Link href="/cart" className="text-primary-600 underline">{t("返回购物车")}</Link>
+        <Link href={checkoutReturn} className="text-primary-600 underline">{t("返回购物车")}</Link>
       </div>
       {hasStorageError && <div className="card p-6 text-red-600" role="alert"><p>{t('无法读取地址恢复信息，请重新读取后再试')}</p><button disabled={isBusy} onClick={loadPending} className="underline mt-2">{t('重新读取新增地址')}</button></div>}
       {pending && <div className="card p-6 mb-4"><p>{t('存在待确认的新增地址，请恢复原请求')}</p>
