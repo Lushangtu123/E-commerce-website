@@ -18,6 +18,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
   const { isAuthenticated, isHydrated, sessionId, user } = useAuthStore();
   const products = Array.from(new Map(items.map(item => [item.product_id, item])).values());
   const key = JSON.stringify([sessionId, user?.user_id, orderId, products.map(item => item.product_id)]);
+  // eslint-disable-next-line react-hooks/refs -- Synchronous view guard: late replies compare it with the order and session they started for.
   const currentKey = useRef(key); currentKey.current = key;
   const mounted = useRef(true);
   const request = useRef(0);
@@ -41,6 +42,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
 
   useEffect(() => {
     mounted.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Bumping the shared counter retires the read started for this order.
     return () => { mounted.current = false; request.current++; };
   }, []);
 
@@ -85,9 +87,12 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
 
   useEffect(() => {
     request.current++; mutation.current = null; currentReviews.current = null; recovery.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Another order or session starts with empty review drafts and notices.
     draftRef.current = {}; setDrafts({}); setConflictedDrafts({}); setResult(null); setBusy(null); setNotice(null);
     if (isHydrated && isAuthenticated && products.length) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Bumping the shared counter retires the read started for this order.
     return () => { request.current++; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Load once per order and session; the loader is rebuilt every render.
   }, [key, isHydrated, isAuthenticated]);
 
   const change = (productId: number, field: keyof Draft, value: string) => {
@@ -135,6 +140,7 @@ export default function OrderReviews({ orderId, items }: { orderId: number; item
     }
   };
 
+  // eslint-disable-next-line react-hooks/refs -- Render nothing for a superseded order or session.
   if (!products.length || !isHydrated || !isAuthenticated || !isCurrent()) return null;
   return (
     <section className="card p-6 mb-6" aria-labelledby="order-reviews-title">
