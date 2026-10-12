@@ -50,8 +50,8 @@ jobs:
       - name: TypeScript 编译
         run: npm run build
 
-      - name: 运行测试
-        run: npm test
+      - name: 运行测试（含覆盖率下限）
+        run: npm run test:coverage
 
       - name: 安装浏览器回归测试依赖
         run: npm ci --prefix ../frontend
@@ -107,8 +107,8 @@ jobs:
       - name: 准备构建环境变量
         run: cp .env.local.example .env.local
 
-      - name: 前端回归测试
-        run: npm test
+      - name: 前端回归测试（含覆盖率下限）
+        run: npm run test:coverage
 
       - name: ESLint 检查
         run: npm run lint

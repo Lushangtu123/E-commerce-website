@@ -17,5 +17,12 @@ export default defineConfig({
     restoreMocks: true,
     unstubGlobals: true,
     unstubEnvs: true,
+    // Only enforced by `npm run test:coverage` (used in CI). Raise the floors when coverage improves; never lower them.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**'],
+      reporter: ['text-summary'],
+      thresholds: { statements: 94, branches: 93, functions: 94, lines: 96 },
+    },
   },
 });
