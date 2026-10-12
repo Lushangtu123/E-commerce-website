@@ -402,7 +402,12 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - `POST /api/orders/:id/confirm` - 确认收货
 - `GET /api/orders/:id/after-sales`、`POST /api/orders/:id/after-sales` - 查看、提交本人的售后申请
 - `POST /api/orders/:id/after-sales/withdraw` - 撤回待审核申请
+- `POST /api/orders/:id/after-sales/return-tracking` - 为本人审核通过、未结案的退货申请提交一次退货运单
+- `POST /api/admin/after-sales/:id/complete` - 记录人工处理并结案（需 `order:edit`）；非零退款须填写凭证且不超过实付金额，演示支付只允许零退款，退货须先有退货运单
 - `GET /api/admin/after-sales`、`POST /api/admin/after-sales/:id/review` - 管理员查看及审核；每个订单最多申请一次，不自动退款或恢复库存
+- `GET /api/admin/after-sales/:id` - 按申请编号查询最新进度（需 `order:view`），不存在返回 404
+
+售后进度需要 8 个可为空的列。部署前请先备份 `after_sales_requests`、构建后端，再在 `backend` 目录用目标数据库配置运行 `npm run schema:after-sales` 检查。若结果为 `migration_required`，经批准后运行 `npm run migrate:after-sales`，再检查直到显示 `ready`。迁移可重复执行，保留原有申请状态、订单、库存和支付记录；回滚代码时保留新增列。构建和 API 请求都不会自动执行迁移。
 
 ### 评论相关 (Review APIs)
 - `POST /api/reviews` - 创建评论
@@ -430,6 +435,7 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - `GET /api/admin/coupons` - 获取优惠券列表
 - `GET /api/admin/coupons/:id` - 获取优惠券详情
 - `PUT /api/admin/coupons/:id/status` - 更新优惠券状态
+- `GET /api/admin/coupons/by-code/:code` - 按唯一代码查询优惠券，用于确认创建结果（需 `coupon:view`）
 
 ### 推荐相关 (Recommendation APIs) 🆕
 - `GET /api/recommendations/personalized` - 基于浏览历史的个性化推荐（需登录）
@@ -484,6 +490,7 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 
 ### 运维 (Operations)
 - `GET /health`、`GET /api/health` - 健康检查；仅 MySQL 或 Redis 异常时返回 503（RabbitMQ、Elasticsearch 作为可选依赖单独标记）
+- `GET /api/openapi.json` - OpenAPI 接口规范（也可在 `/api-docs` 浏览）
 - `POST /api/internal/order-timeouts` - 供外部定时任务取消超时订单，需 `Authorization: Bearer <CRON_SECRET>`
 
 ## 🎯 性能优化
