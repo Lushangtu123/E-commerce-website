@@ -24,6 +24,8 @@ import { readAddressList } from '@/lib/address-list-response';
 import { checkoutAddressHref } from '@/lib/checkout-navigation';
 import { readCheckoutSelection, storeCheckoutSelection, clearCheckoutSelection } from '@/lib/checkout-selection';
 
+import { readCheckoutChoices, storeCheckoutChoices, clearCheckoutChoices, type CheckoutChoices } from '@/lib/checkout-choices';
+
 const MAX_CHECKOUT_LINES = 100;
 const initialSelection = (rows: CartItem[]) => {
   const available = rows.filter(isAvailable);
@@ -65,6 +67,9 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const hasSelectionDraft = useRef(false);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const choices = useRef<CheckoutChoices>({});
+  const [choicesReady, setChoicesReady] = useState(false);
+  const [choicesNotice, setChoicesNotice] = useState<string | null>(null);
   const [selectedCouponId, setSelectedCouponId] = useState<number | undefined>(undefined);
   const [quoteResult, setQuoteResult] = useState<{ key: string; data: OrderPreview } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -144,11 +149,26 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   }), [sessionId, user?.user_id, sessionKey, cartFailure, selectItems, restoredSelection]);
 
   useEffect(() => {
+    if (!isHydrated || !isAuthenticated || !sessionId || !user?.user_id) return;
+    try {
+      choices.current = readCheckoutChoices(sessionKey, buyNowId);
+      setSelectedCouponId(choices.current.couponId ?? undefined);
+    } catch {
+      choices.current = { addressId: null, couponId: null };
+      setChoicesNotice('无法读取结算选择，请重新选择收货地址和优惠券');
+    }
+    setChoicesReady(true);
     const value = new URLSearchParams(window.location.search).get('user_coupon_id');
-    if (value && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0) {
+    if (choices.current.couponId === undefined && value && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0) {
       linkedCouponId.current = Number(value);
     }
-  }, []);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, sessionKey, buyNowId]);
+
+  const persistCoupon = useCallback((id: number | undefined) => {
+    choices.current = { ...choices.current, couponId: id ?? null };
+    setSelectedCouponId(id);
+    storeCheckoutChoices(sessionKey, buyNowId, choices.current);
+  }, [sessionKey, buyNowId]);
 
   const availableItems = items.filter(isAvailable);
   const directPurchase = purchase?.intent?.source === 'buy_now';
@@ -219,7 +239,6 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router, buyNowId, purchase?.intent, directPurchase]);
 
   useEffect(() => {
-    const previousSelection = addressSelection;
     setAddressResult(null);
     setAddressSelection(null);
     if (!isHydrated || !isAuthenticated || !isCurrentSession()) return;
@@ -228,8 +247,10 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       if (!active || !isCurrentSession()) return;
       const ownedAddresses = readAddressList(data).addresses;
       setAddressResult({ key: sessionKey, addresses: ownedAddresses });
-      const preferred = (previousSelection?.key === sessionKey && ownedAddresses.find(address => address.address_id === previousSelection.id)) ||
+      const desiredId = choices.current.addressId;
+      const preferred = desiredId !== undefined ? ownedAddresses.find(address => address.address_id === desiredId) :
         ownedAddresses.find(address => address.is_default === true || address.is_default === 1) || ownedAddresses[0];
+      if (desiredId !== undefined && desiredId !== null && !preferred) setChoicesNotice('原收货地址已不可用，请重新选择收货地址');
       if (preferred) setAddressSelection({ key: sessionKey, id: preferred.address_id });
     }).catch(error => {
       if (!active || !isCurrentSession()) return;
@@ -239,7 +260,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, addressRevision]);
 
   useEffect(() => {
-    if (!isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0 || orderItems.length > MAX_CHECKOUT_LINES) return;
+    if (!choicesReady || !isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0 || orderItems.length > MAX_CHECKOUT_LINES) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentSession();
     setQuoteFailure(null);
@@ -255,7 +276,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
         if (linkedCouponId.current !== undefined) {
           const carriedId = linkedCouponId.current;
           linkedCouponId.current = undefined;
-          if (data.available_coupons.some(coupon => coupon.user_coupon_id === carriedId)) setSelectedCouponId(carriedId);
+          if (data.available_coupons.some(coupon => coupon.user_coupon_id === carriedId)) persistCoupon(carriedId);
           else toast.error(translate('所选优惠券当前不可用，请重新选择'));
         }
       })
@@ -269,12 +290,13 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
         ].includes(message);
         if (selectedCouponId !== undefined && couponUnavailable) {
           toast.error(translate(message));
-          setSelectedCouponId(undefined);
+          persistCoupon(undefined);
+          setChoicesNotice('所选优惠券当前不可用，请重新选择');
         }
       })
       .finally(() => { if (isCurrentRequest()) setQuoteLoading(false); });
     return () => { active = false; };
-  }, [isHydrated, isAuthenticated, loading, directPurchase, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
+  }, [choicesReady, isHydrated, isAuthenticated, loading, directPurchase, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision, persistCoupon]);
 
   const loadCart = async () => {
     if (!isCurrentSession() || cartLoadRequest.current?.key === sessionKey) return;
@@ -454,6 +476,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       selectedItemsRef.current = [];
       setSelectedItems([]);
       if (buyNowId === null) { hasSelectionDraft.current = false; clearCheckoutSelection(sessionKey); }
+      clearCheckoutChoices(sessionKey, buyNowId);
       toast.success(translate('订单创建成功'));
       router.push(`/orders/${data.order_id}`);
     } catch (error) {
@@ -471,10 +494,10 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
         setUnconfirmedSession(null);
         const quoteChanged = status === 409 && failure.response?.data?.code === 'CHECKOUT_QUOTE_CHANGED';
         if (quoteChanged) {
-          setSelectedCouponId(input.user_coupon_id);
+          persistCoupon(input.user_coupon_id);
           setCheckoutNotice({ key: sessionKey, message: '结算金额已变化，请核对新报价后再次点击结算' });
         }
-        else setSelectedCouponId(undefined);
+        else persistCoupon(undefined);
         setQuoteRevision(value => value + 1);
         if (!quoteChanged) setAddressRevision(value => value + 1);
       }
@@ -563,6 +586,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
           <Link href="/cart" className="text-primary-600 underline">{t('返回完整购物车')}</Link>
         </div>}
 
+        {choicesNotice && <p role="alert" className="mb-4 text-amber-800">{t(choicesNotice)}</p>}
         {selectionNotice && <p role="alert" className="mb-4 text-red-600">{t(selectionNotice)}</p>}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* 购物车列表 */}
@@ -602,15 +626,28 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
             <CheckoutSummary itemCount={orderItems.reduce((count, item) => count + item.quantity, 0)} submitting={submitting} cartUpdating={cartUpdating}
               addresses={addresses} addressLoading={addressLoading} addressError={addressError}
               selectedAddressId={selectedAddress?.address_id}
-              onSelectAddress={id => setAddressSelection({ key: sessionKey, id })}
+              onSelectAddress={id => {
+                if (!isCurrentSession() || submittingRequest.current || !addresses.some(address => address.address_id === id)) return;
+                choices.current = { ...choices.current, addressId: id };
+                setAddressSelection({ key: sessionKey, id });
+                setChoicesNotice(null);
+                storeCheckoutChoices(sessionKey, buyNowId, choices.current);
+              }}
               onReloadAddresses={() => setAddressRevision(value => value + 1)}
               quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} onRetryQuote={() => setQuoteRevision(value => value + 1)}
               availableCoupons={quoteResult?.data.available_coupons}
               confirmationNotice={checkoutNotice?.key === sessionKey ? checkoutNotice.message : null}
-              selectedCouponId={selectedCouponId} onSelectCoupon={setSelectedCouponId} onCheckout={handleCheckout}
+              selectedCouponId={selectedCouponId} onSelectCoupon={id => {
+                if (!isCurrentSession() || submittingRequest.current) return;
+                persistCoupon(id);
+                setChoicesNotice(null);
+              }} onCheckout={handleCheckout}
               manageAddressesHref={checkoutAddressHref(buyNowId)} onManageAddresses={event => {
                 if (!isCurrentSession()) { event.preventDefault(); return; }
-                if (buyNowId === null && !storeCheckoutSelection(sessionKey, selectedItemsRef.current)) {
+                const savedChoices = { ...choices.current, ...(selectedAddress && { addressId: selectedAddress.address_id }), couponId: selectedCouponId ?? null };
+                choices.current = savedChoices;
+                const choicesSaved = storeCheckoutChoices(sessionKey, buyNowId, savedChoices);
+                if (!choicesSaved || buyNowId === null && !storeCheckoutSelection(sessionKey, selectedItemsRef.current)) {
                   event.preventDefault();
                   setSelectionNotice('无法保存结算选择，请恢复浏览器存储后重试');
                 } else setSelectionNotice(null);

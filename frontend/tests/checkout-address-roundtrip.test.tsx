@@ -130,3 +130,21 @@ it('clears saved choices only after a confirmed checkout', async () => {
   expect(sessionStorage.getItem('checkout-selection:["first-session",1]')).toBeNull();
   expect(router.push).toHaveBeenLastCalledWith('/orders/55');
 });
+
+
+it('retains the chosen receiver after visiting address management and submits only that address', async () => {
+  useAuthStore.getState().login(firstUser, 'first-session');
+  list.mockResolvedValue({ items: [firstItem] });
+  const address = { address_id: 41, receiver_name: 'Default Receiver', phone: '13800138000', province: null, city: null, district: null, detail_address: 'Street', is_default: true };
+  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [address, { ...address, address_id: 42, receiver_name: 'Chosen Receiver', is_default: false }] });
+  vi.mocked(orderApi.create).mockResolvedValue({ order_id: 55, message: '订单创建成功' });
+  const view = render(<CartPage />); await settle();
+  fireEvent.change(screen.getByLabelText('收货地址'), { target: { value: '42' } }); await settle();
+  fireEvent.click(screen.getByRole('link', { name: '管理收货地址' })); view.unmount();
+  render(<CartPage />); await settle();
+  expect(screen.getByLabelText('收货地址')).toHaveValue('42');
+  expect(addressApi.list).toHaveBeenCalledTimes(2);
+  expect(orderApi.create).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '结算 (3)' })); await settle();
+  expect(vi.mocked(orderApi.create).mock.lastCall?.[0].shipping_address_id).toBe(42);
+});
