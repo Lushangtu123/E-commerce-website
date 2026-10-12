@@ -46,6 +46,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 - Admin sessions carry `admins.auth_version`; logout bumps it. Failed logout retains a purpose-only `admin_logout_retry` httpOnly cookie at `/api/admin` for 24 hours, without extending it on retries; login settles pending exact-version revocations before issuing a new session. Keep this retention at least as long as the maximum admin token lifetime. Customer password changes bump `users.auth_version`.
 - Both Dockerfiles are multi-stage, run as the non-root `node` user over a read-only `/app`, and start `node` directly as PID 1 so SIGTERM reaches the graceful shutdown. The backend image holds only `dist` and production dependencies: run `node dist/...` / `npm run migrate` in it, never `npm run build`.
 - TypeScript stays on 5.9: TypeScript 7 drops the compiler API that ts-jest and ts-node need.
+- `validateEnv()` (`utils/validate-env.ts`) checks the format of every configured variable at startup: production refuses to start on a bad value, development warns. A new variable goes into `ENV_FORMAT` there and into `backend/.env.example`.
 - Never read or print `.env` files; use the `.env.example` files for variable names.
 
 ## Workflow
