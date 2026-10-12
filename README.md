@@ -460,6 +460,7 @@ Product content is stored separately from interface translations: `title_en`, `d
 - `GET /api/coupons/:id` - Coupon details
 
 The coupon centre confirms a claim only when the response contains `success: true` and a valid positive `user_coupon_id`. A malformed response or unverified browser-storage cleanup retains the original request ID; "Retry claim" recovers the same allocation instead of claiming another coupon.
+Available-coupon reads validate rules, quantities and requested pagination before showing claim controls. A malformed successful body shows a read-only retry instead of an empty list; genuine empty pages and concurrent allocation changes remain supported.
 
 **Admin:**
 - `POST /api/admin/coupons` - Create a coupon
