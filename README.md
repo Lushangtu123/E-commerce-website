@@ -585,6 +585,7 @@ Search keywords are trimmed and limited to 100 characters across product search,
 Order path IDs use canonical positive decimal integers up to 9007199254740991 consistently for customer and admin reads and updates. Scientific notation, prefixes, signs, leading zeroes and unsafe integers return 400 before accessing order data.
 
 Order details retain their route after a network or temporary server failure and provide an explicit retry. A failed status refresh preserves the last loaded details while blocking payment, cancellation and receipt actions until reloaded. Missing or forbidden orders keep their specific error; late retries cannot affect another account or order.
+Order lists and details validate successful response bodies, including money, item identity and requested pagination, before displaying them or unlocking recovery actions. Malformed replies use the same read-only retry; genuine empty results and legacy nullable snapshots remain supported.
 
 When a customer cancellation, demo payment or receipt confirmation has an unknown result, both order pages read the actual order before enabling more actions. A failed check leaves a read-only retry; it never repeats the write. The list keeps this recovery available across filters and pagination.
 

@@ -1333,6 +1333,8 @@ async function localPlatformScripts(context) {
     setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./coupon-center-read-response.cjs')({ browser, localPlatformScripts, watchConsole, errors,
     setExpectedRead: value => { expectedReadFailure = value; } });
+  await require('./customer-order-read-response.cjs')({ browser, adminContext, localPlatformScripts, watchConsole, errors,
+    setExpectedRead: value => { expectedReadFailure = value; } });
   await require('./customer-auth-lifecycle.cjs')({ browser, localPlatformScripts, watchConsole, customerEmail, errors });
   await require('./customer-publication-guard.cjs')({ browser, localPlatformScripts, watchConsole, errors });
   await require('./queued-password-account.cjs')({ browser, localPlatformScripts, watchConsole, errors });
