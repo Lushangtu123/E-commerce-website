@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+const { createElement } = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
+const { FiImage } = require('react-icons/fi');
 
 /** Isolate native link activation from React/session handlers and fallback-image loading. */
 module.exports = async function nativeMiddleProbe({ browser, localPlatformScripts }) {
@@ -9,14 +12,24 @@ module.exports = async function nativeMiddleProbe({ browser, localPlatformScript
     try {
       await localPlatformScripts(context);
       const page = await context.newPage();
-      const content = variant === 'html' ? '<div style="height:200px;width:200px">Product image</div>'
-        : `<div><svg width="200" height="200" style="${variant === 'transparent-svg' ? 'pointer-events:none' : ''}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="200" height="200" fill="gray" /></svg></div>`;
+      const icon = renderToStaticMarkup(createElement(FiImage, { size: 24, 'aria-hidden': true,
+        style: variant === 'transparent-svg' ? { pointerEvents: 'none' } : undefined }));
+      const content = `<div style="height:200px;width:200px;display:flex;align-items:center;justify-content:center">${variant === 'html' ? 'Product image' : icon}</div>`;
       await page.setContent(`<a href="${destination}" style="display:block;width:200px;height:200px">${content}</a>`);
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Page.enable');
+      const windows = [];
+      cdp.on('Page.windowOpen', event => windows.push({ url: event.url, userGesture: event.userGesture }));
       await page.evaluate(() => {
         window.__middleProbe = [];
         for (const type of ['mousedown', 'mouseup', 'auxclick']) document.addEventListener(type, event => {
-          if (event.button === 1) queueMicrotask(() => window.__middleProbe.push({ type, target: event.target.tagName,
-            trusted: event.isTrusted, prevented: event.defaultPrevented }));
+          if (event.button !== 1) return;
+          const anchor = event.target.closest?.('a');
+          const sample = { type, target: event.target.tagName, namespace: event.target.namespaceURI,
+            trusted: event.isTrusted, prevented: event.defaultPrevented };
+          window.__middleProbe.push(sample);
+          setTimeout(() => Object.assign(sample, { finalPrevented: event.defaultPrevented,
+            connected: event.target.isConnected, anchorConnected: anchor?.isConnected }), 0);
         });
       });
       let opened = false;
@@ -30,7 +43,9 @@ module.exports = async function nativeMiddleProbe({ browser, localPlatformScript
         await popup.waitForURL(destination, { waitUntil: 'commit', timeout: 5000 });
         opened = true;
       } catch (error) { failure = error.name; }
-      results.push({ variant, opened, failure, input: await page.evaluate(() => window.__middleProbe) });
+      const input = await page.evaluate(() => new Promise(resolve => setTimeout(() => resolve(window.__middleProbe), 0)));
+      results.push({ variant, opened, failure, windows, input });
+      await cdp.detach().catch(() => {});
     } finally { await context.close(); }
   }
   console.log('NATIVE_MIDDLE_PROBE', JSON.stringify(results));

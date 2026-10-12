@@ -24,8 +24,11 @@ async function traceMiddleClick(context, page, perform) {
     for (const type of ['mousedown', 'mouseup', 'auxclick']) document.addEventListener(type, event => {
       if (event.button !== 1) return;
       const anchor = event.target.closest?.('a');
-      queueMicrotask(() => window.__ecommerceMiddleClickTrace.push({ type, button: event.button, trusted: event.isTrusted,
-        prevented: event.defaultPrevented, href: anchor?.getAttribute('href'), target: event.target.tagName }));
+      const sample = { type, button: event.button, trusted: event.isTrusted, prevented: event.defaultPrevented,
+        href: anchor?.getAttribute('href'), target: event.target.tagName, namespace: event.target.namespaceURI };
+      window.__ecommerceMiddleClickTrace.push(sample);
+      setTimeout(() => Object.assign(sample, { finalPrevented: event.defaultPrevented,
+        connected: event.target.isConnected, anchorConnected: anchor?.isConnected }), 0);
     });
   });
   try { return await perform(); }
