@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -44,7 +45,7 @@ export default function ProfilePage() {
   }, [query.error]);
 
   useEffect(() => {
-    if (isHydrated && !isAuthenticated) router.push('/login');
+    if (isHydrated && !isAuthenticated) router.push(customerLoginHref());
   }, [isHydrated, isAuthenticated, router]);
 
   const handleLogout = () => {

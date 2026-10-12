@@ -1,5 +1,6 @@
 /** The shared API client: one axios instance that checks and records the session of every request. */
 import axios, { type AxiosRequestConfig } from 'axios';
+import { customerLoginHref } from '@/lib/customer-login-return';
 import { CUSTOMER_CLEANUP_KEY, SESSION_KEY, storedSessionId, useAuthStore } from '@/store/useAuthStore';
 import { ADMIN_CLEANUP_KEY, ADMIN_SESSION_EVENT, ADMIN_SESSION_KEY, adminSessionIsReady, clearAdminSession, getAdminSession } from '@/lib/admin-session';
 
@@ -152,7 +153,7 @@ const rejectResponse = (error: unknown) => {
               localStorage.removeItem(SESSION_KEY);
               localStorage.removeItem('user');
             }
-            window.location.href = identity === 'admin' || identity === 'admin-cleanup' ? '/admin/login' : '/login';
+            window.location.href = identity === 'admin' || identity === 'admin-cleanup' ? '/admin/login' : customerLoginHref();
           }
         } catch {
           // Preserve the HTTP error if storage is unavailable; do not clear a
