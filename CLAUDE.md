@@ -41,6 +41,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 - The Elasticsearch client is 9.x and only talks to Elasticsearch 9 servers. ES only decides matches and order; price, stock and status always come from MySQL. Product/SKU writes call `syncProductsToSearchIndex` through `afterProductWrite`.
 - ioredis 6 is pinned to `protocol: 2` (Upstash compatibility). express-rate-limit 8 keys IPv4-mapped addresses as plain IPv4.
 - Admin sessions carry `admins.auth_version`; logout bumps it. Failed logout retains a purpose-only `admin_logout_retry` httpOnly cookie at `/api/admin` for 24 hours, without extending it on retries; login settles pending exact-version revocations before issuing a new session. Keep this retention at least as long as the maximum admin token lifetime. Customer password changes bump `users.auth_version`.
+- Both Dockerfiles are multi-stage, run as the non-root `node` user over a read-only `/app`, and start `node` directly as PID 1 so SIGTERM reaches the graceful shutdown. The backend image holds only `dist` and production dependencies: run `node dist/...` / `npm run migrate` in it, never `npm run build`.
 - TypeScript stays on 5.9: TypeScript 7 drops the compiler API that ts-jest and ts-node need.
 - Never read or print `.env` files; use the `.env.example` files for variable names.
 
