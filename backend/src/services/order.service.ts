@@ -72,15 +72,19 @@ export async function previewOrder(userId: number, items: unknown, userCouponId?
   } finally { connection.release(); }
 }
 
-/** Order, line items, inventory and cart changes share this connection and transaction. */
+/** Order, line items, inventory and optional cart changes share this transaction. */
 export async function createOrder(
   userId: number,
   items: unknown,
   shippingAddressId?: number,
   remark?: string,
   userCouponId?: number,
-  checkoutKey?: string
+  checkoutKey?: string,
+  checkoutSource?: 'buy_now'
 ): Promise<{ orderId: number; productIds: number[]; original_amount: number; discount_amount: number; total_amount: number; created: boolean }> {
+  if (checkoutSource !== undefined && checkoutSource !== 'buy_now') {
+    throw new OrderError('结算来源无效，请刷新页面后重试');
+  }
   const exceedsInputLimit = Array.isArray(items) && items.length > MAX_CHECKOUT_INPUT_LINES;
   // Do not traverse huge arrays until a committed historical request is found.
   let normalizedItems = exceedsInputLimit ? [] : normalizeItems(items);
@@ -111,6 +115,8 @@ export async function createOrder(
   }
   const fingerprint = createHash('sha256').update(JSON.stringify({
     items: normalizedItems, shippingAddressId, remark: remark ?? '', userCouponId: userCouponId ?? null,
+    // Absent source preserves historical cart fingerprints byte for byte.
+    ...(checkoutSource === undefined ? {} : { checkoutSource }),
   })).digest('hex');
   if (historicalOrder) {
     const order = historicalOrder;
@@ -221,17 +227,19 @@ export async function createOrder(
       );
     }
     const productIds = [...new Set(normalizedItems.map(item => item.product_id))];
-    // The user mutex includes cart writes, but another page may have added units
-    // before this checkout's old snapshot arrived. Consume only what was bought.
-    for (const item of normalizedItems) {
-      await connection.execute(
-        'DELETE FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ? AND quantity <= ?',
-        [userId, item.product_id, item.sku_id ?? 0, item.quantity]
-      );
-      await connection.execute(
-        'UPDATE cart SET quantity = quantity - ? WHERE user_id = ? AND product_id = ? AND sku_key = ? AND quantity > ?',
-        [item.quantity, userId, item.product_id, item.sku_id ?? 0, item.quantity]
-      );
+    // Direct purchases do not consume or read cart rows. Cart checkouts consume only
+    // the bought quantity, preserving units another page added before submission.
+    if (checkoutSource === undefined) {
+      for (const item of normalizedItems) {
+        await connection.execute(
+          'DELETE FROM cart WHERE user_id = ? AND product_id = ? AND sku_key = ? AND quantity <= ?',
+          [userId, item.product_id, item.sku_id ?? 0, item.quantity]
+        );
+        await connection.execute(
+          'UPDATE cart SET quantity = quantity - ? WHERE user_id = ? AND product_id = ? AND sku_key = ? AND quantity > ?',
+          [item.quantity, userId, item.product_id, item.sku_id ?? 0, item.quantity]
+        );
+      }
     }
     await connection.commit();
     return { orderId, productIds, original_amount: totalCents / 100, discount_amount: discountCents / 100, total_amount: (totalCents - discountCents) / 100, created: true };

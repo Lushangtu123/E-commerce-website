@@ -28,6 +28,7 @@ export interface OrderInput {
 export interface OrderCreateInput extends OrderInput {
   shipping_address_id: number;
   checkout_key: string;
+  checkout_source?: 'buy_now';
 }
 
 export interface OrderPreview {

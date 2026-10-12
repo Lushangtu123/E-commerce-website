@@ -23,9 +23,9 @@ export class OrderController {
   // 创建订单
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { items, shipping_address_id, remark, user_coupon_id, checkout_key } = req.body || {};
+      const { items, shipping_address_id, remark, user_coupon_id, checkout_key, checkout_source } = req.body || {};
       if (checkout_key === undefined) throw new OrderError('结算请求号无效，请刷新页面后重试');
-      const { orderId, productIds, created, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id, checkout_key);
+      const { orderId, productIds, created, ...amounts } = await createOrder(req.userId!, items, shipping_address_id, remark, user_coupon_id, checkout_key, checkout_source);
       if (created) await invalidateOrderProductCache(productIds);
 
       // 发送订单超时检查消息到MQ（30分钟后若仍未支付，消费者将自动取消订单）

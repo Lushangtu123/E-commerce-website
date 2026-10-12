@@ -4,7 +4,7 @@ import { customerLoginHref } from '@/lib/customer-login-return';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { addressApi, cartApi, orderApi, type OrderCreateInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
+import { addressApi, cartApi, productApi, orderApi, type OrderCreateInput, type OrderPreview, type ShippingAddress } from '@/lib/api';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { useCartStore, cartItemKey, type CartItem } from '@/store/useCartStore';
 import toast from 'react-hot-toast';
@@ -18,7 +18,8 @@ import { validCartItems } from '@/lib/cart-contents';
 import { cartAddBlocksWrites, useCartAddRecovery } from '@/hooks/use-cart-add-recovery';
 import { beginCartWrite, readCanonicalCart, subscribeCanonicalCart } from '@/lib/cart-sync';
 import { clearPendingCheckout, readPendingCheckout, storePendingCheckout, type PendingCheckout } from '@/lib/pending-checkout';
-import { clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
+import { buyNowItem, clearBuyNow, readBuyNow, type BuyNowIntent } from '@/lib/buy-now';
+
 
 function requireCartAcknowledgement(data: unknown, message: '更新成功' | '删除成功') {
   if (!data || typeof data !== 'object' || Array.isArray(data) ||
@@ -72,6 +73,9 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   const [addressSelection, setAddressSelection] = useState<{ key: string; id: number } | null>(null);
   const [addressRevision, setAddressRevision] = useState(0);
   const [purchase, setPurchase] = useState<{ intent: BuyNowIntent | null } | null>(null);
+  const [purchaseCatalogResult, setPurchaseCatalog] = useState<{ revision: number; item: CartItem | null; error?: boolean } | null>(null);
+  const [purchaseRevision, setPurchaseRevision] = useState(0);
+  const purchaseCatalog = purchaseCatalogResult?.revision === purchaseRevision ? purchaseCatalogResult : null;
   const sessionKey = JSON.stringify([sessionId, user?.user_id]);
   const hasUnconfirmedCheckout = unconfirmedSession === sessionKey;
   const cartUpdating = updatingSession === sessionKey || unconfirmedCartSession === sessionKey || hasPendingAdd;
@@ -115,7 +119,8 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   }, []);
 
   const availableItems = items.filter(isAvailable);
-  const purchaseItem = purchase?.intent && items.find(item => cartItemKey(item) === cartItemKey(purchase.intent!.input));
+  const directPurchase = purchase?.intent?.source === 'buy_now';
+  const purchaseItem = directPurchase ? purchaseCatalog?.item : purchase?.intent && items.find(item => cartItemKey(item) === cartItemKey(purchase.intent!.input));
   const purchaseAvailable = purchaseItem && purchase?.intent && purchaseItem.quantity >= purchase.intent.input.quantity &&
     purchaseItem.stock >= purchase.intent.input.quantity && (isAvailable(purchaseItem) || purchaseItem.unavailable_reason === '库存不足');
   const orderItems = buyNowId !== null ? purchaseAvailable && purchase?.intent ? [purchase.intent.input] : [] : availableItems
@@ -137,6 +142,18 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     try { await readCanonicalCart(isSameCustomerSession, { fresh: true }); }
     catch { /* The badge exposes its read-only retry if this canonical read fails. */ }
   };
+
+  useEffect(() => {
+    if (!directPurchase || !purchase?.intent || !isCurrentSession()) return;
+    let active = true;
+    const input = purchase.intent.input;
+    productApi.getDetail(input.product_id).then(data => {
+      if (active && isCurrentSession()) setPurchaseCatalog({ revision: purchaseRevision, item: buyNowItem(data.product, input) });
+    }).catch(() => {
+      if (active && isCurrentSession()) setPurchaseCatalog({ revision: purchaseRevision, item: null, error: true });
+    });
+    return () => { active = false; };
+  }, [directPurchase, purchase?.intent, purchaseRevision]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -164,8 +181,10 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       router.push(customerLoginHref());
       return;
     }
+    if (buyNowId !== null && !purchase) return;
+    if (directPurchase || buyNowId !== null && !purchase?.intent) return;
     loadCart();
-  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router]);
+  }, [isHydrated, isAuthenticated, sessionId, user?.user_id, router, buyNowId, purchase?.intent, directPurchase]);
 
   useEffect(() => {
     const previousSelection = addressSelection;
@@ -188,7 +207,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
   }, [isHydrated, isAuthenticated, sessionId, user?.user_id, addressRevision]);
 
   useEffect(() => {
-    if (!isHydrated || !isAuthenticated || loading || orderItems.length === 0) return;
+    if (!isHydrated || !isAuthenticated || loading && !directPurchase || orderItems.length === 0) return;
     let active = true;
     const isCurrentRequest = () => active && isCurrentSession();
     setQuoteResult(null);
@@ -216,7 +235,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       })
       .finally(() => { if (isCurrentRequest()) setQuoteLoading(false); });
     return () => { active = false; };
-  }, [isHydrated, isAuthenticated, loading, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
+  }, [isHydrated, isAuthenticated, loading, directPurchase, sessionId, user?.user_id, orderItemsKey, selectedCouponId, quoteRevision]);
 
   const loadCart = async () => {
     if (!isCurrentSession() || cartLoadRequest.current?.key === sessionKey) return;
@@ -348,6 +367,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     if (!quote || quoteLoading || quoteError || addressLoading || addressError || !selectedAddress || submittingRequest.current || cartMutation.current || !isCurrentSession()) return;
 
     await submitCheckout({ items: orderItems, shipping_address_id: selectedAddress.address_id,
+      ...(directPurchase && { checkout_source: 'buy_now' as const }),
       ...(selectedCouponId !== undefined && { user_coupon_id: selectedCouponId }), checkout_key: purchase?.intent?.id ?? crypto.randomUUID() });
   };
 
@@ -375,7 +395,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
       clearPendingCheckout(sessionKey);
       pendingCheckout.current = null;
       setUnconfirmedSession(null);
-      if (buyNowId !== null) {
+      if (buyNowId !== null && input.checkout_key === buyNowId) {
         clearBuyNow(sessionId!, user!.user_id, buyNowId);
         setPurchase({ intent: null });
       }
@@ -412,7 +432,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     }
   };
 
-  if (!isHydrated || !isAuthenticated || ((loading || buyNowId !== null && !purchase) && !hasUnconfirmedCheckout)) {
+  if (!isHydrated || !isAuthenticated || (((!directPurchase && (buyNowId === null || purchase?.intent) && loading) || buyNowId !== null && !purchase || directPurchase && !purchaseCatalog) && !hasUnconfirmedCheckout)) {
     return (
       <div className="py-8">
         <div className="container-custom">
@@ -438,7 +458,14 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     </div></div>;
   }
 
-  if (cartError) {
+  if (directPurchase && purchaseCatalog?.error) {
+    return <div className="py-12 container-custom"><div className="card p-6 space-y-4" role="alert">
+      <p>{t('加载本次购买失败，请重试')}</p>
+      <button className="btn btn-secondary" onClick={() => setPurchaseRevision(value => value + 1)}>{t('重新加载')}</button>
+    </div></div>;
+  }
+
+  if (cartError && !directPurchase) {
     return <div className="py-12 container-custom"><div className="card p-6 text-center" role="alert">
       <h1 className="text-xl font-bold mb-3">{t('购物车')}</h1>
       <p className="text-red-600">{t(cartError)}</p>
@@ -454,7 +481,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
     </div></div>;
   }
 
-  if (items.length === 0) {
+  if (buyNowId === null && items.length === 0) {
     return (
       <div className="py-20">
         <div className="container-custom text-center">
@@ -494,6 +521,7 @@ function CartView({ buyNowId }: { buyNowId: string | null }) {
                 className="h-5 w-5 rounded-sm accent-primary-600"
               />
               <span className="ml-3 font-medium">{t("全选")}</span>
+
             </div>}
 
             {/* 商品列表 */}

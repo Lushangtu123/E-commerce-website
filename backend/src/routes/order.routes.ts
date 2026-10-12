@@ -72,6 +72,7 @@ router.post('/preview', OrderController.preview);
  *                     sku_id: { type: integer, minimum: 1, description: 规格商品必填 }
  *                     quantity: { type: integer, minimum: 1 }
  *               checkout_key: { type: string, format: uuid, description: 同一次结算重试必须沿用；新结算使用新请求号 }
+ *               checkout_source: { type: string, enum: [buy_now], description: 立即购买时指定 buy_now，完全保留购物车；省略为购物车结算。同一请求号不能切换来源 }
  *               shipping_address_id: { type: integer, minimum: 1, description: 本人完整收货地址 ID（必填） }
  *               remark: { type: string, description: 订单备注 }
  *               user_coupon_id: { type: integer, minimum: 1, description: 用户已领取的优惠券 ID }
@@ -79,10 +80,12 @@ router.post('/preview', OrderController.preview);
  *       201:
  *         description: 创建成功，返回订单 ID、原价、优惠额和应付金额
  *       400:
- *         description: 商品不存在 / 库存不足 / 收货地址无效或信息不完整
+ *         description: 商品不存在 / 库存不足 / 收货地址无效或信息不完整 / 结算来源无效
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       409:
+ *         description: 同一请求号对应的商品、地址、备注、优惠券或结算来源已改变
  */
 router.post('/', OrderController.create);
 

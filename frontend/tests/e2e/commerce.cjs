@@ -536,7 +536,7 @@ async function localPlatformScripts(context) {
   };
   expectedRecoveryWrite = { endpoint: addCartEndpoint }; await page.route(addCartEndpoint, loseFirstSkuAdd);
   await variant.selectOption('201'); await page.locator('#product-quantity').fill('2');
-  await page.getByRole('button', { name: '立即购买', exact: true }).click();
+  await page.getByRole('button', { name: '加入购物车', exact: true }).click();
   await page.getByRole('button', { name: '重试原添加', exact: true }).click({ trial: true });
   assert.equal(page.url(), 'http://127.0.0.1:3100/products/2');
   await page.reload();
@@ -552,7 +552,7 @@ async function localPlatformScripts(context) {
   assert.equal((await context.request.delete(`${addCartEndpoint}/2?sku_id=201`, { headers: { 'X-Requested-With': 'XMLHttpRequest', Origin: 'http://127.0.0.1:3100' } })).status(), 200);
   await page.unroute(addCartEndpoint, loseFirstSkuAdd); expectedRecoveryWrite = undefined;
   await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
-  console.log('PASS browser lost SKU Buy-now reply preserves original options and quantity across reload and English retry');
+  console.log('PASS browser lost SKU add reply preserves original options and quantity across reload and English retry');
   const relatedEndpoint = 'http://127.0.0.1:3101/api/recommendations/related/2';
   let relatedUnavailable = true, relatedAttempts = 0;
   const relatedFault = route => { relatedAttempts++; return relatedUnavailable

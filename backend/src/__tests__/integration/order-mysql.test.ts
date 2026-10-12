@@ -989,6 +989,73 @@ integration('真实 MySQL 订单事务及并发', () => {
   const checkout = (key = checkoutKey, items = [{ product_id: 1, quantity: 2 }], userId = 1, addressId = 100 + userId, couponId?: number, remark?: string) =>
     createOrderService(userId, items, addressId, remark, couponId, key).then(({ created, ...result }) => result);
 
+  test.each([false, true])('立即购买 sku=%s 绕过三件旧购物车，只扣一件库存且并发、取消后重试复用原订单', async withSku => {
+    await receivedCoupon();
+    const skuId = withSku
+      ? await SKUModel.create({ product_id: 1, sku_code: 'BUY-NOW', specs: { size: 'M' }, price: 12, stock: 3 })
+      : undefined;
+    if (!withSku) await db.query('UPDATE products SET stock = 3 WHERE product_id = 1');
+    await CartModel.add(1, 1, 3, skuId);
+    await CartModel.add(1, 2, 1);
+    await CartModel.add(2, 1, 1, skuId);
+    const cartRows = async () => (await db.query<RowDataPacket[]>('SELECT * FROM cart ORDER BY user_id,product_id,sku_key'))[0];
+    const oldCart = await cartRows();
+    const items = [{ product_id: 1, quantity: 1, ...(skuId === undefined ? {} : { sku_id: skuId }) }];
+    const body = { items, shipping_address_id: 101, checkout_key: checkoutKey, user_coupon_id: 1, checkout_source: 'buy_now' };
+    const app = express(); app.use(express.json()); app.use('/orders', orderRoutes);
+    const auth = { Authorization: `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}` };
+    const submit = () => request(app).post('/orders').set(auth).send(body).expect(201);
+    const [first, concurrent] = await Promise.all([submit(), submit()]);
+    expect(concurrent.body).toEqual(first.body);
+    expect((await submit()).body).toEqual(first.body);
+    expect(await cartRows()).toEqual(oldCart);
+    const [orders] = await db.query<RowDataPacket[]>('SELECT order_id,original_amount,discount_amount,total_amount FROM orders');
+    const [lines] = await db.query<RowDataPacket[]>('SELECT product_id,sku_id,quantity FROM order_items');
+    const [coupons] = await db.query<RowDataPacket[]>('SELECT status,order_id FROM user_coupons');
+    const [logs] = await db.query<RowDataPacket[]>('SELECT order_id FROM coupon_usage_logs');
+    expect(orders).toEqual([{ order_id: first.body.order_id, original_amount: withSku ? '12.00' : '10.10',
+      discount_amount: withSku ? '2.40' : '2.02', total_amount: withSku ? '9.60' : '8.08' }]);
+    expect(lines).toEqual([{ product_id: 1, sku_id: skuId ?? null, quantity: 1 }]);
+    expect(coupons).toEqual([{ status: 2, order_id: first.body.order_id }]);
+    expect(logs).toEqual([{ order_id: first.body.order_id }]);
+    const inventory = async () => withSku
+      ? (await db.query<RowDataPacket[]>('SELECT stock FROM product_skus WHERE sku_id = ?', [skuId]))[0][0].stock
+      : (await product()).stock;
+    expect(await inventory()).toBe(2);
+    if (withSku) expect(await product()).toMatchObject({ stock: 10 });
+
+    await request(app).post('/orders').set(auth).send({ ...body, checkout_source: undefined }).expect(409);
+    await transitionOrder(first.body.order_id, OrderStatus.CANCELLED, { userId: 1 });
+    expect(await inventory()).toBe(3);
+    expect((await submit()).body).toEqual(first.body);
+    expect(await state(first.body.order_id)).toBe(OrderStatus.CANCELLED);
+    expect(await inventory()).toBe(3);
+    expect(await cartRows()).toEqual(oldCart);
+    const [finalOrders] = await db.query<RowDataPacket[]>('SELECT order_id FROM orders');
+    const [finalLogs] = await db.query<RowDataPacket[]>('SELECT order_id FROM coupon_usage_logs');
+    expect(finalOrders).toHaveLength(1);
+    expect(finalLogs).toHaveLength(1);
+  });
+
+  test('旧购物车指纹保持原序列化格式，同一请求号切换为立即购买返回 409', async () => {
+    await CartModel.add(1, 1, 3);
+    const items = [{ product_id: 1, quantity: 1 }];
+    const first = await checkout(checkoutKey, items);
+    const [receipt] = await db.query<RowDataPacket[]>('SELECT checkout_fingerprint FROM orders WHERE order_id = ?', [first.orderId]);
+    const historicalFingerprint = createHash('sha256').update(JSON.stringify({
+      items, shippingAddressId: 101, remark: '', userCouponId: null,
+    })).digest('hex');
+    expect(receipt[0].checkout_fingerprint).toBe(historicalFingerprint);
+    const app = express(); app.use(express.json()); app.use('/orders', orderRoutes);
+    await request(app).post('/orders').set('Authorization', `Bearer ${jwt.sign({ userId: 1 }, 'test-jwt-secret')}`).send({
+      items, shipping_address_id: 101, checkout_key: checkoutKey, checkout_source: 'buy_now',
+    }).expect(409);
+    expect(await checkout(checkoutKey, items)).toEqual(first);
+    expect(await product()).toMatchObject({ stock: 9 });
+    const [cart] = await db.query<RowDataPacket[]>('SELECT quantity FROM cart WHERE user_id = 1 AND product_id = 1');
+    expect(cart).toEqual([{ quantity: 2 }]);
+  });
+
   test('结算行数上限拒绝 101 商品、101 规格及 1001 原始行，不启动事务或改变数据库', async () => {
     const beforeProduct = await product();
     const execute = jest.fn((sql: string, values: any[]) => db.execute(sql, values));

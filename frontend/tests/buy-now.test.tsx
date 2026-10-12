@@ -26,6 +26,7 @@ const address = { address_id: 41, receiver_name: 'Buyer', phone: '13800138000', 
 
 async function buy(rows: CartItem[], skuId?: number) {
   useAuthStore.getState().login(owner, 'buyer-session');
+  useCartStore.getState().setItems(rows.map(row => ({ ...row })));
   vi.mocked(productApi.getDetail).mockResolvedValue({ product: { ...product, ...(skuId && { has_sku: true,
     skus: [{ product_id: 1, sku_id: skuId, sku_code: 'RED', specs: { Color: 'Red' }, stock: 20, price: 10, status: 1 }] }) } });
   vi.mocked(cartApi.list).mockImplementation(async () => ({ items: rows.map(row => ({ ...row })) }));
@@ -57,13 +58,14 @@ it('quotes and purchases only the chosen quantity, keeping prior cart units and 
   expect(orderApi.preview).toHaveBeenLastCalledWith({ items: [{ product_id: 1, quantity: 1 }] });
   expect(screen.getByRole('button', { name: '结算 (1)' })).toBeEnabled();
   expect(screen.queryByText('Other cart product')).not.toBeInTheDocument();
-  expect(useCartStore.getState().items.map(row => row.quantity)).toEqual([4, 3]);
+  expect(useCartStore.getState().items.map(row => row.quantity)).toEqual([3, 3]);
+  expect(cartApi.add).not.toHaveBeenCalled();
   vi.mocked(orderApi.create).mockImplementation(async input => {
-    rows[0].quantity -= input.items[0].quantity;
+    expect(input.checkout_source).toBe('buy_now');
     return { order_id: 55, message: '订单创建成功' };
   });
   fireEvent.click(screen.getByRole('button', { name: '结算 (1)' })); await settle();
-  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: expect.any(String) });
+  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: expect.any(String), checkout_source: 'buy_now' });
   expect(useCartStore.getState().items.map(row => row.quantity)).toEqual([3, 3]);
 });
 
@@ -73,7 +75,7 @@ it('keeps the exact selected SKU and quantity after a reload without repeating t
   const { cart } = await buy(rows, 5);
   expect(orderApi.preview).toHaveBeenLastCalledWith({ items: [{ product_id: 1, sku_id: 5, quantity: 1 }] });
   cart.unmount(); render(<CartPage />); await settle();
-  expect(cartApi.add).toHaveBeenCalledTimes(1);
+  expect(cartApi.add).not.toHaveBeenCalled();
   expect(orderApi.preview).toHaveBeenLastCalledWith({ items: [{ product_id: 1, sku_id: 5, quantity: 1 }] });
   expect(screen.queryByText('Other variant')).not.toBeInTheDocument();
   act(() => useLocaleStore.getState().setLocale('en'));
@@ -111,7 +113,7 @@ it('returns to ordinary full-cart selection on same-route navigation and retires
   const { cart } = await buy([{ cart_id: 22, product_id: 2, quantity: 3, title: 'Other cart product', price: 10, stock: 20 }]);
   const oldCheckout = captureHandler(screen.getByRole('button', { name: '结算 (1)' }));
   window.history.replaceState(null, '', '/cart'); cart.rerender(<CartPage />); await settle();
-  expect(screen.getByRole('button', { name: '结算 (4)' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '结算 (3)' })).toBeEnabled();
   expect(screen.getByText('Other cart product')).toBeInTheDocument();
   await oldCheckout(); expect(orderApi.create).not.toHaveBeenCalled();
 });
@@ -147,6 +149,22 @@ it('keeps ordinary Add to cart separate from the purchase scope', async () => {
   const { cart } = await buy([]); cart.unmount(); router.push.mockClear();
   render(<ProductDetail />); await settle();
   fireEvent.click(screen.getByRole('button', { name: '加入购物车' })); await settle();
-  expect(cartApi.add).toHaveBeenCalledTimes(2);
+  expect(cartApi.add).toHaveBeenCalledTimes(1);
   expect(router.push).not.toHaveBeenCalled();
+});
+
+it('restores a legacy cart-backed purchase without changing its checkout source or key', async () => {
+  useAuthStore.getState().login(owner, 'buyer-session');
+  const id = '11111111-1111-4111-8111-111111111111';
+  sessionStorage.setItem('buy-now:buyer-session:1', JSON.stringify({ id, ready: true, input: { product_id: 1, quantity: 1 } }));
+  window.history.replaceState(null, '', `/cart?buy_now=${id}`);
+  vi.mocked(cartApi.list).mockResolvedValue({ items: [{ cart_id: 11, product_id: 1, title: product.title, price: 10, stock: 20, quantity: 4 }] });
+  vi.mocked(addressApi.list).mockResolvedValue({ addresses: [address] });
+  vi.mocked(orderApi.preview).mockResolvedValue({ original_amount: 10, total_amount: 10, discount_amount: 0, coupon: null, available_coupons: [] });
+  vi.mocked(orderApi.create).mockResolvedValue({ order_id: 55, message: '订单创建成功' });
+  render(<CartPage />); await settle();
+  fireEvent.click(screen.getByRole('button', { name: '结算 (1)' })); await settle();
+  expect(orderApi.create).toHaveBeenCalledExactlyOnceWith({ items: [{ product_id: 1, quantity: 1 }], shipping_address_id: 41, checkout_key: id });
+  expect(productApi.getDetail).not.toHaveBeenCalled();
+  expect(cartApi.add).not.toHaveBeenCalled();
 });

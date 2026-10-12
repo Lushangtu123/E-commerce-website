@@ -60,12 +60,12 @@ describe('cart add recovery across views', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry original add' })); await settle();
     expect(cartApi.list).not.toHaveBeenCalled(); expect(screen.getByRole('alert')).toHaveTextContent('unconfirmed');
   });
-  it('Buy now preserves the lost SKU intent even when the user changes options, then retries it without navigating', async () => {
+  it('Add to cart preserves the lost SKU intent even when the user changes options, then retries it without navigating', async () => {
     signIn(); const view = render(<AppShell><ProductDetail /></AppShell>); await settle();
     fireEvent.change(screen.getByLabelText('商品规格'), { target: { value: '5' } });
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } }); await settle();
     vi.mocked(cartApi.add).mockRejectedValueOnce(new Error('Lost reply'));
-    fireEvent.click(screen.getByRole('button', { name: '立即购买' })); await settle();
+    fireEvent.click(screen.getByRole('button', { name: '加入购物车' })); await settle();
     const original = vi.mocked(cartApi.add).mock.calls[0][0];
     expect(original).toMatchObject({ ...input, add_key: expect.stringMatching(/^[a-f0-9-]{36}$/) });
     fireEvent.change(screen.getByLabelText('商品规格'), { target: { value: '6' } }); await settle();

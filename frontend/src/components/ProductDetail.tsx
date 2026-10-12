@@ -273,15 +273,14 @@ export default function ProductDetail({ initialProduct = null }: { initialProduc
     addingRequest.current = context;
     setAdding(true);
     try {
-      const intent: BuyNowIntent | null = purchase ? { id: crypto.randomUUID(), ready: false,
+      const intent: BuyNowIntent | null = purchase ? { id: crypto.randomUUID(), ready: true, source: 'buy_now',
         input: { product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) } } : null;
-      // Test storage before the add is dispatched; only a confirmed add can open this purchase.
-      if (intent) storeBuyNow(sessionId!, user!.user_id, intent);
-      if (!await addToCart({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) }, isCurrentContext)) return false;
-      if (intent && isCurrentContext()) {
-        storeBuyNow(sessionId!, user!.user_id, { ...intent, ready: true });
+      if (intent) {
+        storeBuyNow(sessionId!, user!.user_id, intent);
         router.push(`/cart?buy_now=${intent.id}`);
+        return true;
       }
+      if (!await addToCart({ product_id: productId, quantity, ...(selectedSku && { sku_id: selectedSku.sku_id }) }, isCurrentContext)) return false;
       toast.success(translate("已加入购物车"));
       return true;
     } catch (error) {
