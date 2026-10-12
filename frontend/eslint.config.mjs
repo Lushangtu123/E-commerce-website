@@ -14,6 +14,8 @@ export default defineConfig([
       // React Compiler rules added by react-hooks v7 (eslint-config-next 16). They flag deliberate
       // session/stale-request guards (refs written during render, state reset in effects).
       // The compiler is not enabled; tracked as warnings until those pages are reworked.
+      // `npm run lint` caps warnings at the current count (package.json --max-warnings), so new
+      // code cannot add more; lower the cap when a page is reworked.
       'react-hooks/refs': 'warn',
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/immutability': 'warn',
