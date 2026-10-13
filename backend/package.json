@@ -77,5 +77,8 @@
     "ts-jest": "^29.4.13",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "scarfSettings": {
+    "enabled": false
   }
 }
