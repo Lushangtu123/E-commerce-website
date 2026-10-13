@@ -40,7 +40,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 
 ## Pitfalls already paid for
 
-- `src/load-env.ts` must stay the first import of `app.ts`, `index.ts` and `serverless.ts`: modules read env vars at load time. Read `JWT_SECRET` only through `jwtSecret()` (`utils/jwt-secret.ts`), shared by customer and admin tokens.
+- `src/load-env.ts` must stay the first import of `app.ts`, `index.ts` and `serverless.ts`: modules read env vars at load time. Sign with `jwtSecret()` and verify only with `verifyJwt()` (`utils/jwt-secret.ts`, HS256 only, also accepts `JWT_SECRET_PREVIOUS` during a rotation), shared by customer and admin tokens. Rotation steps: `docs/KEY_ROTATION.md`.
 - Express 5 leaves `req.body` undefined without a parsed body; `app.ts` defaults it to `{}` so Joi does not pass `undefined` through. `req.query` is read-only.
 - Sentry is optional (`SENTRY_DSN`) and reports only through `utils/error-reporting.ts`: the logger hook (error/fatal, sanitized by `log-safety`) and uncaught exceptions (`scrubEvent`). Keep `dataCollection` off and the integration allow-list narrow; never send request data, users or local variables. In the browser, `frontend/src/lib/error-reporting.ts` loads `lib/sentry-browser.ts` on demand (never import it statically); `scrubBrowserEvent` rebuilds each event from an allowlist, and the backend `request_id` tag is its only addition.
 - Retention periods live in `services/data-retention.service.ts` (`RETENTION`, run daily by `index.ts` and by `POST /api/internal/data-retention` on Vercel) and are promised in the privacy policy page; change both together.

@@ -32,3 +32,13 @@ test('失败时返回 503', async () => {
   const res = await request(app).post('/api/internal/data-retention').set('Authorization', `Bearer ${SECRET}`).expect(503);
   expect(res.body).toEqual({ error: '数据保留清理失败' });
 });
+
+test('轮换期内旧的 CRON_SECRET 仍然有效，未设置时无效', async () => {
+  (purgeExpiredPersonalData as jest.Mock).mockResolvedValue({ browse_history: 0, search_history: 0, password_reset_tokens: 0, page_visits: 0 });
+  const OLD = 'o'.repeat(40);
+  await request(app).post('/api/internal/data-retention').set('Authorization', `Bearer ${OLD}`).expect(401);
+  process.env.CRON_SECRET_PREVIOUS = OLD;
+  await request(app).post('/api/internal/data-retention').set('Authorization', `Bearer ${OLD}`).expect(200);
+  await request(app).post('/api/internal/data-retention').set('Authorization', `Bearer ${SECRET}`).expect(200);
+  delete process.env.CRON_SECRET_PREVIOUS;
+});

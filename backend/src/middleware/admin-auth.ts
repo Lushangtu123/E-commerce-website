@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { getPool } from '../database/mysql';
 import logger from '../utils/logger';
 import { ADMIN_COOKIE, CSRF_ERROR, sessionToken } from '../utils/session-cookie';
-import { jwtSecret } from '../utils/jwt-secret';
+import { verifyJwt } from '../utils/jwt-secret';
 
 // 扩展 Request 类型
 export interface AdminAuthRequest extends Request {
@@ -42,7 +42,7 @@ export const authenticateAdmin = async (
     }
 
     // 验证 token
-    const decoded = jwt.verify(token, jwtSecret()) as any;
+    const decoded = verifyJwt(token) as any;
 
     // 检查是否为管理员token
     if (decoded.type !== 'admin' || !Number.isSafeInteger(decoded.adminId) || decoded.adminId <= 0) {

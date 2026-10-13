@@ -104,6 +104,8 @@
 
 ## 🛡️ 安全特性
 
+密钥轮换步骤与第三方渗透测试的准备见 [docs/KEY_ROTATION.md](docs/KEY_ROTATION.md)。
+
 ### 1. 认证与授权
 
 #### JWT Token 认证
