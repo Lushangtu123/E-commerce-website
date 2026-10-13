@@ -565,6 +565,7 @@ Administrator status changes and their audit record commit in one transaction. A
 ## Monitoring and Logging
 
 - Error reporting (optional): with `SENTRY_DSN` set, error/fatal logs and uncaught exceptions go to Sentry, sanitized like the logs and tagged with the request ID. No request headers, cookies, bodies, user data, local variables or breadcrumbs are sent, and there is no performance tracing
+- Browser error reporting (optional): set `NEXT_PUBLIC_SENTRY_DSN` to a separate Browser JavaScript project DSN and rebuild/redeploy. Reports retain only the error category and static bundle code locations, without arbitrary error text, user/request data, breadcrumbs, replay or tracing. Keep Vercel “Automatically expose System Environment Variables” enabled: the build forwards `VERCEL_ENV` and `VERCEL_GIT_COMMIT_SHA` as public report environment/release metadata. No Sentry auth token or source-map upload is required.
 - Request IDs: every response carries `X-Request-Id` (an upstream value is reused when it is short and safe, otherwise a UUID is generated), every log line written during the request includes `requestId`, and 500 responses return it in the body
 - Request logging
 - Error logging

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
+import { reportBrowserError } from '@/lib/error-reporting';
 import { logger } from '@/lib/logger';
 
 /** Shown inside the site layout when a page throws while rendering. */
@@ -10,6 +11,7 @@ export default function Error({ error, retry }: { error: Error & { digest?: stri
   const { t } = useI18n();
 
   useEffect(() => {
+    reportBrowserError(error);
     logger.error('页面渲染失败:', error);
   }, [error]);
 

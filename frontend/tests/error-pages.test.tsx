@@ -3,9 +3,11 @@ import type { ComponentType } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import ErrorPage from '@/app/error';
 import GlobalError from '@/app/global-error';
+import { reportBrowserError } from '@/lib/error-reporting';
 import { logger } from '@/lib/logger';
 import { render } from './helpers';
 
+vi.mock('@/lib/error-reporting', () => ({ reportBrowserError: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 
 type ErrorProps = { error: Error & { digest?: string }; retry: () => void };
@@ -22,6 +24,7 @@ describe.each(pages)('%s', (_, Page) => {
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     expect(retry).toHaveBeenCalledTimes(1);
     expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(reportBrowserError).toHaveBeenCalledWith(error);
     expect(vi.mocked(logger.error).mock.calls[0][1]).toBe(error);
     expect(screen.getAllByRole('link').filter(link => link.getAttribute('href') === '/')).toHaveLength(1);
   });
