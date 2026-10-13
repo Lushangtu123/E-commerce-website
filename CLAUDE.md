@@ -7,6 +7,7 @@ Guidance for Claude Code in this repository. Keep it short and true: update it i
 - `backend/` - Express 5 + TypeScript API (one process, modules split by domain): `src/routes` → `src/controllers` → `src/services` / `src/models`, MySQL via `mysql2`, Redis via `ioredis`.
 - `frontend/` - Next.js 16 + React 19. Read `frontend/AGENTS.md` before frontend work: this Next.js version differs from training data; check `node_modules/next/dist/docs/`.
 - `frontend/src/pages/api/[[...path]].ts` embeds the backend for Vercel (`backend/src/serverless.ts`); Docker and local dev run the backend separately.
+- `docs/BACKUP_RESTORE.md` covers backups, the restore drill (`scripts/dev/backup-restore-drill.sh`) and keeping Preview on its own database (`ecommerce_preview`); Preview must never point at the production database.
 - `scripts/dev/` helper scripts, `scripts/manual-tests/` curl checks, `docs/archive/` historical notes (do not update).
 
 ## Commands
@@ -41,7 +42,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 
 - `src/load-env.ts` must stay the first import of `app.ts`, `index.ts` and `serverless.ts`: modules read env vars at load time. Read `JWT_SECRET` only through `jwtSecret()` (`utils/jwt-secret.ts`), shared by customer and admin tokens.
 - Express 5 leaves `req.body` undefined without a parsed body; `app.ts` defaults it to `{}` so Joi does not pass `undefined` through. `req.query` is read-only.
-- Account deletion (`services/account-deletion.service.ts`) anonymizes the `users` row in place (`deleted_at`) and keeps orders, after-sales and used coupons as transaction records; usernames starting `deleted_` and emails at `@deleted.invalid` are reserved. A new table that holds a customer's personal data must be added to its `PERSONAL_TABLES`.
+- Account deletion (`services/account-deletion.service.ts`) anonymizes the `users` row in place (`deleted_at`) and keeps orders, after-sales and used coupons as transaction records; usernames starting `deleted_` and emails at `@deleted.invalid` are reserved. A new table that holds a customer's personal data must be added to its `PERSONAL_TABLES` and to the export in `services/personal-data.service.ts`.
 - Sentry is optional (`SENTRY_DSN`) and reports only through `utils/error-reporting.ts`: the logger hook (error/fatal, sanitized by `log-safety`) and uncaught exceptions (`scrubEvent`). Keep `dataCollection` off and the integration allow-list narrow; never send request data, users or local variables. In the browser, `frontend/src/lib/error-reporting.ts` loads `lib/sentry-browser.ts` on demand (never import it statically); `scrubBrowserEvent` rebuilds each event from an allowlist, and the backend `request_id` tag is its only addition.
 - RabbitMQ and Elasticsearch are optional: without `RABBITMQ_URL` timed-out orders are cancelled by the 5-minute poller (or `POST /api/internal/order-timeouts` with `CRON_SECRET`), and without `ELASTICSEARCH_URL` search uses MySQL. `/health` returns 503 only for MySQL or Redis.
 - The Elasticsearch client is 9.x and only talks to Elasticsearch 9 servers. ES only decides matches and order; price, stock and status always come from MySQL. Product/SKU writes call `syncProductsToSearchIndex` through `afterProductWrite`.

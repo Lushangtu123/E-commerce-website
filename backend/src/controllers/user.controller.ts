@@ -13,6 +13,7 @@ import { normalizePasswordChange, normalizePasswordForgot, normalizePasswordRese
 import { createHash } from 'crypto';
 import { requestPasswordRecovery } from '../services/password-recovery.service';
 import { jwtSecret } from '../utils/jwt-secret';
+import { exportPersonalData, PersonalDataError } from '../services/personal-data.service';
 
 export class UserController {
   static passwordCapabilities(_req: AuthRequest, res: Response) {
@@ -191,6 +192,21 @@ export class UserController {
     } catch (error) {
       logger.error({ err: error }, '获取用户信息失败');
       res.status(500).json({ error: '获取用户信息失败' });
+    }
+  }
+
+  // 导出个人信息（JSON 附件）
+  static async exportData(req: AuthRequest, res: Response) {
+    try {
+      const data = await exportPersonalData(req.userId!);
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Disposition', `attachment; filename="personal-data-${date}.json"`);
+      res.json(data);
+    } catch (error) {
+      if (error instanceof PersonalDataError) return res.status(error.statusCode).json({ error: error.message });
+      logger.error({ err: error }, '导出个人信息失败');
+      res.status(500).json({ error: '导出个人信息失败，请稍后重试' });
     }
   }
 

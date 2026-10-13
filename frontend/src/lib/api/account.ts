@@ -31,6 +31,8 @@ export const userApi = {
   logout: () => customerSessionLogout(() => api.post('/users/logout')),
   getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
   getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
+  /** Every piece of personal data the store holds about the signed-in customer. */
+  exportData: () => api.get<unknown, Record<string, unknown>>('/users/data-export'),
   updateProfile: (data: ProfileInput) => api.put<unknown, { message: string; user: User }>('/users/profile', data),
   passwordCapabilities: () => api.get<unknown, { passwordResetAvailable: boolean; passwordMinLength: number; passwordMaxBytes: number }>('/users/password/capabilities'),
   forgotPassword: (email: string) => api.post<unknown, { message: string }>('/users/password/forgot', { email }),

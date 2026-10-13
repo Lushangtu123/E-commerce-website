@@ -1,4 +1,9 @@
 export const accountTranslations: Record<string, string> = {
+  '我的个人信息': 'My personal data',
+  '下载账户、收货地址、订单、售后、评价、收藏、浏览与搜索记录等全部个人信息（JSON 文件）。': 'Download all personal data we hold about you, including your account, addresses, orders, after-sales requests, reviews, favorites, and browsing and search history (JSON file).',
+  '导出个人信息': 'Export personal data',
+  '导出中...': 'Exporting...',
+  '个人信息已导出': 'Your personal data has been downloaded',
   '注销账号': 'Delete account',
   '将删除收货地址、购物车、收藏、浏览与搜索记录和未使用的优惠券，且无法恢复。': 'Your addresses, cart, favorites, browsing and search history and unused coupons will be deleted permanently.',
   '订单与售后记录按《电子商务法》保留三年，评价保留但不再显示你的用户名。': 'Orders and after-sales records are kept for three years as the E-Commerce Law requires. Your reviews stay, without your username.',

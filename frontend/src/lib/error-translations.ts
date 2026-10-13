@@ -195,6 +195,7 @@ export const errorTranslations: Record<string, string> = {
   '管理员不存在': 'Administrator not found',
   '用户ID无效': 'Invalid user ID',
   '获取用户信息失败': 'Unable to load your profile',
+  '导出个人信息失败，请稍后重试': 'Unable to export your personal data. Please try again later.',
   '账号已注销': 'Your account has been deleted',
   '密码错误': 'Incorrect password',
   '有未完成的订单或售后，处理完成后才能注销账号': 'Finish your open orders and after-sales requests before deleting the account',

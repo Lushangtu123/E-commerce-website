@@ -259,6 +259,29 @@ router.get('/profile', authMiddleware, UserController.getProfile);
 
 /**
  * @openapi
+ * /api/users/data-export:
+ *   get:
+ *     tags: [用户]
+ *     summary: 导出个人信息
+ *     description: 以 JSON 附件返回当前用户的账户、地址、订单（含明细）、售后、评价、收藏、浏览与搜索记录、购物车、优惠券和访问记录，读取自同一个一致性快照。不含密码哈希、会话版本、幂等键和管理员编号。
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: 个人信息 JSON（Content-Disposition 为附件，Cache-Control 为 no-store）
+ *       401:
+ *         description: 未登录或 Token 无效
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       404:
+ *         description: 用户不存在
+ *       429:
+ *         description: 请求过于频繁
+ */
+router.get('/data-export', authMiddleware, authLimiter, UserController.exportData);
+
+/**
+ * @openapi
  * /api/users/profile:
  *   put:
  *     tags: [用户]
