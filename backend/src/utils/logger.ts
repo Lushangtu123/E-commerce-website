@@ -12,6 +12,7 @@
  *   logger.error({ err }, '数据库连接失败');
  *
  * HTTP 请求内的每条日志自动带 requestId（见 middleware/request-id.ts）。
+ * 配置 SENTRY_DSN 后，error / fatal 日志同时上报 Sentry（见 utils/error-reporting.ts）。
  *
  * 环境变量：
  *   LOG_LEVEL   日志级别（默认开发环境 debug，生产环境 info）
@@ -20,6 +21,7 @@
 import pino from 'pino';
 import { safeError, safeLogArguments } from './log-safety';
 import { logContext } from './request-context';
+import { reportLoggedError } from './error-reporting';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const level = process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug');
@@ -51,7 +53,13 @@ const options: pino.LoggerOptions = {
   level,
   serializers: { err: safeError, error: safeError },
   mixin: logContext, // 请求内的日志附带 requestId，便于按一次请求串起所有日志
-  hooks: { logMethod(args, method) { method.apply(this, safeLogArguments(args) as Parameters<typeof method>); } },
+  hooks: {
+    logMethod(args, method, level) {
+      // error (50) and fatal (60) also go to Sentry when SENTRY_DSN is set; it sanitizes the original arguments itself.
+      if (level >= 50) reportLoggedError(args);
+      method.apply(this, safeLogArguments(args) as Parameters<typeof method>);
+    },
+  },
 };
 const logger = targets.length > 0 ? pino(options, pino.transport({ targets })) : pino(options);
 
