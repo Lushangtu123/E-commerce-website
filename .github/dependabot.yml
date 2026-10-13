@@ -30,6 +30,10 @@ updates:
     ignore:
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+      # eslint-config-next's react, import and jsx-a11y plugins declare support up to ESLint 9.
+      # Upgrade once they accept the next major.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
       # Type definitions follow the Node.js runtime major (.nvmrc, Docker images, CI).
       - dependency-name: "@types/node"
         versions: [">=25"]
