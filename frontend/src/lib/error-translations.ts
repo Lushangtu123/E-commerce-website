@@ -195,6 +195,7 @@ export const errorTranslations: Record<string, string> = {
   '管理员不存在': 'Administrator not found',
   '用户ID无效': 'Invalid user ID',
   '获取用户信息失败': 'Unable to load your profile',
+  '导出个人信息失败，请稍后重试': 'Unable to export your personal data. Please try again later.',
   '更新用户信息失败': 'Unable to update your profile',
   '获取个人统计失败': 'Unable to load your account statistics',
   '获取用户列表失败': 'Failed to load users',

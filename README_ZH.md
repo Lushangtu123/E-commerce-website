@@ -311,6 +311,7 @@ E-commerce-website/
 - `POST /api/users/register` - 用户注册
 - `POST /api/users/login` - 用户登录
 - `GET /api/users/profile` - 获取个人信息
+- `GET /api/users/data-export` - 以 JSON 文件下载当前用户的全部个人信息（一致性快照，不含密码哈希和内部键）
 - `GET /api/users/stats` - 获取本人订单总数、待支付订单数、已领券总数、当前有效可用券数和收藏数
 - `PUT /api/users/profile` - 更新个人信息
 - `PUT /api/users/password` - 验证当前密码并修改密码，撤销所有旧用户会话

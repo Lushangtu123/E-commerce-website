@@ -8,6 +8,7 @@ import { useAuthStore, type User, storedSessionId } from '@/store/useAuthStore';
 import { userApi, type ProfileInput } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ChangePassword from '@/components/ChangePassword';
+import PersonalDataExport from '@/components/PersonalDataExport';
 import { requestFailure } from '@/lib/api-error';
 
 type Draft = { username: string; phone: string; avatar_url: string };
@@ -243,6 +244,7 @@ export default function ProfileSettingsPage() {
       <ChangePassword key={sessionKey}
         onPasswordChanged={() => { if (isCurrent()) passwordRedirect.current = '/login?passwordChanged=1'; }}
         onPasswordUnconfirmed={() => { if (isCurrent()) passwordRedirect.current = '/login?passwordChangeUnconfirmed=1'; }} />
+      <PersonalDataExport key={`export-${sessionKey}`} />
     </div>
   );
 }
