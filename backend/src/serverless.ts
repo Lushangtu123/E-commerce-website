@@ -5,7 +5,9 @@ import { createApp } from './app';
 import { connectDatabase } from './database/mysql';
 import { connectRedis } from './database/redis';
 import logger from './utils/logger';
+import { initErrorReporting, flushErrorReporting } from './utils/error-reporting';
 
+initErrorReporting();
 const app = createApp({ serverless: true });
 
 /** No listener, RabbitMQ consumer or background interval in a Vercel function. */
@@ -14,17 +16,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // the original URL itself so those framework parameters never reach validation.
   delete (req as Partial<Request>).query;
   try {
-    await Promise.all([connectDatabase(), connectRedis()]);
-  } catch {
-    logger.error('云数据库初始化失败');
-    res.statusCode = 503;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ error: '服务暂不可用，请稍后重试' }));
-    return;
+    try {
+      await Promise.all([connectDatabase(), connectRedis()]);
+    } catch {
+      logger.error('云数据库初始化失败');
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ error: '服务暂不可用，请稍后重试' }));
+      return;
+    }
+    await new Promise<void>(resolve => {
+      res.once('finish', resolve);
+      res.once('close', resolve);
+      app(req as Request, res as Response);
+    });
+  } finally {
+    // The function may be frozen once it returns; send this request's error reports first (no-op without SENTRY_DSN).
+    await flushErrorReporting(1000);
   }
-  await new Promise<void>(resolve => {
-    res.once('finish', resolve);
-    res.once('close', resolve);
-    app(req as Request, res as Response);
-  });
 }

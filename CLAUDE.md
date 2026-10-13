@@ -41,6 +41,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 
 - `src/load-env.ts` must stay the first import of `app.ts`, `index.ts` and `serverless.ts`: modules read env vars at load time. Read `JWT_SECRET` only through `jwtSecret()` (`utils/jwt-secret.ts`), shared by customer and admin tokens.
 - Express 5 leaves `req.body` undefined without a parsed body; `app.ts` defaults it to `{}` so Joi does not pass `undefined` through. `req.query` is read-only.
+- Sentry is optional (`SENTRY_DSN`) and reports only through `utils/error-reporting.ts`: the logger hook (error/fatal, sanitized by `log-safety`) and uncaught exceptions (`scrubEvent`). Keep `dataCollection` off and the integration allow-list narrow; never send request data, users or local variables.
 - RabbitMQ and Elasticsearch are optional: without `RABBITMQ_URL` timed-out orders are cancelled by the 5-minute poller (or `POST /api/internal/order-timeouts` with `CRON_SECRET`), and without `ELASTICSEARCH_URL` search uses MySQL. `/health` returns 503 only for MySQL or Redis.
 - The Elasticsearch client is 9.x and only talks to Elasticsearch 9 servers. ES only decides matches and order; price, stock and status always come from MySQL. Product/SKU writes call `syncProductsToSearchIndex` through `afterProductWrite`.
 - ioredis 6 is pinned to `protocol: 2` (Upstash compatibility). express-rate-limit 8 keys IPv4-mapped addresses as plain IPv4.

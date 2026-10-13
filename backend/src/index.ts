@@ -10,6 +10,10 @@ import { startMessageQueueConsumers } from './services/message-queue.service';
 import { getPool } from './database/mysql';
 import { getRedisClient } from './database/redis';
 import { closeRabbitMQ } from './database/rabbitmq';
+import { initErrorReporting, flushErrorReporting } from './utils/error-reporting';
+
+// Before anything can fail: with SENTRY_DSN set, error logs and crashes are reported.
+initErrorReporting();
 const app = createApp();
 const PORT = process.env.PORT || 3001;
 
@@ -102,9 +106,11 @@ function gracefulShutdown(server: import('http').Server) {
 
       clearTimeout(forceTimer);
       logger.info('优雅关闭完成');
+      await flushErrorReporting();
       process.exit(0);
     } catch (err) {
       logger.error({ err }, '优雅关闭过程出错');
+      await flushErrorReporting();
       process.exit(1);
     }
   };
