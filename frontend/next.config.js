@@ -1,13 +1,21 @@
+const { buildContentSecurityPolicy, SECRET_URL_PATHS } = require('./csp');
+
 /**
  * Baseline security headers for every response. The embedded API (pages/api)
  * sets its own via helmet; Next applies these first, so the API's values win.
- * No script-src CSP yet: Next's inline scripts and Vercel Analytics would need nonces.
+ * The CSP (csp.js) is enforced with inline scripts allowed, plus a report-only trial without them.
  */
+const csp = buildContentSecurityPolicy({
+  dev: process.env.NODE_ENV === 'development',
+  apiUrl: process.env.NEXT_PUBLIC_API_URL,
+  sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+});
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+  { key: 'Content-Security-Policy', value: csp.enforced },
+  { key: 'Content-Security-Policy-Report-Only', value: csp.reportOnly },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
 ];
 
@@ -29,7 +37,11 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // A later rule overrides the same header: keep the reset token out of CSP reports.
+      ...SECRET_URL_PATHS.map(source => ({ source, headers: [{ key: 'Content-Security-Policy-Report-Only', value: csp.reportOnlyUnreported }] })),
+    ];
   },
   images: {
     remotePatterns: [

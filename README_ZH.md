@@ -519,7 +519,7 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - JWT Token认证
 - 密码加密存储（bcrypt）
 - SQL注入防护
-- XSS防护
+- XSS防护，包括每个页面的内容安全策略（`frontend/csp.js`）：只允许本站脚本，连接限于本站、API 和 Sentry 接收地址，禁止插件、嵌入和外站表单提交。不允许 inline 脚本的严格版以“只报告”模式试运行，配置 `NEXT_PUBLIC_SENTRY_DSN` 时报告到 Sentry（密码重置页的网址含凭据，从不上报）
 - CSRF防护
 - 请求限流
 
