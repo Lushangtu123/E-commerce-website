@@ -535,6 +535,7 @@ Administrator status changes and their audit record commit in one transaction. A
 - `GET /health`, `GET /api/health` - Health check; returns 503 only when MySQL or Redis is down (RabbitMQ and Elasticsearch are reported as optional)
 - `GET /api/openapi.json` - OpenAPI specification (also browsable at `/api-docs`)
 - `POST /api/internal/order-timeouts` - Cancels timed-out orders for an external scheduler; requires `Authorization: Bearer <CRON_SECRET>`
+- `POST /api/internal/data-retention` - Daily job that deletes personal data past the privacy policy's retention periods (browse/search history 180 days, expired reset links, visit logs 90 days); requires `Authorization: Bearer <CRON_SECRET>`. Standalone servers also run it once a day
 
 ## Performance
 

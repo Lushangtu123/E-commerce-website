@@ -495,6 +495,7 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 - `GET /health`、`GET /api/health` - 健康检查；仅 MySQL 或 Redis 异常时返回 503（RabbitMQ、Elasticsearch 作为可选依赖单独标记）
 - `GET /api/openapi.json` - OpenAPI 接口规范（也可在 `/api-docs` 浏览）
 - `POST /api/internal/order-timeouts` - 供外部定时任务取消超时订单，需 `Authorization: Bearer <CRON_SECRET>`
+- `POST /api/internal/data-retention` - 每日清理超过隐私政策保存期限的个人信息（浏览与搜索记录 180 天、过期的重置链接、访问日志 90 天），需 `Authorization: Bearer <CRON_SECRET>`；独立部署的后端也会每天自动运行
 
 ## 🎯 性能优化
 
