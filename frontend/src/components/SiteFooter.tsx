@@ -42,7 +42,13 @@ export default function SiteFooter() {
           </div>
         </div>
         <div className="mt-10 border-t border-gray-200 pt-6 text-sm text-gray-500">
-          <p>{t("© {year} 电商平台. All rights reserved.", { year })}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p>{t("© {year} 电商平台. All rights reserved.", { year })}</p>
+            <nav aria-label={t('法律信息')} className="flex gap-4">
+              <Link href="/privacy" className={linkClass}>{t('隐私政策')}</Link>
+              <Link href="/terms" className={linkClass}>{t('用户协议')}</Link>
+            </nav>
+          </div>
         </div>
       </div>
     </footer>

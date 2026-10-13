@@ -23,6 +23,7 @@ export default function RegisterPage() {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const router = useRouter();
   const returnPath = useSyncExternalStore(subscribeCustomerReturnPath, customerReturnPath, () => '/');
   const { login } = useAuthStore();
@@ -54,6 +55,11 @@ export default function RegisterPage() {
 
     if (password !== confirmPassword) {
       toast.error(translate("两次密码不一致"));
+      return;
+    }
+
+    if (!agreed) {
+      toast.error(translate('请阅读并同意用户协议和隐私政策'));
       return;
     }
 
@@ -168,6 +174,14 @@ export default function RegisterPage() {
                 required
               />
             </div>
+
+            <label className="flex items-start gap-2 text-sm text-gray-600">
+              <input type="checkbox" name="agreement" checked={agreed} onChange={event => setAgreed(event.target.checked)} className="mt-1" />
+              <span>
+                {t('我已阅读并同意')} <Link href="/terms" target="_blank" className="text-primary-600 hover:underline">{t('用户协议')}</Link>{' '}
+                {t('和')} <Link href="/privacy" target="_blank" className="text-primary-600 hover:underline">{t('隐私政策')}</Link>
+              </span>
+            </label>
 
             <button
               type="submit"

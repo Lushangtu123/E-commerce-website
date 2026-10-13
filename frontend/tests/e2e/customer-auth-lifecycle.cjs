@@ -30,6 +30,7 @@ module.exports = async function customerAuthLifecycle({ browser, localPlatformSc
     await page.getByLabel('邮箱', { exact: true }).fill(email);
     await page.getByLabel('密码', { exact: true }).fill('BrowserAuthOrder123!');
     await page.getByLabel('确认密码', { exact: true }).fill('BrowserAuthOrder123!');
+    await page.locator('input[name="agreement"]').check();
     await page.getByRole('button', { name: '注册', exact: true }).click();
     await page.getByRole('button', { name: '注册中...', exact: true }).waitFor({ state: 'visible' });
     assert.equal(registerWrites, 0, 'next cookie writer waits for the pending first login');

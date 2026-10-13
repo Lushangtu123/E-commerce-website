@@ -371,4 +371,10 @@ export const commonTranslations: Record<string, string> = {
   '优惠券分页': 'Coupon pagination',
   '关闭': 'Close',
   '删除搜索历史：{keyword}': 'Delete search history: {keyword}',
+  '隐私政策': 'Privacy policy',
+  '用户协议': 'User agreement',
+  '法律信息': 'Legal',
+  '我已阅读并同意': 'I have read and agree to the',
+  '和': 'and',
+  '请阅读并同意用户协议和隐私政策': 'Please read and accept the user agreement and privacy policy',
 };

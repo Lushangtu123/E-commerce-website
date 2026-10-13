@@ -102,6 +102,7 @@ async function localPlatformScripts(context) {
   await page.locator('input[name="email"]').fill(customerEmail);
   await page.locator('input[name="password"]').fill('BrowserCustomer123!');
   await page.locator('input[name="confirmPassword"]').fill('BrowserCustomer123!');
+  await page.locator('input[name="agreement"]').check();
   await page.getByRole('button', { name: '注册', exact: true }).click();
   await page.waitForURL('http://127.0.0.1:3100/');
   console.log('PASS browser registration');

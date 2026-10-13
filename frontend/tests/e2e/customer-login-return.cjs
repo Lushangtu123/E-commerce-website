@@ -119,6 +119,7 @@ module.exports = async function customerLoginReturn({ browser, adminContext, loc
     await registration.page.getByLabel('邮箱', { exact: true }).fill(`${registeredName}@example.test`);
     await registration.page.getByLabel('密码', { exact: true }).fill('BrowserRegisteredReturn123!');
     await registration.page.getByLabel('确认密码', { exact: true }).fill('BrowserRegisteredReturn123!');
+    await registration.page.locator('input[name="agreement"]').check();
     await registration.page.getByRole('button', { name: '注册', exact: true }).click();
     await registration.page.waitForURL(`${origin}${registrationPath}`);
     await registration.page.getByText(registeredName, { exact: true }).waitFor({ state: 'visible' });

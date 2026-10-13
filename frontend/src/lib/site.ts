@@ -102,7 +102,7 @@ export function shareableImage(url: string | null | undefined): string | undefin
 export const PRIVATE_PATHS = ['/admin', '/api', '/cart', '/orders', '/profile', '/my', '/favorites', '/history', '/login', '/register', '/forgot-password', '/reset-password'];
 
 /** Public pages that are always listed in the sitemap. */
-export const PUBLIC_STATIC_PATHS = ['/', '/products', '/coupons', '/help', '/returns', '/shipping'];
+export const PUBLIC_STATIC_PATHS = ['/', '/products', '/coupons', '/help', '/returns', '/shipping', '/privacy', '/terms'];
 
 /** Read fresh pages; a failed page must not replace the sitemap's complete ISR result. */
 export async function listPublicProducts(options: { env?: Env; fetcher?: typeof fetch; maxPages?: number } = {}): Promise<PublicProduct[]> {
