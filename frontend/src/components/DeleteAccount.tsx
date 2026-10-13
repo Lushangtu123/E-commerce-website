@@ -68,7 +68,7 @@ export default function DeleteAccount() {
           <span>{t('我已了解注销后无法恢复')}</span>
         </label>
         <label className="block">
-          <span className="block mb-2 font-medium">{t('当前密码')}</span>
+          <span className="block mb-2 font-medium">{t('输入当前密码以确认注销')}</span>
           <input name="delete-password" type="password" autoComplete="current-password" className="input" value={password} disabled={busy}
             onChange={event => { setPassword(event.target.value); setError(null); }} />
         </label>

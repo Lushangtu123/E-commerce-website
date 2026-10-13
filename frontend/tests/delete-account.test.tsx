@@ -17,7 +17,7 @@ const user = { user_id: 1, username: 'Buyer', email: 'buyer@example.test' };
 beforeEach(() => { useAuthStore.getState().login(user, 'session-one'); });
 
 const confirm = () => fireEvent.click(screen.getByRole('checkbox', { name: '我已了解注销后无法恢复' }));
-const typePassword = (value = 'my password') => fireEvent.change(screen.getByLabelText('当前密码'), { target: { value } });
+const typePassword = (value = 'my password') => fireEvent.change(screen.getByLabelText('输入当前密码以确认注销'), { target: { value } });
 const submit = () => fireEvent.click(screen.getByRole('button', { name: '注销账号' }));
 
 it('requires the confirmation and the password before sending anything', async () => {
