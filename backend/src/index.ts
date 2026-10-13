@@ -6,6 +6,7 @@ import { connectRedis } from './database/redis';
 import { connectRabbitMQ } from './database/rabbitmq';
 import { checkESConnection, getESClient } from './database/elasticsearch';
 import { startOrderTimeoutChecker } from './services/order-timeout.service';
+import { startDataRetentionJob } from './services/data-retention.service';
 import { startMessageQueueConsumers } from './services/message-queue.service';
 import { getPool } from './database/mysql';
 import { getRedisClient } from './database/redis';
@@ -46,6 +47,7 @@ async function startServer() {
     
     // 启动订单超时检查服务
     startOrderTimeoutChecker();
+    startDataRetentionJob();
     logger.info('✓ 订单超时检查服务已启动');
     
     // 启动服务器

@@ -91,6 +91,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 在 QStash 创建 POST 任务，目标为当前有效 Preview 的 `/api/internal/order-timeouts`，使用 `*/5 * * * *`，最多重试 1 次、超时 55 秒。每日正常投递 288 次，全部重试时 576 次；其他 QStash 使用也会占用同一配额。
 
+另建一个每日任务，目标为 `/api/internal/data-retention`，使用 `17 3 * * *`（每天一次），同样带 `Authorization: Bearer <CRON_SECRET>`。它按隐私政策的保存期限删除过期的浏览与搜索记录和重置凭据，每天只增加一次投递。生产与 Preview 各自需要一个任务。
+
 - `Upstash-Forward-Authorization: Bearer <CRON_SECRET>`。
 - Preview 开启 Vercel 登录保护时，需经账号所有者授权创建本项目的自动化访问密钥，再设置 `Upstash-Forward-x-vercel-protection-bypass`。该密钥可访问项目的受保护部署，应只给该任务使用。
 - 使用 `Upstash-Redact-Fields: header[Authorization],header[x-vercel-protection-bypass]` 隐藏日志中的凭据，不将密钥放到 URL。
