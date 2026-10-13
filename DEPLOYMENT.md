@@ -292,29 +292,7 @@ pm2 monit
 
 ## 备份策略
 
-### 数据库备份
-
-```bash
-# MySQL备份脚本
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/backup/mysql"
-mysqldump -u root -p ecommerce > $BACKUP_DIR/ecommerce_$DATE.sql
-gzip $BACKUP_DIR/ecommerce_$DATE.sql
-
-# 保留最近7天的备份
-find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
-```
-
-### Redis备份
-
-```bash
-# Redis持久化配置
-appendonly yes
-save 900 1
-save 300 10
-save 60 10000
-```
+云端部署（Aiven MySQL + Upstash Redis）的自动备份、恢复演练脚本、真实恢复步骤和预览库隔离见 [备份、恢复与环境隔离](docs/BACKUP_RESTORE.md)。Docker 自建部署可用同一个演练脚本核对备份能否恢复；Redis 只保存缓存、限流计数和可重建的状态，丢失后不影响订单与账户数据。
 
 ## 性能优化
 

@@ -7,6 +7,7 @@ Guidance for Claude Code in this repository. Keep it short and true: update it i
 - `backend/` - Express 5 + TypeScript API (one process, modules split by domain): `src/routes` → `src/controllers` → `src/services` / `src/models`, MySQL via `mysql2`, Redis via `ioredis`.
 - `frontend/` - Next.js 16 + React 19. Read `frontend/AGENTS.md` before frontend work: this Next.js version differs from training data; check `node_modules/next/dist/docs/`.
 - `frontend/src/pages/api/[[...path]].ts` embeds the backend for Vercel (`backend/src/serverless.ts`); Docker and local dev run the backend separately.
+- `docs/BACKUP_RESTORE.md` covers backups, the restore drill (`scripts/dev/backup-restore-drill.sh`) and keeping Preview on its own database (`ecommerce_preview`); Preview must never point at the production database.
 - `scripts/dev/` helper scripts, `scripts/manual-tests/` curl checks, `docs/archive/` historical notes (do not update).
 
 ## Commands
