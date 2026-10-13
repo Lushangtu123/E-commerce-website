@@ -101,4 +101,15 @@ integration('MySQL customer disable and migration compatibility', () => {
     expect(jwt.verify(freshCookie.split('=')[1], process.env.JWT_SECRET!)).toMatchObject({ authVersion: 1 });
     await request(app).get('/api/users/profile').set('Cookie', freshCookie).expect(200);
   });
+
+  test('a deleted account cannot be re-enabled', async () => {
+    await db.query("UPDATE users SET status = 0, deleted_at = NOW() WHERE user_id = 7");
+    const res = await request(app).put('/admin/users/7/status').send({ status: 1 }).expect(409);
+    expect(res.body).toEqual({ error: '已注销的账户不能启用' });
+    const [rows] = await db.query<import('mysql2').RowDataPacket[]>('SELECT status FROM users WHERE user_id = 7');
+    expect(rows[0].status).toBe(0);
+    const [logs] = await db.query<import('mysql2').RowDataPacket[]>('SELECT COUNT(*) AS n FROM admin_logs');
+    expect(Number(logs[0].n)).toBe(0);
+    await request(app).put('/admin/users/7/status').send({ status: 0 }).expect(200);
+  });
 });

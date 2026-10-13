@@ -5,7 +5,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
 import { CSRF_ERROR, CUSTOMER_COOKIE, clearSessionCookie, hasTrustedSessionSource, setSessionCookie } from '../utils/session-cookie';
-import { normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
+import { normalizeAccountDeletion, normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
+import { AccountDeletionError, deleteAccount } from '../services/account-deletion.service';
 import { passwordMailConfig } from '../services/password-mail.service';
 import { PasswordResetModel } from '../models/password-reset.model';
 import { normalizePasswordChange, normalizePasswordForgot, normalizePasswordReset } from '../utils/password-validation';
@@ -190,6 +191,22 @@ export class UserController {
     } catch (error) {
       logger.error({ err: error }, '获取用户信息失败');
       res.status(500).json({ error: '获取用户信息失败' });
+    }
+  }
+
+  // 注销账号：去身份化并使所有登录失效
+  static async deleteAccount(req: AuthRequest, res: Response) {
+    try {
+      const { password } = normalizeAccountDeletion(req.body);
+      await deleteAccount(req.userId!, password);
+      clearSessionCookie(res, CUSTOMER_COOKIE);
+      return res.json({ message: '账号已注销' });
+    } catch (error) {
+      if (error instanceof UserValidationError || error instanceof AccountDeletionError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      logger.error({ err: error }, '注销账号失败');
+      return res.status(503).json({ error: '注销账号暂不可用，请稍后重试' });
     }
   }
 

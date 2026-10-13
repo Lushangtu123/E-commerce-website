@@ -1,4 +1,13 @@
 export const accountTranslations: Record<string, string> = {
+  '注销账号': 'Delete account',
+  '将删除收货地址、购物车、收藏、浏览与搜索记录和未使用的优惠券，且无法恢复。': 'Your addresses, cart, favorites, browsing and search history and unused coupons will be deleted permanently.',
+  '订单与售后记录按《电子商务法》保留三年，评价保留但不再显示你的用户名。': 'Orders and after-sales records are kept for three years as the E-Commerce Law requires. Your reviews stay, without your username.',
+  '有未完成的订单或售后时不能注销；注销后所有设备上的登录都会失效。': 'You cannot delete the account while an order or after-sales request is still open. Deleting signs you out on every device.',
+  '我已了解注销后无法恢复': 'I understand this cannot be undone',
+  '请确认已了解注销的后果': 'Please confirm that you understand the consequences',
+  '注销结果尚未确认，请尝试重新登录；无法登录说明账号已注销': 'We could not confirm the deletion. Try signing in again; if you cannot, the account has been deleted.',
+  '注销账号失败，请稍后重试': 'Unable to delete the account. Please try again later.',
+  '已注销用户': 'Deleted user',
   '订单评价': 'Order reviews',
   '每个订单的每种商品可评价一次，不同规格共用一条评价': 'Review each product once per order. Different variants share one review.',
   '订单评价加载中...': 'Loading order reviews...',

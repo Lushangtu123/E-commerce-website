@@ -20,7 +20,8 @@ export function readProductReviews(value: unknown, productId: number, page: numb
     if (!record(review) || !id(review.review_id) || ids.has(review.review_id) ||
         (review.product_id !== undefined && review.product_id !== productId) ||
         !count(review.rating) || review.rating < 1 || review.rating > 5 ||
-        !['username', 'content', 'created_at'].every(field => text(review[field]))) throw new Error('Invalid product review');
+        !['username', 'content', 'created_at'].every(field => text(review[field])) ||
+        (review.author_deleted !== undefined && typeof review.author_deleted !== 'boolean')) throw new Error('Invalid product review');
     ids.add(review.review_id);
   }
   return { reviews: value.reviews.map(review => ({ ...review, created_at: review.created_at ?? undefined })) as ProductReview[],

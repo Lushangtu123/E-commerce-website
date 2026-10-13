@@ -29,10 +29,10 @@ export default function ProductReviewList({ reviews, loading = false, error = fa
             <div key={review.review_id} className="border-b border-gray-100 pb-4 last:border-0">
               <div className="flex items-center mb-2">
                 <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-medium mr-3">
-                  {review.username?.[0]}
+                  {(review.author_deleted ? t('已注销用户') : review.username)?.[0]}
                 </div>
                 <div>
-                  <div className="font-medium">{review.username}</div>
+                  <div className="font-medium">{review.author_deleted ? t('已注销用户') : review.username}</div>
                   <div className="flex items-center text-sm text-gray-500">
                     <div className="mr-2 flex text-amber-400" aria-label={t('{rating} 分', { rating: review.rating })}>
                       {[...Array(5)].map((_, i) => (

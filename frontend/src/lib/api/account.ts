@@ -37,6 +37,9 @@ export const userApi = {
   resetPassword: (data: { token: string; newPassword: string }) => customerSessionWrite(() => api.post('/users/password/reset', data)),
   changePassword: (data: { currentPassword: string; newPassword: string }, stillInvoked?: () => boolean) =>
     customerAccountWrite(() => api.put('/users/password', data), stillInvoked),
+  /** Deletes the signed-in account; the server also clears the session cookie. */
+  deleteAccount: (password: string, stillInvoked?: () => boolean) =>
+    customerAccountWrite(() => api.post<unknown, { message: string }>('/users/account/delete', { password }), stillInvoked),
 };
 
 // 收货地址相关API

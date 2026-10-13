@@ -64,6 +64,8 @@ export interface ProductReview {
   rating: number;
   content?: string | null;
   username?: string | null;
+  /** The author deleted their account; the review stays without a name. */
+  author_deleted?: boolean;
   created_at?: string;
 }
 
