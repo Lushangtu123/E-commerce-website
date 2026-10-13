@@ -13,7 +13,7 @@ it('real SDK captures global errors, rejections and handled errors without sensi
   vi.stubEnv('NEXT_PUBLIC_SENTRY_ENVIRONMENT', 'preview');
   vi.stubEnv('NEXT_PUBLIC_SENTRY_RELEASE', 'a'.repeat(40));
   const { initBrowserErrorReporting, reportBrowserError } = await import('@/lib/error-reporting');
-  initBrowserErrorReporting();
+  await initBrowserErrorReporting();
   Sentry.setUser({ email: 'private@example.com', ip_address: '127.0.0.1' });
   Sentry.setExtra('password', 'secret'); Sentry.setTag('token', 'secret');
   Sentry.addBreadcrumb({ message: 'private@example.com' });
