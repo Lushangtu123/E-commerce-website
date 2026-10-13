@@ -525,6 +525,7 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 ## 📊 监控和日志
 
 - 错误上报（可选）：配置 `SENTRY_DSN` 后，error / fatal 日志和未捕获异常会上报 Sentry，内容与日志一样脱敏并带请求 ID；不发送请求头、Cookie、请求体、用户信息、局部变量和面包屑，也不做性能追踪
+- 浏览器错误上报（可选）：把独立 Browser JavaScript 项目的 DSN 设置为 `NEXT_PUBLIC_SENTRY_DSN`，然后重新构建/部署。报告只保留错误类别和静态代码位置，不发送任意错误文本、用户/请求数据或面包屑，不启用录屏或追踪。保持 Vercel 的“Automatically expose System Environment Variables”开启；构建会将 `VERCEL_ENV` 和 `VERCEL_GIT_COMMIT_SHA` 作为公开的报告环境/版本元数据。无需 Sentry 授权令牌或源码映射上传。
 - 请求 ID：每个响应都带 `X-Request-Id`（上游传入的短且安全的值会沿用，否则生成 UUID），该请求期间的每条日志都带 `requestId`，500 响应体里也会返回
 - 请求日志记录
 - 错误日志记录

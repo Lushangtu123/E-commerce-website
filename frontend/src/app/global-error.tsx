@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import './globals.css';
 import { translate } from '@/lib/i18n';
+import { reportBrowserError } from '@/lib/error-reporting';
 import { logger } from '@/lib/logger';
 
 /**
@@ -11,6 +12,7 @@ import { logger } from '@/lib/logger';
  */
 export default function GlobalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   useEffect(() => {
+    reportBrowserError(error);
     logger.error('应用渲染失败:', error);
   }, [error]);
 

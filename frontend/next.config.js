@@ -14,7 +14,12 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const embeddedApi = process.env.VERCEL === '1' || process.env.ECOMMERCE_SERVERLESS_API === 'true';
 const nextConfig = {
-  env: { ECOMMERCE_SERVERLESS_API: embeddedApi ? 'true' : 'false' },
+  env: {
+    ECOMMERCE_SERVERLESS_API: embeddedApi ? 'true' : 'false',
+    // Forward only public deployment metadata; raw Vercel vars are server-only.
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+    NEXT_PUBLIC_SENTRY_RELEASE: process.env.VERCEL_GIT_COMMIT_SHA || '',
+  },
   outputFileTracingRoot: embeddedApi ? require('path').join(__dirname, '..') : __dirname,
   ...(embeddedApi ? {
     experimental: { externalDir: true },
