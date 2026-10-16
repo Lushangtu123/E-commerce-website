@@ -1,0 +1,6 @@
+# Test code is never deployed; its throwaway Express apps and fixtures only add noise
+# (for example "missing rate limiting" on a test-only route).
+paths-ignore:
+  - '**/__tests__/**'
+  - 'frontend/tests/**'
+  - 'scripts/manual-tests/**'
