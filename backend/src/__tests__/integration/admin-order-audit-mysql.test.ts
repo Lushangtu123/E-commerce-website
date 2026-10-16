@@ -23,7 +23,7 @@ integration('admin order status and audit atomicity in real MySQL', () => {
   };
   let server: Pool, db: Pool, created = false;
   const app = express(); app.use(express.json()); app.use('/api/admin/orders', adminOrderRoutes);
-  const auth = (adminId = 2) => ({ Authorization: `Bearer ${jwt.sign({ type: 'admin', adminId, authVersion: 0 }, 'test-jwt-secret')}` });
+  const auth = (adminId = 2) => ({ Authorization: `Bearer ${jwt.sign({ type: 'admin', mfa: true, adminId, authVersion: 0 }, 'test-jwt-secret')}` });
   const shipment = { shipping_company: 'Fixture carrier', tracking_number: 'TRACK-10' };
   const update = (status: number, userAgent = 'Fixture browser') => request(app).put('/api/admin/orders/10/status')
     .set(auth()).set('User-Agent', userAgent).send({ status, ...(status === 2 ? shipment : {}) });
@@ -41,7 +41,7 @@ integration('admin order status and audit atomicity in real MySQL', () => {
     await migrateCouponTables(db);
     await db.query("INSERT INTO users(user_id,username,email,password_hash) VALUES(7,'buyer','buyer@example.test','fixture')");
     await db.query("INSERT INTO roles(role_id,role_name) VALUES(1,'order_operator'),(2,'order_reader')");
-    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id) VALUES(2,'operator','fixture',1),(3,'reader','fixture',2)");
+    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id,totp_enabled_at) VALUES(2,'operator','fixture',1,NOW()),(3,'reader','fixture',2,NOW())");
     await db.query("INSERT INTO permissions(permission_id,permission_name,permission_code) VALUES(1,'Edit orders','order:edit'),(2,'View orders','order:view')");
     await db.query('INSERT INTO role_permissions(role_id,permission_id) VALUES(1,1),(2,2)');
   });

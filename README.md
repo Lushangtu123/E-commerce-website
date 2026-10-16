@@ -206,7 +206,8 @@ cd E-commerce-website
 2. **Configure and start all services**
 ```bash
 cp .env.example .env
-# In the root .env: set JWT_SECRET to the output of openssl rand -hex 32, and set
+# In the root .env: set JWT_SECRET to the output of openssl rand -hex 32, ADMIN_TOTP_KEY to the output of
+# openssl rand -base64 32, and set
 # MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD and RABBITMQ_PASSWORD to the output of openssl rand -hex 16 each
 docker-compose up -d
 ```
@@ -328,6 +329,7 @@ E-commerce-website/
 - `POST /api/users/register` - Register
 - `POST /api/users/login` - Sign in
 - `GET /api/users/profile` - Get the current profile
+- `GET /api/users/data-export` - Download all of the signed-in customer's personal data as a JSON file (consistent snapshot; no password hash or internal keys)
 - `GET /api/users/stats` - Get the user's total orders, unpaid orders, claimed coupons, currently usable coupons and favourites
 The account centre requires all five statistics to be nonnegative integer counts. A null or incomplete successful reply shows a retryable loading error; genuine zero counts display normally.
 - `PUT /api/users/profile` - Update the profile
@@ -486,7 +488,10 @@ Available-coupon reads validate rules, quantities and requested pagination befor
 
 ### Admin APIs
 **Session:**
-- `POST /api/admin/login` - Administrator sign-in
+- `POST /api/admin/login` - Administrator sign-in, step 1: a correct password returns a five-minute two-factor challenge (`two_factor: verify` or `setup`), never a session
+- `POST /api/admin/login/2fa` - Step 2 for administrators with an authenticator: a 6-digit code (each time step usable once) or a one-time recovery code; issues the session cookie
+- `POST /api/admin/login/2fa/setup` - Step 2 for administrators without one yet: returns a new TOTP secret and `otpauth://` URI (stored encrypted)
+- `POST /api/admin/login/2fa/activate` - Confirms the authenticator with one code, returns 10 one-time recovery codes (shown once) and issues the session cookie
 - `POST /api/admin/logout` - Sign out and invalidate every session of this administrator
 - `GET /api/admin/profile` - Administrator profile and permissions
 
@@ -534,6 +539,7 @@ Administrator status changes and their audit record commit in one transaction. A
 - `GET /health`, `GET /api/health` - Health check; returns 503 only when MySQL or Redis is down (RabbitMQ and Elasticsearch are reported as optional)
 - `GET /api/openapi.json` - OpenAPI specification (also browsable at `/api-docs`)
 - `POST /api/internal/order-timeouts` - Cancels timed-out orders for an external scheduler; requires `Authorization: Bearer <CRON_SECRET>`
+- `POST /api/internal/data-retention` - Daily job that deletes personal data past the privacy policy's retention periods (browse/search history 180 days, expired reset links, visit logs 90 days); requires `Authorization: Bearer <CRON_SECRET>`. Standalone servers also run it once a day
 
 ## Performance
 
@@ -558,7 +564,7 @@ Administrator status changes and their audit record commit in one transaction. A
 - JWT authentication
 - Hashed password storage (bcrypt)
 - SQL injection protection
-- XSS protection
+- XSS protection, including a Content Security Policy on every page (`frontend/csp.js`): only this site's scripts, connections limited to the site, its API and the Sentry ingest host, no plugins, frames or foreign form targets. A stricter policy without inline scripts runs report-only and reports to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set (never from the password-reset page, whose URL holds the token)
 - CSRF protection
 - Rate limiting
 

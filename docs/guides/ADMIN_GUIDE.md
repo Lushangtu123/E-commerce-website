@@ -129,6 +129,8 @@ exit
 
 ⚠️ **重要：** 首次登录后请立即修改密码！
 
+**两步验证（所有管理员强制）：** 输入密码后，首次登录需用验证器应用（Google Authenticator、Microsoft Authenticator 等）扫描二维码完成绑定，随后页面只显示一次 10 个恢复码，请离线保存；之后每次登录都要输入 6 位动态码，手机丢失时可用一个恢复码代替（每个只能用一次）。验证器和恢复码都丢失时，由运维在服务器上执行 `node dist/database/admin-reset-two-factor.js <用户名>`，该管理员下次登录时重新绑定。
+
 ### 4. 重启服务
 
 ```bash
@@ -236,8 +238,18 @@ docker-compose restart frontend
 }
 ```
 
-**响应：**
-服务器设置 httpOnly `admin_session` Cookie，响应体不返回令牌。CLI 可保存 Cookie，或从 Cookie 值构造后续 Bearer 请求。
+**响应：** 密码正确时不签发会话，只返回 5 分钟有效的两步验证凭据：`{"two_factor": "verify" | "setup", "challenge": "..."}`。`verify` 表示已绑定验证器，`setup` 表示需先绑定。
+
+#### POST `/api/admin/login/2fa/setup`
+请求体 `{"challenge": "..."}`，返回 `{"secret", "otpauth_uri"}` 供验证器绑定（仅限 `setup` 凭据）。
+
+#### POST `/api/admin/login/2fa/activate`
+请求体 `{"challenge", "code"}`，用一个动态码确认绑定；成功后签发会话，并在响应中一次性返回 `recovery_codes`（10 个）。
+
+#### POST `/api/admin/login/2fa`
+请求体 `{"challenge", "code"}`，`code` 为 6 位动态码或一个未使用的恢复码；使用恢复码时响应带 `recovery_codes_remaining`。凭据过期返回 401 `验证已过期，请重新输入密码`，验证码错误返回 401 `验证码错误`。
+
+以上两个签发会话的接口成功后，服务器设置 httpOnly `admin_session` Cookie，响应体不返回令牌。CLI 可保存 Cookie，或从 Cookie 值构造后续 Bearer 请求。
 ```json
 {
   "admin": {
@@ -503,7 +515,7 @@ docker-compose exec backend node dist/database/admin-migrate.js
 - [ ] 更多统计图表
 - [ ] 实时通知系统
 - [ ] 操作审计功能
-- [ ] 二次认证(2FA)
+- [x] 二次认证(2FA)
 - [ ] 密码修改功能
 
 ## 技术支持

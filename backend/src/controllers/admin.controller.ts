@@ -9,6 +9,7 @@ import { normalizeAdminLogin } from '../utils/admin-login-validation';
 import { UserValidationError } from '../utils/user-validation';
 import { logAdminAction } from './admin-log.controller';
 import { jwtSecret } from '../utils/jwt-secret';
+import { activate, beginSetup, issueChallenge, TwoFactorError, verify, type AdminLoginRow } from '../services/admin-two-factor.service';
 import { AdminLogoutReceiptCapacityError, adminRevocationTarget, clearAdminLogoutReceipt, prepareAdminLogoutReceipt, readAdminLogoutReceipt, revokeAdminTargets, setAdminLogoutReceipt } from '../utils/admin-logout-recovery';
 
 // 管理员登录
@@ -20,9 +21,8 @@ export const adminLogin = async (req: Request, res: Response) => {
 
     // 查询管理员
     const [admins] = await pool.query(
-      `SELECT a.*, r.role_name 
-       FROM admins a 
-       LEFT JOIN roles r ON a.role_id = r.role_id 
+      `SELECT a.admin_id, a.password_hash, a.status, a.auth_version, a.totp_enabled_at
+       FROM admins a
        WHERE a.username = ?`,
       [username]
     );
@@ -44,73 +44,128 @@ export const adminLogin = async (req: Request, res: Response) => {
       return res.status(401).json({ error: '用户名或密码错误' });
     }
 
-    // A new login must not overwrite the only proof of an earlier unfinished logout.
-    const pending = readAdminLogoutReceipt(req);
-    if (pending) {
-      try {
-        await revokeAdminTargets(pool, pending.targets);
-        const [fresh] = await pool.query('SELECT auth_version FROM admins WHERE admin_id = ?', [admin.admin_id]);
-        if (!Array.isArray(fresh) || fresh.length !== 1 || !Number.isSafeInteger(Number((fresh[0] as any).auth_version))) {
-          throw new Error('Administrator session version was not confirmed');
-        }
-        admin.auth_version = Number((fresh[0] as any).auth_version);
-      } catch (error) {
-        logger.error({ err: error }, '管理员会话撤销失败');
-        return res.status(503).json({ error: '退出尚未完成，请重试' });
-      }
-    }
-
-    // 生成 JWT Token
-    const token = jwt.sign(
-      { 
-        adminId: admin.admin_id, 
-        username: admin.username,
-        roleId: admin.role_id,
-        authVersion: Number(admin.auth_version ?? 0),
-        type: 'admin'
-      },
-      jwtSecret(),
-      { expiresIn: '24h' }
-    );
-
-    // 更新最后登录时间
-    await pool.query(
-      'UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?',
-      [admin.admin_id]
-    );
-
-    // 记录登录日志
-    await logAdminAction(
-      admin.admin_id,
-      'LOGIN',
-      null,
-      null,
-      '管理员登录',
-      req.ip,
-      req.get('user-agent')
-    );
-
-    // 返回登录信息（不返回密码）
-    delete admin.password_hash;
-
-    // The signed token travels only in the httpOnly cookie; page scripts never see it.
-    setSessionCookie(res, ADMIN_COOKIE, token);
-    clearAdminLogoutReceipt(res);
-    res.json({
-      admin: {
-        admin_id: admin.admin_id,
-        username: admin.username,
-        real_name: admin.real_name,
-        email: admin.email,
-        role_id: admin.role_id,
-        role_name: admin.role_name,
-        status: admin.status
-      }
-    });
+    // Every administrator needs a second factor: no session yet, only a short-lived challenge.
+    res.json(issueChallenge(admin));
   } catch (error) {
     if (error instanceof UserValidationError) return res.status(error.statusCode).json({ error: error.message });
     logger.error({ err: error }, '管理员登录失败');
     res.status(500).json({ error: '登录失败' });
+  }
+};
+
+/** Issues the session once the second factor is confirmed (shared by verify and activate). */
+async function completeAdminLogin(req: Request, res: Response, admin: AdminLoginRow, extra: Record<string, unknown> = {}) {
+  const pool = getPool();
+  // A new login must not overwrite the only proof of an earlier unfinished logout.
+  const pending = readAdminLogoutReceipt(req);
+  if (pending) {
+    try {
+      await revokeAdminTargets(pool, pending.targets);
+      const [fresh] = await pool.query('SELECT auth_version FROM admins WHERE admin_id = ?', [admin.admin_id]);
+      if (!Array.isArray(fresh) || fresh.length !== 1 || !Number.isSafeInteger(Number((fresh[0] as any).auth_version))) {
+        throw new Error('Administrator session version was not confirmed');
+      }
+      admin.auth_version = Number((fresh[0] as any).auth_version);
+    } catch (error) {
+      logger.error({ err: error }, '管理员会话撤销失败');
+      return res.status(503).json({ error: '退出尚未完成，请重试' });
+    }
+  }
+
+  // 生成 JWT Token；mfa 表示这次登录经过了两步验证
+  const token = jwt.sign(
+    { 
+      adminId: admin.admin_id, 
+      username: admin.username,
+      roleId: admin.role_id,
+      authVersion: Number(admin.auth_version ?? 0),
+      type: 'admin',
+      mfa: true
+    },
+    jwtSecret(),
+    { expiresIn: '24h' }
+  );
+
+  // 更新最后登录时间
+  await pool.query(
+    'UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?',
+    [admin.admin_id]
+  );
+
+  // 记录登录日志
+  await logAdminAction(
+    admin.admin_id,
+    'LOGIN',
+    null,
+    null,
+    '管理员登录',
+    req.ip,
+    req.get('user-agent')
+  );
+
+  // The signed token travels only in the httpOnly cookie; page scripts never see it.
+  setSessionCookie(res, ADMIN_COOKIE, token);
+  clearAdminLogoutReceipt(res);
+  res.json({
+    admin: {
+      admin_id: admin.admin_id,
+      username: admin.username,
+      real_name: admin.real_name,
+      email: admin.email,
+      role_id: admin.role_id,
+      role_name: admin.role_name,
+      status: admin.status
+    },
+    ...extra
+  });
+}
+
+function twoFactorFailure(res: Response, error: unknown, action: string) {
+  if (error instanceof TwoFactorError) return res.status(error.statusCode).json({ error: error.message });
+  logger.error({ err: error }, action);
+  return res.status(503).json({ error: '两步验证暂不可用，请稍后重试' });
+}
+
+const challengeBody = (body: unknown): { challenge?: unknown; code?: unknown } =>
+  body && typeof body === 'object' && !Array.isArray(body) ? body as { challenge?: unknown; code?: unknown } : {};
+
+// 两步验证：已绑定的管理员提交动态码或恢复码
+export const adminLoginVerify = async (req: Request, res: Response) => {
+  if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
+  try {
+    const { challenge, code } = challengeBody(req.body);
+    const { admin, recovery } = await verify(challenge, code);
+    if (recovery) {
+      await logAdminAction(admin.admin_id, 'TWO_FACTOR_RECOVERY', null, null, `使用恢复码登录，剩余 ${recovery.remaining} 个`, req.ip, req.get('user-agent'));
+    }
+    await completeAdminLogin(req, res, admin, recovery ? { recovery_codes_remaining: recovery.remaining } : {});
+  } catch (error) {
+    twoFactorFailure(res, error, '管理员两步验证失败');
+  }
+};
+
+// 两步验证：未绑定的管理员取得密钥与二维码
+export const adminLoginSetup = async (req: Request, res: Response) => {
+  if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await beginSetup(challengeBody(req.body).challenge));
+  } catch (error) {
+    twoFactorFailure(res, error, '准备两步验证失败');
+  }
+};
+
+// 两步验证：确认绑定，领取恢复码并登录
+export const adminLoginActivate = async (req: Request, res: Response) => {
+  if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
+  try {
+    const { challenge, code } = challengeBody(req.body);
+    const { admin, recoveryCodes } = await activate(challenge, code);
+    await logAdminAction(admin.admin_id, 'TWO_FACTOR_ENABLED', null, null, '绑定两步验证', req.ip, req.get('user-agent'));
+    res.setHeader('Cache-Control', 'no-store');
+    await completeAdminLogin(req, res, admin, { recovery_codes: recoveryCodes });
+  } catch (error) {
+    twoFactorFailure(res, error, '绑定两步验证失败');
   }
 };
 

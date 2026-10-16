@@ -39,13 +39,13 @@ type Endpoint = typeof endpoints[number];
 
 let permissions: string[];
 let role: string;
-let admin: { admin_id: number; username: string; role_id: number | null; status: number; auth_version: number };
+let admin: { admin_id: number; username: string; role_id: number | null; status: number; auth_version: number; totp_enabled_at: Date | null };
 
 beforeEach(() => {
   jest.clearAllMocks();
   permissions = [];
   role = 'data_analyst';
-  admin = { admin_id: 2, username: 'limited', role_id: 4, status: 1, auth_version: 0 };
+  admin = { admin_id: 2, username: 'limited', role_id: 4, status: 1, auth_version: 0, totp_enabled_at: new Date() };
   (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async (sql: string) => {
     if (sql.includes('FROM admins')) return [[admin]];
     if (sql.includes('FROM role_permissions')) return [permissions.map(permission_code => ({ permission_code }))];
@@ -68,7 +68,7 @@ function app() {
 }
 
 const authorization = () => `Bearer ${jwt.sign({
-  adminId: 2, type: 'admin', authVersion: 0, roleId: 1,
+  adminId: 2, type: 'admin', mfa: true, authVersion: 0, roleId: 1,
 }, 'test-jwt-secret')}`;
 
 function call(endpoint: Endpoint, bearer: string | null = authorization()) {

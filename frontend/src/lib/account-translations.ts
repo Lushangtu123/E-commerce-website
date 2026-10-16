@@ -1,4 +1,9 @@
 export const accountTranslations: Record<string, string> = {
+  '我的个人信息': 'My personal data',
+  '下载账户、收货地址、订单、售后、评价、收藏、浏览与搜索记录等全部个人信息（JSON 文件）。': 'Download all personal data we hold about you, including your account, addresses, orders, after-sales requests, reviews, favorites, and browsing and search history (JSON file).',
+  '导出个人信息': 'Export personal data',
+  '导出中...': 'Exporting...',
+  '个人信息已导出': 'Your personal data has been downloaded',
   '订单评价': 'Order reviews',
   '每个订单的每种商品可评价一次，不同规格共用一条评价': 'Review each product once per order. Different variants share one review.',
   '订单评价加载中...': 'Loading order reviews...',

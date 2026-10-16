@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const answerAdminTwoFactor = require('./admin-two-factor.cjs');
 
-/** Uses two real administrators and a held login body in the disposable commerce fixture. */
+/** Uses two real administrators and a held session-issuing (second factor) body in the disposable commerce fixture. */
 module.exports = async function adminPublicationGuard({ browser, localPlatformScripts, watchConsole, errors }) {
   const frontend = 'http://127.0.0.1:3100';
   const api = 'http://127.0.0.1:3101/api';
@@ -11,7 +12,7 @@ module.exports = async function adminPublicationGuard({ browser, localPlatformSc
   const headers = new Promise((resolve, reject) => { headersReady = resolve; failHeaders = reject; });
   // Flush genuine Set-Cookie headers before JSON; route.fetch/fulfill cannot model this ordering.
   const relay = http.createServer((request, response) => {
-    if (request.url !== '/api/admin/login' || !['POST', 'OPTIONS'].includes(request.method)) {
+    if (request.url !== '/api/admin/login/2fa' || !['POST', 'OPTIONS'].includes(request.method)) {
       response.writeHead(404).end(); return;
     }
     const upstream = http.request({ hostname: '127.0.0.1', port: 3101, path: request.url, method: request.method,
@@ -40,6 +41,7 @@ module.exports = async function adminPublicationGuard({ browser, localPlatformSc
     await page.getByLabel('用户名', { exact: true }).fill(username);
     await page.getByLabel('密码', { exact: true }).fill('BrowserFixtureAdmin123!');
     await page.getByRole('button', { name: '登录', exact: true }).click();
+    await answerAdminTwoFactor(page, username);
   };
   try {
     await new Promise((resolve, reject) => { relay.once('error', reject); relay.listen(0, '127.0.0.1', resolve); });
@@ -79,7 +81,7 @@ module.exports = async function adminPublicationGuard({ browser, localPlatformSc
     };
     const newTab = await observe('admin-publication-b');
     await newTab.goto(`${frontend}/admin/login`);
-    await newTab.route(`${api}/admin/login`, route => route.continue({ url: `http://127.0.0.1:${relay.address().port}/api/admin/login` }));
+    await newTab.route(`${api}/admin/login/2fa`, route => route.continue({ url: `http://127.0.0.1:${relay.address().port}/api/admin/login/2fa` }));
     let protectedWrites = 0;
     context.on('request', request => {
       if (request.url() === `${api}/admin/users/${target.user_id}/status` && request.method() === 'PUT') protectedWrites++;
@@ -95,7 +97,7 @@ module.exports = async function adminPublicationGuard({ browser, localPlatformSc
     assert.equal(second.username, 'admin_publication_b');
     assert.notEqual(second.admin_id, first.admin_id);
     assert.equal(await newTab.evaluate(() => localStorage.getItem('admin_session_cleanup_pending')), '1');
-    assert.equal(await newTab.getByRole('button', { name: '登录中...', exact: true }).isVisible(), true);
+    assert.equal(await newTab.getByRole('button', { name: '验证中...', exact: true }).isVisible(), true);
     await row.getByRole('button', { name: '禁用', exact: true }).waitFor({ state: 'hidden' });
     const before = await logs();
     await oldTab.evaluate(() => window.publicationOldAdminWrite());

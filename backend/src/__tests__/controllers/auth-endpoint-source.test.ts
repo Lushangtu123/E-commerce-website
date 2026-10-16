@@ -39,8 +39,7 @@ beforeEach(() => {
   (PasswordResetModel.consume as jest.Mock).mockResolvedValue(true);
   (bcrypt.compare as jest.Mock).mockResolvedValue(true); (bcrypt.hash as jest.Mock).mockResolvedValue('fixture');
   databaseQuery = jest.fn(async (sql: string) => sql.includes('FROM admins a') ? [[{
-    admin_id: 9, username: 'root', role_id: 1, role_name: 'operator', status: 1, password_hash: 'fixture', auth_version: 0,
-  }]] : [{ affectedRows: 1 }]);
+    admin_id: 9, username: 'root', role_id: 1, role_name: 'operator', status: 1, password_hash: 'fixture', auth_version: 0, totp_enabled_at: new Date() }]] : [{ affectedRows: 1 }]);
   (getPool as jest.Mock).mockReturnValue({ query: databaseQuery });
 });
 afterEach(() => { process.env = { ...originalEnv }; });
@@ -69,13 +68,16 @@ test.each(['null', 'https://shop.example.test/path', 'https://shop.example.test#
 });
 test.each(endpoints)('allowed origin plus custom header retains legitimate %s', async (path, body, status) => {
   const res = await request(createApp()).post(path).set('Origin', 'https://shop.example.test').set('X-Requested-With', 'XMLHttpRequest').send(body);
-  expect(res.status).toBe(status); expect(res.headers['set-cookie']).toBeDefined();
+  expect(res.status).toBe(status);
+  // An administrator's password only earns a two-factor challenge; the session cookie comes after the second step.
+  if (path === '/api/admin/login') expect(res.body).toEqual({ two_factor: 'verify', challenge: expect.any(String) });
+  else expect(res.headers['set-cookie']).toBeDefined();
 });
 test('header-bearing API clients without Origin retain legacy short administrator passwords byte for byte', async () => {
   const password = ' 1 ';
   const res = await request(createApp()).post('/api/admin/login').set('X-Requested-With', 'XMLHttpRequest')
     .send({ username: ' root ', password }).expect(200);
-  expect(res.headers['set-cookie']).toBeDefined(); expect(bcrypt.compare).toHaveBeenCalledWith(password, 'fixture');
+  expect(res.body.two_factor).toBe('verify'); expect(bcrypt.compare).toHaveBeenCalledWith(password, 'fixture');
   expect(databaseQuery.mock.calls[0][1]).toEqual(['root']);
 });
 test('same-origin deployments accept their own canonical origin without extending the external allowlist', async () => {
@@ -94,6 +96,7 @@ test('development loopback frontend remains usable without wildcard cookie trust
 });
 test('production never grants the development localhost exception', async () => {
   process.env.NODE_ENV = 'production'; process.env.JWT_SECRET = 'a-strong-production-test-secret';
+  process.env.ADMIN_TOTP_KEY = Buffer.alloc(32, 7).toString('base64');
   noSideEffects(await request(createApp()).post('/api/users/login').set('Origin', 'http://localhost:3000')
     .set('X-Requested-With', 'XMLHttpRequest').send(endpoints[0][1]));
 });

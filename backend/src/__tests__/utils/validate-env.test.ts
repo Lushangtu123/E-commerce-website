@@ -25,6 +25,8 @@ beforeEach(() => {
   process.env = { ...OLD_ENV };
   delete process.env.JWT_SECRET;
   delete process.env.CORS_ORIGIN;
+  // Production also needs the key that encrypts administrators' TOTP secrets.
+  process.env.ADMIN_TOTP_KEY = Buffer.alloc(32, 7).toString('base64');
   exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 });
 
@@ -174,5 +176,62 @@ describe('validateEnv 配置格式', () => {
     Object.assign(process.env, { APP_URL: 'https://shop.example', RESEND_API_KEY: 're_test_key', EMAIL_FROM: 'Store <shop@shop.example>' });
     validateEnv();
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('validateEnv 密钥轮换', () => {
+  const STRONG = 'a-strong-random-secret-value-0123456789';
+  beforeEach(() => {
+    Object.assign(process.env, { NODE_ENV: 'production', JWT_SECRET: STRONG, CORS_ORIGIN: 'https://a.com' });
+    delete process.env.JWT_SECRET_PREVIOUS; delete process.env.CRON_SECRET; delete process.env.CRON_SECRET_PREVIOUS;
+  });
+
+  test('轮换期的旧 JWT 密钥：合格时正常启动', () => {
+    process.env.JWT_SECRET_PREVIOUS = 'the-old-strong-random-secret-0123456789';
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['与当前密钥相同', STRONG],
+    ['是已知弱密钥', 'secret'],
+  ])('旧 JWT 密钥%s：拒绝启动', (_label, value) => {
+    process.env.JWT_SECRET_PREVIOUS = value;
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain('JWT_SECRET_PREVIOUS');
+  });
+
+  test.each([['CRON_SECRET'], ['CRON_SECRET_PREVIOUS']])('%s 少于 32 个字符：拒绝启动', name => {
+    process.env[name] = 'short';
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain(name);
+  });
+});
+
+describe('validateEnv 管理员两步验证密钥', () => {
+  beforeEach(() => {
+    Object.assign(process.env, { NODE_ENV: 'production', JWT_SECRET: 'a-strong-random-secret-value-0123456789', CORS_ORIGIN: 'https://a.com' });
+  });
+
+  test('合格的 ADMIN_TOTP_KEY：正常启动', () => {
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([['未配置', undefined], ['长度不对', Buffer.alloc(16).toString('base64')], ['不是 base64', 'not base64 at all!!']])('生产环境 ADMIN_TOTP_KEY %s：拒绝启动', (_label, value) => {
+    if (value === undefined) delete process.env.ADMIN_TOTP_KEY; else process.env.ADMIN_TOTP_KEY = value;
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain('ADMIN_TOTP_KEY');
+  });
+
+  test('开发环境未配置：只提示', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.ADMIN_TOTP_KEY;
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(JSON.stringify(logger.warn.mock.calls)).toContain('ADMIN_TOTP_KEY');
   });
 });

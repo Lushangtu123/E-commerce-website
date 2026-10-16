@@ -18,7 +18,7 @@ afterEach(() => { jest.restoreAllMocks();
 test('capabilities are public and password updates require a current customer session', async () => {
   expect((await request(app).get('/api/users/password/capabilities')).body).toMatchObject({ passwordResetAvailable: false });
   await request(app).put('/api/users/password').send({ currentPassword: 'old', newPassword: 'new-long-password' }).expect(401);
-  const admin = jwt.sign({ type: 'admin', adminId: 1, userId: 7 }, process.env.JWT_SECRET!);
+  const admin = jwt.sign({ type: 'admin', mfa: true, adminId: 1, userId: 7 }, process.env.JWT_SECRET!);
   await request(app).put('/api/users/password').set('Authorization', `Bearer ${admin}`).send({ currentPassword: 'old', newPassword: 'new-long-password' }).expect(401);
 });
 test('valid customer may change password but extra fields are rejected', async () => {

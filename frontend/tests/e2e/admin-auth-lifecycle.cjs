@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const answerAdminTwoFactor = require('./admin-two-factor.cjs');
 
 /** Real cookie revocation and re-login, in one page and in two tabs sharing Web Locks. */
 module.exports = async function adminAuthLifecycle({ browser, localPlatformScripts, watchConsole, errors }) {
@@ -20,13 +21,14 @@ module.exports = async function adminAuthLifecycle({ browser, localPlatformScrip
         await page.getByLabel('用户名', { exact: true }).fill('admin');
         await page.getByLabel('密码', { exact: true }).fill('BrowserFixtureAdmin123!');
         await page.getByRole('button', { name: '登录', exact: true }).click();
+        await answerAdminTwoFactor(page, 'admin');
       };
       await pageA.goto(`${frontend}/admin/login`); await submitLogin(pageA);
       await pageA.waitForURL(`${frontend}/admin/dashboard`);
       await pageA.getByRole('button', { name: '退出登录', exact: true }).waitFor({ state: 'visible' });
       assert.equal(await pageA.evaluate(() => !!navigator.locks), true);
 
-      let logoutStarted, loginWrites = 0, logoutWrites = 0;
+      let logoutStarted, passwordWrites = 0, loginWrites = 0, logoutWrites = 0;
       const gate = new Promise(resolve => { releaseLogout = resolve; });
       const started = new Promise(resolve => { logoutStarted = resolve; });
       await pageA.route(`${api}/admin/logout`, async route => {
@@ -35,20 +37,24 @@ module.exports = async function adminAuthLifecycle({ browser, localPlatformScrip
         return route.continue();
       });
       context.on('request', request => {
-        if (request.method() === 'POST' && request.url() === `${api}/admin/login`) loginWrites++;
+        if (request.method() === 'POST' && request.url() === `${api}/admin/login`) passwordWrites++;
+        if (request.method() === 'POST' && request.url() === `${api}/admin/login/2fa`) loginWrites++;
       });
       await pageA.getByRole('button', { name: '退出登录', exact: true }).click();
       await started; await pageA.waitForURL(`${frontend}/admin/login`);
       const pageB = secondTab ? await context.newPage() : pageA;
       if (secondTab) { observe(pageB, 'admin-auth-tabs-b'); await pageB.goto(`${frontend}/admin/login`); }
-      await submitLogin(pageB);
+      const signingIn = submitLogin(pageB);
       await pageB.getByRole('button', { name: '登录中...', exact: true }).waitFor({ state: 'visible' });
-      assert.equal(loginWrites, 0, 'new credentials wait until the previous cookie revocation completes');
+      assert.equal(passwordWrites, 0, 'the password challenge waits until logout advances auth_version');
+      assert.equal(loginWrites, 0, 'the session-issuing second factor waits until the previous cookie revocation completes');
       assert.equal(logoutWrites, 1);
       releaseLogout();
+      await signingIn;
       await pageB.waitForURL(`${frontend}/admin/dashboard`);
       await pageB.getByRole('button', { name: '退出登录', exact: true }).waitFor({ state: 'visible' });
       assert.equal(loginWrites, 1);
+      assert.equal(passwordWrites, 1);
       const profile = await context.request.get(`${api}/admin/profile`);
       assert.equal(profile.status(), 200, 'the newly issued HttpOnly cookie remains valid');
       assert.equal((await profile.json()).admin.username, 'admin');

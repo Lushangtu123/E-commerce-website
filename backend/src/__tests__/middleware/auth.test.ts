@@ -99,7 +99,7 @@ describe('optionalAuth', () => {
     expect((await request(buildApp(optionalAuth)).get('/protected').set('Authorization', authorization)).body.userId).toBeNull();
   });
   test('管理员令牌不会注入普通用户身份', async () => {
-    const token = jwt.sign({ type: 'admin', adminId: 1, userId: 99 }, SECRET);
+    const token = jwt.sign({ type: 'admin', mfa: true, adminId: 1, userId: 99 }, SECRET);
     const res = await request(buildApp(optionalAuth)).get('/protected').set('Authorization', `Bearer ${token}`).expect(200);
     expect(res.body.userId).toBeNull();
   });

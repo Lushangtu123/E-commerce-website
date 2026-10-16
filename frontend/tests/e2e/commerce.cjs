@@ -823,6 +823,7 @@ async function localPlatformScripts(context) {
   await admin.locator('input[type="text"]').fill('admin');
   await admin.locator('input[type="password"]').fill('BrowserFixtureAdmin123!');
   await admin.getByRole('button', { name: '登录', exact: true }).click();
+  await require('./admin-two-factor.cjs')(admin, 'admin');
   await admin.waitForURL(/\/admin\/dashboard$/);
   await require('./admin-sidebar-keyboard.cjs')({ admin });
   const dashboardOrdersEndpoint = 'http://127.0.0.1:3101/api/admin/dashboard/recent-orders';

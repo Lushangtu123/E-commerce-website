@@ -1,59 +1,49 @@
 import { registerTranslations } from '@/lib/i18n';
 import type { InfoSection } from '@/components/InfoPage';
 
-/**
- * Privacy policy and user agreement (PIPL arts. 7, 17). Every line is a dictionary key; the English text is
- * registered here so it only ships with these pages. Keep the facts in step with the code: what is collected,
- * the processors used, the retention periods (backend data-retention job) and the rights the account pages offer.
- * Have both texts reviewed by counsel before relying on them.
- */
-export const LEGAL_UPDATED = '更新日期：2026年10月13日';
+/** Demo disclosures reflect deployed behavior; formal operation needs a separate legal review. */
+export const LEGAL_UPDATED = '更新日期：2026年10月16日';
+const DEMO_NOTICE = '本网站是个人演示项目，不开展真实商品销售，不收取真实款项，也不提供实际配送、退款或售后服务。请仅使用授权测试账号和虚构资料，勿填写真实收货信息、支付信息或他人的个人信息。';
 
 export const PRIVACY_POLICY: { title: string; intro: string; sections: InfoSection[] } = {
   title: '隐私政策',
-  intro: '本政策说明本网站如何收集、使用、存储和保护你的个人信息，以及你享有的权利。使用本网站即表示你已阅读并理解本政策。',
+  intro: DEMO_NOTICE,
   sections: [
     { title: '我们收集的信息', body: [
-      '账户信息：注册时的用户名、邮箱和密码（仅保存不可逆的加密哈希），以及你选择填写的手机号和头像地址。',
-      '交易信息：收货人姓名、电话和地址，订单、支付状态、物流、售后申请和评价。',
-      '使用记录：你浏览过的商品、搜索关键词、购物车、收藏和领取的优惠券。',
-      '安全日志：服务器为安全和排错记录请求的 IP 地址、时间和访问路径，按托管平台的日志保留期自动删除。',
+      '账户信息：测试账号的用户名、邮箱和密码哈希，以及你选择填写的手机号和头像地址。找回密码测试可使用你有权控制的测试邮箱。',
+      '演示数据：收货资料、模拟订单和支付状态、物流、售后申请及评价。请使用虚构内容。',
+      '使用记录：浏览过的商品、搜索关键词、购物车、收藏和领取的优惠券。',
+      '公开访问仍可能产生 IP 地址、访问时间和路径等托管日志；个人演示不代表完全不处理个人信息。',
     ] },
     { title: '我们如何使用信息', body: [
-      '提供购物服务：登录、下单、配送、售后和找回密码。',
-      '个性化推荐与搜索：根据你的浏览和搜索记录推荐商品，你可以随时删除这些记录。',
-      '安全与改进：防止欺诈和滥用、排查故障，以及统计匿名化的页面访问情况。',
+      '测试登录、模拟购物流程、个人设置和密码找回功能；浏览和搜索记录用于演示推荐与搜索。',
+      '诊断故障、限制滥用，并查看页面访问与性能统计。',
     ] },
     { title: 'Cookie 与本地存储', body: [
-      '登录状态保存在仅限服务器读取的 Cookie 中；浏览器本地存储只保存登录会话编号和账户资料的副本，退出登录时清除。',
-      '页面访问统计使用 Vercel Analytics 与 Speed Insights，不设置跟踪 Cookie，上报前会去掉网址中的查询参数。',
+      '登录状态保存在仅限服务器读取的 Cookie 中；浏览器本地存储还保存会话编号、账户资料、语言偏好和部分待确认操作，退出登录会清理对应的会话资料。',
+      '页面统计使用 Vercel Analytics 与 Speed Insights，不设置跟踪 Cookie；上报前去掉网址中的查询参数和片段。',
     ] },
-    { title: '委托处理与数据出境', body: [
-      '为运行本网站，我们委托以下服务商处理数据：Vercel（网站托管与访问统计）、Aiven（数据库）、Upstash（缓存）、邮件服务商（发送找回密码邮件），以及在启用时的 Sentry（错误报告，不含个人信息）。',
-      '上述服务的服务器可能位于中国境外。我们与服务商约定其仅按我们的指示处理数据，并采取必要的安全措施；向境外提供个人信息前，我们会依法履行告知并取得你的单独同意等义务。',
-      '除法律法规要求或你的明确同意外，我们不会向第三方出售或提供你的个人信息。',
+    { title: '云服务与跨境处理', body: [
+      '网站使用 Vercel 托管和统计、Aiven 数据库、Upstash 缓存与任务调度，以及已配置的邮件服务；启用 Sentry 时发送经过过滤的错误诊断数据。',
+      '错误上报配置为排除请求体、Cookie 和用户资料，但请勿在测试内容或错误文本中填写个人信息。',
+      '这些服务可能在你所在国家或地区以外处理数据。本项目尚未完成面向真实用户的跨境处理安排，正式开放前需要确认服务商、处理地区、告知与适用的授权程序。',
     ] },
-    { title: '保存期限', body: [
-      '浏览记录与搜索记录保存 180 天，到期自动删除。',
-      '密码重置链接在失效后删除。',
-      '订单、售后和支付相关信息依照《电子商务法》自交易完成之日起保存三年。',
-      '账户信息保存到你注销账号为止。',
+    { title: '保存与清理', body: [
+      '清理任务以浏览和搜索记录 180 天、页面访问记录 90 天为阈值，并删除过期密码重置凭据；实际清理取决于定时任务成功运行。',
+      '模拟订单、售后和相关记录尚无自动到期清理。托管日志和备份按服务商实际配置保留，不由账户注销接口立即清除。',
+      '注销账号会停用账户并删除地址簿、购物车、收藏、浏览和搜索记录等数据；当前仍保留模拟订单中的收货快照、售后、评价及去身份化的账户行，这些保留记录不保证匿名化。',
     ] },
-    { title: '你的权利', body: [
-      '查阅与复制：在“个人设置”中导出你的全部个人信息（JSON 文件）。',
-      '更正：在“个人设置”中修改用户名、手机号和头像。',
-      '删除：可删除收货地址、浏览与搜索记录，或注销账号；注销后我们删除你的个人信息，交易记录按法律要求保留并不再关联你的身份。',
-      '撤回同意与咨询：通过本页的联系方式联系我们，我们会在十五个工作日内答复。',
+    { title: '账户功能与咨询', body: [
+      '个人设置可导出账户关联数据，包括账户资料、地址、订单和活动记录等；导出不包含密码、密钥或服务商的全部日志和备份。',
+      '可修改账户资料，删除地址、浏览和搜索记录，或注销账号。未完成的模拟订单或售后会暂时阻止注销。',
+      '如本页显示联系渠道，可用于演示问题咨询；正式运营主体、权利请求渠道和响应流程将在开放真实用户前明确。',
     ] },
-    { title: '信息安全', body: [
-      '我们使用加密传输（HTTPS）、密码哈希、访问权限控制和操作审计，并定期备份数据和演练恢复。',
-      '如发生个人信息泄露，我们会依法采取补救措施并通知你和监管部门。',
-    ] },
-    { title: '未成年人', body: [
-      '本网站不面向十四周岁以下的儿童。若你未满十四周岁，请在监护人同意和指导下使用。',
+    { title: '安全与使用限制', body: [
+      '系统使用 HTTPS、密码哈希、权限控制和操作审计。演示验证不能替代正式安全评估，请勿提交真实交易或敏感资料。',
+      '本演示不向十四周岁以下儿童提供注册服务，请勿提交儿童个人信息。',
     ] },
     { title: '政策更新', body: [
-      '政策发生重大变化时，我们会在网站显著位置通知你。',
+      '用途或数据处理方式发生变化时，应先更新本说明；开放真实用户或交易前将另行明确正式政策与条款。',
       LEGAL_UPDATED,
     ] },
   ],
@@ -61,116 +51,77 @@ export const PRIVACY_POLICY: { title: string; intro: string; sections: InfoSecti
 
 export const USER_AGREEMENT: { title: string; intro: string; sections: InfoSection[] } = {
   title: '用户协议',
-  intro: '本协议是你与本网站运营方之间关于使用本网站服务的约定。注册或使用本网站即表示你同意本协议。',
+  intro: DEMO_NOTICE,
   sections: [
-    { title: '账户', body: [
-      '你应提供真实、有效的注册信息，并妥善保管密码；通过你的账户进行的操作视为你本人的行为。',
-      '发现账户被盗用时，请立即修改密码并联系我们。你可以随时在“个人设置”中注销账号。',
+    { title: '测试账户', body: [
+      '仅使用你有权控制的测试账号，不冒用他人身份；妥善保管密码、验证器和恢复码。',
+      '发现账号被误用时，请修改密码并停止测试。个人设置提供资料导出和账号注销功能。',
     ] },
-    { title: '订单与价格', body: [
-      '商品价格、库存和优惠以下单时页面显示为准；订单提交后，我们按订单信息安排发货。',
-      '因系统故障导致价格明显错误时，我们可以取消相关订单并全额退款。',
+    { title: '商品与模拟订单', body: [
+      '商品、价格、库存、物流及售后状态仅用于功能展示，提交模拟订单不构成真实商品购买或实际履约承诺。',
+      '请勿依据演示价格付款，也不要填写真实收货资料。',
     ] },
     { title: '支付', body: [
-      '本网站当前处于演示模式，不会实际扣款；接入正式支付后，以支付页面的提示为准。',
+      '本网站不提供真实支付；明确启用的测试支付仅模拟状态变更，不会实际扣款。',
     ] },
     { title: '配送与售后', body: [
-      '配送和退换货按“配送说明”和“退换货政策”执行，并适用《消费者权益保护法》关于网购商品七日无理由退货等规定。',
+      '配送、退货、退款和售后页面用于演示流程，不会实际发货、收货、转账或退款。',
     ] },
-    { title: '用户行为', body: [
-      '你发布的评价应真实、合法，不得含有侵权、违法或广告内容；违规内容可能被删除。',
-      '不得利用本网站从事违法活动，或以技术手段干扰网站的正常运行。',
+    { title: '使用规则', body: [
+      '测试内容应合法，不得侵犯他人权益；未经授权不得攻击本网站或第三方服务。',
+      '演示服务可能调整或停止，请勿将其用于真实业务或保存唯一的数据副本。',
     ] },
-    { title: '责任', body: [
-      '我们努力保证服务连续和信息准确，但在不可抗力或第三方原因导致服务中断时，在法律允许的范围内不承担责任。',
-    ] },
-    { title: '法律适用与争议', body: [
-      '本协议适用中华人民共和国法律。发生争议时，双方应先协商；协商不成的，可向运营方所在地有管辖权的人民法院起诉。',
+    { title: '正式运营前', body: [
+      '当前说明仅适用于个人演示；面向真实用户或交易前，将明确运营主体、服务地区、联系渠道、适用法律和正式服务条款。',
       LEGAL_UPDATED,
     ] },
   ],
 };
 
 registerTranslations({
-  [LEGAL_UPDATED]: 'Last updated: October 13, 2026',
-  '本政策说明本网站如何收集、使用、存储和保护你的个人信息，以及你享有的权利。使用本网站即表示你已阅读并理解本政策。':
-    'This policy explains how this site collects, uses, stores and protects your personal information, and the rights you have. By using the site you confirm that you have read and understood it.',
+  [LEGAL_UPDATED]: 'Last updated: October 16, 2026',
+  [DEMO_NOTICE]: 'This is a personal demonstration project. It does not sell goods, collect real payments, or provide actual delivery, refunds or after-sales services. Use only authorized test accounts and fictional details. Do not enter real shipping details, payment information or another person\'s personal data.',
   '我们收集的信息': 'Information we collect',
-  '账户信息：注册时的用户名、邮箱和密码（仅保存不可逆的加密哈希），以及你选择填写的手机号和头像地址。':
-    'Account: the username, email and password you register with (only an irreversible hash of the password is stored), and the phone number and avatar URL you choose to add.',
-  '交易信息：收货人姓名、电话和地址，订单、支付状态、物流、售后申请和评价。':
-    'Transactions: recipient name, phone and address; orders, payment status, shipping, after-sales requests and reviews.',
-  '使用记录：你浏览过的商品、搜索关键词、购物车、收藏和领取的优惠券。':
-    'Activity: products you viewed, search keywords, your cart, favorites and claimed coupons.',
-  '安全日志：服务器为安全和排错记录请求的 IP 地址、时间和访问路径，按托管平台的日志保留期自动删除。':
-    'Security logs: for security and troubleshooting the servers record the IP address, time and path of requests; they are deleted automatically under the hosting platform\'s log retention.',
-  '我们如何使用信息': 'How we use it',
-  '提供购物服务：登录、下单、配送、售后和找回密码。': 'To provide the store: sign-in, orders, delivery, after-sales and password recovery.',
-  '个性化推荐与搜索：根据你的浏览和搜索记录推荐商品，你可以随时删除这些记录。':
-    'Recommendations and search: products are suggested from your browsing and search history, which you can delete at any time.',
-  '安全与改进：防止欺诈和滥用、排查故障，以及统计匿名化的页面访问情况。':
-    'Security and improvement: preventing fraud and abuse, fixing faults and measuring anonymized page visits.',
+  '账户信息：测试账号的用户名、邮箱和密码哈希，以及你选择填写的手机号和头像地址。找回密码测试可使用你有权控制的测试邮箱。': 'Account information: a test account\'s username, email and password hash, and any phone number or avatar URL you choose to add. For password-recovery tests, use a test mailbox you control.',
+  '演示数据：收货资料、模拟订单和支付状态、物流、售后申请及评价。请使用虚构内容。': 'Demo data: recipient details, simulated orders and payment statuses, shipping, after-sales requests and reviews. Use fictional content.',
+  '使用记录：浏览过的商品、搜索关键词、购物车、收藏和领取的优惠券。': 'Activity: viewed products, search keywords, cart items, favorites and claimed coupons.',
+  '公开访问仍可能产生 IP 地址、访问时间和路径等托管日志；个人演示不代表完全不处理个人信息。': 'Public visits can still generate hosting logs containing IP addresses, visit times and paths. A personal demo does not mean that no personal information is processed.',
+  '我们如何使用信息': 'How information is used',
+  '测试登录、模拟购物流程、个人设置和密码找回功能；浏览和搜索记录用于演示推荐与搜索。': 'To test sign-in, simulated shopping, profile settings and password recovery. Browsing and search history demonstrate recommendations and search.',
+  '诊断故障、限制滥用，并查看页面访问与性能统计。': 'To diagnose faults, limit abuse and view page-visit and performance statistics.',
   'Cookie 与本地存储': 'Cookies and local storage',
-  '登录状态保存在仅限服务器读取的 Cookie 中；浏览器本地存储只保存登录会话编号和账户资料的副本，退出登录时清除。':
-    'Your sign-in is kept in a cookie only the server can read. Browser storage holds just the session ID and a copy of your profile, cleared when you sign out.',
-  '页面访问统计使用 Vercel Analytics 与 Speed Insights，不设置跟踪 Cookie，上报前会去掉网址中的查询参数。':
-    'Page statistics use Vercel Analytics and Speed Insights without tracking cookies; query strings are removed from URLs before anything is sent.',
-  '委托处理与数据出境': 'Processors and cross-border transfer',
-  '为运行本网站，我们委托以下服务商处理数据：Vercel（网站托管与访问统计）、Aiven（数据库）、Upstash（缓存）、邮件服务商（发送找回密码邮件），以及在启用时的 Sentry（错误报告，不含个人信息）。':
-    'To run this site we use these processors: Vercel (hosting and page statistics), Aiven (database), Upstash (cache), an email provider (password-recovery emails) and, when enabled, Sentry (error reports without personal information).',
-  '上述服务的服务器可能位于中国境外。我们与服务商约定其仅按我们的指示处理数据，并采取必要的安全措施；向境外提供个人信息前，我们会依法履行告知并取得你的单独同意等义务。':
-    'Their servers may be located outside mainland China. They process data only on our instructions and under the necessary safeguards; before personal information is provided abroad we inform you and obtain your separate consent as the law requires.',
-  '除法律法规要求或你的明确同意外，我们不会向第三方出售或提供你的个人信息。':
-    'We do not sell or provide your personal information to third parties unless the law requires it or you explicitly agree.',
-  '保存期限': 'Retention',
-  '浏览记录与搜索记录保存 180 天，到期自动删除。': 'Browsing and search history are kept for 180 days and then deleted automatically.',
-  '密码重置链接在失效后删除。': 'Password-reset links are deleted once they expire.',
-  '订单、售后和支付相关信息依照《电子商务法》自交易完成之日起保存三年。':
-    'Orders, after-sales and payment records are kept for three years after the transaction completes, as the E-Commerce Law requires.',
-  '账户信息保存到你注销账号为止。': 'Account information is kept until you delete your account.',
-  '你的权利': 'Your rights',
-  '查阅与复制：在“个人设置”中导出你的全部个人信息（JSON 文件）。': 'Access and copy: export all of your personal data from Profile settings (JSON file).',
-  '更正：在“个人设置”中修改用户名、手机号和头像。': 'Correction: change your username, phone number and avatar in Profile settings.',
-  '删除：可删除收货地址、浏览与搜索记录，或注销账号；注销后我们删除你的个人信息，交易记录按法律要求保留并不再关联你的身份。':
-    'Deletion: delete addresses or browsing and search history, or delete your account. Deleting the account removes your personal information; transaction records are kept as the law requires and no longer identify you.',
-  '撤回同意与咨询：通过本页的联系方式联系我们，我们会在十五个工作日内答复。':
-    'Withdrawing consent and questions: contact us using the details on this page; we reply within fifteen working days.',
-  '信息安全': 'Security',
-  '我们使用加密传输（HTTPS）、密码哈希、访问权限控制和操作审计，并定期备份数据和演练恢复。':
-    'We use encrypted transport (HTTPS), password hashing, access control and audit logs, and back up data and rehearse restores regularly.',
-  '如发生个人信息泄露，我们会依法采取补救措施并通知你和监管部门。':
-    'If personal information is leaked we take remedial action and notify you and the regulator as the law requires.',
-  '未成年人': 'Children',
-  '本网站不面向十四周岁以下的儿童。若你未满十四周岁，请在监护人同意和指导下使用。':
-    'This site is not directed at children under fourteen. If you are under fourteen, use it only with a guardian\'s consent and guidance.',
+  '登录状态保存在仅限服务器读取的 Cookie 中；浏览器本地存储还保存会话编号、账户资料、语言偏好和部分待确认操作，退出登录会清理对应的会话资料。': 'Sign-in is stored in a cookie only the server can read. Browser storage also holds session IDs, profile details, language preferences and some unconfirmed operations. Signing out clears the corresponding session details.',
+  '页面统计使用 Vercel Analytics 与 Speed Insights，不设置跟踪 Cookie；上报前去掉网址中的查询参数和片段。': 'Page statistics use Vercel Analytics and Speed Insights without tracking cookies. URL query strings and fragments are removed before reporting.',
+  '云服务与跨境处理': 'Cloud services and cross-border processing',
+  '网站使用 Vercel 托管和统计、Aiven 数据库、Upstash 缓存与任务调度，以及已配置的邮件服务；启用 Sentry 时发送经过过滤的错误诊断数据。': 'The site uses Vercel for hosting and statistics, Aiven for its database, Upstash for caching and scheduled tasks, and the configured email service. When enabled, Sentry receives filtered error diagnostics.',
+  '错误上报配置为排除请求体、Cookie 和用户资料，但请勿在测试内容或错误文本中填写个人信息。': 'Error reporting is configured to exclude request bodies, cookies and user profiles. Do not place personal information in test content or error messages.',
+  '这些服务可能在你所在国家或地区以外处理数据。本项目尚未完成面向真实用户的跨境处理安排，正式开放前需要确认服务商、处理地区、告知与适用的授权程序。': 'These services may process data outside your country or region. Cross-border arrangements for real users have not been completed. Providers, processing locations, notices and applicable authorization procedures must be confirmed before public operation.',
+  '保存与清理': 'Storage and cleanup',
+  '清理任务以浏览和搜索记录 180 天、页面访问记录 90 天为阈值，并删除过期密码重置凭据；实际清理取决于定时任务成功运行。': 'The cleanup task uses thresholds of 180 days for browsing and search history and 90 days for page visits, and removes expired password-reset credentials. Actual cleanup depends on successful scheduled runs.',
+  '模拟订单、售后和相关记录尚无自动到期清理。托管日志和备份按服务商实际配置保留，不由账户注销接口立即清除。': 'Simulated orders, after-sales and related records do not yet have automatic expiry cleanup. Hosting logs and backups follow the providers\' actual retention settings and are not immediately erased by account deletion.',
+  '注销账号会停用账户并删除地址簿、购物车、收藏、浏览和搜索记录等数据；当前仍保留模拟订单中的收货快照、售后、评价及去身份化的账户行，这些保留记录不保证匿名化。': 'Account deletion disables the account and removes address-book entries, cart items, favorites, and browsing and search history. Simulated order address snapshots, after-sales records, reviews and the de-identified account row remain. These retained records are not guaranteed to be anonymous.',
+  '账户功能与咨询': 'Account features and questions',
+  '个人设置可导出账户关联数据，包括账户资料、地址、订单和活动记录等；导出不包含密码、密钥或服务商的全部日志和备份。': 'Profile settings can export account-linked data, including profile details, addresses, orders and activity records. The export excludes passwords, secrets and the providers\' complete logs and backups.',
+  '可修改账户资料，删除地址、浏览和搜索记录，或注销账号。未完成的模拟订单或售后会暂时阻止注销。': 'You can edit profile details, remove addresses or browsing and search history, or delete your account. Unfinished simulated orders or after-sales requests temporarily prevent deletion.',
+  '如本页显示联系渠道，可用于演示问题咨询；正式运营主体、权利请求渠道和响应流程将在开放真实用户前明确。': 'If contact details are shown on this page, use them for demo questions. The formal operator, rights-request channel and response process will be specified before opening to real users.',
+  '安全与使用限制': 'Security and use limits',
+  '系统使用 HTTPS、密码哈希、权限控制和操作审计。演示验证不能替代正式安全评估，请勿提交真实交易或敏感资料。': 'The system uses HTTPS, password hashing, access controls and audit logs. Demo testing does not replace a formal security assessment. Do not submit real transactions or sensitive information.',
+  '本演示不向十四周岁以下儿童提供注册服务，请勿提交儿童个人信息。': 'Registration for this demo is not offered to children under fourteen. Do not submit children\'s personal information.',
   '政策更新': 'Changes',
-  '政策发生重大变化时，我们会在网站显著位置通知你。': 'We will announce material changes prominently on the site.',
-  '本协议是你与本网站运营方之间关于使用本网站服务的约定。注册或使用本网站即表示你同意本协议。':
-    'This agreement governs your use of this site between you and its operator. By registering or using the site you accept it.',
-  '账户': 'Account',
-  '你应提供真实、有效的注册信息，并妥善保管密码；通过你的账户进行的操作视为你本人的行为。':
-    'Provide accurate registration details and keep your password safe; actions taken with your account are treated as your own.',
-  '发现账户被盗用时，请立即修改密码并联系我们。你可以随时在“个人设置”中注销账号。':
-    'If your account is misused, change your password and contact us at once. You can delete your account at any time in Profile settings.',
-  '订单与价格': 'Orders and prices',
-  '商品价格、库存和优惠以下单时页面显示为准；订单提交后，我们按订单信息安排发货。':
-    'Prices, stock and discounts are those shown when you place the order; we ship according to the order details.',
-  '因系统故障导致价格明显错误时，我们可以取消相关订单并全额退款。':
-    'If a system fault produces an obviously wrong price, we may cancel the order and refund it in full.',
+  '用途或数据处理方式发生变化时，应先更新本说明；开放真实用户或交易前将另行明确正式政策与条款。': 'This notice must be updated before changing the purpose or data-processing practices. Formal policies and terms will be specified before accepting real users or transactions.',
+  '测试账户': 'Test accounts',
+  '仅使用你有权控制的测试账号，不冒用他人身份；妥善保管密码、验证器和恢复码。': 'Use only test accounts you are authorized to control and do not impersonate others. Keep passwords, authenticators and recovery codes secure.',
+  '发现账号被误用时，请修改密码并停止测试。个人设置提供资料导出和账号注销功能。': 'If an account is misused, change its password and stop testing. Profile settings offer data export and account deletion.',
+  '商品与模拟订单': 'Products and simulated orders',
+  '商品、价格、库存、物流及售后状态仅用于功能展示，提交模拟订单不构成真实商品购买或实际履约承诺。': 'Products, prices, inventory, shipping and after-sales statuses demonstrate features only. A simulated order does not create a real purchase or a promise of actual fulfillment.',
+  '请勿依据演示价格付款，也不要填写真实收货资料。': 'Do not pay based on demo prices or enter real shipping details.',
   '支付': 'Payment',
-  '本网站当前处于演示模式，不会实际扣款；接入正式支付后，以支付页面的提示为准。':
-    'The site is currently in demonstration mode and takes no real payments; once real payments are enabled, the payment page applies.',
+  '本网站不提供真实支付；明确启用的测试支付仅模拟状态变更，不会实际扣款。': 'The site does not offer real payments. Where test payments are explicitly enabled, they only simulate status changes and do not charge money.',
   '配送与售后': 'Delivery and after-sales',
-  '配送和退换货按“配送说明”和“退换货政策”执行，并适用《消费者权益保护法》关于网购商品七日无理由退货等规定。':
-    'Delivery and returns follow the Shipping and Returns pages, together with the Consumer Rights Protection Law, including the seven-day no-reason return for online purchases.',
-  '用户行为': 'Conduct',
-  '你发布的评价应真实、合法，不得含有侵权、违法或广告内容；违规内容可能被删除。':
-    'Reviews must be truthful and lawful, without infringing, illegal or advertising content; violating content may be removed.',
-  '不得利用本网站从事违法活动，或以技术手段干扰网站的正常运行。': 'Do not use the site for illegal activities or interfere with its operation by technical means.',
-  '责任': 'Liability',
-  '我们努力保证服务连续和信息准确，但在不可抗力或第三方原因导致服务中断时，在法律允许的范围内不承担责任。':
-    'We work to keep the service available and accurate but, as far as the law allows, are not liable for interruptions caused by force majeure or third parties.',
-  '法律适用与争议': 'Governing law and disputes',
-  '本协议适用中华人民共和国法律。发生争议时，双方应先协商；协商不成的，可向运营方所在地有管辖权的人民法院起诉。':
-    'This agreement is governed by the laws of the People\'s Republic of China. Disputes are first settled by negotiation; failing that, either party may sue in the competent people\'s court where the operator is located.',
+  '配送、退货、退款和售后页面用于演示流程，不会实际发货、收货、转账或退款。': 'Shipping, returns, refunds and after-sales pages demonstrate workflows only. They do not send or receive goods, transfer money or issue actual refunds.',
+  '使用规则': 'Use rules',
+  '测试内容应合法，不得侵犯他人权益；未经授权不得攻击本网站或第三方服务。': 'Test content must be lawful and respect others\' rights. Do not attack this site or third-party services without authorization.',
+  '演示服务可能调整或停止，请勿将其用于真实业务或保存唯一的数据副本。': 'The demo may change or stop. Do not use it for real business or to store the only copy of any data.',
+  '正式运营前': 'Before public operation',
+  '当前说明仅适用于个人演示；面向真实用户或交易前，将明确运营主体、服务地区、联系渠道、适用法律和正式服务条款。': 'This notice applies only to the personal demo. The operator, service regions, contact channels, applicable law and formal terms will be specified before accepting real users or transactions.',
 });

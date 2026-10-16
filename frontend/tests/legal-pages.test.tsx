@@ -39,9 +39,15 @@ describe('legal pages', () => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(en);
     });
 
-  it('states the retention periods and the rights the account pages offer', () => {
+  it('states the demo limits, implemented retention and account rights without claiming complete anonymization', () => {
     const text = keys(PRIVACY_POLICY).join('\n');
-    for (const fact of ['180 天', '三年', '导出', '注销账号', 'Vercel', 'Aiven', 'Upstash', '十四周岁']) expect(text).toContain(fact);
+    for (const fact of ['个人演示', '180 天', '90 天', '尚无自动到期清理', '导出', '注销账号', '收货快照', 'Vercel', 'Aiven', 'Upstash', '十四周岁']) expect(text).toContain(fact);
+    expect(text).not.toContain('不再关联你的身份');
+    expect(text).not.toContain('我们与服务商约定');
+    const terms = keys(USER_AGREEMENT).join('\n');
+    expect(terms).toContain('不开展真实商品销售');
+    expect(terms).toContain('本网站不提供真实支付');
+    expect(terms).not.toContain('订单提交后，我们按订单信息安排发货');
   });
 
   it('are linked from the footer', () => {

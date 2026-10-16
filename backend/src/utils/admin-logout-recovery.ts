@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import type { Pool } from 'mysql2/promise';
 import jwt from 'jsonwebtoken';
-import { jwtSecret } from './jwt-secret';
+import { jwtSecret, verifyJwt } from './jwt-secret';
 import { clearSessionCookie, readCookie, setSessionCookie } from './session-cookie';
 
 export const ADMIN_LOGOUT_RETRY_COOKIE = 'admin_logout_retry';
@@ -30,7 +30,7 @@ function validTarget(value: unknown): value is AdminRevocationTarget {
 /** A revocation receipt is never an admin session, even when copied into its cookie or Bearer header. */
 export function adminRevocationTarget(token: string | undefined): AdminRevocationTarget | undefined {
   try {
-    const claims = jwt.verify(token || '', jwtSecret());
+    const claims = verifyJwt(token || '');
     if (typeof claims !== 'object' || claims.type !== 'admin') return undefined;
     const target = { adminId: claims.adminId, authVersion: claims.authVersion ?? 0 };
     return validTarget(target) ? target : undefined;
@@ -39,7 +39,7 @@ export function adminRevocationTarget(token: string | undefined): AdminRevocatio
 
 export function readAdminLogoutReceipt(req: Request): AdminLogoutReceipt | undefined {
   try {
-    const claims = jwt.verify(readCookie(req, ADMIN_LOGOUT_RETRY_COOKIE) || '', jwtSecret(), { algorithms: ['HS256'] });
+    const claims = verifyJwt(readCookie(req, ADMIN_LOGOUT_RETRY_COOKIE) || '');
     if (typeof claims !== 'object' || claims.type !== PURPOSE || !Number.isSafeInteger(claims.iat) ||
         !Number.isSafeInteger(claims.exp) || !Array.isArray(claims.targets) || !claims.targets.length ||
         !claims.targets.every(validTarget)) return undefined;
