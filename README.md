@@ -560,7 +560,7 @@ Administrator status changes and their audit record commit in one transaction. A
 - JWT authentication
 - Hashed password storage (bcrypt)
 - SQL injection protection
-- XSS protection
+- XSS protection, including a Content Security Policy on every page (`frontend/csp.js`): only this site's scripts, connections limited to the site, its API and the Sentry ingest host, no plugins, frames or foreign form targets. A stricter policy without inline scripts runs report-only and reports to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set (never from the password-reset page, whose URL holds the token)
 - CSRF protection
 - Rate limiting
 
