@@ -3,16 +3,22 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { getPool } from '../../database/mysql';
-import { adminLogin, adminLogout } from '../../controllers/admin.controller';
+import { adminLogin, adminLoginVerify, adminLogout } from '../../controllers/admin.controller';
+import { verify } from '../../services/admin-two-factor.service';
 import { authenticateAdmin } from '../../middleware/admin-auth';
 
 jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn() }));
 jest.mock('../../controllers/admin-log.controller', () => ({ logAdminAction: jest.fn() }));
+// The second factor itself is covered by integration/admin-two-factor-mysql; here it always succeeds.
+jest.mock('../../services/admin-two-factor.service', () => ({
+  ...jest.requireActual('../../services/admin-two-factor.service'),
+  verify: jest.fn(),
+}));
 
 const SECRET = 'test-jwt-secret';
 const csrf = { 'X-Requested-With': 'XMLHttpRequest' };
 const RETRY_COOKIE = 'admin_logout_retry';
-const issued = (adminId = 9, authVersion = 0) => jwt.sign({ adminId, type: 'admin', authVersion }, SECRET, { expiresIn: '1h' });
+const issued = (adminId = 9, authVersion = 0) => jwt.sign({ adminId, type: 'admin', mfa: true, authVersion }, SECRET, { expiresIn: '1h' });
 let versions: Map<number, number>;
 let failRevocation: boolean;
 let unknownRevocationResult: boolean;
@@ -28,6 +34,10 @@ beforeEach(() => {
   commitThenFail = false;
   failAdministrator = undefined;
   const password_hash = bcrypt.hashSync('fixture-password', 4);
+  (verify as jest.Mock).mockImplementation(async () => ({
+    admin: { admin_id: 9, username: 'fixture', real_name: null, email: null, role_id: 1, role_name: null, status: 1, auth_version: versions.get(9) },
+    recovery: null,
+  }));
   (getPool as jest.Mock).mockReturnValue({
     query: jest.fn(async (sql: string, params: number[]) => {
       if (sql.startsWith('UPDATE admins SET auth_version')) {
@@ -42,7 +52,7 @@ beforeEach(() => {
       if (sql.includes('FROM admins')) {
         const id = typeof params[0] === 'string' ? 9 : params[0];
         const version = versions.get(id);
-        return [version === undefined ? [] : [{ admin_id: id, username: 'fixture', role_id: 1, status: 1, auth_version: version, password_hash }]];
+        return [version === undefined ? [] : [{ admin_id: id, username: 'fixture', role_id: 1, status: 1, auth_version: version, password_hash, totp_enabled_at: new Date() }]];
       }
       if (sql.startsWith('UPDATE admins SET last_login_at')) return [{}];
       throw new Error('Unexpected SQL in isolated logout fixture');
@@ -63,6 +73,7 @@ function app(session = issued(), receipt?: string) {
     res.end();
   });
   server.post('/api/admin/login', adminLogin);
+  server.post('/api/admin/login/2fa', adminLoginVerify);
   server.post('/api/admin/logout', adminLogout);
   server.get('/api/admin/profile', authenticateAdmin, (req, res) => res.json({ adminId: req.admin?.adminId }));
   return server;
@@ -180,7 +191,7 @@ test('repeated failed retries do not extend the receipt lifetime', async () => {
 });
 
 test('when the browser receipt expires, even the latest pre-logout 24-hour session copy has expired', async () => {
-  const session = jwt.sign({ adminId: 9, type: 'admin', authVersion: 0 }, SECRET, { expiresIn: '24h' });
+  const session = jwt.sign({ adminId: 9, type: 'admin', mfa: true, authVersion: 0 }, SECRET, { expiresIn: '24h' });
   const server = app(session);
   const browser = request.agent(server);
   await browser.get('/fixture-session').expect(200);
@@ -229,7 +240,10 @@ test.each([
 test('a successful new login settles a pending receipt before issuing the fresh auth version', async () => {
   const browser = request.agent(app(issued(), fixtureReceipt()));
   await browser.get('/fixture-session').expect(200);
-  await browser.post('/api/admin/login').set(csrf).send({ username: 'fixture', password: 'fixture-password' }).expect(200);
+  const { body } = await browser.post('/api/admin/login').set(csrf).send({ username: 'fixture', password: 'fixture-password' }).expect(200);
+  // The password alone settles nothing; the receipt is settled when the session is issued.
+  expect(revocations).toEqual([]);
+  await browser.post('/api/admin/login/2fa').set(csrf).send({ challenge: body.challenge, code: '123456' }).expect(200);
   expect(versions.get(9)).toBe(1);
   await browser.get('/api/admin/profile').expect(200);
   expect(revocations).toEqual([[9, 0]]);
@@ -241,7 +255,8 @@ test('a failed pending cleanup cannot be overwritten by a new login, or by inval
   failRevocation = true;
   await browser.post('/api/admin/login').set(csrf).send({ username: 'fixture', password: 'wrong-password' }).expect(401);
   expect(revocations).toEqual([]);
-  const failed = await browser.post('/api/admin/login').set(csrf).send({ username: 'fixture', password: 'fixture-password' }).expect(503);
+  const { body } = await browser.post('/api/admin/login').set(csrf).send({ username: 'fixture', password: 'fixture-password' }).expect(200);
+  const failed = await browser.post('/api/admin/login/2fa').set(csrf).send({ challenge: body.challenge, code: '123456' }).expect(503);
   expect(failed.body.error).toBe('退出尚未完成，请重试');
   expect(failed.headers['set-cookie']).toBeUndefined();
   failRevocation = false;

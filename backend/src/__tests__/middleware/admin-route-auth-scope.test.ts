@@ -8,6 +8,9 @@ import { getPool } from '../../database/mysql';
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
 jest.mock('../../controllers/admin.controller', () => ({
   adminLogin: (_req: unknown, res: express.Response) => res.json({ public: 'login' }),
+  adminLoginVerify: (_req: unknown, res: express.Response) => res.json({ public: 'login-2fa' }),
+  adminLoginSetup: (_req: unknown, res: express.Response) => res.json({ public: 'login-2fa-setup' }),
+  adminLoginActivate: (_req: unknown, res: express.Response) => res.json({ public: 'login-2fa-activate' }),
   adminLogout: (_req: unknown, res: express.Response) => res.json({ public: 'logout' }),
   getAdminProfile: (_req: unknown, res: express.Response) => res.json({ allowed: true }),
 }));
@@ -29,14 +32,14 @@ jest.mock('../../middleware/rate-limit', () => ({
   authLimiter: (_req: unknown, _res: unknown, next: express.NextFunction) => next(),
 }));
 
-let admin: { admin_id: number; username: string; role_id: number; status: number; auth_version: number };
+let admin: { admin_id: number; username: string; role_id: number; status: number; auth_version: number; totp_enabled_at: Date | null };
 let permissions: string[];
 let role: string;
 let query: jest.Mock;
 let failDatabase: boolean;
 const verification = jest.spyOn(jwt, 'verify');
 const identityReads = () => query.mock.calls.filter(([sql]: [string]) => sql.includes('FROM admins')).length;
-const authorization = () => `Bearer ${jwt.sign({ adminId: 2, type: 'admin', authVersion: 0, roleId: 1 }, 'test-jwt-secret')}`;
+const authorization = () => `Bearer ${jwt.sign({ adminId: 2, type: 'admin', mfa: true, authVersion: 0, roleId: 1 }, 'test-jwt-secret')}`;
 
 function app() {
   const server = express();
@@ -48,7 +51,7 @@ function app() {
 
 beforeEach(() => {
   verification.mockClear(); failDatabase = false;
-  admin = { admin_id: 2, username: 'limited', role_id: 4, status: 1, auth_version: 0 };
+  admin = { admin_id: 2, username: 'limited', role_id: 4, status: 1, auth_version: 0, totp_enabled_at: new Date() };
   permissions = ['coupon:view', 'coupon:create', 'statistics:view', 'order:view', 'log:view'];
   role = 'limited_admin';
   query = jest.fn(async (sql: string) => {

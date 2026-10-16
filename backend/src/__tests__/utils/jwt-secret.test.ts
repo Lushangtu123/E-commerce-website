@@ -16,7 +16,7 @@ const OLD_SECRET = process.env.JWT_SECRET;
 beforeEach(() => {
   (query as jest.Mock).mockResolvedValue([{ auth_version: 0, status: 1 }]);
   (getPool as jest.Mock).mockReturnValue({
-    query: jest.fn(async () => [[{ admin_id: 9, username: 'root', role_id: 1, status: 1, auth_version: 0 }]]),
+    query: jest.fn(async () => [[{ admin_id: 9, username: 'root', role_id: 1, status: 1, auth_version: 0, totp_enabled_at: new Date() }]]),
   });
 });
 afterEach(() => { process.env.JWT_SECRET = OLD_SECRET; });
@@ -38,7 +38,7 @@ test('jwtSecret 在调用时读取 JWT_SECRET，未配置时回退到开发默�
 test('未配置 JWT_SECRET 时，顾客与管理员认证都接受开发默认值签发的令牌', async () => {
   delete process.env.JWT_SECRET;
   const userToken = jwt.sign({ userId: 7, type: 'user', authVersion: 0 }, DEV_JWT_SECRET);
-  const adminToken = jwt.sign({ adminId: 9, type: 'admin', authVersion: 0 }, DEV_JWT_SECRET);
+  const adminToken = jwt.sign({ adminId: 9, type: 'admin', mfa: true, authVersion: 0 }, DEV_JWT_SECRET);
   await request(app()).get('/user').set('Authorization', `Bearer ${userToken}`).expect(200);
   await request(app()).get('/admin').set('Authorization', `Bearer ${adminToken}`).expect(200);
 });

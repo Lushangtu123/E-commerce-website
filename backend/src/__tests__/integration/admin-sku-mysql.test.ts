@@ -26,7 +26,7 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
   const options = { ...(process.env.MYSQL_TEST_SOCKET ? { socketPath: process.env.MYSQL_TEST_SOCKET } : { host: process.env.MYSQL_TEST_HOST, port: Number(process.env.MYSQL_TEST_PORT || 3306) }), user: process.env.MYSQL_TEST_USER || 'root', password: process.env.MYSQL_TEST_PASSWORD || '', timezone: '+00:00', connectionLimit: 6 };
   let server: Pool, db: Pool, created = false;
   const app = express(); app.use(express.json()); app.use('/api/admin/products', adminProducts); app.get('/api/products/:id', ProductController.getDetail);
-  const admin = (id = 1) => `Bearer ${jwt.sign({ type: 'admin', adminId: id }, process.env.JWT_SECRET!)}`;
+  const admin = (id = 1) => `Bearer ${jwt.sign({ type: 'admin', mfa: true, adminId: id }, process.env.JWT_SECRET!)}`;
   const body = { sku_code: 'BLUE-M', specs: { Color: 'Blue', Size: 42, Waterproof: false }, price: 12.50, original_price: null, stock: 3, image: null, status: 1 };
 
   beforeAll(async () => {
@@ -39,7 +39,7 @@ const enabled = Boolean(process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_
     }
     await migrateCouponTables(db);
     await db.query("INSERT INTO roles(role_id,role_name) VALUES(1,'super_admin'),(2,'viewer')");
-    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id) VALUES(1,'owner','fixture',1),(2,'viewer','fixture',2)");
+    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id,totp_enabled_at) VALUES(1,'owner','fixture',1,NOW()),(2,'viewer','fixture',2,NOW())");
     await db.query("INSERT INTO permissions(permission_id,permission_name,permission_code) VALUES(1,'view','product:view')");
     await db.query('INSERT INTO role_permissions(role_id,permission_id) VALUES(2,1)');
   });

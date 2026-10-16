@@ -47,6 +47,15 @@ Upstash 控制台重置密码后旧连接串立即失效，会有短暂的缓存
 1. 选择低峰时段，在 Upstash 重置密码。
 2. 立即在 Vercel 更新 `REDIS_URL` 并重新部署，确认 `/api/health` 中 `redis: up`。
 
+## ADMIN_TOTP_KEY（管理员两步验证）
+
+`ADMIN_TOTP_KEY` 加密数据库中每位管理员的验证器密钥。它没有过渡期：换了新值，旧密钥加密的验证器全部无法解密，所有管理员都要重新绑定。因此不做例行轮换，只在怀疑泄露（同时数据库也可能泄露）时更换：
+
+1. 用 `openssl rand -base64 32` 生成新值，在 Vercel 更新 `ADMIN_TOTP_KEY`（Sensitive）并重新部署。
+2. 对每位管理员执行 `node dist/database/admin-reset-two-factor.js <用户名>`（清除旧绑定和恢复码），他们下次登录时重新绑定。
+
+`ADMIN_TOTP_KEY` 要和数据库备份分开保存：只拿到备份的人解不开验证器密钥；从备份恢复时则需要同一个密钥，否则管理员要全部重新绑定。
+
 ## 其他密钥
 
 | 密钥 | 轮换方法 |

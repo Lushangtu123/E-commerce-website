@@ -25,6 +25,8 @@ beforeEach(() => {
   process.env = { ...OLD_ENV };
   delete process.env.JWT_SECRET;
   delete process.env.CORS_ORIGIN;
+  // Production also needs the key that encrypts administrators' TOTP secrets.
+  process.env.ADMIN_TOTP_KEY = Buffer.alloc(32, 7).toString('base64');
   exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 });
 
@@ -205,5 +207,31 @@ describe('validateEnv 密钥轮换', () => {
     validateEnv();
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(JSON.stringify(logger.error.mock.calls)).toContain(name);
+  });
+});
+
+describe('validateEnv 管理员两步验证密钥', () => {
+  beforeEach(() => {
+    Object.assign(process.env, { NODE_ENV: 'production', JWT_SECRET: 'a-strong-random-secret-value-0123456789', CORS_ORIGIN: 'https://a.com' });
+  });
+
+  test('合格的 ADMIN_TOTP_KEY：正常启动', () => {
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([['未配置', undefined], ['长度不对', Buffer.alloc(16).toString('base64')], ['不是 base64', 'not base64 at all!!']])('生产环境 ADMIN_TOTP_KEY %s：拒绝启动', (_label, value) => {
+    if (value === undefined) delete process.env.ADMIN_TOTP_KEY; else process.env.ADMIN_TOTP_KEY = value;
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain('ADMIN_TOTP_KEY');
+  });
+
+  test('开发环境未配置：只提示', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.ADMIN_TOTP_KEY;
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(JSON.stringify(logger.warn.mock.calls)).toContain('ADMIN_TOTP_KEY');
   });
 });

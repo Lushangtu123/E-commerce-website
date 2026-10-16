@@ -193,7 +193,7 @@ cd E-commerce-website
 2. **配置并启动所有服务**
 ```bash
 cp .env.example .env
-# 编辑根目录 .env：JWT_SECRET 填 openssl rand -hex 32 的结果，
+# 编辑根目录 .env：JWT_SECRET 填 openssl rand -hex 32 的结果，ADMIN_TOTP_KEY 填 openssl rand -base64 32 的结果，
 # MYSQL_ROOT_PASSWORD、MYSQL_PASSWORD、RABBITMQ_PASSWORD 各填一个 openssl rand -hex 16 的结果
 docker-compose up -d
 ```
@@ -447,7 +447,10 @@ MySQL 搜索按空白拆词，每个词都须出现在品牌、标题或描述�
 
 ### 管理后台 (Admin APIs) 🆕
 **会话:**
-- `POST /api/admin/login` - 管理员登录
+- `POST /api/admin/login` - 管理员登录第一步：密码正确后返回 5 分钟有效的两步验证挑战（`two_factor: verify` 或 `setup`），不签发会话
+- `POST /api/admin/login/2fa` - 已绑定验证器的管理员第二步：提交 6 位动态码（每个时间步只能用一次）或一次性恢复码，签发会话 Cookie
+- `POST /api/admin/login/2fa/setup` - 尚未绑定的管理员第二步：获取新的 TOTP 密钥和 `otpauth://` 地址（加密保存）
+- `POST /api/admin/login/2fa/activate` - 用一个动态码确认绑定，返回 10 个一次性恢复码（只显示一次）并签发会话 Cookie
 - `POST /api/admin/logout` - 退出登录，并使该管理员的所有会话失效
 - `GET /api/admin/profile` - 管理员信息及权限
 

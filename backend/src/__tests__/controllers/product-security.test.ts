@@ -17,7 +17,7 @@ app.use('/cart', cartRoutes);
 // Controller input contract; production admin routes provide the authentication middleware.
 app.post('/admin-products', createProduct);
 app.put('/admin-products/:productId', updateProduct);
-const adminToken = jwt.sign({ adminId: 1, type: 'admin' }, 'test-jwt-secret');
+const adminToken = jwt.sign({ adminId: 1, type: 'admin', mfa: true }, 'test-jwt-secret');
 const userToken = jwt.sign({ userId: 1 }, 'test-jwt-secret');
 const sql = jest.fn();
 
@@ -28,7 +28,7 @@ beforeEach(() => {
     beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
   }) });
   sql.mockImplementation(async (statement: string) => {
-    if (statement.includes('FROM admins')) return [[{ admin_id: 1, username: 'editor', role_id: 2, status: 1 }]];
+    if (statement.includes('FROM admins')) return [[{ admin_id: 1, username: 'editor', role_id: 2, status: 1, totp_enabled_at: new Date() }]];
     if (statement.includes('FROM role_permissions')) return [[{ permission_code: 'product:create' }, { permission_code: 'product:edit' }]];
     return [[{ role_name: 'editor' }]];
   });
@@ -55,7 +55,7 @@ test('普通用户不能写商品，授权管理员可以创建商品', async ()
 
 test('缺少商品编辑权限的管理员不能修改商品', async () => {
   sql.mockImplementation(async (statement: string) => {
-    if (statement.includes('FROM admins')) return [[{ admin_id: 1, role_id: 2, status: 1 }]];
+    if (statement.includes('FROM admins')) return [[{ admin_id: 1, role_id: 2, status: 1, totp_enabled_at: new Date() }]];
     if (statement.includes('FROM role_permissions')) return [[]];
     return [[{ role_name: 'viewer' }]];
   });
