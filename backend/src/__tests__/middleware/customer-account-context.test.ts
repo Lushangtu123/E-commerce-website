@@ -66,7 +66,7 @@ describe('customer account request context', () => {
     (query as jest.Mock).mockResolvedValue([{ auth_version: 1, status: 1 }]);
     await request(app()).get('/account').set(headerName, '2').set('Cookie', `customer_session=${token(2)}`).expect(401);
     await request(app()).get('/account').set(headerName, '2')
-      .set('Authorization', `Bearer ${jwt.sign({ userId: 2, type: 'admin', adminId: 9 }, 'test-jwt-secret')}`).expect(401);
+      .set('Authorization', `Bearer ${jwt.sign({ userId: 2, type: 'admin', mfa: true, adminId: 9 }, 'test-jwt-secret')}`).expect(401);
     expect(handler).not.toHaveBeenCalled();
   });
 

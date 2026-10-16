@@ -31,17 +31,32 @@ export interface AdminSKUList {
   product: { product_id: number; title: string; title_en?: string | null; status: number };
   skus: AdminSKU[];
 }
+/** Administrator sign-in writes cookies, so it bypasses the axios client and its session headers. */
+async function postAdminAuth<T>(path: string, data: unknown): Promise<T> {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/admin/${path}`, {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw Object.assign(new Error('Administrator sign-in rejected'), { response: { status: response.status, data: result } });
+  return result as T;
+}
+
+/** A correct password only earns a short-lived challenge for the second factor. */
+export interface AdminTwoFactorChallenge { two_factor: 'verify' | 'setup'; challenge: string }
+export interface AdminTwoFactorSetup { secret: string; otpauth_uri: string }
+export interface AdminTwoFactorResult extends AdminAuthResult { recovery_codes?: string[]; recovery_codes_remaining?: number }
+
 export const adminApi = {
-  login: (data: { username: string; password: string }, attempt: AdminAuthAttempt) => adminSignIn(async () => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/admin/login`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      body: JSON.stringify(data),
-    });
-    const result = await response.json();
-    if (!response.ok) throw Object.assign(new Error('Administrator sign-in rejected'), { response: { status: response.status, data: result } });
-    return result as AdminAuthResult;
-  }, () => api.post('/admin/logout'), attempt),
+  /** Step 1: password. Issues no session. */
+  login: (data: { username: string; password: string }) => postAdminAuth<AdminTwoFactorChallenge>('login', data),
+  /** Step 2 for an administrator without an authenticator yet. */
+  twoFactorSetup: (challenge: string) => postAdminAuth<AdminTwoFactorSetup>('login/2fa/setup', { challenge }),
+  /** Step 2 that issues the session: a code (`verify`) or the first code of a new authenticator (`activate`). */
+  completeTwoFactor: (step: 'verify' | 'activate', data: { challenge: string; code: string }, attempt: AdminAuthAttempt) =>
+    adminSignIn(() => postAdminAuth<AdminTwoFactorResult>(step === 'verify' ? 'login/2fa' : 'login/2fa/activate', data),
+      () => api.post('/admin/logout'), attempt) as Promise<AdminTwoFactorResult>,
   /** Clears the administrator's httpOnly session cookie; works after the session has expired too. */
   logout: () => adminSessionLogout(() => api.post('/admin/logout')),
 };

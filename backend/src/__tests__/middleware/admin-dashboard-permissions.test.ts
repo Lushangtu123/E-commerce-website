@@ -15,7 +15,7 @@ let role: string;
 beforeEach(() => {
   permissions = []; role = 'product_admin';
   (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async (sql: string) => {
-    if (sql.includes('FROM admins')) return [[{ admin_id: 2, username: 'limited', role_id: 2, status: 1, auth_version: 0 }]];
+    if (sql.includes('FROM admins')) return [[{ admin_id: 2, username: 'limited', role_id: 2, status: 1, auth_version: 0, totp_enabled_at: new Date() }]];
     if (sql.includes('FROM role_permissions')) return [permissions.map(permission_code => ({ permission_code }))];
     if (sql.includes('FROM roles')) return [[{ role_name: role }]];
     throw new Error('Unexpected authorization query');
@@ -25,7 +25,7 @@ beforeEach(() => {
 function app() {
   const server = express(); server.use('/api/admin', adminRoutes); return server;
 }
-const authorization = () => `Bearer ${jwt.sign({ adminId: 2, type: 'admin', authVersion: 0 }, 'test-jwt-secret')}`;
+const authorization = () => `Bearer ${jwt.sign({ adminId: 2, type: 'admin', mfa: true, authVersion: 0 }, 'test-jwt-secret')}`;
 const statistics = ['/dashboard/stats', '/dashboard/top-products', '/dashboard/sales-trend'];
 
 test.each([...statistics, '/dashboard/recent-orders'])('%s rejects an unauthenticated caller', async path => {

@@ -37,7 +37,7 @@ function signIn(commit: (value: AdminAuthResult) => void = value => { startAdmin
     return { ok: true, status: 200, json: () => gate.promise } as Response;
   });
   vi.stubGlobal('fetch', fetch);
-  const result = adminApi.login({ username: second.username, password: 'DisposableFixture123!' }, adminAuthAttempt(() => true, commit));
+  const result = adminApi.completeTwoFactor('verify', { challenge: 'fixture-challenge', code: '123456' }, adminAuthAttempt(() => true, commit));
   return { gate, result, fetch };
 }
 beforeEach(() => {

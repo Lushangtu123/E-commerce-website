@@ -83,7 +83,7 @@ integration('真实 MySQL 个人统计与订单分页', () => {
 
   test('真实认证统计返回当前用户空计数，删除用户撤销会话401，不暴露用户私密字段', async () => {
     await request(app).get('/api/users/stats').expect(401);
-    const admin = jwt.sign({ adminId: 1, type: 'admin' }, 'test-jwt-secret');
+    const admin = jwt.sign({ adminId: 1, type: 'admin', mfa: true }, 'test-jwt-secret');
     await request(app).get('/api/users/stats').set('Authorization', `Bearer ${admin}`).expect(401);
     const response = await request(app).get('/api/users/stats?user_id=2').set(auth()).expect(200);
     expect(response.body).toEqual({ stats: { totalOrders: 0, pendingOrders: 0, totalCoupons: 0, availableCoupons: 0, favoriteCount: 0 } });

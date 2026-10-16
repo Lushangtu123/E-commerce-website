@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const answerAdminTwoFactor = require('./admin-two-factor.cjs');
 
 /** Real cookie revocation and re-login, in one page and in two tabs sharing Web Locks. */
 module.exports = async function adminAuthLifecycle({ browser, localPlatformScripts, watchConsole, errors }) {
@@ -20,6 +21,7 @@ module.exports = async function adminAuthLifecycle({ browser, localPlatformScrip
         await page.getByLabel('用户名', { exact: true }).fill('admin');
         await page.getByLabel('密码', { exact: true }).fill('BrowserFixtureAdmin123!');
         await page.getByRole('button', { name: '登录', exact: true }).click();
+        await answerAdminTwoFactor(page, 'admin');
       };
       await pageA.goto(`${frontend}/admin/login`); await submitLogin(pageA);
       await pageA.waitForURL(`${frontend}/admin/dashboard`);
@@ -35,15 +37,15 @@ module.exports = async function adminAuthLifecycle({ browser, localPlatformScrip
         return route.continue();
       });
       context.on('request', request => {
-        if (request.method() === 'POST' && request.url() === `${api}/admin/login`) loginWrites++;
+        if (request.method() === 'POST' && request.url() === `${api}/admin/login/2fa`) loginWrites++;
       });
       await pageA.getByRole('button', { name: '退出登录', exact: true }).click();
       await started; await pageA.waitForURL(`${frontend}/admin/login`);
       const pageB = secondTab ? await context.newPage() : pageA;
       if (secondTab) { observe(pageB, 'admin-auth-tabs-b'); await pageB.goto(`${frontend}/admin/login`); }
       await submitLogin(pageB);
-      await pageB.getByRole('button', { name: '登录中...', exact: true }).waitFor({ state: 'visible' });
-      assert.equal(loginWrites, 0, 'new credentials wait until the previous cookie revocation completes');
+      await pageB.getByRole('button', { name: '验证中...', exact: true }).waitFor({ state: 'visible' });
+      assert.equal(loginWrites, 0, 'the session-issuing second factor waits until the previous cookie revocation completes');
       assert.equal(logoutWrites, 1);
       releaseLogout();
       await pageB.waitForURL(`${frontend}/admin/dashboard`);

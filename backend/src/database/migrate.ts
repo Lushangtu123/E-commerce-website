@@ -14,6 +14,7 @@ import { migrateProductI18n } from './migrate-product-i18n';
 import { migrateProductCreations } from './migrate-product-creations';
 import { migrateCartAdds } from './migrate-cart-adds';
 import { withMigrationLock } from './migration-lock';
+import { migrateAdminTwoFactor } from './migrate-admin-two-factor';
 
 const migrations = [
   // 用户表
@@ -243,6 +244,7 @@ async function runMigrations() {
       await migrateProductI18n(pool);
       await migrateProductCreations(pool);
       await migrateCartAdds(pool);
+      await migrateAdminTwoFactor(pool);
     });
 
     logger.info('\n✓ 所有迁移执行成功！');

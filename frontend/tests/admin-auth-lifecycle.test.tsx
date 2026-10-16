@@ -18,11 +18,16 @@ const reply = (value: unknown = { admin }, status = 200) => ({ ok: status >= 200
 const originalAdapter = api.defaults.adapter;
 afterEach(() => { api.defaults.adapter = originalAdapter; });
 const form = () => document.querySelector('form')!;
-function prepareLogin(request: () => Promise<Response> = async () => reply()) {
-  const fetch = vi.fn(request); vi.stubGlobal('fetch', fetch);
+/** Passes the password step; `fetch` counts only the second-factor request that issues the session. */
+async function prepareLogin(request: () => Promise<Response> = async () => reply()) {
+  const fetch = vi.fn(request);
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => String(url).endsWith('/admin/login')
+    ? reply({ two_factor: 'verify', challenge: 'fixture-challenge' }) : fetch()));
   const view = render(<AdminLogin />);
   fireEvent.change(screen.getByLabelText('用户名'), { target: { value: admin.username } });
   fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'fixture-password' } });
+  fireEvent.submit(form()); await settle();
+  fireEvent.change(screen.getByLabelText('验证码'), { target: { value: '123456' } });
   return { fetch, view };
 }
 function cleanupRequests(handler: () => Promise<unknown> = async () => ({ message: '已退出登录' })) {
@@ -37,7 +42,7 @@ describe('administrator cookie write ordering', () => {
     const gate = deferred(); const clear = cleanupRequests(() => gate.promise);
     const layout = render(<AdminLayout>Protected administration</AdminLayout>); await settle();
     fireEvent.click(screen.getByRole('button', { name: '退出登录' })); await settle(); layout.unmount();
-    const login = prepareLogin();
+    const login = await prepareLogin();
     fireEvent.submit(form()); await settle();
     try {
       expect(clear).toHaveBeenCalledTimes(1);
@@ -50,14 +55,14 @@ describe('administrator cookie write ordering', () => {
   });
 
   it('makes duplicate submissions exclusive before React updates the disabled button', async () => {
-    const gate = deferred<Response>(); const login = prepareLogin(() => gate.promise);
+    const gate = deferred<Response>(); const login = await prepareLogin(() => gate.promise);
     submitTogether(form(), form()); await settle();
     try { expect(login.fetch).toHaveBeenCalledTimes(1); }
     finally { await act(async () => gate.resolve(reply())); await settle(); }
   });
 
   it('cleans an unmounted login response without publishing its profile or navigation', async () => {
-    const gate = deferred<Response>(); const clear = cleanupRequests(); const login = prepareLogin(() => gate.promise);
+    const gate = deferred<Response>(); const clear = cleanupRequests(); const login = await prepareLogin(() => gate.promise);
     fireEvent.submit(form()); await settle(); login.view.unmount();
     await act(async () => gate.resolve(reply())); await settle();
     expect(clear).toHaveBeenCalledTimes(1);
@@ -66,10 +71,10 @@ describe('administrator cookie write ordering', () => {
   });
 
   it('cleans an abandoned login before a later page publishes its own session', async () => {
-    const gate = deferred<Response>(); const clear = cleanupRequests(); const first = prepareLogin(() => gate.promise);
+    const gate = deferred<Response>(); const clear = cleanupRequests(); const first = await prepareLogin(() => gate.promise);
     fireEvent.submit(form()); await settle(); first.view.unmount();
     const secondAdmin = { ...admin, admin_id: 2, username: 'Second administrator' };
-    const second = prepareLogin(async () => reply({ admin: secondAdmin })); fireEvent.submit(form()); await settle();
+    const second = await prepareLogin(async () => reply({ admin: secondAdmin })); fireEvent.submit(form()); await settle();
     try { expect(second.fetch).not.toHaveBeenCalled(); }
     finally { await act(async () => gate.resolve(reply())); await settle(); }
     expect(clear).toHaveBeenCalledTimes(1); expect(second.fetch).toHaveBeenCalledTimes(1);
@@ -78,7 +83,7 @@ describe('administrator cookie write ordering', () => {
   });
 
   it('cleans a lost login response once without automatically resending credentials', async () => {
-    const clear = cleanupRequests(); const login = prepareLogin(async () => { throw new TypeError('Response lost'); });
+    const clear = cleanupRequests(); const login = await prepareLogin(async () => { throw new TypeError('Response lost'); });
     fireEvent.submit(form()); await settle();
     expect(login.fetch).toHaveBeenCalledTimes(1); expect(clear).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem('admin_session')).toBeNull();
@@ -89,7 +94,7 @@ describe('administrator cookie write ordering', () => {
     localStorage.setItem('admin_session_cleanup_pending', '1');
     let unavailable = true;
     const clear = cleanupRequests(async () => { if (unavailable) throw new Error('Cleanup unavailable'); return { message: '已退出登录' }; });
-    const login = prepareLogin(); fireEvent.submit(form()); await settle();
+    const login = await prepareLogin(); fireEvent.submit(form()); await settle();
     try {
       expect(login.fetch).not.toHaveBeenCalled(); expect(clear).toHaveBeenCalledTimes(1);
       expect(localStorage.getItem('admin_session_cleanup_pending')).toBe('1');
@@ -100,7 +105,7 @@ describe('administrator cookie write ordering', () => {
   });
 
   it.each([{ admin: {} }, { admin: [] }, { admin: { username: 'Fixture admin' } }, { admin: { ...admin, admin_id: -1 } }])('cleans an incomplete successful login %j', async value => {
-    const clear = cleanupRequests(); prepareLogin(async () => reply(value)); fireEvent.submit(form()); await settle();
+    const clear = cleanupRequests(); await prepareLogin(async () => reply(value)); fireEvent.submit(form()); await settle();
     expect(clear).toHaveBeenCalledTimes(1); expect(localStorage.getItem('admin_session')).toBeNull();
     expect(toast.success).not.toHaveBeenCalled(); expect(router.push).not.toHaveBeenCalled();
   });
@@ -109,14 +114,14 @@ describe('administrator cookie write ordering', () => {
     const gate = deferred();
     const request = vi.fn(async (_name: string, run: () => Promise<unknown>) => { await gate.promise; return run(); });
     vi.spyOn(navigator, 'locks', 'get').mockReturnValue({ request } as unknown as LockManager);
-    const login = prepareLogin(); fireEvent.submit(form()); await settle();
+    const login = await prepareLogin(); fireEvent.submit(form()); await settle();
     try { expect(request.mock.calls[0]?.[0]).toBe('admin-session-cookie'); expect(login.fetch).not.toHaveBeenCalled(); }
     finally { await act(async () => gate.resolve({})); await settle(); }
     expect(login.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('records an unfinished login before its request so a reload must clean the cookie first', async () => {
-    const gate = deferred<Response>(); const login = prepareLogin(() => gate.promise);
+    const gate = deferred<Response>(); const login = await prepareLogin(() => gate.promise);
     fireEvent.submit(form()); await settle();
     try { expect(localStorage.getItem('admin_session_cleanup_pending')).toBe('1'); }
     finally { await act(async () => gate.resolve(reply())); await settle(); }
@@ -125,7 +130,7 @@ describe('administrator cookie write ordering', () => {
   });
 
   it('never publishes a late login over a replacement administrator session', async () => {
-    const gate = deferred<Response>(); const clear = cleanupRequests(); prepareLogin(() => gate.promise);
+    const gate = deferred<Response>(); const clear = cleanupRequests(); await prepareLogin(() => gate.promise);
     fireEvent.submit(form()); await settle();
     startAdminSession({ admin_id: 2, username: 'Replacement administrator' });
     const replacement = localStorage.getItem('admin_session');
@@ -137,7 +142,7 @@ describe('administrator cookie write ordering', () => {
   });
 
   it('reports unknown login cleanup in English after the locale changes', async () => {
-    const gate = deferred<Response>(); cleanupRequests(); prepareLogin(() => gate.promise);
+    const gate = deferred<Response>(); cleanupRequests(); await prepareLogin(() => gate.promise);
     fireEvent.submit(form()); await settle();
     act(() => useLocaleStore.getState().setLocale('en'));
     await act(async () => gate.reject(new TypeError('Lost reply'))); await settle();
@@ -151,7 +156,7 @@ describe('administrator cookie write ordering', () => {
       throw new AxiosError('Unauthorized cleanup', AxiosError.ERR_BAD_RESPONSE, config, undefined,
         { config, status: 401, statusText: 'Unauthorized', headers: {}, data: { error: '未认证' } });
     };
-    const first = prepareLogin(() => answer.promise); fireEvent.submit(form()); await settle(); first.view.unmount();
+    const first = await prepareLogin(() => answer.promise); fireEvent.submit(form()); await settle(); first.view.unmount();
     await act(async () => answer.resolve(reply())); await settle();
     const replacement = { admin_id: 2, username: 'Replacement administrator' };
     startAdminSession(replacement); const sessionId = localStorage.getItem('admin_session');
@@ -160,18 +165,18 @@ describe('administrator cookie write ordering', () => {
     expect(JSON.parse(localStorage.getItem('admin_user')!)).toMatchObject(replacement);
     expect(toast.success).not.toHaveBeenCalled(); expect(router.push).not.toHaveBeenCalled();
     expect(localStorage.getItem('admin_session_cleanup_pending')).toBe('1');
-    cleanupRequests(); const next = prepareLogin(async () => reply({ admin: replacement }));
+    cleanupRequests(); const next = await prepareLogin(async () => reply({ admin: replacement }));
     fireEvent.submit(form()); await settle(); expect(next.fetch).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem('admin_session_cleanup_pending')).toBeNull();
   });
 
   it('does not send credentials when storage cannot safely record the sign-in', async () => {
-    const clear = cleanupRequests(); const login = prepareLogin();
+    const clear = cleanupRequests(); const login = await prepareLogin();
     const storage = vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new Error('Storage denied'); });
     fireEvent.submit(form()); await settle();
     expect(login.fetch).not.toHaveBeenCalled(); expect(clear).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith('管理员会话清理尚未确认，请重试登录');
-    expect(screen.getByRole('button', { name: '登录' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '验证并登录' })).toBeEnabled();
     storage.mockRestore(); fireEvent.submit(form()); await settle();
     expect(login.fetch).toHaveBeenCalledTimes(1); expect(clear).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('登录成功');
@@ -179,7 +184,7 @@ describe('administrator cookie write ordering', () => {
 
   it.each([false, true])('retires its own partially stored profile and reports the failed publication (previous session: %s)', async previous => {
     if (previous) startAdminSession({ admin_id: 2, username: 'Earlier administrator' });
-    const clear = cleanupRequests(); const login = prepareLogin();
+    const clear = cleanupRequests(); const login = await prepareLogin();
     const save = localStorage.setItem.bind(localStorage);
     vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
       if (key === 'admin_user') throw new DOMException('Quota exhausted', 'QuotaExceededError');
@@ -195,7 +200,7 @@ describe('administrator cookie write ordering', () => {
 
   it('cannot retire another session installed during a failed profile publication', async () => {
     startAdminSession({ admin_id: 2, username: 'Earlier administrator' });
-    const clear = cleanupRequests(); prepareLogin();
+    const clear = cleanupRequests(); await prepareLogin();
     const replacement = { admin_id: 3, username: 'Concurrent administrator' };
     const save = localStorage.setItem.bind(localStorage);
     vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {

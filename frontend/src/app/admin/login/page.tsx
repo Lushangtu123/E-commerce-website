@@ -13,6 +13,7 @@ import { getAdminSessionId, startAdminSession } from '@/lib/admin-session';
 import { adminApi } from '@/lib/api';
 import { adminAuthAttempt, AdminAuthAbandoned, AdminAuthUnconfirmed, type AdminAuthAttempt } from '@/lib/admin-auth-flow';
 import { requestFailure } from '@/lib/api-error';
+import AdminTwoFactorStep, { type AdminTwoFactorView } from '@/components/AdminTwoFactorStep';
 
 export default function AdminLoginPage() {
   const { t } = useI18n();
@@ -22,42 +23,81 @@ export default function AdminLoginPage() {
     password: ''
   });
   const [loading, setLoading] = useState(false);
+  // After the password: the second factor, or binding an authenticator first. Recovery codes are shown once.
+  const [step, setStep] = useState<{ kind: 'password' } | AdminTwoFactorView>({ kind: 'password' });
   const mounted = useRef(true), mutation = useRef<object | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; mutation.current = null; };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /** Runs one step at a time; a step started before a newer one never reports. */
+  const run = async (work: (alive: () => boolean) => Promise<void>) => {
     if (!mounted.current || mutation.current) return;
     const operation = {}; mutation.current = operation;
     const alive = () => mounted.current && mutation.current === operation;
-    let attempt: AdminAuthAttempt | undefined;
-    let publishedSessionId: string | null = null;
     setLoading(true);
+    try { await work(alive); }
+    finally { if (alive()) { mutation.current = null; setLoading(false); } }
+  };
 
-    try {
-      attempt = adminAuthAttempt(alive, data => {
-        publishedSessionId = startAdminSession(data.admin);
-      });
-      await adminApi.login(formData, attempt);
-      if (alive() && publishedSessionId && getAdminSessionId() === publishedSessionId) {
+  const fail = (error: unknown, fallback: string) => {
+    const failure = requestFailure(error).response;
+    // An expired or superseded challenge means starting again from the password.
+    if (failure?.status === 401 && failure.data?.error === '验证已过期，请重新输入密码') setStep({ kind: 'password' });
+    logger.error('管理员登录请求失败');
+    toast.error(translate(failure?.data?.error || fallback));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async alive => {
+      try {
+        const answer = await adminApi.login(formData);
+        if (!alive()) return;
+        setFormData(previous => ({ ...previous, password: '' }));
+        if (answer.two_factor === 'verify') { setStep({ kind: 'verify', challenge: answer.challenge }); return; }
+        const setup = await adminApi.twoFactorSetup(answer.challenge);
+        if (alive()) setStep({ kind: 'setup', challenge: answer.challenge, setup });
+      } catch (error) {
+        if (alive()) fail(error, '登录失败');
+      }
+    });
+  };
+
+  /** The step that issues the session goes through the shared sign-in lock and publication. */
+  const completeTwoFactor = (code: string) => {
+    if (step.kind !== 'verify' && step.kind !== 'setup') return;
+    const current = step;
+    void run(async alive => {
+      let attempt: AdminAuthAttempt | undefined;
+      let publishedSessionId: string | null = null;
+      try {
+        attempt = adminAuthAttempt(alive, data => { publishedSessionId = startAdminSession(data.admin); });
+        const result = await adminApi.completeTwoFactor(current.kind === 'verify' ? 'verify' : 'activate',
+          { challenge: current.challenge, code }, attempt);
+        if (!alive() || !publishedSessionId || getAdminSessionId() !== publishedSessionId) return;
+        if (result.recovery_codes?.length) { setStep({ kind: 'recovery', codes: result.recovery_codes }); return; }
+        if (typeof result.recovery_codes_remaining === 'number' && result.recovery_codes_remaining <= 3) {
+          toast.error(translate('恢复码只剩 {count} 个，请尽快重置两步验证以生成新的恢复码', { count: result.recovery_codes_remaining }));
+        }
         toast.success(translate('登录成功'));
         router.push('/admin/dashboard');
+      } catch (error) {
+        if (!alive() || error instanceof AdminAuthAbandoned) return;
+        if (error instanceof AdminAuthUnconfirmed) {
+          if (error.report) toast.error(translate(error.message));
+          return;
+        }
+        if (!attempt?.current()) return;
+        fail(error, '验证失败');
       }
-    } catch (error) {
-      if (!alive() || error instanceof AdminAuthAbandoned) return;
-      if (error instanceof AdminAuthUnconfirmed) {
-        if (error.report) toast.error(translate(error.message));
-        return;
-      }
-      if (!attempt?.current()) return;
-      logger.error('管理员登录请求失败');
-      toast.error(translate(requestFailure(error).response?.data?.error || '登录失败'));
-    } finally {
-      if (alive()) { mutation.current = null; setLoading(false); }
-    }
+    });
+  };
+
+  const finishRecovery = () => {
+    toast.success(translate('登录成功'));
+    router.push('/admin/dashboard');
   };
 
   return (
@@ -77,6 +117,10 @@ export default function AdminLoginPage() {
 
         {/* 登录表单 */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
+          {step.kind !== 'password' ? (
+            <AdminTwoFactorStep key={step.kind} step={step} loading={loading} onSubmitCode={completeTwoFactor} onFinish={finishRecovery}
+              onRestart={() => { if (!mutation.current) setStep({ kind: 'password' }); }} />
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 用户名 */}
             <div>
@@ -145,11 +189,14 @@ export default function AdminLoginPage() {
               )}
             </button>
           </form>
+          )}
 
           {/* 部署账号提示 */}
-          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-700">{t("请使用部署时配置的管理员账号和密码登录。")}</p>
-          </div>
+          {step.kind === 'password' && (
+            <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <p className="text-sm text-gray-700">{t("请使用部署时配置的管理员账号和密码登录。")}</p>
+            </div>
+          )}
 
           {/* 返回首页 */}
           <div className="mt-6 text-center">

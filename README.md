@@ -206,7 +206,8 @@ cd E-commerce-website
 2. **Configure and start all services**
 ```bash
 cp .env.example .env
-# In the root .env: set JWT_SECRET to the output of openssl rand -hex 32, and set
+# In the root .env: set JWT_SECRET to the output of openssl rand -hex 32, ADMIN_TOTP_KEY to the output of
+# openssl rand -base64 32, and set
 # MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD and RABBITMQ_PASSWORD to the output of openssl rand -hex 16 each
 docker-compose up -d
 ```
@@ -487,7 +488,10 @@ Available-coupon reads validate rules, quantities and requested pagination befor
 
 ### Admin APIs
 **Session:**
-- `POST /api/admin/login` - Administrator sign-in
+- `POST /api/admin/login` - Administrator sign-in, step 1: a correct password returns a five-minute two-factor challenge (`two_factor: verify` or `setup`), never a session
+- `POST /api/admin/login/2fa` - Step 2 for administrators with an authenticator: a 6-digit code (each time step usable once) or a one-time recovery code; issues the session cookie
+- `POST /api/admin/login/2fa/setup` - Step 2 for administrators without one yet: returns a new TOTP secret and `otpauth://` URI (stored encrypted)
+- `POST /api/admin/login/2fa/activate` - Confirms the authenticator with one code, returns 10 one-time recovery codes (shown once) and issues the session cookie
 - `POST /api/admin/logout` - Sign out and invalidate every session of this administrator
 - `GET /api/admin/profile` - Administrator profile and permissions
 

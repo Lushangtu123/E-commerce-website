@@ -18,7 +18,7 @@ beforeEach(() => { jest.clearAllMocks(); mockStats([{ ...stats }]); });
 
 test('个人统计需要用户认证，管理员令牌或匿名不能读取', async () => {
   await request(app).get('/api/users/stats').expect(401);
-  const admin = jwt.sign({ adminId: 1, type: 'admin' }, 'test-jwt-secret');
+  const admin = jwt.sign({ adminId: 1, type: 'admin', mfa: true }, 'test-jwt-secret');
   await request(app).get('/api/users/stats').set('Authorization', `Bearer ${admin}`).expect(401);
   expect(query).not.toHaveBeenCalled();
 });

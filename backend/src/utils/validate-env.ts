@@ -2,6 +2,7 @@ import Joi from 'joi';
 import logger from './logger';
 import { DEV_JWT_SECRET } from './jwt-secret';
 import { passwordMailConfig } from '../services/password-mail.service';
+import { secretBoxKeyProblem } from './secret-box';
 
 /** 已知的弱密钥默认值，生产环境禁止使用 */
 const WEAK_SECRETS = new Set([
@@ -94,6 +95,18 @@ export function validateEnv(): void {
       process.exit(1);
     }
     logger.warn('未配置 JWT_SECRET，使用开发默认值（仅限开发环境）');
+  }
+
+  // 管理员两步验证强制开启，加密 TOTP 密钥的 ADMIN_TOTP_KEY 必须有效
+  const totpKeyProblem = secretBoxKeyProblem(process.env.ADMIN_TOTP_KEY);
+  if (totpKeyProblem && (isProd || process.env.ADMIN_TOTP_KEY)) {
+    if (isProd) {
+      logger.error(`${totpKeyProblem}，管理员无法完成两步验证，拒绝启动`);
+      process.exit(1);
+    }
+    logger.warn(totpKeyProblem);
+  } else if (totpKeyProblem) {
+    logger.warn('未配置 ADMIN_TOTP_KEY，管理员无法绑定两步验证（开发环境可用 openssl rand -base64 32 生成）');
   }
 
   // 轮换期的旧密钥只用于校验已签发的令牌（docs/KEY_ROTATION.md）
