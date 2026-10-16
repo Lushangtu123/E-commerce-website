@@ -62,6 +62,9 @@ const ENV_FORMAT = Joi.object({
   RABBITMQ_URL: uri('amqp', 'amqps'),
   ELASTICSEARCH_URL: uri('http', 'https'),
   SENTRY_DSN: uri('https', 'http'),
+  // The internal job routes reject shorter secrets, so a short one would silently stop the scheduled jobs.
+  CRON_SECRET: Joi.string().min(32),
+  CRON_SECRET_PREVIOUS: Joi.string().min(32),
   SENTRY_ENVIRONMENT: Joi.string().pattern(/^[A-Za-z0-9._-]{1,64}$/),
   // jsonwebtoken 把不带单位的字符串当作毫秒，因此要求写单位
   JWT_EXPIRES_IN: Joi.string().pattern(/^[1-9]\d*(s|m|h|d|w|y)$/)
@@ -91,6 +94,16 @@ export function validateEnv(): void {
       process.exit(1);
     }
     logger.warn('未配置 JWT_SECRET，使用开发默认值（仅限开发环境）');
+  }
+
+  // 轮换期的旧密钥只用于校验已签发的令牌（docs/KEY_ROTATION.md）
+  const previousJwtSecret = process.env.JWT_SECRET_PREVIOUS;
+  if (previousJwtSecret && (WEAK_SECRETS.has(previousJwtSecret) || previousJwtSecret === jwtSecret)) {
+    if (isProd) {
+      logger.error('JWT_SECRET_PREVIOUS 不能是弱密钥，也不能与 JWT_SECRET 相同，拒绝启动');
+      process.exit(1);
+    }
+    logger.warn('JWT_SECRET_PREVIOUS 是弱密钥或与 JWT_SECRET 相同');
   }
 
   if (!process.env.CORS_ORIGIN) {

@@ -176,3 +176,34 @@ describe('validateEnv 配置格式', () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 });
+
+describe('validateEnv 密钥轮换', () => {
+  const STRONG = 'a-strong-random-secret-value-0123456789';
+  beforeEach(() => {
+    Object.assign(process.env, { NODE_ENV: 'production', JWT_SECRET: STRONG, CORS_ORIGIN: 'https://a.com' });
+    delete process.env.JWT_SECRET_PREVIOUS; delete process.env.CRON_SECRET; delete process.env.CRON_SECRET_PREVIOUS;
+  });
+
+  test('轮换期的旧 JWT 密钥：合格时正常启动', () => {
+    process.env.JWT_SECRET_PREVIOUS = 'the-old-strong-random-secret-0123456789';
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['与当前密钥相同', STRONG],
+    ['是已知弱密钥', 'secret'],
+  ])('旧 JWT 密钥%s：拒绝启动', (_label, value) => {
+    process.env.JWT_SECRET_PREVIOUS = value;
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain('JWT_SECRET_PREVIOUS');
+  });
+
+  test.each([['CRON_SECRET'], ['CRON_SECRET_PREVIOUS']])('%s 少于 32 个字符：拒绝启动', name => {
+    process.env[name] = 'short';
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain(name);
+  });
+});

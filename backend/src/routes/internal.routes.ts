@@ -6,14 +6,17 @@ import logger from '../utils/logger';
 
 const router = Router();
 
-/** Scheduled jobs authenticate with `Authorization: Bearer <CRON_SECRET>` (at least 32 characters). */
+/**
+ * Scheduled jobs authenticate with `Authorization: Bearer <CRON_SECRET>` (at least 32 characters).
+ * During a rotation CRON_SECRET_PREVIOUS is accepted as well (docs/KEY_ROTATION.md).
+ */
 function requireCronSecret(req: Request, res: Response, next: NextFunction) {
-  const secret = process.env.CRON_SECRET;
   const supplied = Buffer.from(req.get('authorization') || '');
-  const expected = Buffer.from(`Bearer ${secret || ''}`);
-  if (!secret || secret.length < 32 || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-    return res.status(401).json({ error: '未授权的定时任务' });
-  }
+  const accepted = [process.env.CRON_SECRET, process.env.CRON_SECRET_PREVIOUS].some(secret => {
+    const expected = Buffer.from(`Bearer ${secret || ''}`);
+    return !!secret && secret.length >= 32 && supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  });
+  if (!accepted) return res.status(401).json({ error: '未授权的定时任务' });
   next();
 }
 
