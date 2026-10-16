@@ -51,6 +51,8 @@ describe.each(pages)('failed %s', (route, Page, values) => {
       const input = document.querySelector<HTMLInputElement>(route === 'register' ? `input[name="${name}"]` : `input[type="${name}"]`)!;
       fireEvent.change(input, { target: { name, value } });
     }
+    const agreement = document.querySelector<HTMLInputElement>('input[name="agreement"]');
+    if (agreement) fireEvent.click(agreement);
     fireEvent.submit(document.querySelector('form')!);
     await settle();
 

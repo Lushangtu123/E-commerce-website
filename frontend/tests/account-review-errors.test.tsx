@@ -40,6 +40,7 @@ const input = (name: string) => document.querySelector<HTMLInputElement>(`input[
 
 async function register(fields: Record<string, string>) {
   for (const [name, value] of Object.entries(fields)) fireEvent.change(input(name), { target: { name, value } });
+  fireEvent.click(input('agreement'));
   fireEvent.submit(document.querySelector('form')!);
   await settle();
 }

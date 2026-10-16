@@ -54,7 +54,10 @@ function fill(route: 'login' | 'register', account = userA) {
   if (route === 'register') fireEvent.change(screen.getByLabelText('用户名'), { target: { value: account.username } });
   fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: account.email } });
   fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'private password 123' } });
-  if (route === 'register') fireEvent.change(screen.getByLabelText('确认密码'), { target: { value: 'private password 123' } });
+  if (route === 'register') {
+    fireEvent.change(screen.getByLabelText('确认密码'), { target: { value: 'private password 123' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /我已阅读并同意/ }));
+  }
 }
 
 beforeEach(() => {
