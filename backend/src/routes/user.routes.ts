@@ -317,4 +317,38 @@ router.get('/data-export', authMiddleware, authLimiter, UserController.exportDat
  */
 router.put('/profile', authMiddleware, UserController.updateProfile);
 
+/**
+ * @openapi
+ * /api/users/account/delete:
+ *   post:
+ *     tags: [用户]
+ *     summary: 注销账号
+ *     description: 需要当前密码。有未完成的订单（待支付、已支付、已发货）或未结案的售后时返回 409。成功后删除收货地址、购物车、收藏、浏览与搜索记录、未使用的优惠券、密码重置凭据和访问记录；订单、售后、已使用的优惠券按《电子商务法》保留，评价保留但作者显示为已注销；用户行去身份化，所有登录失效并清除会话 Cookie。
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             additionalProperties: false
+ *             properties:
+ *               password: { type: string, minLength: 1, maxLength: 1024 }
+ *     responses:
+ *       200:
+ *         description: 已注销
+ *       400:
+ *         description: 未提供密码、字段无效或密码错误
+ *       401:
+ *         description: 未登录或 Token 无效
+ *       409:
+ *         description: 有未完成的订单或售后
+ *       429:
+ *         description: 请求过于频繁
+ *       503:
+ *         description: 暂不可用，未修改数据
+ */
+router.post('/account/delete', authMiddleware, authLimiter, UserController.deleteAccount);
+
 export default router;

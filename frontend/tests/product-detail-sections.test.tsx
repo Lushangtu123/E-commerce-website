@@ -1,9 +1,11 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import ProductReviewList from '@/components/ProductReviewList';
 import RelatedProducts from '@/components/RelatedProducts';
 import type { Product } from '@/lib/api';
 import { render } from './helpers';
+import { readProductReviews } from '@/lib/product-region-response';
+import { useLocaleStore } from '@/store/useLocaleStore';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -29,6 +31,20 @@ describe('product reviews', () => {
     const greyed = (index: number) => screen.getAllByLabelText(/^\d 分$/)[index].querySelectorAll('svg.text-gray-200').length;
     expect([greyed(0), greyed(1)]).toEqual([1, 3]);
     expect(screen.queryByText('暂无评价')).not.toBeInTheDocument();
+  });
+
+  it('shows a deleted author as a deleted user, in either language', () => {
+    render(<ProductReviewList reviews={[{ review_id: 3, rating: 5, content: 'Kept', username: null, author_deleted: true }]} />);
+    const item = screen.getByLabelText('5 分').closest('.border-b')!;
+    expect(item.textContent).toMatch(/^已已注销用户.*Kept$/);
+    act(() => useLocaleStore.setState({ locale: 'en' }));
+    expect(screen.getByText('Deleted user')).toBeInTheDocument();
+  });
+
+  it('rejects a review whose deleted flag is not a boolean', () => {
+    const page = (review: object) => ({ reviews: [{ review_id: 1, rating: 5, username: null, content: 'x', created_at: null, ...review }], total: 1 });
+    expect(readProductReviews(page({ author_deleted: true }), 1, 1).reviews[0].author_deleted).toBe(true);
+    expect(() => readProductReviews(page({ author_deleted: 1 }), 1, 1)).toThrow('Invalid product review');
   });
 
   it('says when there are no reviews yet', () => {
