@@ -13,6 +13,9 @@ export async function migrateAccountSecurity(pool: Pool): Promise<void> {
   if (!columns.some(column => column.COLUMN_NAME === 'auth_version')) {
     await pool.query('ALTER TABLE users ADD COLUMN auth_version INT UNSIGNED NOT NULL DEFAULT 0');
   }
+  if (!columns.some(column => column.COLUMN_NAME === 'deleted_at')) {
+    await pool.query("ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL COMMENT '账号注销时间；注销后用户行已去身份化'");
+  }
   // 管理员表由 admin-migrate 创建；已存在时补上会话版本列，未创建时留给 admin-migrate
   const [adminColumns] = await pool.query<RowDataPacket[]>(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admins'"

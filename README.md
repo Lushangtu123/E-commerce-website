@@ -330,6 +330,7 @@ E-commerce-website/
 - `POST /api/users/login` - Sign in
 - `GET /api/users/profile` - Get the current profile
 - `GET /api/users/data-export` - Download all of the signed-in customer's personal data as a JSON file (consistent snapshot; no password hash or internal keys)
+- `POST /api/users/account/delete` - Delete the signed-in account (current password required; refused while an order or after-sales request is open). Personal data is deleted, orders and after-sales records are kept as the E-Commerce Law requires, reviews stay without the author's name, and every session ends
 - `GET /api/users/stats` - Get the user's total orders, unpaid orders, claimed coupons, currently usable coupons and favourites
 The account centre requires all five statistics to be nonnegative integer counts. A null or incomplete successful reply shows a retryable loading error; genuine zero counts display normally.
 - `PUT /api/users/profile` - Update the profile

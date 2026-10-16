@@ -140,9 +140,11 @@ export const updateUserStatus = async (req: Request, res: Response) => {
     const { status } = body;
     const changed = await adminWriteTransaction(async connection => {
       const [users] = await connection.execute<import('mysql2').RowDataPacket[]>(
-        'SELECT user_id, username FROM users WHERE user_id = ? FOR UPDATE', [userId]
+        'SELECT user_id, username, deleted_at FROM users WHERE user_id = ? FOR UPDATE', [userId]
       );
       if (!users.length) return false;
+      // A deleted account has no usable credentials or personal data left; it stays disabled.
+      if (users[0].deleted_at && status === 1) return 'deleted' as const;
       // A failed audit must also roll back session revocation.
       await connection.execute(
         'UPDATE users SET auth_version = auth_version + IF(? = 0, 1, 0), status = ?, updated_at = NOW() WHERE user_id = ?',
@@ -153,6 +155,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
       return true;
     });
     if (!changed) return res.status(404).json({ error: '用户不存在' });
+    if (changed === 'deleted') return res.status(409).json({ error: '已注销的账户不能启用' });
 
     res.json({ message: '更新成功', status });
   } catch (error) {

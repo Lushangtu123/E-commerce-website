@@ -16,16 +16,18 @@ test('upgrades legacy customer and admin tables once without overwriting existin
   await migrateAccountSecurity(pool); await migrateAccountSecurity(pool);
   expect(columns.users.has('status')).toBe(true);
   expect(columns.users.has('auth_version')).toBe(true);
+  expect(columns.users.has('deleted_at')).toBe(true);
   expect(columns.admins.has('auth_version')).toBe(true);
   const alterations = query.mock.calls.map(([sql]) => sql).filter(sql => sql.startsWith('ALTER'));
-  expect(alterations).toHaveLength(3);
+  expect(alterations).toHaveLength(4);
+  expect(alterations.find(sql => sql.includes('ADD COLUMN deleted_at'))).toContain('NULL DEFAULT NULL');
   expect(alterations.find(sql => sql.includes('ADD COLUMN status'))).toContain('DEFAULT 1');
   expect(query.mock.calls.some(([sql]) => sql.startsWith('UPDATE') || sql.startsWith('DELETE'))).toBe(false);
 });
 
 test('already migrated status and auth versions are preserved', async () => {
   const query = jest.fn(async (sql: string) => [sql.includes('INFORMATION_SCHEMA')
-    ? ['user_id', 'status', 'auth_version'].map(COLUMN_NAME => ({ COLUMN_NAME })) : {}]);
+    ? ['user_id', 'status', 'auth_version', 'deleted_at'].map(COLUMN_NAME => ({ COLUMN_NAME })) : {}]);
   await migrateAccountSecurity({ query } as unknown as Pool);
   expect(query.mock.calls.some(([sql]) => sql.startsWith('ALTER'))).toBe(false);
 });

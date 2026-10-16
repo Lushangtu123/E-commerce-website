@@ -16,8 +16,10 @@ export interface Review {
   images?: string[];
   created_at: Date;
   // 关联用户信息
-  username?: string;
-  avatar_url?: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  /** The author deleted their account: the review stays without a name or avatar. */
+  author_deleted?: boolean;
   product_title?: string | null;
   product_title_en?: string | null;
 }
@@ -93,7 +95,9 @@ export class ReviewModel {
 
     // 获取评论列表
     const reviews = await query<(Review & RowDataPacket)[]>(
-      `SELECT r.*, u.username, u.avatar_url
+      // A deleted account keeps its reviews without its name or avatar.
+      `SELECT r.*, IF(u.deleted_at IS NULL, u.username, NULL) AS username, IF(u.deleted_at IS NULL, u.avatar_url, NULL) AS avatar_url,
+         (u.deleted_at IS NOT NULL) AS author_deleted
        FROM reviews r
        LEFT JOIN users u ON r.user_id = u.user_id
        WHERE r.product_id = ?
@@ -102,7 +106,7 @@ export class ReviewModel {
       [productId, limit, offset]
     );
 
-    return { reviews, total };
+    return { reviews: reviews.map(review => ({ ...review, author_deleted: Boolean(review.author_deleted) })), total };
   }
 
   // 获取用户评论列表

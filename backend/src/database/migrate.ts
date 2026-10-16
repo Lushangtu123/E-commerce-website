@@ -25,6 +25,7 @@ const migrations = [
     password_hash VARCHAR(255) NOT NULL,
     status TINYINT NOT NULL DEFAULT 1 COMMENT '1:启用 0:禁用',
     auth_version INT UNSIGNED NOT NULL DEFAULT 0,
+    deleted_at TIMESTAMP NULL DEFAULT NULL COMMENT '账号注销时间；注销后用户行已去身份化',
     phone VARCHAR(20),
     avatar_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
