@@ -83,6 +83,13 @@ ADMIN_LOGIN=$(curl -s -i -X POST "${BASE_URL}/admin/login" \
     "username": "admin",
     "password": "admin123"
   }')
+# 管理员必须两步验证：先在网页登录页绑定验证器，再输入当前动态码（或设置 ADMIN_TOTP_CODE）
+ADMIN_CHALLENGE=$(echo "$ADMIN_LOGIN" | grep -o '"challenge":"[^"]*"' | cut -d'"' -f4)
+if [ -z "${ADMIN_TOTP_CODE:-}" ]; then read -r -p "验证器动态码: " ADMIN_TOTP_CODE; fi
+ADMIN_LOGIN=$(curl -s -i -X POST "${BASE_URL}/admin/login/2fa" \
+  -H "X-Requested-With: XMLHttpRequest" \
+  -H "Content-Type: application/json" \
+  -d "{\"challenge\":\"$ADMIN_CHALLENGE\",\"code\":\"$ADMIN_TOTP_CODE\"}")
 ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | grep -o 'admin_session=[^;]*' | head -1 | cut -d= -f2)
 
 if [ -n "$ADMIN_TOKEN" ]; then

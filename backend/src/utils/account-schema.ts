@@ -1,6 +1,6 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 
-const REQUIRED = ['users.auth_version', 'users.status', 'users.deleted_at', 'admins.auth_version'];
+const REQUIRED = ['users.auth_version', 'users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step'];
 
 /** Read-only release gate; never performs migrations during an API request or build. */
 export async function missingAccountColumns(pool: Pool): Promise<string[]> {

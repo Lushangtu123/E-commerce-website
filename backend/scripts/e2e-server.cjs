@@ -21,6 +21,8 @@ process.env.PAYMENT_MODE = 'demo';
 process.env.JWT_SECRET = 'isolated-browser-fixture-only-secret';
 process.env.CORS_ORIGIN = 'http://127.0.0.1:3100';
 process.env.ADMIN_BOOTSTRAP_PASSWORD = 'BrowserFixtureAdmin123!';
+const fixtureTwoFactor = require('./e2e-admin-two-factor.cjs');
+process.env.ADMIN_TOTP_KEY = fixtureTwoFactor.ADMIN_TOTP_KEY;
 // The complete commerce flow shares one loopback IP and has no customer think time.
 // A fast runner can make more than 500 API reads in one minute across the recovery flows.
 // Keep a fixture-only budget; middleware/Redis suites verify production limiter behavior.
@@ -77,6 +79,8 @@ process.on('SIGINT', () => stop().then(() => process.exit(0)));
     'INSERT INTO admins (username, password_hash, real_name, role_id, status) VALUES (?, ?, ?, ?, 1)',
     ['admin_publication_b', publicationPassword, 'Publication B', publicationRole.role_id],
   );
+  // Administrators must use a second factor; bind the fixture one so the browser flows can answer it.
+  await fixtureTwoFactor.bindFixtureTwoFactor(pool, ['admin', 'admin_publication_b']);
   await pool.query("INSERT INTO categories(category_id,name) VALUES(1,'浏览器测试分类')");
   await pool.query("INSERT INTO categories(category_id,name) VALUES(9000,'PaginationFixture')");
   // Keep the primary flow fixtures ahead of pagination rows even when MySQL changes tie order.

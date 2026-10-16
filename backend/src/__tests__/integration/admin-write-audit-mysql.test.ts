@@ -52,7 +52,7 @@ integration('non-order admin writes and audit atomicity in real MySQL', () => {
   const app = express(); app.use(express.json());
   app.use('/api/admin/products', products); app.use('/api/products', legacyProducts);
   app.use('/api/admin/coupons', coupons); app.use('/api/admin/users', users);
-  const auth = (adminId = 2) => `Bearer ${jwt.sign({ type: 'admin', adminId, authVersion: 0 }, 'test-jwt-secret')}`;
+  const auth = (adminId = 2) => `Bearer ${jwt.sign({ type: 'admin', mfa: true, adminId, authVersion: 0 }, 'test-jwt-secret')}`;
   const send = (write: typeof writes[number], adminId = 2, agent = 'Fixture browser') =>
     request(app)[write[1]](write[2]).set('Authorization', auth(adminId)).set('User-Agent', agent).send(write[3]);
   beforeAll(async () => {
@@ -67,7 +67,7 @@ integration('non-order admin writes and audit atomicity in real MySQL', () => {
     await migrateProductCreations(db);
     await db.query("INSERT INTO categories(category_id,name) VALUES(1,'Fixture category')");
     await db.query("INSERT INTO roles(role_id,role_name) VALUES(1,'super_admin'),(2,'reader')");
-    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id) VALUES(2,'operator','fixture',1),(3,'reader','fixture',2)");
+    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id,totp_enabled_at) VALUES(2,'operator','fixture',1,NOW()),(3,'reader','fixture',2,NOW())");
     await db.query("INSERT INTO users(user_id,username,email,password_hash) VALUES(7,'buyer','buyer@example.test','fixture')");
   });
   afterAll(async () => {

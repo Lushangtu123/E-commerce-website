@@ -30,7 +30,7 @@ integration('legacy product routes use current product write postprocessing', ()
   const app = express();
   app.use(express.json());
   app.use('/api/products', productRoutes);
-  const adminToken = jwt.sign({ adminId: 1, type: 'admin', authVersion: 0 }, 'test-jwt-secret');
+  const adminToken = jwt.sign({ adminId: 1, type: 'admin', mfa: true, authVersion: 0 }, 'test-jwt-secret');
 
   beforeAll(async () => {
     server = mysql.createPool(options);
@@ -47,7 +47,7 @@ integration('legacy product routes use current product write postprocessing', ()
       }
     }
     await db.query("INSERT INTO roles(role_id,role_name) VALUES(2,'product_editor')");
-    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id,status) VALUES(1,'editor','unused',2,1)");
+    await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id,status,totp_enabled_at) VALUES(1,'editor','unused',2,1,NOW())");
     await db.query("INSERT INTO permissions(permission_id,permission_name,permission_code) VALUES(1,'Create','product:create'),(2,'Edit','product:edit')");
   });
 

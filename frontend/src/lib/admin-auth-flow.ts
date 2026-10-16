@@ -102,14 +102,28 @@ function validAdmin(value: unknown): value is AdminSession['admin'] {
     (admin.role_name == null || typeof admin.role_name === 'string');
 }
 
+async function prepareAdminAuth(clear: () => Promise<unknown>, attempt: AdminAuthAttempt) {
+  if (!attempt.current()) throw new AdminAuthAbandoned();
+  if (needsCleanup()) {
+    try { await clearCookie(clear); }
+    catch { throw new AdminAuthUnconfirmed(attempt.current(), true); }
+  }
+  if (!attempt.current()) throw new AdminAuthAbandoned();
+}
+
+/** Logout advances auth_version, so even a password-only challenge must wait for its acknowledgement. */
+export function adminPasswordChallenge<T>(request: () => Promise<T>, clear: () => Promise<unknown>, attempt: AdminAuthAttempt): Promise<T> {
+  return queueWrite(async () => {
+    await prepareAdminAuth(clear, attempt);
+    const value = await request();
+    if (!attempt.current()) throw new AdminAuthAbandoned();
+    return value;
+  });
+}
+
 export function adminSignIn(request: () => Promise<AdminAuthResult>, clear: () => Promise<unknown>, attempt: AdminAuthAttempt): Promise<AdminAuthResult> {
   return queueWrite(async () => {
-    if (!attempt.current()) throw new AdminAuthAbandoned();
-    if (needsCleanup()) {
-      try { await clearCookie(clear); }
-      catch { throw new AdminAuthUnconfirmed(attempt.current(), true); }
-    }
-    if (!attempt.current()) throw new AdminAuthAbandoned();
+    await prepareAdminAuth(clear, attempt);
     // A hard reload can outlive this request's JS context, so remember its possible cookie now.
     recordCleanup(true);
     let value: AdminAuthResult;

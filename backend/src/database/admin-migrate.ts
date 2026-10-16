@@ -1,5 +1,6 @@
 import { connectDatabase, getPool } from './mysql';
 import logger from '../utils/logger';
+import { migrateAdminTwoFactor } from './migrate-admin-two-factor';
 
 async function runAdminMigrations() {
   // 首先连接数据库
@@ -35,6 +36,9 @@ async function runAdminMigrations() {
         role_id INT,
         status TINYINT DEFAULT 1 COMMENT '1:启用 0:禁用',
         auth_version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '退出登录时递增，使旧令牌失效',
+        totp_secret VARCHAR(255) NULL DEFAULT NULL COMMENT 'AES-256-GCM 加密的 TOTP 密钥',
+        totp_enabled_at TIMESTAMP NULL DEFAULT NULL,
+        totp_last_step BIGINT NULL DEFAULT NULL COMMENT '最后接受的时间步，更早的动态码不再有效',
         last_login_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -43,6 +47,8 @@ async function runAdminMigrations() {
         INDEX idx_status (status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Existing tables get the two-factor columns; both get the recovery code table.
+    await migrateAdminTwoFactor(connection);
 
     // 3. 创建权限表
     logger.info('创建权限表...');

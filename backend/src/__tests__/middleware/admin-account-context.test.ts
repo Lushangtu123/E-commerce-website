@@ -5,7 +5,7 @@ import { authenticateAdmin } from '../../middleware/admin-auth';
 import { getPool } from '../../database/mysql';
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn() }));
 const query = jest.fn(), handler = jest.fn();
-const token = (adminId = 2, authVersion = 0) => jwt.sign({ adminId, authVersion, type: 'admin' }, 'test-jwt-secret');
+const token = (adminId = 2, authVersion = 0) => jwt.sign({ adminId, authVersion, type: 'admin', mfa: true }, 'test-jwt-secret');
 function app() {
   const instance = express();
   instance.all('/account', authenticateAdmin, (req, res) => { handler(req.admin?.adminId); res.json({ adminId: req.admin?.adminId }); });
@@ -13,7 +13,7 @@ function app() {
 }
 beforeEach(() => {
   jest.clearAllMocks(); (getPool as jest.Mock).mockReturnValue({ query });
-  query.mockResolvedValue([[{ admin_id: 2, username: 'Second administrator', role_id: 1, status: 1, auth_version: 0 }]]);
+  query.mockResolvedValue([[{ admin_id: 2, username: 'Second administrator', role_id: 1, status: 1, auth_version: 0, totp_enabled_at: new Date() }]]);
 });
 describe('administrator expected account context', () => {
   test.each(['cookie', 'bearer'])('rejects stale expected identity before writes/reads using %s', async source => {
@@ -47,7 +47,7 @@ describe('administrator expected account context', () => {
     expect(handler).not.toHaveBeenCalled();
   });
   test.each(['missing', 'disabled', 'revoked'])('runs account validity checks before context validation: %s', async state => {
-    query.mockResolvedValue([state === 'missing' ? [] : [{ admin_id: 2, username: 'Second administrator', role_id: 1, status: state === 'disabled' ? 0 : 1, auth_version: state === 'revoked' ? 1 : 0 }]]);
+    query.mockResolvedValue([state === 'missing' ? [] : [{ admin_id: 2, username: 'Second administrator', role_id: 1, status: state === 'disabled' ? 0 : 1, auth_version: state === 'revoked' ? 1 : 0, totp_enabled_at: new Date() }]]);
     await request(app()).get('/account').set('Cookie', `admin_session=${token()}`).set('X-Expected-Admin-Id', 'invalid').expect(state === 'disabled' ? 403 : 401);
     expect(handler).not.toHaveBeenCalled();
   });

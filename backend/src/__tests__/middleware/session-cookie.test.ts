@@ -8,22 +8,28 @@ import jwt from 'jsonwebtoken';
 import { authMiddleware, optionalAuth, AuthRequest } from '../../middleware/auth';
 import { authenticateAdmin } from '../../middleware/admin-auth';
 import { UserController } from '../../controllers/user.controller';
-import { adminLogin, adminLogout } from '../../controllers/admin.controller';
+import { adminLogin, adminLoginVerify, adminLogout } from '../../controllers/admin.controller';
+import { verify } from '../../services/admin-two-factor.service';
 import bcrypt from 'bcryptjs';
 import { getPool, query } from '../../database/mysql';
 import { readCookie, setSessionCookie } from '../../utils/session-cookie';
 import { corsOptions } from '../../utils/validate-env';
 
 jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn() }));
+// The second factor itself is covered by integration/admin-two-factor-mysql; here it always succeeds.
+jest.mock('../../services/admin-two-factor.service', () => ({
+  ...jest.requireActual('../../services/admin-two-factor.service'),
+  verify: jest.fn(),
+}));
 
 const SECRET = 'test-jwt-secret'; // 与 setup.ts 中的 JWT_SECRET 一致
 const customer = (userId: number) => jwt.sign({ userId, type: 'user', authVersion: 0 }, SECRET, { expiresIn: '1h' });
-const admin = (adminId: number) => jwt.sign({ adminId, type: 'admin' }, SECRET, { expiresIn: '1h' });
+const admin = (adminId: number) => jwt.sign({ adminId, type: 'admin', mfa: true }, SECRET, { expiresIn: '1h' });
 
 beforeEach(() => {
   jest.clearAllMocks();
   (query as jest.Mock).mockResolvedValue([{ auth_version: 0, status: 1 }]);
-  (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async () => [[{ admin_id: 9, username: 'root', role_id: 1, status: 1 }]]) });
+  (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async () => [[{ admin_id: 9, username: 'root', role_id: 1, status: 1, totp_enabled_at: new Date() }]]) });
 });
 
 function customerApp(middleware = authMiddleware) {
@@ -107,18 +113,26 @@ describe('administrator session cookie', () => {
 });
 
 describe('login', () => {
-  test('an administrator login sets the admin session cookie without exposing the token in the body', async () => {
+  test('an administrator sign-in sets the admin session cookie after the second factor, without exposing the token', async () => {
     const password_hash = await bcrypt.hash('admin-password', 4);
     (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async (sql: string) => sql.includes('FROM admins a')
-      ? [[{ admin_id: 9, username: 'root', role_id: 1, role_name: '超级管理员', status: 1, password_hash }]] : [{}]) });
+      ? [[{ admin_id: 9, username: 'root', role_id: 1, role_name: '超级管理员', status: 1, password_hash, totp_enabled_at: new Date() }]] : [{}]) });
     const app = express();
     app.use(express.json());
     app.post('/api/admin/login', adminLogin);
+    app.post('/api/admin/login/2fa', adminLoginVerify);
+    (verify as jest.Mock).mockResolvedValue({
+      admin: { admin_id: 9, username: 'root', real_name: null, email: null, role_id: 1, role_name: '超级管理员', status: 1, auth_version: 0 },
+      recovery: null,
+    });
 
-    const res = await request(app).post('/api/admin/login').set('X-Requested-With', 'XMLHttpRequest').send({ username: 'root', password: 'admin-password' }).expect(200);
+    const password = await request(app).post('/api/admin/login').set('X-Requested-With', 'XMLHttpRequest').send({ username: 'root', password: 'admin-password' }).expect(200);
+    expect(password.headers['set-cookie']).toBeUndefined();
+    const res = await request(app).post('/api/admin/login/2fa').set('X-Requested-With', 'XMLHttpRequest')
+      .send({ challenge: password.body.challenge, code: '123456' }).expect(200);
     const [cookie] = res.headers['set-cookie'] as unknown as string[];
     const token = /^admin_session=([^;]+);/.exec(cookie)![1];
-    expect(jwt.verify(token, SECRET)).toMatchObject({ adminId: 9, type: 'admin' });
+    expect(jwt.verify(token, SECRET)).toMatchObject({ adminId: 9, type: 'admin', mfa: true });
     expect(res.body).not.toHaveProperty('token');
     expect(res.body.admin).toMatchObject({ admin_id: 9, username: 'root' });
     expect(res.text).not.toContain(token);

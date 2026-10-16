@@ -20,11 +20,11 @@ const app = () => {
   return application;
 };
 const customer = () => ({ Authorization: `Bearer ${jwt.sign({ userId: 7 }, 'test-jwt-secret')}` });
-const admin = () => ({ Authorization: `Bearer ${jwt.sign({ type: 'admin', adminId: 2 }, 'test-jwt-secret')}` });
+const admin = () => ({ Authorization: `Bearer ${jwt.sign({ type: 'admin', mfa: true, adminId: 2 }, 'test-jwt-secret')}` });
 beforeEach(() => {
   jest.clearAllMocks(); allowed = true;
   (getPool as jest.Mock).mockReturnValue({ query: jest.fn(async (sql: string) => {
-    if (sql.includes('FROM admins')) return [[{ admin_id: 2, username: 'operator', role_id: 2, status: 1 }], []];
+    if (sql.includes('FROM admins')) return [[{ admin_id: 2, username: 'operator', role_id: 2, status: 1, totp_enabled_at: new Date() }], []];
     if (sql.includes('FROM role_permissions')) return [allowed ? [{ permission_code: 'order:view' }, { permission_code: 'order:edit' }] : [], []];
     if (sql.includes('FROM roles')) return [[{ role_name: 'operator' }], []];
     return [[], []];

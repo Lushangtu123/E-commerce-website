@@ -99,6 +99,7 @@ services:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - RABBITMQ_URL=amqp://admin:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env before starting Compose}
+      - ADMIN_TOTP_KEY=${ADMIN_TOTP_KEY:?Set ADMIN_TOTP_KEY in the root .env before starting Compose}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     ports:
       - "3001:3001"

@@ -44,7 +44,7 @@ test('全部地址端点都需要用户令牌，管理员令牌不能替代用�
   await request(app).put('/api/addresses/3').send(fields).expect(401);
   await request(app).put('/api/addresses/3/default').send({}).expect(401);
   await request(app).delete('/api/addresses/3').expect(401);
-  const admin = jwt.sign({ adminId: 1, type: 'admin' }, 'test-jwt-secret');
+  const admin = jwt.sign({ adminId: 1, type: 'admin', mfa: true }, 'test-jwt-secret');
   await request(app).get('/api/addresses').set('Authorization', `Bearer ${admin}`).expect(401);
   await request(app).put('/api/addresses/3/default').set('Authorization', `Bearer ${admin}`).send({}).expect(401);
   expect(getPool).not.toHaveBeenCalled();

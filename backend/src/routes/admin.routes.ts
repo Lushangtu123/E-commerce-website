@@ -1,5 +1,5 @@
 import express from 'express';
-import { adminLogin, adminLogout, getAdminProfile } from '../controllers/admin.controller';
+import { adminLogin, adminLoginActivate, adminLoginSetup, adminLoginVerify, adminLogout, getAdminProfile } from '../controllers/admin.controller';
 import { getDashboardStats, getRecentOrders, getTopProducts, getSalesTrend } from '../controllers/admin-dashboard.controller';
 import { getAdminLogs } from '../controllers/admin-log.controller';
 import { authenticateAdmin, requirePermission } from '../middleware/admin-auth';
@@ -45,6 +45,62 @@ const router = express.Router();
  *         description: 原会话撤销尚未完成，未签发新会话，请重试
  */
 router.post('/login', authLimiter, adminLogin);
+
+/**
+ * @openapi
+ * /api/admin/login/2fa:
+ *   post:
+ *     tags: [管理后台]
+ *     summary: 两步验证：提交动态码或恢复码完成登录
+ *     description: 用于已绑定验证器的管理员。challenge 来自密码登录的响应（5 分钟有效）；code 为 6 位动态码（每个时间步只能用一次）或一次性恢复码。成功后签发会话 Cookie；使用恢复码时返回剩余数量。
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               challenge: { type: string }
+ *               code: { type: string }
+ *     responses:
+ *       200:
+ *         description: 登录成功
+ *       401:
+ *         description: 验证码错误或验证已过期
+ *       403:
+ *         description: 请求来源校验失败或账号已被禁用
+ */
+router.post('/login/2fa', authLimiter, adminLoginVerify);
+
+/**
+ * @openapi
+ * /api/admin/login/2fa/setup:
+ *   post:
+ *     tags: [管理后台]
+ *     summary: 两步验证：未绑定的管理员获取验证器密钥
+ *     description: 返回新的 TOTP 密钥和 otpauth 地址（用于二维码），密钥加密保存，确认绑定前可重新获取。
+ *     responses:
+ *       200:
+ *         description: secret 与 otpauth_uri（Cache-Control no-store）
+ *       401:
+ *         description: 验证已过期
+ */
+router.post('/login/2fa/setup', authLimiter, adminLoginSetup);
+
+/**
+ * @openapi
+ * /api/admin/login/2fa/activate:
+ *   post:
+ *     tags: [管理后台]
+ *     summary: 两步验证：提交动态码确认绑定并登录
+ *     description: 确认绑定后返回 10 个一次性恢复码（只显示这一次）并签发会话 Cookie。
+ *     responses:
+ *       200:
+ *         description: 登录成功，含 recovery_codes
+ *       401:
+ *         description: 验证码错误或验证已过期
+ */
+router.post('/login/2fa/activate', authLimiter, adminLoginActivate);
 
 /**
  * @openapi
