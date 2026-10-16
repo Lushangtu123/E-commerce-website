@@ -28,7 +28,7 @@ module.exports = async function adminAuthLifecycle({ browser, localPlatformScrip
       await pageA.getByRole('button', { name: '退出登录', exact: true }).waitFor({ state: 'visible' });
       assert.equal(await pageA.evaluate(() => !!navigator.locks), true);
 
-      let logoutStarted, loginWrites = 0, logoutWrites = 0;
+      let logoutStarted, passwordWrites = 0, loginWrites = 0, logoutWrites = 0;
       const gate = new Promise(resolve => { releaseLogout = resolve; });
       const started = new Promise(resolve => { logoutStarted = resolve; });
       await pageA.route(`${api}/admin/logout`, async route => {
@@ -37,20 +37,24 @@ module.exports = async function adminAuthLifecycle({ browser, localPlatformScrip
         return route.continue();
       });
       context.on('request', request => {
+        if (request.method() === 'POST' && request.url() === `${api}/admin/login`) passwordWrites++;
         if (request.method() === 'POST' && request.url() === `${api}/admin/login/2fa`) loginWrites++;
       });
       await pageA.getByRole('button', { name: '退出登录', exact: true }).click();
       await started; await pageA.waitForURL(`${frontend}/admin/login`);
       const pageB = secondTab ? await context.newPage() : pageA;
       if (secondTab) { observe(pageB, 'admin-auth-tabs-b'); await pageB.goto(`${frontend}/admin/login`); }
-      await submitLogin(pageB);
-      await pageB.getByRole('button', { name: '验证中...', exact: true }).waitFor({ state: 'visible' });
+      const signingIn = submitLogin(pageB);
+      await pageB.getByRole('button', { name: '登录中...', exact: true }).waitFor({ state: 'visible' });
+      assert.equal(passwordWrites, 0, 'the password challenge waits until logout advances auth_version');
       assert.equal(loginWrites, 0, 'the session-issuing second factor waits until the previous cookie revocation completes');
       assert.equal(logoutWrites, 1);
       releaseLogout();
+      await signingIn;
       await pageB.waitForURL(`${frontend}/admin/dashboard`);
       await pageB.getByRole('button', { name: '退出登录', exact: true }).waitFor({ state: 'visible' });
       assert.equal(loginWrites, 1);
+      assert.equal(passwordWrites, 1);
       const profile = await context.request.get(`${api}/admin/profile`);
       assert.equal(profile.status(), 200, 'the newly issued HttpOnly cookie remains valid');
       assert.equal((await profile.json()).admin.username, 'admin');

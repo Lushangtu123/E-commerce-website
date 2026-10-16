@@ -2,7 +2,7 @@ import api from './client';
 import type { Money, Product } from './catalog';
 import type { Order, Coupon, CouponPagination } from './orders';
 import type { SpecTranslations } from '@/lib/product-content';
-import { adminSessionLogout, adminSignIn, type AdminAuthAttempt, type AdminAuthResult } from '@/lib/admin-auth-flow';
+import { adminPasswordChallenge, adminSessionLogout, adminSignIn, type AdminAuthAttempt, type AdminAuthResult } from '@/lib/admin-auth-flow';
 
 // 管理后台
 export interface AdminSKU {
@@ -50,7 +50,8 @@ export interface AdminTwoFactorResult extends AdminAuthResult { recovery_codes?:
 
 export const adminApi = {
   /** Step 1: password. Issues no session. */
-  login: (data: { username: string; password: string }) => postAdminAuth<AdminTwoFactorChallenge>('login', data),
+  login: (data: { username: string; password: string }, attempt: AdminAuthAttempt) =>
+    adminPasswordChallenge(() => postAdminAuth<AdminTwoFactorChallenge>('login', data), () => api.post('/admin/logout'), attempt),
   /** Step 2 for an administrator without an authenticator yet. */
   twoFactorSetup: (challenge: string) => postAdminAuth<AdminTwoFactorSetup>('login/2fa/setup', { challenge }),
   /** Step 2 that issues the session: a code (`verify`) or the first code of a new authenticator (`activate`). */

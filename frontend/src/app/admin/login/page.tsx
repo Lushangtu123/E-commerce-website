@@ -53,13 +53,18 @@ export default function AdminLoginPage() {
     e.preventDefault();
     void run(async alive => {
       try {
-        const answer = await adminApi.login(formData);
+        const answer = await adminApi.login(formData, adminAuthAttempt(alive, () => {}));
         if (!alive()) return;
         setFormData(previous => ({ ...previous, password: '' }));
         if (answer.two_factor === 'verify') { setStep({ kind: 'verify', challenge: answer.challenge }); return; }
         const setup = await adminApi.twoFactorSetup(answer.challenge);
         if (alive()) setStep({ kind: 'setup', challenge: answer.challenge, setup });
       } catch (error) {
+        if (!alive() || error instanceof AdminAuthAbandoned) return;
+        if (error instanceof AdminAuthUnconfirmed) {
+          if (error.report) toast.error(translate(error.message));
+          return;
+        }
         if (alive()) fail(error, '登录失败');
       }
     });
