@@ -1,6 +1,7 @@
 // Synthetic production checks for .github/workflows/uptime.yml: read-only GETs against the public site.
 // Each check retries before it counts as failed, so one slow cold start does not page anyone.
 // Usage: SITE_URL=https://example.test [REPORT_FILE=report.md] node scripts/ci/uptime-check.mjs
+// PROTECTION_BYPASS: Vercel "Protection Bypass for Automation" secret, for a protected deployment URL.
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -36,10 +37,10 @@ export const CHECKS = [
 ];
 
 /** One attempt: the problem as text, or null when the check passed. */
-async function attempt(base, check, fetchImpl) {
+async function attempt(base, check, fetchImpl, headers) {
   const started = Date.now();
   try {
-    const response = await fetchImpl(`${base}${check.path}`, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: 'manual' });
+    const response = await fetchImpl(`${base}${check.path}`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS), redirect: 'manual' });
     const ms = Date.now() - started;
     if (response.status !== 200) return { problem: `HTTP ${response.status}`, ms };
     return { problem: await check.verify(response), ms };
@@ -49,12 +50,12 @@ async function attempt(base, check, fetchImpl) {
   }
 }
 
-export async function runChecks(base, { fetchImpl = fetch, attempts = 3, retryDelayMs = 15_000, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+export async function runChecks(base, { fetchImpl = fetch, attempts = 3, retryDelayMs = 15_000, sleep = ms => new Promise(r => setTimeout(r, ms)), headers = {} } = {}) {
   const results = [];
   for (const check of CHECKS) {
     let result;
     for (let tries = 1; tries <= attempts; tries++) {
-      result = { ...(await attempt(base, check, fetchImpl)), tries };
+      result = { ...(await attempt(base, check, fetchImpl, headers)), tries };
       if (!result.problem) break;
       if (tries < attempts) await sleep(retryDelayMs);
     }
@@ -84,7 +85,8 @@ async function main() {
     console.error('Set SITE_URL to the site origin, e.g. https://example.vercel.app');
     process.exit(2);
   }
-  const results = await runChecks(base);
+  const bypass = process.env.PROTECTION_BYPASS;
+  const results = await runChecks(base, { headers: bypass ? { 'x-vercel-protection-bypass': bypass } : {} });
   const text = report(base, results);
   console.log(text);
   if (process.env.REPORT_FILE) writeFileSync(process.env.REPORT_FILE, text);

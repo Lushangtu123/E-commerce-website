@@ -10,7 +10,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 - Install Command：`cd .. && npm ci --prefix backend && npm ci --prefix frontend`。
 - Build Command：`cd .. && npm --prefix backend run build && npm --prefix frontend run build`。
 - 允许构建读取 Root Directory 外的后端代码。后端必须先编译，构建时生成 OpenAPI JSON。
-- 默认发布 Preview：在仓库根目录运行 `vercel deploy --target preview --scope <team-slug>`。新项目第一次部署可能被 Vercel 自动设为 Production；检查 `vercel inspect` 的 target，并再次明确发布 Preview。
+- 生产部署由 GitHub Actions「发布」工作流在 main 的 CI 通过后完成（迁移 → 结构检查 → 部署 → 冒烟测试 → 切换域名，见 [自动化发布](RELEASE.md)）；`frontend/vercel.json` 关闭了 main 的 Git 自动部署，PR 预览仍由 Vercel 自动构建。
+- 手动发布 Preview：在仓库根目录运行 `vercel deploy --target preview --scope <team-slug>`。新项目第一次部署可能被 Vercel 自动设为 Production；检查 `vercel inspect` 的 target，并再次明确发布 Preview。
 
 将以下变量配置到对应的 Vercel 环境。Preview 和 Production 的变量分别管理，不能只配置一个环境后直接推广另一个环境。
 
@@ -57,7 +58,7 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 
 ## 初始化数据库
 
-先配置云数据库变量，在本地运行 `npm --prefix backend run build`，然后运行 `backend/dist/database/migrate.js` 及 `backend/dist/database/admin-migrate.js`。管理员初始化还需临时设置至少 16 字符的 `ADMIN_BOOTSTRAP_PASSWORD`；生产环境不会创建默认弱密码账户。迁移不会在每次函数请求中运行。
+首次初始化：先配置云数据库变量，在本地运行 `npm --prefix backend run build`，然后运行 `backend/dist/database/migrate.js` 及 `backend/dist/database/admin-migrate.js`。之后的迁移由发布工作流自动运行（生产在部署前，预览库在每个 PR 上）。管理员初始化还需临时设置至少 16 字符的 `ADMIN_BOOTSTRAP_PASSWORD`；生产环境不会创建默认弱密码账户。迁移不会在每次函数请求中运行。
 
 初始化命令应从后端目录运行，或在进程中直接注入配置；不要提交 `.env`、云端连接地址中的密码、CA 私钥或管理员密码。`seed` 会清空开发数据，已禁止在 `NODE_ENV=production` 下执行。示例商品不是实际商品，正式运营前需由管理员替换。
 
