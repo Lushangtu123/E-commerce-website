@@ -84,7 +84,7 @@ export default function AdminLoginPage() {
         if (!alive() || !publishedSessionId || getAdminSessionId() !== publishedSessionId) return;
         if (result.recovery_codes?.length) { setStep({ kind: 'recovery', codes: result.recovery_codes }); return; }
         if (typeof result.recovery_codes_remaining === 'number' && result.recovery_codes_remaining <= 3) {
-          toast.error(translate('恢复码只剩 {count} 个，请尽快重置两步验证以生成新的恢复码', { count: result.recovery_codes_remaining }));
+          toast.error(translate('恢复码只剩 {count} 个；全部用完后，下次登录时会自动生成新的一组', { count: result.recovery_codes_remaining }));
         }
         toast.success(translate('登录成功'));
         router.push('/admin/dashboard');

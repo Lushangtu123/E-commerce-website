@@ -4,14 +4,16 @@
  * 登录流程：密码正确后不签发会话，而是返回 5 分钟有效的一次性挑战（challenge）：
  * - 已绑定验证器：提交 6 位动态码或恢复码（verify）后签发会话；
  * - 未绑定：先取得密钥与二维码（setup），提交一次动态码确认绑定（activate），同时领取 10 个恢复码，然后签发会话。
- * 挑战令牌绑定管理员的 auth_version，退出或重置后旧挑战失效。动态码按时间步防重放，恢复码只存 SHA-256、每个只能用一次。
+ * 挑战令牌绑定管理员的 auth_version，退出或重置后旧挑战失效。动态码按时间步防重放。
+ * 恢复码 160 位随机、只存带密钥的 HMAC（utils/recovery-code.ts），每个只能用一次；当前密钥下没有可用恢复码时
+ * （迁移作废旧码、密钥轮换或全部用完），登录成功同时发放新的一组。轮换期间用旧密钥加密的 TOTP 密钥在登录时改用新密钥。
  */
-import { createHash, randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { getPool } from '../database/mysql';
 import { jwtSecret, verifyJwt } from '../utils/jwt-secret';
-import { openSecret, sealSecret } from '../utils/secret-box';
+import { openSecretWithRotation, sealSecret } from '../utils/secret-box';
+import { RECOVERY_CODE_COUNT, newRecoveryCode, normalizeRecoveryCode, recoveryCodeHash, recoveryKeys } from '../utils/recovery-code';
 import { generateTotpSecret, otpauthUri, verifyTotp } from '../utils/totp';
 
 export class TwoFactorError extends Error {
@@ -22,7 +24,7 @@ export class TwoFactorError extends Error {
 }
 
 export type ChallengePurpose = 'verify' | 'setup';
-export const RECOVERY_CODE_COUNT = 10;
+export { RECOVERY_CODE_COUNT } from '../utils/recovery-code';
 const CHALLENGE_TTL = '5m';
 const ISSUER = '电商平台管理后台';
 
@@ -89,13 +91,27 @@ async function inTransaction<T>(work: (conn: PoolConnection) => Promise<T>): Pro
   }
 }
 
-const hashRecoveryCode = (code: string) => createHash('sha256').update(code.replace(/[\s-]/g, '').toLowerCase()).digest('hex');
+/** Replaces every recovery code of the administrator with a new set under the current key. */
+async function issueRecoveryCodes(conn: PoolConnection, adminId: number): Promise<string[]> {
+  const [current] = recoveryKeys();
+  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, newRecoveryCode);
+  await conn.query('DELETE FROM admin_recovery_codes WHERE admin_id = ?', [adminId]);
+  await conn.query('INSERT INTO admin_recovery_codes (admin_id, code_hash, key_id) VALUES ?',
+    [codes.map(code => [adminId, recoveryCodeHash(current, adminId, normalizeRecoveryCode(code)!), current.id])]);
+  return codes;
+}
 
-function newRecoveryCodes(): string[] {
-  return Array.from({ length: RECOVERY_CODE_COUNT }, () => {
-    const text = randomBytes(5).toString('hex'); // 40 bits each
-    return `${text.slice(0, 5)}-${text.slice(5)}`;
-  });
+/** Spends one unused recovery code, hashed with the current or (during a rotation) the previous key. */
+async function spendRecoveryCode(conn: PoolConnection, adminId: number, code: string): Promise<boolean> {
+  const normalized = normalizeRecoveryCode(code);
+  if (!normalized) return false;
+  for (const key of recoveryKeys()) {
+    const [used] = await conn.query<ResultSetHeader>(
+      'UPDATE admin_recovery_codes SET used_at = NOW() WHERE admin_id = ? AND key_id = ? AND code_hash = ? AND used_at IS NULL',
+      [adminId, key.id, recoveryCodeHash(key, adminId, normalized)]);
+    if (used.affectedRows === 1) return true;
+  }
+  return false;
 }
 
 /** Starts (or restarts) binding: a fresh secret replaces any unconfirmed one. */
@@ -114,34 +130,44 @@ export async function activate(challenge: unknown, code: unknown): Promise<{ adm
   return inTransaction(async conn => {
     const admin = await challengedAdmin(conn, challenge, 'setup');
     if (!admin.totp_secret) throw new TwoFactorError('请先获取验证器密钥');
-    const step = typeof code === 'string' ? verifyTotp(openSecret(admin.totp_secret), code, null) : null;
+    const secret = openSecretWithRotation(admin.totp_secret);
+    const step = typeof code === 'string' ? verifyTotp(secret.value, code, null) : null;
     if (step === null) throw new TwoFactorError('验证码错误', 401);
-    const recoveryCodes = newRecoveryCodes();
-    await conn.query('UPDATE admins SET totp_enabled_at = NOW(), totp_last_step = ? WHERE admin_id = ?', [step, admin.admin_id]);
-    await conn.query('DELETE FROM admin_recovery_codes WHERE admin_id = ?', [admin.admin_id]);
-    await conn.query('INSERT INTO admin_recovery_codes (admin_id, code_hash) VALUES ?',
-      [recoveryCodes.map(value => [admin.admin_id, hashRecoveryCode(value)])]);
-    return { admin, recoveryCodes };
+    await conn.query('UPDATE admins SET totp_secret = ?, totp_enabled_at = NOW(), totp_last_step = ? WHERE admin_id = ?',
+      [secret.stale ? sealSecret(secret.value) : admin.totp_secret, step, admin.admin_id]);
+    return { admin, recoveryCodes: await issueRecoveryCodes(conn, admin.admin_id) };
   });
 }
 
+export interface VerifyResult {
+  admin: AdminLoginRow;
+  /** Set when a recovery code signed in: how many unused codes under the current key remain. */
+  recovery: { remaining: number } | null;
+  /** A new set, shown once, when no usable code remained under the current key. */
+  recoveryCodes: string[] | null;
+}
+
 /** Checks a dynamic code, or else a recovery code; `recovery` tells the caller which one was used. */
-export async function verify(challenge: unknown, code: unknown): Promise<{ admin: AdminLoginRow; recovery: { remaining: number } | null }> {
+export async function verify(challenge: unknown, code: unknown): Promise<VerifyResult> {
   return inTransaction(async conn => {
     const admin = await challengedAdmin(conn, challenge, 'verify');
-    if (typeof code !== 'string' || code.length > 32) throw new TwoFactorError('验证码错误', 401);
-    const step = verifyTotp(openSecret(admin.totp_secret!), code, admin.totp_last_step === null ? null : Number(admin.totp_last_step));
-    if (step !== null) {
-      await conn.query('UPDATE admins SET totp_last_step = ? WHERE admin_id = ?', [step, admin.admin_id]);
-      return { admin, recovery: null };
-    }
-    const [used] = await conn.query<ResultSetHeader>(
-      'UPDATE admin_recovery_codes SET used_at = NOW() WHERE admin_id = ? AND code_hash = ? AND used_at IS NULL',
-      [admin.admin_id, hashRecoveryCode(code)]);
-    if (used.affectedRows !== 1) throw new TwoFactorError('验证码错误', 401);
+    if (typeof code !== 'string' || code.length > 64) throw new TwoFactorError('验证码错误', 401);
+    const secret = openSecretWithRotation(admin.totp_secret!);
+    const step = verifyTotp(secret.value, code, admin.totp_last_step === null ? null : Number(admin.totp_last_step));
+    const usedRecovery = step === null;
+    if (usedRecovery && !await spendRecoveryCode(conn, admin.admin_id, code)) throw new TwoFactorError('验证码错误', 401);
+    // A secret only the previous key opens moves to the current key at this sign-in.
+    await conn.query('UPDATE admins SET totp_secret = ?, totp_last_step = ? WHERE admin_id = ?',
+      [secret.stale ? sealSecret(secret.value) : admin.totp_secret, usedRecovery ? admin.totp_last_step : step, admin.admin_id]);
     const [left] = await conn.query<RowDataPacket[]>(
-      'SELECT COUNT(*) AS remaining FROM admin_recovery_codes WHERE admin_id = ? AND used_at IS NULL', [admin.admin_id]);
-    return { admin, recovery: { remaining: Number(left[0].remaining) } };
+      'SELECT COUNT(*) AS remaining FROM admin_recovery_codes WHERE admin_id = ? AND key_id = ? AND used_at IS NULL',
+      [admin.admin_id, recoveryKeys()[0].id]);
+    const remaining = Number(left[0].remaining);
+    return {
+      admin,
+      recovery: usedRecovery ? { remaining } : null,
+      recoveryCodes: remaining === 0 ? await issueRecoveryCodes(conn, admin.admin_id) : null,
+    };
   });
 }
 
@@ -155,4 +181,42 @@ export async function resetTwoFactor(username: string): Promise<boolean> {
     await conn.query('DELETE c FROM admin_recovery_codes c JOIN admins a ON a.admin_id = c.admin_id WHERE a.username = ?', [username]);
     return true;
   });
+}
+
+export interface TwoFactorKeyReport {
+  /** TOTP secrets moved to the current key by this run (`rekey`). */
+  resealed: string[];
+  /** Administrators whose TOTP secret still only opens with ADMIN_TOTP_KEY_PREVIOUS. */
+  staleSecrets: string[];
+  /** Administrators whose TOTP secret opens with neither key: they must be reset. */
+  unreadableSecrets: string[];
+  /** Administrators with unused recovery codes under another key; their next sign-in replaces them. */
+  staleRecoveryCodes: string[];
+}
+
+/**
+ * Rotation check (CLI): what still depends on a key other than the current ADMIN_TOTP_KEY.
+ * With `rekey`, TOTP secrets that only the previous key opens are re-sealed now. Recovery codes cannot be
+ * re-hashed without the codes themselves; they are replaced at the administrator's next sign-in.
+ */
+export async function twoFactorKeyReport(rekey: boolean): Promise<TwoFactorKeyReport> {
+  const pool = getPool();
+  const report: TwoFactorKeyReport = { resealed: [], staleSecrets: [], unreadableSecrets: [], staleRecoveryCodes: [] };
+  const [admins] = await pool.query<RowDataPacket[]>('SELECT admin_id, username, totp_secret FROM admins WHERE totp_secret IS NOT NULL ORDER BY admin_id');
+  for (const admin of admins) {
+    let secret: { value: string; stale: boolean };
+    try { secret = openSecretWithRotation(admin.totp_secret); }
+    catch { report.unreadableSecrets.push(admin.username); continue; }
+    if (!secret.stale) continue;
+    if (!rekey) { report.staleSecrets.push(admin.username); continue; }
+    // Only replace the exact sealed value read above; a concurrent sign-in may already have re-sealed it.
+    const [result] = await pool.query<ResultSetHeader>('UPDATE admins SET totp_secret = ? WHERE admin_id = ? AND totp_secret = ?',
+      [sealSecret(secret.value), admin.admin_id, admin.totp_secret]);
+    if (result.affectedRows === 1) report.resealed.push(admin.username);
+  }
+  const [codes] = await pool.query<RowDataPacket[]>(
+    `SELECT DISTINCT a.username FROM admin_recovery_codes c JOIN admins a ON a.admin_id = c.admin_id
+     WHERE c.used_at IS NULL AND c.key_id <> ? ORDER BY a.username`, [recoveryKeys()[0].id]);
+  report.staleRecoveryCodes = codes.map(row => row.username);
+  return report;
 }
