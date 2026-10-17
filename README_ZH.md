@@ -723,7 +723,7 @@ MIT License
 - 短信及订单通知邮件（密码重置邮件已支持 Gmail SMTP 和 Resend）
 - 对象存储（OSS）
 - CDN配置
-- 监控告警系统
+- 电话/短信告警与长期日志保存（线上巡检和 Sentry 错误告警已具备，见 `docs/MONITORING.md`）
 - 备份恢复方案
 - 负载均衡配置
 

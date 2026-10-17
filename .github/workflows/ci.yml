@@ -110,6 +110,9 @@ jobs:
       - name: 前端回归测试（含覆盖率下限）
         run: npm run test:coverage
 
+      - name: 线上巡检脚本测试
+        run: node --test ../scripts/ci/uptime-check.test.mjs
+
       - name: ESLint 检查
         run: npm run lint
 
