@@ -12,7 +12,7 @@ PR 合并到 main → CI 全部通过
 任一步失败：开启 release-failed Issue，写明停在哪一步、生产当前是哪个版本
 ```
 
-Pull request 仍由 Vercel 自动构建预览；同时「发布」工作流用 PR 的代码迁移**预览库**（来自 fork 和 Dependabot 的 PR 拿不到密钥，会跳过）。
+Pull request 仍由 Vercel 自动构建预览；同时「发布」工作流用 PR 的代码迁移**预览库**（来自 fork 和 Dependabot 的 PR 拿不到密钥，会跳过；`preview` 环境尚未配置时只给出警告并跳过）。生产缺少配置时则直接失败并开启 Issue，不会悄悄停止发布。
 
 ## 一次性设置（合并本流水线之前完成）
 
