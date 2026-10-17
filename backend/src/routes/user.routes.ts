@@ -220,14 +220,16 @@ router.post('/login', authLimiter, UserController.login);
  *   post:
  *     tags: [用户]
  *     summary: 退出登录
- *     description: 清除 httpOnly 会话 Cookie。需带 X-Requested-With 请求头；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。
+ *     description: 撤销该账号在所有设备上的会话（递增 auth_version，被复制的 Cookie 或 Bearer 令牌随即失效），再清除 httpOnly 会话 Cookie。无效或过期的令牌只清除 Cookie。需带 X-Requested-With 请求头；有 Origin 时须为当前部署或明确允许的规范 HTTP(S) 来源，无 Origin 的 API 客户端也需请求头。
  *     parameters:
  *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
  *     responses:
  *       200:
- *         description: 已清除会话 Cookie
+ *         description: 已撤销会话并清除 Cookie
  *       403:
  *         description: 请求来源校验失败，不清除 Cookie
+ *       503:
+ *         description: 撤销失败，保留 Cookie，请稍后重试
  */
 router.post('/logout', UserController.logout);
 

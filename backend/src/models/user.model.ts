@@ -25,6 +25,17 @@ export interface UserStats {
 }
 
 export class UserModel {
+  /**
+   * Revokes every session of the account by advancing auth_version, but only from the version the
+   * presented token carries: repeating a stale logout never revokes a later sign-in.
+   */
+  static async revokeSessions(userId: number, authVersion: number): Promise<boolean> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new RangeError('用户ID无效');
+    const result = await query<ResultSetHeader>(
+      'UPDATE users SET auth_version = auth_version + 1 WHERE user_id = ? AND auth_version = ?', [userId, authVersion]);
+    return result.affectedRows === 1;
+  }
+
   static async getAuthVersion(userId: number): Promise<number | null> {
     const rows = await query<RowDataPacket[]>('SELECT auth_version, status FROM users WHERE user_id = ?', [userId]);
     // Disabled accounts never authenticate, even when a token carries the current version.

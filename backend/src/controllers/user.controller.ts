@@ -1,10 +1,10 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, userPayload } from '../middleware/auth';
 import { UserModel } from '../models/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
-import { CSRF_ERROR, CUSTOMER_COOKIE, clearSessionCookie, hasTrustedSessionSource, setSessionCookie } from '../utils/session-cookie';
+import { CSRF_ERROR, CUSTOMER_COOKIE, clearSessionCookie, hasTrustedSessionSource, sessionToken, setSessionCookie } from '../utils/session-cookie';
 import { normalizeAccountDeletion, normalizeRegistration, normalizeLogin, normalizeProfile, publicUser, UserValidationError } from '../utils/user-validation';
 import { AccountDeletionError, deleteAccount } from '../services/account-deletion.service';
 import { passwordMailConfig } from '../services/password-mail.service';
@@ -12,8 +12,17 @@ import { PasswordResetModel } from '../models/password-reset.model';
 import { normalizePasswordChange, normalizePasswordForgot, normalizePasswordReset } from '../utils/password-validation';
 import { createHash } from 'crypto';
 import { requestPasswordRecovery } from '../services/password-recovery.service';
-import { jwtSecret } from '../utils/jwt-secret';
+import { jwtSecret, verifyJwt } from '../utils/jwt-secret';
 import { exportPersonalData, PersonalDataError } from '../services/personal-data.service';
+
+/** The customer a presented token signs in, if it is still a valid customer token. */
+function customerSession(token: string | undefined): { userId: number; authVersion: number } | null {
+  if (!token) return null;
+  try {
+    const decoded = verifyJwt(token);
+    return userPayload(decoded) ? { userId: decoded.userId, authVersion: decoded.authVersion ?? 0 } : null;
+  } catch { return null; }
+}
 
 export class UserController {
   static passwordCapabilities(_req: AuthRequest, res: Response) {
@@ -124,9 +133,19 @@ export class UserController {
     }
   }
 
-  // 退出登录：清除会话 Cookie。令牌本身无状态，Bearer 客户端自行丢弃即可。
-  static logout(req: AuthRequest, res: Response) {
+  // 退出登录：递增 auth_version，撤销该账号在所有设备上的会话（被复制的 Cookie 或 Bearer 令牌随即失效），再清除本机 Cookie。
+  // 撤销失败时保留 Cookie 并返回 503，不提前宣布已退出；前端保留待清理标记，下次登录前用同一 Cookie 重试。
+  static async logout(req: AuthRequest, res: Response) {
     if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
+    const target = customerSession(sessionToken(req, CUSTOMER_COOKIE).token);
+    if (target) {
+      try {
+        await UserModel.revokeSessions(target.userId, target.authVersion);
+      } catch (error) {
+        logger.error({ err: error }, '顾客会话撤销失败');
+        return res.status(503).json({ error: '退出登录暂不可用，请稍后重试' });
+      }
+    }
     clearSessionCookie(res, CUSTOMER_COOKIE);
     return res.json({ message: '已退出登录' });
   }
