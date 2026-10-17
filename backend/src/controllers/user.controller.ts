@@ -10,17 +10,21 @@ import { AccountDeletionError, deleteAccount } from '../services/account-deletio
 import { passwordMailConfig } from '../services/password-mail.service';
 import { PasswordResetModel } from '../models/password-reset.model';
 import { normalizePasswordChange, normalizePasswordForgot, normalizePasswordReset } from '../utils/password-validation';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { requestPasswordRecovery } from '../services/password-recovery.service';
 import { jwtSecret, verifyJwt } from '../utils/jwt-secret';
 import { exportPersonalData, PersonalDataError } from '../services/personal-data.service';
 
+interface PresentedSession { userId: number; authVersion: number; sessionId?: string; expiresAt?: number }
+
 /** The customer a presented token signs in, if it is still a valid customer token. */
-function customerSession(token: string | undefined): { userId: number; authVersion: number } | null {
+function customerSession(token: string | undefined): PresentedSession | null {
   if (!token) return null;
   try {
     const decoded = verifyJwt(token);
-    return userPayload(decoded) ? { userId: decoded.userId, authVersion: decoded.authVersion ?? 0 } : null;
+    return userPayload(decoded)
+      ? { userId: decoded.userId, authVersion: decoded.authVersion ?? 0, sessionId: decoded.sid, expiresAt: decoded.exp }
+      : null;
   } catch { return null; }
 }
 
@@ -114,7 +118,7 @@ export class UserController {
       // 生成token
       // @ts-ignore
       const token = jwt.sign(
-        { userId, username, email, type: 'user', authVersion: 0 },
+        { userId, username, email, type: 'user', authVersion: 0, sid: randomUUID() },
         jwtSecret(),
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
@@ -150,6 +154,24 @@ export class UserController {
     return res.json({ message: '已退出登录' });
   }
 
+  // 放弃一次未完成的登录（页面已离开、响应丢失等）：只撤销这次登录签发的会话，其他设备保持登录，再清除本机 Cookie。
+  // 没有会话标识的旧令牌无法单独撤销，退回撤销该账号的全部会话，不留下可重放的令牌。失败时同退出：503 并保留 Cookie。
+  static async discardSession(req: AuthRequest, res: Response) {
+    if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
+    const target = customerSession(sessionToken(req, CUSTOMER_COOKIE).token);
+    if (target) {
+      try {
+        if (target.sessionId && target.expiresAt) await UserModel.revokeSession(target.userId, target.sessionId, target.expiresAt);
+        else await UserModel.revokeSessions(target.userId, target.authVersion);
+      } catch (error) {
+        logger.error({ err: error }, '顾客会话撤销失败');
+        return res.status(503).json({ error: '退出登录暂不可用，请稍后重试' });
+      }
+    }
+    clearSessionCookie(res, CUSTOMER_COOKIE);
+    return res.json({ message: '已退出登录' });
+  }
+
   // 登录
   static async login(req: AuthRequest, res: Response) {
     if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
@@ -174,7 +196,7 @@ export class UserController {
       // 生成token
       // @ts-ignore
       const token = jwt.sign(
-        { userId: user.user_id, username: user.username, email: user.email, type: 'user', authVersion: user.auth_version ?? 0 },
+        { userId: user.user_id, username: user.username, email: user.email, type: 'user', authVersion: user.auth_version ?? 0, sid: randomUUID() },
         jwtSecret(),
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );

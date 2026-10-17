@@ -320,6 +320,7 @@ E-commerce-website/
 - `POST /api/users/password/forgot` - 请求重置邮件；服务未配置时安全禁用
 - `POST /api/users/password/reset` - 使用 30 分钟内的一次性凭据重置密码
 - `POST /api/users/logout` - 退出登录（所有设备）：服务端撤销该账号的全部会话，被复制的 Cookie 或 Bearer 令牌随即失效，再清除会话 Cookie；撤销失败时返回 503 并保留 Cookie
+- `POST /api/users/session/discard` - 放弃一次未完成的登录（页面已离开、响应丢失）：只撤销这一次登录的会话，其他设备保持登录，再清除 Cookie；没有会话标识的旧令牌退回撤销全部会话
 
 密码找回支持两种后端邮件服务。Gmail 配置 `EMAIL_PROVIDER=gmail`、`GMAIL_USER`、`GMAIL_APP_PASSWORD` 和 `APP_URL`；Resend 配置 `RESEND_API_KEY`、`EMAIL_FROM` 和 `APP_URL`（未设置 `EMAIL_PROVIDER` 时的默认服务）。只有商城的 Gmail 发件账户需要应用专用密码；收件人使用已注册的账户邮箱，无需 Gmail 账户或应用专用密码。凭据仅保存于后端环境配置，不能放入前端变量或 Git；配置缺失或无效时关闭找回功能。配置和收信验证方法见 [邮件部署指引](./docs/VERCEL_UPSTASH.md)。
 

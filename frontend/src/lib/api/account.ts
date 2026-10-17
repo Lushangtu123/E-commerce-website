@@ -22,13 +22,16 @@ export interface AuthSession {
   user: User;
 }
 
+/** A sign-out revokes every session; discarding an abandoned sign-in revokes only that one. */
+const clearSessionCookie = (scope: 'all' | 'this') => api.post(scope === 'all' ? '/users/logout' : '/users/session/discard');
+
 export const userApi = {
   register: (data: { username: string; email: string; password: string }, attempt?: CustomerAuthAttempt) =>
-    customerSignIn(() => api.post<unknown, AuthSession>('/users/register', data), () => api.post('/users/logout'), attempt),
+    customerSignIn(() => api.post<unknown, AuthSession>('/users/register', data), clearSessionCookie, attempt),
   login: (data: { email: string; password: string }, attempt?: CustomerAuthAttempt) =>
-    customerSignIn(() => api.post<unknown, AuthSession>('/users/login', data), () => api.post('/users/logout'), attempt),
-  /** Clears the httpOnly session cookie; the API needs no valid session to do so. */
-  logout: () => customerSessionLogout(() => api.post('/users/logout')),
+    customerSignIn(() => api.post<unknown, AuthSession>('/users/login', data), clearSessionCookie, attempt),
+  /** Signs out on every device and clears the httpOnly session cookie; the API needs no valid session to do so. */
+  logout: () => customerSessionLogout(clearSessionCookie),
   getProfile: () => api.get<unknown, { user: User }>('/users/profile'),
   getStats: () => api.get<unknown, { stats: UserStats }>('/users/stats'),
   /** Every piece of personal data the store holds about the signed-in customer. */

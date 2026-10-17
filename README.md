@@ -339,6 +339,7 @@ The account centre requires all five statistics to be nonnegative integer counts
 - `POST /api/users/password/forgot` - Request a reset email; safely disabled when the email service is not configured
 - `POST /api/users/password/reset` - Reset the password with a one-time token valid for 30 minutes
 - `POST /api/users/logout` - Sign out on every device: revokes the account's sessions server-side (copied cookies and Bearer tokens stop working), then clears the session cookie; answers 503 and keeps the cookie when revocation fails
+- `POST /api/users/session/discard` - Discard one unconfirmed sign-in (page left, reply lost): revokes only that sign-in's session and keeps other devices signed in, then clears the cookie; tokens without a session id fall back to revoking every session
 
 Password-reset mail supports two backend providers. Gmail uses `EMAIL_PROVIDER=gmail`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `APP_URL`; Resend uses `RESEND_API_KEY`, `EMAIL_FROM` and `APP_URL` (the default when `EMAIL_PROVIDER` is unset). Gmail needs an app password for the store's sending account only; registered recipients use their account email and do not need a Gmail account or app password. Store credentials only in backend environment settings, never in client variables or Git. Missing or invalid provider configuration disables recovery. See the [mail configuration and verification guide](./docs/VERCEL_UPSTASH.md).
 

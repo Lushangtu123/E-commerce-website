@@ -45,7 +45,7 @@ integration('真实 MySQL 数据保留期清理', () => {
   });
 
   beforeEach(async () => {
-    for (const table of ['browse_history', 'search_history', 'password_reset_tokens', 'page_visits', 'users']) await db.query(`DELETE FROM ${table}`);
+    for (const table of ['browse_history', 'search_history', 'password_reset_tokens', 'page_visits', 'customer_session_revocations', 'users']) await db.query(`DELETE FROM ${table}`);
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (1,'one','one@example.test','x'),(2,'two','two@example.test','x')");
   });
 
@@ -58,9 +58,12 @@ integration('真实 MySQL 数据保留期清理', () => {
       (REPEAT('a',64),1,NOW() - INTERVAL 1 MINUTE),(REPEAT('b',64),2,NOW() + INTERVAL 1 HOUR)`);
     await db.query(`INSERT INTO page_visits (user_id,session_id,page_url,created_at) VALUES
       (1,'s','/',NOW() - INTERVAL 91 DAY),(1,'s','/',NOW() - INTERVAL 89 DAY)`);
+    await db.query(`INSERT INTO customer_session_revocations (session_id,user_id,expires_at) VALUES
+      (UUID(),1,NOW() - INTERVAL 1 MINUTE),(UUID(),1,NOW() + INTERVAL 1 DAY)`);
 
     const result = await purgeExpiredPersonalData();
-    expect(result).toEqual({ browse_history: 1, search_history: 1, password_reset_tokens: 1, page_visits: 1 });
+    expect(result).toEqual({ browse_history: 1, search_history: 1, password_reset_tokens: 1, customer_session_revocations: 1, page_visits: 1 });
+    expect(await count('customer_session_revocations')).toBe(1);
     expect((await db.query<RowDataPacket[]>('SELECT product_id FROM browse_history ORDER BY product_id'))[0].map(row => row.product_id)).toEqual([2, 3]);
     expect((await db.query<RowDataPacket[]>('SELECT keyword FROM search_history'))[0].map(row => row.keyword)).toEqual(['recent']);
     expect((await db.query<RowDataPacket[]>('SELECT user_id FROM password_reset_tokens'))[0].map(row => row.user_id)).toEqual([2]);
@@ -77,7 +80,7 @@ integration('真实 MySQL 数据保留期清理', () => {
   });
 
   test('再次运行没有可删除的记录', async () => {
-    expect(await purgeExpiredPersonalData()).toEqual({ browse_history: 0, search_history: 0, password_reset_tokens: 0, page_visits: 0 });
+    expect(await purgeExpiredPersonalData()).toEqual({ browse_history: 0, search_history: 0, password_reset_tokens: 0, customer_session_revocations: 0, page_visits: 0 });
   });
 
   test('保留期与隐私政策一致', () => {

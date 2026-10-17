@@ -22,9 +22,9 @@ test('需要 CRON_SECRET', async () => {
 });
 
 test('返回各表删除的条数', async () => {
-  (purgeExpiredPersonalData as jest.Mock).mockResolvedValue({ browse_history: 3, search_history: 0, password_reset_tokens: 1, page_visits: 0 });
+  (purgeExpiredPersonalData as jest.Mock).mockResolvedValue({ browse_history: 3, search_history: 0, password_reset_tokens: 1, customer_session_revocations: 0, page_visits: 0 });
   const res = await request(app).post('/api/internal/data-retention').set('Authorization', `Bearer ${SECRET}`).expect(200);
-  expect(res.body).toEqual({ browse_history: 3, search_history: 0, password_reset_tokens: 1, page_visits: 0 });
+  expect(res.body).toEqual({ browse_history: 3, search_history: 0, password_reset_tokens: 1, customer_session_revocations: 0, page_visits: 0 });
 });
 
 test('失败时返回 503', async () => {
@@ -34,7 +34,7 @@ test('失败时返回 503', async () => {
 });
 
 test('轮换期内旧的 CRON_SECRET 仍然有效，未设置时无效', async () => {
-  (purgeExpiredPersonalData as jest.Mock).mockResolvedValue({ browse_history: 0, search_history: 0, password_reset_tokens: 0, page_visits: 0 });
+  (purgeExpiredPersonalData as jest.Mock).mockResolvedValue({ browse_history: 0, search_history: 0, password_reset_tokens: 0, customer_session_revocations: 0, page_visits: 0 });
   const OLD = 'o'.repeat(40);
   await request(app).post('/api/internal/data-retention').set('Authorization', `Bearer ${OLD}`).expect(401);
   process.env.CRON_SECRET_PREVIOUS = OLD;

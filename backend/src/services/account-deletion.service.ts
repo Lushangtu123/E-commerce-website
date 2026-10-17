@@ -32,7 +32,7 @@ const UNUSABLE_PASSWORD = '!deleted';
 
 const PERSONAL_TABLES = [
   'shipping_addresses', 'address_creation_receipts', 'cart', 'cart_add_receipts', 'favorites',
-  'browse_history', 'search_history', 'password_reset_tokens', 'page_visits',
+  'browse_history', 'search_history', 'password_reset_tokens', 'page_visits', 'customer_session_revocations',
 ] as const;
 
 export async function deleteAccount(userId: number, password: string): Promise<void> {

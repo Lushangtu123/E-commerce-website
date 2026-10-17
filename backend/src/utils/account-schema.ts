@@ -1,11 +1,11 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 
-const REQUIRED = ['users.auth_version', 'users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step', 'admin_recovery_codes.key_id'];
+const REQUIRED = ['users.auth_version', 'users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step', 'admin_recovery_codes.key_id', 'customer_session_revocations.session_id'];
 
 /** Read-only release gate; never performs migrations during an API request or build. */
 export async function missingAccountColumns(pool: Pool): Promise<string[]> {
   const [columns] = await pool.query<RowDataPacket[]>(
-    "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('users', 'admins', 'admin_recovery_codes')"
+    "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('users', 'admins', 'admin_recovery_codes', 'customer_session_revocations')"
   );
   const present = new Set(columns.map(column => `${column.TABLE_NAME}.${column.COLUMN_NAME}`));
   return REQUIRED.filter(column => !present.has(column));
