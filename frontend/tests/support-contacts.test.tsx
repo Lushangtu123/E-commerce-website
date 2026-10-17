@@ -39,6 +39,12 @@ describe.each(surfaces)('published contacts: %s', (_, surface) => {
     expect(screen.queryByText('客服联系方式暂未公布')).not.toBeInTheDocument();
   });
 
+  it('encodes the mailbox and domain around a literal @', () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPPORT_EMAIL', '100%real"desk@shop.test');
+    render(surface());
+    expect(screen.getByRole('link', { name: '100%real"desk@shop.test' })).toHaveAttribute('href', 'mailto:100%25real%22desk@shop.test');
+  });
+
   it('supports one configured contact without exposing a placeholder for the other', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPPORT_EMAIL', 'support@shop.test');
     render(surface());

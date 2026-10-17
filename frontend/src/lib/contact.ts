@@ -1,3 +1,9 @@
+/** Encodes the mailbox and domain separately so the single @ stays a literal separator. */
+function mailtoHref(email: string): string {
+  const at = email.lastIndexOf('@');
+  return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`;
+}
+
 /** Public merchant contacts are configured at build time; no sample contact is published. */
 export function supportContacts() {
   const configuredPhone = process.env.NEXT_PUBLIC_SUPPORT_PHONE?.trim() || '';
@@ -9,6 +15,6 @@ export function supportContacts() {
     phone,
     email,
     phoneHref: phone ? `tel:${phone.replace(/[^\d+]/g, '')}` : undefined,
-    emailHref: email ? `mailto:${encodeURIComponent(email).replace('%40', '@')}` : undefined,
+    emailHref: email ? mailtoHref(email) : undefined,
   };
 }

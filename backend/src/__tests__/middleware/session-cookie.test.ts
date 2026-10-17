@@ -203,11 +203,26 @@ describe('CORS credentials', () => {
     expect((await preflight('https://evil.example')).headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  test.each([undefined, '*', 'http://localhost:3000,*'])('allows any origin without credentials for CORS_ORIGIN=%p', async value => {
+  test.each([undefined, '*', 'http://localhost:3000,*'])('without a usable list, development allows only loopback pages and no credentials (CORS_ORIGIN=%p)', async value => {
     if (value === undefined) delete process.env.CORS_ORIGIN;
     else process.env.CORS_ORIGIN = value;
-    const res = await preflight('https://anywhere.example');
-    expect(res.headers['access-control-allow-origin']).toBe('https://anywhere.example');
-    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+    for (const local of ['http://localhost:3000', 'http://127.0.0.1:3100', 'http://[::1]:3000']) {
+      const res = await preflight(local);
+      expect(res.headers['access-control-allow-origin']).toBe(local);
+      expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+    }
+    for (const remote of ['https://anywhere.example', 'http://localhost.evil.example', 'null']) {
+      expect((await preflight(remote)).headers['access-control-allow-origin']).toBeUndefined();
+    }
+  });
+
+  test('production never reflects an origin without a configured list', async () => {
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production'; delete process.env.CORS_ORIGIN;
+    try {
+      for (const origin of ['http://localhost:3000', 'https://anywhere.example']) {
+        expect((await preflight(origin)).headers['access-control-allow-origin']).toBeUndefined();
+      }
+    } finally { process.env.NODE_ENV = env; }
   });
 });
