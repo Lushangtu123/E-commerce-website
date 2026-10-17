@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import type { CorsOptions } from 'cors';
 import logger from './logger';
 import { DEV_JWT_SECRET } from './jwt-secret';
 import { passwordMailConfig } from '../services/password-mail.service';
@@ -16,24 +17,37 @@ const WEAK_SECRETS = new Set([
 
 /**
  * 解析 CORS 允许的来源列表（支持逗号分隔多个域名）
- * @returns 来源数组；未配置或含 `*` 时返回 true（放行所有来源，但不带 Cookie）
+ * @returns 来源数组；未配置或含通配符 `*` 时返回 null（生产环境因此拒绝启动）
  */
-export function getCorsOrigins(): string[] | true {
+export function getCorsOrigins(): string[] | null {
   const origins = (process.env.CORS_ORIGIN || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return origins.length > 0 && !origins.includes('*') ? origins : true;
+  return origins.length > 0 && !origins.includes('*') ? origins : null;
+}
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+function isLoopbackOrigin(origin: string | undefined): boolean {
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && LOOPBACK_HOSTS.has(url.hostname);
+  } catch { return false; }
 }
 
 /**
- * CORS 配置。会话 Cookie 只允许发给明确列出的来源：未配置 CORS_ORIGIN 时（仅开发环境）
- * 放行所有来源，但不带凭据，否则任何网站都能以访客身份调用接口。
+ * CORS 配置。只有 CORS_ORIGIN 明确列出的来源能跨域读取响应并携带会话 Cookie。
+ * 没有可用列表时：生产环境不放行任何跨域来源（validateEnv 也会拒绝启动）；
+ * 开发环境只放行本机页面（localhost / 127.0.0.1），且不带凭据。
  */
-export function corsOptions(): { origin: string[] | true; credentials: boolean; exposedHeaders: string[] } {
-  const origin = getCorsOrigins();
+export function corsOptions(): CorsOptions {
   // 前端报错时可以读取请求 ID，方便按 ID 查日志
-  return { origin, credentials: origin !== true, exposedHeaders: ['X-Request-Id'] };
+  const exposedHeaders = ['X-Request-Id'];
+  const origins = getCorsOrigins();
+  if (origins) return { origin: origins, credentials: true, exposedHeaders };
+  if (process.env.NODE_ENV === 'production') return { origin: false, credentials: false, exposedHeaders };
+  return { origin: (origin, callback) => callback(null, isLoopbackOrigin(origin)), credentials: false, exposedHeaders };
 }
 
 const port = Joi.number().integer().min(1).max(65535);
@@ -119,12 +133,12 @@ export function validateEnv(): void {
     logger.warn('JWT_SECRET_PREVIOUS 是弱密钥或与 JWT_SECRET 相同');
   }
 
-  if (!process.env.CORS_ORIGIN) {
+  if (!getCorsOrigins()) {
     if (isProd) {
-      logger.error('生产环境必须配置 CORS_ORIGIN（允许的前端域名，逗号分隔），拒绝启动');
+      logger.error('生产环境必须把 CORS_ORIGIN 配置为允许的前端域名（逗号分隔，不能用 *），拒绝启动');
       process.exit(1);
     }
-    logger.warn('未配置 CORS_ORIGIN，开发环境允许所有来源跨域');
+    logger.warn('未配置 CORS_ORIGIN 或使用了 *，开发环境只允许本机页面跨域，且不带 Cookie');
   }
 
   const problems = envFormatProblems();

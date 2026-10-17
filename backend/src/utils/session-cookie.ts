@@ -64,7 +64,7 @@ export function hasTrustedSessionSource(req: Request): boolean {
   const origin = canonicalOrigin(value);
   if (!origin) return false;
   const allowed = getCorsOrigins();
-  if (allowed !== true && allowed.includes(value)) return true;
+  if (allowed?.includes(value)) return true;
   // Same-origin deployments (including Vercel previews) need no external CORS allowlist entry.
   if (value === `${req.protocol}://${req.get('host')}`) return true;
   // Local development commonly serves the frontend and API on different loopback ports.

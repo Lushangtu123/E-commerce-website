@@ -36,8 +36,9 @@ afterEach(() => {
 });
 
 describe('getCorsOrigins', () => {
-  test('未配置时返回 true（开发环境放行）', () => {
-    expect(getCorsOrigins()).toBe(true);
+  test.each([undefined, '*', 'https://a.com,*', ' , '])('未配置或含通配符时没有可用列表：%p', value => {
+    if (value !== undefined) process.env.CORS_ORIGIN = value;
+    expect(getCorsOrigins()).toBeNull();
   });
 
   test('单个域名', () => {
@@ -78,6 +79,14 @@ describe('validateEnv', () => {
   test('生产环境缺失 CORS_ORIGIN：拒绝启动', () => {
     process.env.NODE_ENV = 'production';
     process.env.JWT_SECRET = 'a-strong-random-secret-value';
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  test.each(['*', 'https://a.com,*'])('生产环境 CORS_ORIGIN 使用通配符 %s：拒绝启动', value => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'a-strong-random-secret-value';
+    process.env.CORS_ORIGIN = value;
     validateEnv();
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
