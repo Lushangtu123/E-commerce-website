@@ -9,7 +9,7 @@ export interface AuthRequest extends Request {
   user?: any;
 }
 
-function userPayload(decoded: string | jwt.JwtPayload): decoded is jwt.JwtPayload {
+export function userPayload(decoded: string | jwt.JwtPayload): decoded is jwt.JwtPayload {
   return typeof decoded === 'object' && decoded.type !== 'admin' &&
     (decoded.type === undefined || decoded.type === 'user') &&
     Number.isSafeInteger(decoded.userId) && decoded.userId > 0 &&

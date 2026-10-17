@@ -191,6 +191,7 @@ export const errorTranslations: Record<string, string> = {
   '用户名或密码错误': 'Incorrect username or password',
   '注册失败': 'Unable to create your account',
   '登录失败': 'Unable to sign in',
+  '退出登录暂不可用，请稍后重试': 'Sign-out is unavailable. Please try again later.',
   '验证已过期，请重新输入密码': 'Verification expired. Enter your password again.',
   '验证码错误': 'Incorrect verification code',
   '请先获取验证器密钥': 'Get the authenticator key first.',

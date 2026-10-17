@@ -1,7 +1,15 @@
 const assert = require('node:assert/strict');
 
 /** Real HttpOnly cookie responses, with the first login held while its page is left. */
-module.exports = async function customerAuthLifecycle({ browser, localPlatformScripts, watchConsole, customerEmail, errors }) {
+module.exports = async function customerAuthLifecycle({ browser, localPlatformScripts, watchConsole, errors }) {
+  // The abandoned login uses its own account: clearing its cookie signs that account out everywhere,
+  // and the main commerce customer's session must survive for the later flows.
+  const abandoned = { username: `abandoned${Date.now()}`, email: `abandoned${Date.now()}@example.test`, password: 'BrowserAbandoned789!' };
+  const setup = await browser.newContext();
+  try {
+    const headers = { 'X-Requested-With': 'XMLHttpRequest', Origin: 'http://127.0.0.1:3100' };
+    assert.equal((await setup.request.post('http://127.0.0.1:3101/api/users/register', { headers, data: abandoned })).status(), 201);
+  } finally { await setup.close(); }
   const context = await browser.newContext();
   try {
     await localPlatformScripts(context);
@@ -20,8 +28,8 @@ module.exports = async function customerAuthLifecycle({ browser, localPlatformSc
       if (request.method() === 'POST' && request.url() === 'http://127.0.0.1:3101/api/users/register') registerWrites++;
     });
     await page.goto('http://127.0.0.1:3100/login');
-    await page.getByLabel('邮箱', { exact: true }).fill(customerEmail);
-    await page.getByLabel('密码', { exact: true }).fill('BrowserRecovered789!');
+    await page.getByLabel('邮箱', { exact: true }).fill(abandoned.email);
+    await page.getByLabel('密码', { exact: true }).fill(abandoned.password);
     await page.getByRole('button', { name: '登录', exact: true }).click(); await started;
     await page.getByRole('link', { name: '立即注册', exact: true }).click();
     await page.waitForURL(/\/register$/);
