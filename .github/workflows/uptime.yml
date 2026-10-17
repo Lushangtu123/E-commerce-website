@@ -1,0 +1,50 @@
+name: 线上巡检
+
+# Every 10 minutes (GitHub may start scheduled runs a few minutes late) and on demand.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+# Runs never overlap; a slow run finishes before the next one starts.
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+# Read the repository; open, comment on and close the uptime-alert issue.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    name: 生产站点巡检
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # The production origin; override with the repository variable PRODUCTION_URL.
+      SITE_URL: ${{ vars.PRODUCTION_URL || 'https://e-commerce-website-blush-rho.vercel.app' }}
+      REPORT_FILE: uptime-report.md
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: 检查健康接口、首页和商品接口
+        id: probe
+        continue-on-error: true
+        run: node scripts/ci/uptime-check.mjs
+
+      - name: 开启、更新或关闭告警 Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.probe.outcome }}
+        run: bash scripts/ci/uptime-issue.sh
+
+      - name: 巡检失败时标红本次运行
+        if: steps.probe.outcome == 'failure'
+        run: exit 1

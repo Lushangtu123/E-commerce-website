@@ -768,7 +768,7 @@ MIT License
 - SMS and order-notification email (password-reset email through Gmail SMTP or Resend already exists)
 - Object storage
 - CDN configuration
-- Monitoring and alerting
+- Paging and long-term log retention (uptime checks and Sentry error alerts are in place; see `docs/MONITORING.md`)
 - Backup and recovery
 - Load balancing
 
