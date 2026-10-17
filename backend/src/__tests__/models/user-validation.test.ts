@@ -11,7 +11,7 @@ test.each([{}, { phone: undefined }, { username: 123 }, { email: 'x@test' }, { p
 
 test('direct model normalizes clearable fields and binds values instead of SQL fields', async () => {
   expect(await UserModel.update(1, { username: ' 名称 ', phone: '  ', avatar_url: null })).toBe(true);
-  expect(query).toHaveBeenCalledWith('UPDATE users SET username = ?, phone = ?, avatar_url = ? WHERE user_id = ?', ['名称', null, null, 1]);
+  expect(query).toHaveBeenCalledWith('UPDATE users SET username = ?, phone = ?, avatar_url = ? WHERE user_id = ? AND status = 1 AND deleted_at IS NULL', ['名称', null, null, 1]);
 });
 
 test.each([0, -1, 1.5, '1', Number.MAX_SAFE_INTEGER + 1])('model rejects invalid user identity %p', async userId => {

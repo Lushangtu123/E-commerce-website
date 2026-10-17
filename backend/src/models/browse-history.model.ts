@@ -1,4 +1,5 @@
-import { query } from '../database/mysql';
+import { getPool, query } from '../database/mysql';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 import { customerProducts } from './product.model';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { CustomerActivityError, assertActivityId, assertActivityPage, activityProductDTO } from '../utils/customer-activity-validation';
@@ -24,13 +25,20 @@ export class BrowseHistoryModel {
   // 添加浏览记录
   static async add(userId: number, productId: number): Promise<number> {
     assertActivityId(userId); assertActivityId(productId);
-    const result = await query<ResultSetHeader>(
-      `INSERT INTO browse_history (user_id, product_id, browsed_at)
-       SELECT ?, product_id, NOW() FROM products WHERE product_id = ? AND status = 1`,
-      [userId, productId]
-    );
-    if (result.affectedRows !== 1) throw new CustomerActivityError('商品不存在或已下架', 404);
-    return result.insertId;
+    const connection = await getPool().getConnection();
+    try {
+      await connection.beginTransaction();
+      await lockCustomerAccount(connection, userId, (message, status) => new CustomerActivityError(message, status));
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO browse_history (user_id, product_id, browsed_at)
+         SELECT ?, product_id, NOW() FROM products WHERE product_id = ? AND status = 1`,
+        [userId, productId]
+      );
+      if (result.affectedRows !== 1) throw new CustomerActivityError('商品不存在或已下架', 404);
+      await connection.commit();
+      return result.insertId;
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
   }
 
   // 获取用户浏览历史（带商品信息）

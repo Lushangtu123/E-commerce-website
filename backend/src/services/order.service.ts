@@ -14,6 +14,7 @@ import { PRODUCT_HOT_CACHE_KEYS, productDetailCacheKeys } from '../utils/product
 import { AdminAuditMetadata, normalizeAdminAuditMetadata } from '../utils/admin-audit-metadata';
 
 import { PurchaseError as OrderError, MAX_QUANTITY, MAX_CHECKOUT_LINES, MAX_CHECKOUT_INPUT_LINES, normalizePurchaseItems as normalizeItems, pricePurchaseItems as priceItems } from './purchase-items.service';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 export { PurchaseError as OrderError } from './purchase-items.service';
 
 export class CheckoutQuoteChangedError extends OrderError {
@@ -167,10 +168,7 @@ export async function createOrder(
     await connection.beginTransaction();
     // Match address writes and coupon claims before taking address/product/coupon locks.
     // user_coupons' user FK would otherwise introduce a coupon -> user lock edge.
-    const [users] = await connection.execute<RowDataPacket[]>(
-      'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]
-    );
-    if (!users.length) throw new OrderError('用户不存在', 404);
+    await lockCustomerAccount(connection, userId, (message, status) => new OrderError(message, status));
     // The user lock serializes same-user attempts across processes. This is the transaction's
     // first consistent read, after that lock, so it sees the previous attempt's commit.
     // Do not gap-lock missing keys: different users must be able to create their first orders.

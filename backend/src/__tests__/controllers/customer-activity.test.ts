@@ -24,9 +24,10 @@ beforeEach(() => {
   (getPool as jest.Mock).mockReturnValue({ getConnection: async () => ({
     beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {},
     query: async (sql: string, values?: unknown[]) => [await query(sql, values)],
+    execute: async (sql: string, values?: unknown[]) => [await query(sql, values)],
   }) });
   (query as jest.Mock).mockImplementation(async (sql: string) => {
-    if (sql.startsWith('SELECT user_id FROM users')) return [{ user_id: 7 }];
+    if (sql.startsWith('SELECT status, deleted_at FROM users')) return [{ status: 1, deleted_at: null }];
     if (sql.startsWith('SELECT favorite_id FROM favorites')) return favorited ? [{ favorite_id: 1 }] : [];
     if (sql.startsWith('SELECT auth_version')) return [{ auth_version: 0, status: 1 }];
     if (sql.startsWith('INSERT')) return { insertId: available ? 50 : 0, affectedRows: available ? 1 : 0 };

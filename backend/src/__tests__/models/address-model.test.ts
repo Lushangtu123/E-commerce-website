@@ -15,7 +15,7 @@ beforeEach(() => {
   connection = {
     beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[]) => {
-      if (sql.includes('FROM users')) return [userExists ? [{ user_id: 1 }] : [], []];
+      if (sql.includes('FROM users')) return [userExists ? [{ user_id: 1, status: 1, deleted_at: null }] : [], []];
       if (sql.startsWith('SELECT') && sql.includes('FROM shipping_addresses')) return [rows, []];
       if (sql.startsWith('INSERT')) return [{ insertId: 21, affectedRows: 1 }, []];
       if (sql.includes('is_default = CASE') && defaultFailure) throw new Error('default write failed');

@@ -3,11 +3,11 @@ import path from 'path';
 import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth';
-import { query } from '../../database/mysql';
+import { getPool, query } from '../../database/mysql';
 import { recordSearch, getUserSearchHistory, getHotKeywords, getSearchSuggestions, deleteSearchKeyword, clearSearchHistory, elasticsearchSearch } from '../../controllers/search.controller';
 import { searchProducts } from '../../services/product-search.service';
 
-jest.mock('../../database/mysql', () => ({ query: jest.fn() }));
+jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
 jest.mock('../../services/product-search.service', () => ({ searchProducts: jest.fn() }));
 
 const integration = process.env.MYSQL_TEST_SOCKET || process.env.MYSQL_TEST_HOST ? describe : describe.skip;
@@ -34,6 +34,7 @@ integration('真实 MySQL 搜索记录边界和用户归属', () => {
     await db.query(`INSERT INTO users (user_id,username,email,password_hash) VALUES
       (7,'search-a','search-a@example.test','fixture'),(8,'search-b','search-b@example.test','fixture')`);
     (query as jest.Mock).mockImplementation(async (sql: string, values?: unknown[]) => (await db.query(sql, values))[0]);
+    (getPool as jest.Mock).mockReturnValue(db);
   });
 
   afterAll(async () => {

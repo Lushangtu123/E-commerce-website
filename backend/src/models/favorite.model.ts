@@ -3,6 +3,7 @@ import { customerProducts } from './product.model';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import type { PoolConnection } from 'mysql2/promise';
 import { CustomerActivityError, assertActivityId, assertActivityPage, assertActivityBatch, activityProductDTO } from '../utils/customer-activity-validation';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 
 export interface Favorite {
   favorite_id: number;
@@ -27,8 +28,7 @@ async function withFavoriteAccount<T>(userId: number, perform: (connection: Pool
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
-    const [users] = await connection.query<RowDataPacket[]>('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]);
-    if (!users.length) throw new CustomerActivityError('用户不存在', 404);
+    await lockCustomerAccount(connection, userId, (message, status) => new CustomerActivityError(message, status));
     const result = await perform(connection);
     await connection.commit(); return result;
   } catch (error) { await connection.rollback(); throw error; }

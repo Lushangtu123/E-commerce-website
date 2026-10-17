@@ -26,8 +26,9 @@ export class PasswordResetModel {
     const conn = await getPool().getConnection();
     try {
       await conn.beginTransaction();
-      const [users] = await conn.query<RowDataPacket[]>('SELECT auth_version FROM users WHERE user_id = ? FOR UPDATE', [userId]);
-      if (!users.length) { await conn.rollback(); return null; }
+      const [users] = await conn.query<RowDataPacket[]>('SELECT auth_version, deleted_at FROM users WHERE user_id = ? FOR UPDATE', [userId]);
+      // The lookup by email ran before this lock; account deletion may have committed meanwhile.
+      if (!users.length || users[0].deleted_at) { await conn.rollback(); return null; }
       const [tokens] = await conn.query<RowDataPacket[]>(
         `SELECT token_hash, DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s.%f') AS expires_at,
          expires_at > UTC_TIMESTAMP(3) AS unexpired,

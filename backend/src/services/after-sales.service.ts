@@ -2,6 +2,7 @@ import Joi from 'joi';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { getPool } from '../database/mysql';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 import { OrderStatus } from '../models/order.model';
 import { couponMoneyToCents } from '../utils/coupon-discount';
 
@@ -77,6 +78,13 @@ async function inTransaction<T>(work: (connection: PoolConnection) => Promise<T>
   } catch (error) { await connection.rollback(); throw error; }
   finally { connection.release(); }
 }
+/** Customer writes lock the account before the order, like checkout, so deletion cannot be outrun. */
+function customerTransaction<T>(userId: number, work: (connection: PoolConnection) => Promise<T>): Promise<T> {
+  return inTransaction(async connection => {
+    await lockCustomerAccount(connection, userId, (message, status) => new AfterSalesError(message, status));
+    return work(connection);
+  });
+}
 
 export async function getAfterSales(userId: number, orderId: number): Promise<AfterSalesRequest | null> {
   validateIds(userId, orderId);
@@ -89,7 +97,7 @@ export async function createAfterSales(userId: number, orderId: number, input: u
   validateIds(userId, orderId);
   const { error, value } = requestSchema.validate(input);
   if (error) throw new AfterSalesError('售后类型或申请原因无效');
-  return inTransaction(async connection => {
+  return customerTransaction(userId, async connection => {
     // Every mutation takes the order lock before the request lock, including admin review.
     const order = await ownedOrder(connection, userId, orderId, true);
     if (![OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.COMPLETED].includes(order.status)) {
@@ -107,7 +115,7 @@ export async function createAfterSales(userId: number, orderId: number, input: u
 
 export async function withdrawAfterSales(userId: number, orderId: number): Promise<AfterSalesRequest> {
   validateIds(userId, orderId);
-  return inTransaction(async connection => {
+  return customerTransaction(userId, async connection => {
     await ownedOrder(connection, userId, orderId, true);
     const request = await requestForOrder(connection, orderId, true);
     if (!request) throw new AfterSalesError('售后申请不存在', 404);
@@ -188,7 +196,7 @@ export async function submitReturnTracking(userId: number, orderId: number, inpu
   validateIds(userId, orderId);
   const { error, value } = trackingSchema.validate(input);
   if (error) throw new AfterSalesError('退货快递公司或运单号无效');
-  return inTransaction(async connection => {
+  return customerTransaction(userId, async connection => {
     await ownedOrder(connection, userId, orderId, true);
     const request = await requestForOrder(connection, orderId, true);
     if (!request) throw new AfterSalesError('售后申请不存在', 404);

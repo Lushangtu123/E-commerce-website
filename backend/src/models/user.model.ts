@@ -1,6 +1,7 @@
 import { query } from '../database/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { normalizeProfile, ProfileUpdates } from '../utils/user-validation';
+import { normalizeProfile, ProfileUpdates, UserValidationError } from '../utils/user-validation';
+import { ACCOUNT_SESSION_EXPIRED, ACTIVE_ACCOUNT } from '../utils/customer-account-lock';
 
 export interface User {
   user_id: number;
@@ -111,10 +112,15 @@ export class UserModel {
     const fields = Object.keys(allowed).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(allowed), userId];
     
+    // The row lock this UPDATE waits for may be account deletion's, so it only matches an active account.
     const result = await query<ResultSetHeader>(
-      `UPDATE users SET ${fields} WHERE user_id = ?`,
+      `UPDATE users SET ${fields} WHERE user_id = ? AND ${ACTIVE_ACCOUNT}`,
       values
     );
-    return result.affectedRows > 0;
+    if (result.affectedRows > 0) return true;
+    // No row changed: unchanged values, a missing user, or an account closed while this waited.
+    const rows = await query<RowDataPacket[]>('SELECT status, deleted_at FROM users WHERE user_id = ?', [userId]);
+    if (rows.length && (rows[0].deleted_at || Number(rows[0].status) !== 1)) throw new UserValidationError(ACCOUNT_SESSION_EXPIRED, 401);
+    return false;
   }
 }

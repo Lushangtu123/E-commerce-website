@@ -89,6 +89,7 @@ integration('真实 MySQL 收藏与浏览历史边界', () => {
       return {
         beginTransaction: () => connection.beginTransaction(), commit: () => connection.commit(),
         rollback: () => connection.rollback(), release: () => connection.release(),
+        execute: (sql: string, values: any[]) => connection.execute(sql, values),
         query: async (sql: string, values: unknown[]) => {
           const result = await connection.query(sql, values);
           if (sql.startsWith('SELECT favorite_id FROM favorites')) {

@@ -8,6 +8,7 @@ import { calculateDiscountCents, couponMoneyToCents } from '../utils/coupon-disc
 import logger from '../utils/logger';
 import { CouponClaimError, normalizeCouponClaimKey } from '../utils/coupon-claim';
 import { AdminAuditContext, adminWriteTransaction, writeAdminAudit } from '../utils/admin-write-audit';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 
 // 优惠券类型
 export enum CouponType {
@@ -210,10 +211,7 @@ export class CouponModel {
       await connection.beginTransaction();
 
       // Order creation and address writes use the same user-first lock order.
-      const [users] = await connection.execute<RowDataPacket[]>(
-        'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]
-      );
-      if (!users.length) throw new CouponClaimError('用户不存在');
+      await lockCustomerAccount(connection, userId, (message, status) => new CouponClaimError(message, status === 404 ? 400 : status));
 
       // The user mutex makes this the first consistent read after any preceding claim commits.
       // Read an existing receipt before eligibility checks: a retry must work after expiry or use.

@@ -4,6 +4,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { normalizePurchaseItems, pricePurchaseItems, PurchaseError, MAX_QUANTITY } from '../services/purchase-items.service';
 import { SpecsTranslation } from '../utils/product-i18n';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 
 export interface CartItem {
   cart_id: number;
@@ -32,8 +33,7 @@ export class CartModel {
       await connection.beginTransaction();
       // Match checkout's user -> product -> SKU order. This also serializes remove/clear
       // with writes, so a deleted item's old quantity cannot be restored by a late add.
-      const [users] = await connection.execute<RowDataPacket[]>('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]);
-      if (!users.length) throw new PurchaseError('用户不存在', 404);
+      await lockCustomerAccount(connection, userId, (message, status) => new PurchaseError(message, status));
       const result = await work(connection);
       await connection.commit();
       return result;
