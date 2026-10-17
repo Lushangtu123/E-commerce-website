@@ -35,7 +35,7 @@ const getRequestIdentity = (config: AxiosRequestConfig) => {
   // an existing session nor invalidate one when a sign-in attempt fails.
   if (config.method?.toLowerCase() === 'post' && ['/users/login', '/users/register', '/admin/login'].includes(path)) return null;
   // Clearing an uncertain cookie needs no valid sign-in, including after storage identity changed.
-  if (path === '/users/logout' && config.method?.toLowerCase() === 'post') return null;
+  if ((path === '/users/logout' || path === '/users/session/discard') && config.method?.toLowerCase() === 'post') return null;
   // Categories are a public read shared by the storefront and admin editor.
   // Keep this exception exact and read-only; protected customer calls still
   // require their hydrated identity to match browser storage.

@@ -17,6 +17,8 @@ vi.mock('next/link', () => ({ default: ({ href, children, ...rest }: AnchorHTMLA
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('react-hot-toast', () => ({ default: notices }));
 
+/** Abandoned or unconfirmed sign-ins revoke only their own session; sign-out uses /users/logout. */
+const DISCARD = 'POST /users/session/discard';
 const userA = { user_id: 1, username: 'Account A', email: 'a@example.test' };
 const userB = { user_id: 2, username: 'Account B', email: 'b@example.test' };
 const originalAdapter = api.defaults.adapter;
@@ -37,7 +39,7 @@ function serve(routes: Record<string, () => unknown>) {
     requests.push(route);
     if (!routes[route]) throw new Error(`Unexpected request ${route}`);
     const data = await routes[route]();
-    if (route === 'POST /users/logout' || route.includes('/users/password')) cookieUser = null;
+    if (route === 'POST /users/logout' || route === DISCARD || route.includes('/users/password')) cookieUser = null;
     else if (data && typeof data === 'object' && 'user' in data) cookieUser = (data as { user: typeof userA }).user?.user_id ?? null;
     return { data, status: 200, statusText: 'OK', headers: {}, config };
   };
@@ -153,11 +155,11 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
 
   it('clears an abandoned successful response without storing or announcing it', async () => {
     const answer = pending();
-    serve({ [endpoint]: () => answer.promise, 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ [endpoint]: () => answer.promise, [DISCARD]: () => ({ message: '已退出登录' }) });
     const view = render(<Page />); await settle(); fill(route);
     fireEvent.submit(document.querySelector('form')!); await settle(); view.unmount();
     answer.resolve({ user: userA }); await settle();
-    expect(requests).toEqual([endpoint, 'POST /users/logout']);
+    expect(requests).toEqual([endpoint, DISCARD]);
     expect(cookieUser).toBeNull();
     expect(useAuthStore.getState().user).toBeNull();
     expect(localStorage.getItem('session')).toBeNull();
@@ -192,10 +194,10 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
   });
 
   it.each([null, {}, { user: {} }, { user: { ...userA, user_id: '1' } }, { user: { ...userA, email: null } }])('clears an unexpected successful body %j instead of publishing it', async body => {
-    serve({ [endpoint]: () => body, 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ [endpoint]: () => body, [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<Page />); await settle(); fill(route);
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual([endpoint, 'POST /users/logout']);
+    expect(requests).toEqual([endpoint, DISCARD]);
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(localStorage.getItem('user')).toBeNull();
     expect(notices.success).not.toHaveBeenCalled();
@@ -205,7 +207,7 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
 
   it('discards a result after the stored tab identity changes', async () => {
     const answer = pending();
-    serve({ [endpoint]: () => answer.promise, 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ [endpoint]: () => answer.promise, [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<Page />); await settle(); fill(route);
     fireEvent.submit(document.querySelector('form')!); await settle();
     localStorage.setItem('session', 'other-tab');
@@ -226,10 +228,10 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
       if (key === failedKey) throw new DOMException('Full storage', 'QuotaExceededError');
       setItem(key, value);
     });
-    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ [endpoint]: () => ({ user: userA }), [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<Page />); await settle(); fill(route);
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual([endpoint, 'POST /users/logout']);
+    expect(requests).toEqual([endpoint, DISCARD]);
     expect(cookieUser).toBeNull();
     expect(localStorage.getItem('session')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
@@ -240,7 +242,7 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
   });
 
   it('reports unavailable storage before sending credentials and permits explicit retry after it recovers', async () => {
-    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ [endpoint]: () => ({ user: userA }), [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<Page />); await settle(); fill(route);
     const read = vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new DOMException('Storage denied', 'SecurityError'); });
     fireEvent.submit(document.querySelector('form')!); await settle();
@@ -264,6 +266,7 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
     serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
     render(<Page />); await settle(); fill(route); fireEvent.submit(document.querySelector('form')!); await settle();
     try {
+      // Unreadable storage cannot rule out a pending sign-out, so cleanup signs out everywhere rather than downgrade it.
       expect(requests).toEqual([endpoint, 'POST /users/logout']);
       expect(cookieUser).toBeNull(); expect(useAuthStore.getState().isAuthenticated).toBe(false);
       expect(notices.error).toHaveBeenCalledWith('无法保存登录状态，请恢复浏览器存储后重新登录');
@@ -297,20 +300,20 @@ describe.each(['login', 'register'] as const)('customer %s lifecycle', route => 
       if (key === 'user' && fails) throw new DOMException('Full storage', 'QuotaExceededError');
       setItem(key, value);
     });
-    serve({ [endpoint]: () => ({ user: userA }), 'POST /users/logout': () => {
+    serve({ [endpoint]: () => ({ user: userA }), [DISCARD]: () => {
       if (++clears < 3) throw new Error('Cleanup unavailable'); return { message: '已退出登录' };
     } });
     render(<Page />); await settle(); fill(route);
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual([endpoint, 'POST /users/logout']);
+    expect(requests).toEqual([endpoint, DISCARD]);
     expect(localStorage.getItem('customer_session_cleanup_pending')).toBe('1');
     expect(notices.error).toHaveBeenCalledTimes(1);
     fails = false; write.mockRestore();
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual([endpoint, 'POST /users/logout', 'POST /users/logout']);
+    expect(requests).toEqual([endpoint, DISCARD, DISCARD]);
     expect(notices.error).toHaveBeenLastCalledWith('登录状态清理尚未确认，请恢复浏览器存储后重试');
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual([endpoint, 'POST /users/logout', 'POST /users/logout', 'POST /users/logout', endpoint]);
+    expect(requests).toEqual([endpoint, DISCARD, DISCARD, DISCARD, endpoint]);
     expect(cookieUser).toBe(1); expect(useAuthStore.getState().user).toEqual(userA);
   });
 });
@@ -347,7 +350,7 @@ describe('customer cookie mutation order across actual routed pages', () => {
       }
       setItem(key, value);
     });
-    serve({ 'POST /users/login': () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ 'POST /users/login': () => ({ user: userA }), [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<LoginPage />); await settle(); fill('login');
     fireEvent.submit(document.querySelector('form')!); await settle();
     expect(localStorage.getItem('session')).toBe('replacement-b');
@@ -358,10 +361,10 @@ describe('customer cookie mutation order across actual routed pages', () => {
 
   it('rejects an invalid cleanup acknowledgement without resending credentials', async () => {
     localStorage.setItem('customer_session_cleanup_pending', '1');
-    serve({ 'POST /users/logout': () => ({}), 'POST /users/login': () => ({ user: userA }) });
+    serve({ [DISCARD]: () => ({}), 'POST /users/login': () => ({ user: userA }) });
     render(<LoginPage />); await settle(); fill('login');
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual(['POST /users/logout']);
+    expect(requests).toEqual([DISCARD]);
     expect(localStorage.getItem('customer_session_cleanup_pending')).toBe('1');
     expect(notices.error).toHaveBeenCalledWith('登录状态清理尚未确认，请恢复浏览器存储后重试');
     // End this fixture's pending cleanup without leaving the module queue dirty for the next case.
@@ -388,7 +391,7 @@ describe('customer cookie mutation order across actual routed pages', () => {
     const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
       if (key === 'user' || key === 'session') throw new DOMException('Storage denied', 'SecurityError'); removeItem(key);
     });
-    serve({ 'POST /users/login': () => ({ user: userA }), 'POST /users/logout': () => ({ message: '已退出登录' }) });
+    serve({ 'POST /users/login': () => ({ user: userA }), [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<LoginPage />); await settle(); fill('login'); fireEvent.submit(document.querySelector('form')!); await settle();
     expect(cookieUser).toBeNull();
     act(() => useAuthStore.getState().hydrate());
@@ -405,7 +408,7 @@ describe('customer cookie mutation order across actual routed pages', () => {
       if (key === 'session' || key === 'user') throw new DOMException('Storage denied', 'SecurityError');
       removeItem(key);
     });
-    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
+    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }), [DISCARD]: () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
     await signOut();
     expect(cookieUser).toBeNull();
     act(() => useAuthStore.getState().hydrate());
@@ -436,20 +439,21 @@ describe('customer cookie mutation order across actual routed pages', () => {
     act(() => useAuthStore.getState().hydrate());
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     read.mockRestore(); remove.mockRestore();
-    serve({ 'POST /users/logout': () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
+    serve({ [DISCARD]: () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
     render(<LoginPage />); await settle(); fill('login', userB);
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual(['POST /users/logout', 'POST /users/logout', 'POST /users/login']);
+    // The server already acknowledged the sign-out; the leftover local cleanup needs no second global revocation.
+    expect(requests).toEqual(['POST /users/logout', DISCARD, 'POST /users/login']);
     expect(useAuthStore.getState().user).toEqual(userB); expect(cookieUser).toBe(2);
     expect(localStorage.getItem('customer_session_cleanup_pending')).toBeNull();
   });
 
   it('clears a lost sign-in result without resending credentials', async () => {
     serve({ 'POST /users/login': () => { cookieUser = 1; throw new Error('Lost reply'); },
-      'POST /users/logout': () => ({ message: '已退出登录' }) });
+      [DISCARD]: () => ({ message: '已退出登录' }) });
     render(<LoginPage />); await settle(); fill('login');
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual(['POST /users/login', 'POST /users/logout']);
+    expect(requests).toEqual(['POST /users/login', DISCARD]);
     expect(cookieUser).toBeNull(); expect(useAuthStore.getState().user).toBeNull();
     expect(notices.error).toHaveBeenCalledWith('登录结果尚未确认，请重新登录');
   });
@@ -457,7 +461,7 @@ describe('customer cookie mutation order across actual routed pages', () => {
   it('requires successful cookie cleanup before a later registration after failed abandoned cleanup', async () => {
     const answer = pending(); let clears = 0;
     serve({ 'POST /users/login': () => answer.promise, 'POST /users/register': () => ({ user: userB }),
-      'POST /users/logout': () => { if (++clears === 1) throw new Error('Cleanup unavailable'); return { message: '已退出登录' }; } });
+      [DISCARD]: () => { if (++clears === 1) throw new Error('Cleanup unavailable'); return { message: '已退出登录' }; } });
     const first = render(<LoginPage />); await settle(); fill('login');
     fireEvent.submit(document.querySelector('form')!); await settle(); first.unmount();
     answer.resolve({ user: userA }); await settle();
@@ -465,7 +469,7 @@ describe('customer cookie mutation order across actual routed pages', () => {
     expect(useAuthStore.getState().user).toBeNull();
     render(<RegisterPage />); await settle(); fill('register', userB);
     fireEvent.submit(document.querySelector('form')!); await settle();
-    expect(requests).toEqual(['POST /users/login', 'POST /users/logout', 'POST /users/logout', 'POST /users/register']);
+    expect(requests).toEqual(['POST /users/login', DISCARD, DISCARD, 'POST /users/register']);
     expect(cookieUser).toBe(2); expect(useAuthStore.getState().user).toEqual(userB);
     expect(localStorage.getItem('customer_session_cleanup_pending')).toBeNull();
   });
@@ -483,22 +487,36 @@ describe('customer cookie mutation order across actual routed pages', () => {
   });
   it('finishes and cleans abandoned login A before sending register B through the live link', async () => {
     const answer = pending(), cleanup = pending();
-    serve({ 'POST /users/login': () => answer.promise, 'POST /users/register': () => ({ user: userB }), 'POST /users/logout': () => cleanup.promise });
+    serve({ 'POST /users/login': () => answer.promise, 'POST /users/register': () => ({ user: userB }), [DISCARD]: () => cleanup.promise });
     render(<RoutedPages />); await settle(); fill('login');
     fireEvent.submit(document.querySelector('form')!); await settle();
     fireEvent.click(screen.getByRole('link', { name: '立即注册' })); await settle();
     fill('register', userB); fireEvent.submit(document.querySelector('form')!); await settle();
     expect(requests).toEqual(['POST /users/login']);
     answer.resolve({ user: userA }); await settle();
-    expect(requests).toEqual(['POST /users/login', 'POST /users/logout']);
+    expect(requests).toEqual(['POST /users/login', DISCARD]);
     expect(useAuthStore.getState().user).toBeNull();
     cleanup.resolve({ message: '已退出登录' }); await settle();
-    expect(requests).toEqual(['POST /users/login', 'POST /users/logout', 'POST /users/register']);
+    expect(requests).toEqual(['POST /users/login', DISCARD, 'POST /users/register']);
     expect(cookieUser).toBe(2);
     expect(useAuthStore.getState().user).toEqual(userB);
     expect(JSON.parse(localStorage.getItem('user')!)).toEqual(userB);
     expect(routing.pushes).toEqual(['/']);
     expect(notices.success).toHaveBeenCalledTimes(1);
+  });
+
+  it('repeats an unacknowledged sign-out as a full sign-out before the next sign-in, never as a single-session discard', async () => {
+    act(() => useAuthStore.getState().login(userA, 'session-a')); cookieUser = 1;
+    let fails = true;
+    serve({ 'POST /users/logout': () => { if (fails) throw new Error('Revocation unavailable'); return { message: '已退出登录' }; },
+      [DISCARD]: () => ({ message: '已退出登录' }), 'POST /users/login': () => ({ user: userB }) });
+    await signOut();
+    expect(cookieUser).toBe(1);
+    fails = false;
+    render(<LoginPage />); await settle(); fill('login', userB);
+    fireEvent.submit(document.querySelector('form')!); await settle();
+    expect(requests).toEqual(['POST /users/logout', 'POST /users/logout', 'POST /users/login']);
+    expect(useAuthStore.getState().user).toEqual(userB); expect(cookieUser).toBe(2);
   });
 
   it('keeps a pending logout from clearing the cookie of a later sign-in', async () => {

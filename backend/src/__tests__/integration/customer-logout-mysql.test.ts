@@ -9,6 +9,7 @@ import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { query } from '../../database/mysql';
+import { migrateAccountSecurity } from '../../database/migrate-account-security';
 import userRoutes from '../../routes/user.routes';
 
 jest.mock('../../database/mysql', () => ({ query: jest.fn(), getPool: jest.fn() }));
@@ -54,8 +55,11 @@ integration('真实 MySQL 顾客退出撤销会话', () => {
     const source = fs.readFileSync(path.join(__dirname, '../../database/migrate.ts'), 'utf8');
     const schema = [...source.matchAll(/`(CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)].find(match => match[2] === 'users');
     await db.query(schema![1]);
+    await migrateAccountSecurity(db as never);
     (query as jest.Mock).mockImplementation(async (sql: string, values?: unknown[]) => {
-      if (failRevocation && sql.startsWith('UPDATE users SET auth_version')) throw new Error('database unavailable');
+      if (failRevocation && (sql.startsWith('UPDATE users SET auth_version') || sql.includes('INTO customer_session_revocations'))) {
+        throw new Error('database unavailable');
+      }
       return (await db.query(sql, values))[0];
     });
   });
@@ -70,6 +74,7 @@ integration('真实 MySQL 顾客退出撤销会话', () => {
 
   beforeEach(async () => {
     failRevocation = false;
+    await db.query('DELETE FROM customer_session_revocations');
     await db.query('DELETE FROM users');
     const hash = await require('bcryptjs').hash(PASSWORD, 4);
     await db.query("INSERT INTO users (user_id,username,email,password_hash) VALUES (1,'one','one@example.test',?)", [hash]);
@@ -130,5 +135,63 @@ integration('真实 MySQL 顾客退出撤销会话', () => {
     await request(app).post('/api/users/logout').set('Cookie', cookie).expect(403);
     expect(await version()).toBe(0);
     await profile(cookie).expect(200);
+  });
+
+  describe('放弃一次未完成的登录（session/discard）', () => {
+    const discard = (cookie?: string) => {
+      const req = request(app).post('/api/users/session/discard').set(csrf);
+      return cookie ? req.set('Cookie', cookie) : req;
+    };
+
+    test('只撤销这一次登录的会话，其他设备保持登录', async () => {
+      const abandoned = await signIn();
+      const otherDevice = await signIn();
+      const out = await discard(abandoned).expect(200);
+      expect(out.body).toEqual({ message: '已退出登录' });
+      expect(cookieOf(out)).toBe('customer_session=');
+      await profile(abandoned).expect(401);
+      await profile(otherDevice).expect(200);
+      expect(await version()).toBe(0);
+      // Repeating it is harmless.
+      await discard(abandoned).expect(200);
+      await profile(otherDevice).expect(200);
+    });
+
+    test('之后的“退出所有设备”仍撤销全部会话', async () => {
+      const abandoned = await signIn();
+      const otherDevice = await signIn();
+      await discard(abandoned).expect(200);
+      await logout(otherDevice).expect(200);
+      await profile(otherDevice).expect(401);
+    });
+
+    test('没有会话标识的旧令牌无法单独撤销，退回撤销全部会话', async () => {
+      const legacy = `customer_session=${jwt.sign({ userId: 1, type: 'user', authVersion: 0 }, process.env.JWT_SECRET!, { expiresIn: '1h' })}`;
+      const otherDevice = await signIn();
+      await discard(legacy).expect(200);
+      expect(await version()).toBe(1);
+      await profile(legacy).expect(401);
+      await profile(otherDevice).expect(401);
+    });
+
+    test('撤销失败时返回 503 且保留 Cookie，恢复后重试才确认', async () => {
+      const abandoned = await signIn();
+      failRevocation = true;
+      const failed = await discard(abandoned).expect(503);
+      expect(failed.body).toEqual({ error: '退出登录暂不可用，请稍后重试' });
+      expect(cookieOf(failed)).toBeUndefined();
+      await profile(abandoned).expect(200);
+      failRevocation = false;
+      await discard(abandoned).expect(200);
+      await profile(abandoned).expect(401);
+    });
+
+    test('撤销记录保存到令牌过期，没有 CSRF 头时拒绝', async () => {
+      const abandoned = await signIn();
+      await request(app).post('/api/users/session/discard').set('Cookie', abandoned).expect(403);
+      await discard(abandoned).expect(200);
+      const [rows] = await db.query<RowDataPacket[]>('SELECT user_id, expires_at > NOW() AS live FROM customer_session_revocations');
+      expect(rows).toEqual([expect.objectContaining({ user_id: 1, live: 1 })]);
+    });
   });
 });

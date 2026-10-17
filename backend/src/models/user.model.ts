@@ -36,6 +36,19 @@ export class UserModel {
     return result.affectedRows === 1;
   }
 
+  /** Revokes one session (one sign-in) until its token would have expired anyway. */
+  static async revokeSession(userId: number, sessionId: string, expiresAt: number): Promise<void> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new RangeError('用户ID无效');
+    await query<ResultSetHeader>(
+      'INSERT IGNORE INTO customer_session_revocations (session_id, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+      [sessionId, userId, expiresAt]);
+  }
+
+  static async sessionRevoked(sessionId: string): Promise<boolean> {
+    const rows = await query<RowDataPacket[]>('SELECT 1 FROM customer_session_revocations WHERE session_id = ? LIMIT 1', [sessionId]);
+    return rows.length > 0;
+  }
+
   static async getAuthVersion(userId: number): Promise<number | null> {
     const rows = await query<RowDataPacket[]>('SELECT auth_version, status FROM users WHERE user_id = ?', [userId]);
     // Disabled accounts never authenticate, even when a token carries the current version.

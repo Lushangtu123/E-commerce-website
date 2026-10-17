@@ -16,6 +16,7 @@ const PURGES = {
   browse_history: `DELETE FROM browse_history WHERE browsed_at < NOW() - INTERVAL ${RETENTION.browseHistoryDays} DAY LIMIT ?`,
   search_history: `DELETE FROM search_history WHERE created_at < NOW() - INTERVAL ${RETENTION.searchHistoryDays} DAY LIMIT ?`,
   password_reset_tokens: 'DELETE FROM password_reset_tokens WHERE expires_at < NOW() LIMIT ?',
+  customer_session_revocations: 'DELETE FROM customer_session_revocations WHERE expires_at < NOW() LIMIT ?',
   page_visits: `DELETE FROM page_visits WHERE created_at < NOW() - INTERVAL ${RETENTION.pageVisitDays} DAY LIMIT ?`,
 } as const;
 

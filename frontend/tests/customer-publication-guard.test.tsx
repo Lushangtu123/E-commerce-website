@@ -42,7 +42,7 @@ function signIn(route: 'login' | 'register' = 'login', commit: (data: AuthSessio
   const body = deferred<AuthSession>();
   finishPending.push(() => body.resolve({ user: second }));
   serve(config => {
-    if (config.url === '/users/logout') { cookieUser = null; return { message: '已退出登录' }; }
+    if (config.url === '/users/logout' || config.url === '/users/session/discard') { cookieUser = null; return { message: '已退出登录' }; }
     if (config.url === `/users/${route}`) {
       // Response headers can replace the HttpOnly cookie while the JSON body is still arriving.
       cookieUser = second.user_id;
@@ -173,7 +173,7 @@ describe('customer cookie publication guard', () => {
 
   it.each([
     ['get', '/admin/products'], ['post', '/admin/login'], ['post', '/users/login'], ['post', '/users/register'],
-    ['post', '/users/logout'], ['post', '/users/password/forgot'], ['post', '/users/password/reset'],
+    ['post', '/users/logout'], ['post', '/users/session/discard'], ['post', '/users/password/forgot'], ['post', '/users/password/reset'],
   ])('keeps %s %s outside the customer guard and removes a supplied expected-user header', async (method, url) => {
     localStorage.setItem(CUSTOMER_CLEANUP_KEY, '1');
     serve(() => ({}));
@@ -193,7 +193,7 @@ describe('customer cookie publication guard', () => {
     const pending = signIn(); await settle();
     pending.body.resolve({ user: second }); await pending.result;
     await userApi.getProfile();
-    expect(requests.map(request => request.route)).toEqual(['POST /users/logout', 'POST /users/login', 'GET /users/profile']);
+    expect(requests.map(request => request.route)).toEqual(['POST /users/session/discard', 'POST /users/login', 'GET /users/profile']);
     expect(requests.at(-1)?.expectedUser).toBe('2');
   });
 
@@ -252,7 +252,7 @@ describe('customer cookie publication guard', () => {
     const pending = signIn('login', () => { throw new Error('Publication failed'); });
     // Replace only the response handling; the sign-in is already awaiting its body.
     serve(config => {
-      if (config.url === '/users/logout') { cookieUser = null; useAuthStore.getState().login(replacement, 'replacement-session'); return { message: '已退出登录' }; }
+      if (config.url === '/users/logout' || config.url === '/users/session/discard') { cookieUser = null; useAuthStore.getState().login(replacement, 'replacement-session'); return { message: '已退出登录' }; }
       return {};
     });
     pending.body.resolve({ user: second });

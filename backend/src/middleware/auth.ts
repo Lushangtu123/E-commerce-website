@@ -9,11 +9,21 @@ export interface AuthRequest extends Request {
   user?: any;
 }
 
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The token's account version still matches and its own sign-in was not discarded. */
+async function sessionActive(decoded: jwt.JwtPayload): Promise<boolean> {
+  const version = await UserModel.getAuthVersion(decoded.userId);
+  if (version === null || version !== (decoded.authVersion ?? 0)) return false;
+  return decoded.sid === undefined || !await UserModel.sessionRevoked(decoded.sid);
+}
+
 export function userPayload(decoded: string | jwt.JwtPayload): decoded is jwt.JwtPayload {
   return typeof decoded === 'object' && decoded.type !== 'admin' &&
     (decoded.type === undefined || decoded.type === 'user') &&
     Number.isSafeInteger(decoded.userId) && decoded.userId > 0 &&
-    (decoded.authVersion === undefined || (Number.isSafeInteger(decoded.authVersion) && decoded.authVersion >= 0));
+    (decoded.authVersion === undefined || (Number.isSafeInteger(decoded.authVersion) && decoded.authVersion >= 0)) &&
+    (decoded.sid === undefined || (typeof decoded.sid === 'string' && SESSION_ID.test(decoded.sid)));
 }
 
 /** An expected profile only constrains an already verified identity; it never authenticates. */
@@ -47,8 +57,7 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
     return res.status(401).json({ error: '登录已过期，请重新登录' });
   }
   try {
-    const version = await UserModel.getAuthVersion(decoded.userId);
-    if (version === null || version !== (decoded.authVersion ?? 0)) return res.status(401).json({ error: '登录已过期，请重新登录' });
+    if (!await sessionActive(decoded)) return res.status(401).json({ error: '登录已过期，请重新登录' });
     if (!matchesExpectedCustomer(req, res, decoded.userId)) return;
     req.userId = decoded.userId;
     req.user = decoded;
@@ -67,7 +76,7 @@ export async function optionalAuth(req: AuthRequest, res: Response, next: NextFu
 
     if (token) {
       const decoded = verifyJwt(token) as any;
-      if (userPayload(decoded) && (await UserModel.getAuthVersion(decoded.userId)) === (decoded.authVersion ?? 0)) {
+      if (userPayload(decoded) && await sessionActive(decoded)) {
         if (!matchesExpectedCustomer(req, res, decoded.userId)) return;
         req.userId = decoded.userId;
         req.user = decoded;

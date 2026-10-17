@@ -31,6 +31,15 @@ export async function migrateAccountSecurity(pool: Pool): Promise<void> {
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     INDEX idx_password_reset_expiry (expires_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  // 单个顾客会话的撤销记录（放弃未完成的登录时使用），保存到令牌过期为止，由每日保存期限任务清理
+  await pool.query(`CREATE TABLE IF NOT EXISTS customer_session_revocations (
+    session_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_session_revocation_expiry (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
   logger.info('账户安全迁移完成');
 }
 

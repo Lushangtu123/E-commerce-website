@@ -20,10 +20,33 @@ export class CustomerSessionChanged extends Error {
   constructor() { super('登录状态已变化，请刷新后重试'); }
 }
 
+/**
+ * Which server cleanup a cookie needs: `all` is the user's own sign-out (every device), `this` discards
+ * only an abandoned or unconfirmed sign-in, so other devices stay signed in.
+ */
+export type CookieClear = (scope: 'all' | 'this') => Promise<unknown>;
+
+/** A sign-out that has not been acknowledged yet; cleanup must not downgrade it to a single session. */
+const LOGOUT_PENDING_KEY = 'customer_session_logout_pending';
+
 let writing = false;
 const waiting: (() => void)[] = [];
 let authRevision = 0;
 let cleanupPending = false;
+let logoutPending = false;
+
+function needsLogout() {
+  try { return logoutPending || (typeof window !== 'undefined' && localStorage.getItem(LOGOUT_PENDING_KEY) === '1'); }
+  catch { return true; }
+}
+
+function recordLogout(pending: boolean) {
+  logoutPending = pending;
+  if (typeof window !== 'undefined') {
+    if (pending) localStorage.setItem(LOGOUT_PENDING_KEY, '1');
+    else localStorage.removeItem(LOGOUT_PENDING_KEY);
+  }
+}
 
 function needsCleanup() {
   return cleanupPending || (typeof window !== 'undefined' && localStorage.getItem(CUSTOMER_CLEANUP_KEY) === '1');
@@ -91,20 +114,23 @@ export function customerAccountWrite<T>(write: () => Promise<T>, stillInvoked: (
 }
 
 /** Called inside the queue; invoking the public queued logout here would deadlock. */
-export async function clearCustomerCookie(clear: () => Promise<unknown>, canFinishCleanup: () => boolean = () => true): Promise<void> {
+export async function clearCustomerCookie(clear: CookieClear, canFinishCleanup: () => boolean = () => true): Promise<void> {
   try { recordCleanup(true); } catch { /* The in-memory marker remains set; always try server cleanup. */ }
-  const value = await clear();
+  const scope = needsLogout() ? 'all' : 'this';
+  const value = await clear(scope);
   if (!value || typeof value !== 'object' || !('message' in value) || value.message !== '已退出登录') {
     throw new Error('Invalid customer logout acknowledgement');
   }
+  if (scope === 'all') { try { recordLogout(false); } catch { /* A later cleanup repeats the full sign-out. */ } }
   // A confirmed server logout can still leave a local profile that is unsafe to restore.
   // Keep the marker if its final check fails or cannot read browser storage.
   if (canFinishCleanup()) recordCleanup(false);
 }
 
 /** Remember logout before a Web Lock or earlier cookie writer makes it wait. */
-export function customerSessionLogout(clear: () => Promise<unknown>): Promise<{ message: string }> {
+export function customerSessionLogout(clear: CookieClear): Promise<{ message: string }> {
   try { recordCleanup(true); } catch { /* Cleanup must still run when storage is denied. */ }
+  try { recordLogout(true); } catch { /* The in-memory marker still asks for a full sign-out. */ }
   return customerSessionWrite(async () => {
     await clearCustomerCookie(clear, () => !!useAuthStore.getState().sessionId || !storedSessionId() || !localStorage.getItem('user'));
     return { message: '已退出登录' };
@@ -141,7 +167,7 @@ function validUser(value: unknown): value is User {
     (user.phone == null || typeof user.phone === 'string') && (user.avatar_url == null || typeof user.avatar_url === 'string');
 }
 
-export function customerSignIn(request: () => Promise<AuthSession>, clear: () => Promise<unknown>, attempt?: CustomerAuthAttempt): Promise<AuthSession> {
+export function customerSignIn(request: () => Promise<AuthSession>, clear: CookieClear, attempt?: CustomerAuthAttempt): Promise<AuthSession> {
   return queueWrite(async () => {
     if (attempt && !attempt.current()) throw new CustomerAuthAbandoned();
     try { if (needsCleanup()) await clearCustomerCookie(clear); }

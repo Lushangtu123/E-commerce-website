@@ -235,6 +235,25 @@ router.post('/logout', UserController.logout);
 
 /**
  * @openapi
+ * /api/users/session/discard:
+ *   post:
+ *     tags: [用户]
+ *     summary: 放弃一次未完成的登录
+ *     description: 前端放弃一次结果未确认的登录（页面已离开、响应丢失等）时调用。只撤销所持令牌对应的这一次登录，其他设备保持登录，再清除 httpOnly 会话 Cookie；没有会话标识的旧令牌退回撤销该账号全部会话。无效或过期的令牌只清除 Cookie。需带 X-Requested-With 请求头，来源规则同退出登录。
+ *     parameters:
+ *       - { in: header, name: X-Requested-With, required: true, schema: { type: string, example: XMLHttpRequest } }
+ *     responses:
+ *       200:
+ *         description: 已撤销这一次登录并清除 Cookie
+ *       403:
+ *         description: 请求来源校验失败，不清除 Cookie
+ *       503:
+ *         description: 撤销失败，保留 Cookie，请稍后重试
+ */
+router.post('/session/discard', UserController.discardSession);
+
+/**
+ * @openapi
  * /api/users/profile:
  *   get:
  *     tags: [用户]

@@ -7,14 +7,14 @@ const pool = (columns: Array<[string, string]>) => ({ query: jest.fn().mockResol
 
 test('已升级账户结构通过，缺失列按实际差异报告而不执行DDL', async () => {
   const current = pool([['users', 'auth_version'], ['users', 'status'], ['users', 'deleted_at'], ['admins', 'auth_version'],
-    ['admins', 'totp_secret'], ['admins', 'totp_enabled_at'], ['admins', 'totp_last_step'], ['admin_recovery_codes', 'key_id']]);
+    ['admins', 'totp_secret'], ['admins', 'totp_enabled_at'], ['admins', 'totp_last_step'], ['admin_recovery_codes', 'key_id'], ['customer_session_revocations', 'session_id']]);
   expect(await missingAccountColumns(current)).toEqual([]);
   const old = pool([['users', 'auth_version']]);
-  expect(await missingAccountColumns(old)).toEqual(['users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step', 'admin_recovery_codes.key_id']);
+  expect(await missingAccountColumns(old)).toEqual(['users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step', 'admin_recovery_codes.key_id', 'customer_session_revocations.session_id']);
   expect(old.query).toHaveBeenCalledTimes(1);
   expect((old.query as jest.Mock).mock.calls[0][0]).toMatch(/^SELECT /);
 });
 
 test('未初始化库不会误报准备就绪', async () => {
-  expect(await missingAccountColumns(pool([]))).toEqual(['users.auth_version', 'users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step', 'admin_recovery_codes.key_id']);
+  expect(await missingAccountColumns(pool([]))).toEqual(['users.auth_version', 'users.status', 'users.deleted_at', 'admins.auth_version', 'admins.totp_secret', 'admins.totp_enabled_at', 'admins.totp_last_step', 'admin_recovery_codes.key_id', 'customer_session_revocations.session_id']);
 });
