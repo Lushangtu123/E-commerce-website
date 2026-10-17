@@ -71,8 +71,9 @@ export default function AdminTwoFactorStep({ step, loading, onSubmitCode, onFini
           <p className="mt-1 text-sm text-gray-600">
             {t('手机丢失或无法使用验证器时，可以用恢复码代替动态码登录。每个恢复码只能使用一次，并且只显示这一次，请保存在安全的地方。')}
           </p>
+          <p className="mt-1 text-sm text-gray-600">{t('这组恢复码会替换之前的全部恢复码。')}</p>
         </div>
-        <ul aria-label={t('恢复码')} className="grid grid-cols-2 gap-2 p-4 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm text-gray-900">
+        <ul aria-label={t('恢复码')} className="grid grid-cols-1 gap-2 p-4 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm text-gray-900">
           {step.codes.map(value => <li key={value}>{value}</li>)}
         </ul>
         <div className="flex gap-3">
@@ -132,7 +133,7 @@ export default function AdminTwoFactorStep({ step, loading, onSubmitCode, onFini
           inputMode={step.kind === 'setup' ? 'numeric' : 'text'}
           autoFocus
           required
-          maxLength={32}
+          maxLength={64}
           value={code}
           onChange={event => setCode(event.target.value)}
           className={inputClass}

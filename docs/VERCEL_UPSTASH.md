@@ -23,7 +23,8 @@ Vercel 自动启用内置 API；本地需要验证同一部署结构时可设置
 | `REDIS_KEY_PREFIX=ecommerce:preview:` | 与其他项目及环境隔离键名；仍共用实例配额 |
 | `JWT_SECRET` | 独立随机长密钥 |
 | `CRON_SECRET` | 至少 32 字符的独立随机定时任务密钥 |
-| `ADMIN_TOTP_KEY` | 管理员两步验证密钥的加密密钥，`openssl rand -base64 32` 生成，设为 Sensitive；生产环境缺失时拒绝启动 |
+| `ADMIN_TOTP_KEY` | 管理员两步验证密钥的加密密钥（也用于恢复码 HMAC），`openssl rand -base64 32` 生成，设为 Sensitive；生产环境缺失时拒绝启动 |
+| `ADMIN_TOTP_KEY_PREVIOUS` | 仅在轮换 `ADMIN_TOTP_KEY` 的过渡期设置为旧值，迁移完成后删除（[密钥轮换](KEY_ROTATION.md)） |
 | `CORS_ORIGIN` | 允许的前端来源；跨域调用时须包含实际域名 |
 | `NEXT_PUBLIC_API_URL=/api` | 同域 API 地址 |
 | `NEXT_PUBLIC_SITE_URL` | 可选。网站公开地址，用于 canonical、Open Graph 和 sitemap；不填时生产环境使用 Vercel 项目生产域名。只有 Production 允许搜索引擎收录，Preview 一律 noindex |

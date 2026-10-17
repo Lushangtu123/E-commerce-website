@@ -49,12 +49,21 @@ Upstash 控制台重置密码后旧连接串立即失效，会有短暂的缓存
 
 ## ADMIN_TOTP_KEY（管理员两步验证）
 
-`ADMIN_TOTP_KEY` 加密数据库中每位管理员的验证器密钥。它没有过渡期：换了新值，旧密钥加密的验证器全部无法解密，所有管理员都要重新绑定。因此不做例行轮换，只在怀疑泄露（同时数据库也可能泄露）时更换：
+`ADMIN_TOTP_KEY` 加密数据库中每位管理员的验证器密钥，并（经 HKDF 派生）作为恢复码 HMAC 的密钥。按以下步骤平滑轮换，管理员不需要重新绑定验证器：
 
-1. 用 `openssl rand -base64 32` 生成新值，在 Vercel 更新 `ADMIN_TOTP_KEY`（Sensitive）并重新部署。
-2. 对每位管理员执行 `node dist/database/admin-reset-two-factor.js <用户名>`（清除旧绑定和恢复码），他们下次登录时重新绑定。
+1. 用 `openssl rand -base64 32` 生成新值。在 Vercel（Production，Preview 同理）把**旧值**填入 `ADMIN_TOTP_KEY_PREVIOUS`，把**新值**填入 `ADMIN_TOTP_KEY`，类型选 Sensitive，然后重新部署。
+2. 过渡期内旧密钥加密的验证器、旧密钥下的恢复码都继续可用。管理员登录时，验证器密钥自动改用新密钥加密；当前密钥下没有可用恢复码时，登录同时发放新的一组（页面只显示一次），旧恢复码作废。
+3. 在本地终端临时设置生产数据库连接和这两个变量（不要写进文件），运行检查：
+   ```bash
+   npm --prefix backend run build
+   node backend/dist/database/admin-two-factor-keys.js --rekey
+   ```
+   `--rekey` 会直接把验证器密钥改用新密钥加密；恢复码无法离线换密钥，会列出尚未登录过的管理员，请他们登录一次。命令以 0 退出并提示“可以删除”时，进入下一步。
+4. 删除 `ADMIN_TOTP_KEY_PREVIOUS` 并重新部署。
 
-`ADMIN_TOTP_KEY` 要和数据库备份分开保存：只拿到备份的人解不开验证器密钥；从备份恢复时则需要同一个密钥，否则管理员要全部重新绑定。
+怀疑密钥泄露且数据库也可能泄露时，跳过过渡期：直接替换 `ADMIN_TOTP_KEY`，不设置 `ADMIN_TOTP_KEY_PREVIOUS`，再对每位管理员执行 `node dist/database/admin-reset-two-factor.js <用户名>`，他们下次登录时重新绑定。
+
+`validateEnv` 在生产环境拒绝格式不对或与 `ADMIN_TOTP_KEY` 相同的 `ADMIN_TOTP_KEY_PREVIOUS`。`ADMIN_TOTP_KEY` 要和数据库备份分开保存：只拿到备份的人解不开验证器密钥，也无法离线验证恢复码；从备份恢复时则需要同一个密钥（或在过渡期内作为 `ADMIN_TOTP_KEY_PREVIOUS`）。
 
 ## 其他密钥
 

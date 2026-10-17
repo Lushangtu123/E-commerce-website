@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
 import express from 'express';
 import request from 'supertest';
@@ -9,7 +9,9 @@ import bcrypt from 'bcryptjs';
 import { getPool, query } from '../../database/mysql';
 import { migrateAdminTwoFactor } from '../../database/migrate-admin-two-factor';
 import adminRoutes from '../../routes/admin.routes';
-import { resetTwoFactor } from '../../services/admin-two-factor.service';
+import { resetTwoFactor, twoFactorKeyReport } from '../../services/admin-two-factor.service';
+import { openSecret } from '../../utils/secret-box';
+import { recoveryKeys } from '../../utils/recovery-code';
 import { totpCode } from '../../utils/totp';
 
 jest.mock('../../database/mysql', () => ({ getPool: jest.fn(), query: jest.fn() }));
@@ -38,8 +40,9 @@ integration('真实 MySQL 管理员两步验证', () => {
   const step = () => Math.floor(Date.now() / 1000 / 30);
   const row = async () => ((await db.query<RowDataPacket[]>('SELECT * FROM admins WHERE admin_id = 1'))[0])[0];
 
+  const KEY = randomBytes(32).toString('base64');
   beforeAll(async () => {
-    process.env.ADMIN_TOTP_KEY = randomBytes(32).toString('base64');
+    process.env.ADMIN_TOTP_KEY = KEY;
     server = mysql.createPool(options);
     await server.query(`CREATE DATABASE ${database} CHARACTER SET utf8mb4`); databaseCreated = true;
     db = mysql.createPool({ ...options, database });
@@ -51,7 +54,7 @@ integration('真实 MySQL 管理员两步验证', () => {
   });
 
   afterAll(async () => {
-    delete process.env.ADMIN_TOTP_KEY;
+    delete process.env.ADMIN_TOTP_KEY; delete process.env.ADMIN_TOTP_KEY_PREVIOUS;
     if (db) await db.end();
     if (server) {
       try { if (databaseCreated) await server.query(`DROP DATABASE ${database}`); }
@@ -60,6 +63,7 @@ integration('真实 MySQL 管理员两步验证', () => {
   });
 
   beforeEach(async () => {
+    process.env.ADMIN_TOTP_KEY = KEY; delete process.env.ADMIN_TOTP_KEY_PREVIOUS;
     for (const table of ['admin_recovery_codes', 'admin_logs', 'admins', 'roles']) await db.query(`DELETE FROM ${table}`);
     await db.query("INSERT INTO roles (role_id, role_name) VALUES (1, 'super_admin')");
     await db.query('INSERT INTO admins (admin_id, username, password_hash, role_id, status) VALUES (1, ?, ?, 1, 1)', ['boss', await bcrypt.hash(PASSWORD, 4)]);
@@ -102,8 +106,13 @@ integration('真实 MySQL 管理员两步验证', () => {
     expect(activated.body.admin).toMatchObject({ admin_id: 1, username: 'boss' });
     expect(activated.headers['set-cookie'][0]).toMatch(/^admin_session=/);
     await agent.get('/api/admin/profile').expect(200);
-    const hashes = (await db.query<RowDataPacket[]>('SELECT code_hash FROM admin_recovery_codes WHERE admin_id = 1'))[0];
+    // 160 random bits each, stored only as a keyed HMAC under the current key.
+    for (const code of activated.body.recovery_codes) expect(code).toMatch(/^[a-z2-7]{4}(-[a-z2-7]{4}){7}$/);
+    const hashes = (await db.query<RowDataPacket[]>('SELECT code_hash, key_id FROM admin_recovery_codes WHERE admin_id = 1'))[0];
     expect(hashes).toHaveLength(10);
+    expect(new Set(hashes.map(hash => hash.key_id))).toEqual(new Set([recoveryKeys()[0].id]));
+    const plainDigest = createHash('sha256').update(activated.body.recovery_codes[0].replace(/-/g, '')).digest('hex');
+    expect(hashes.map(hash => hash.code_hash)).not.toContain(plainDigest);
     expect(JSON.stringify(hashes)).not.toContain(activated.body.recovery_codes[0]);
   });
 
@@ -124,12 +133,79 @@ integration('真实 MySQL 管理员两步验证', () => {
   test('恢复码只能用一次，并报告剩余数量', async () => {
     const { recoveryCodes } = await enroll();
     const first = await passwordStep();
-    const used = await first.agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: first.body.challenge, code: recoveryCodes[0].toUpperCase() }).expect(200);
+    const typed = recoveryCodes[0].toUpperCase().replace(/-/g, ' ');
+    const used = await first.agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: first.body.challenge, code: typed }).expect(200);
     expect(used.body.recovery_codes_remaining).toBe(9);
+    expect(used.body.recovery_codes).toBeUndefined();
     const second = await passwordStep();
     await second.agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: second.body.challenge, code: recoveryCodes[0] }).expect(401);
     const logs = (await db.query<RowDataPacket[]>("SELECT description FROM admin_logs WHERE action = 'TWO_FACTOR_RECOVERY'"))[0];
     expect(logs).toEqual([expect.objectContaining({ description: '使用恢复码登录，剩余 9 个' })]);
+  });
+
+  test('当前密钥下没有可用恢复码时（迁移作废、用完），登录同时发放新的一组，旧码作废', async () => {
+    const { secret, recoveryCodes } = await enroll();
+    await db.query('UPDATE admin_recovery_codes SET used_at = NOW() WHERE admin_id = 1');
+    const { agent, body } = await passwordStep();
+    const res = await agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: body.challenge, code: totpCode(secret, step() + 1) }).expect(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body.recovery_codes).toHaveLength(10);
+    expect(res.body.recovery_codes).not.toContain(recoveryCodes[0]);
+    expect((await db.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM admin_recovery_codes WHERE used_at IS NULL'))[0][0].n).toBe(10);
+    const logs = (await db.query<RowDataPacket[]>("SELECT description FROM admin_logs WHERE action = 'TWO_FACTOR_RECOVERY_CODES'"))[0];
+    expect(logs).toEqual([expect.objectContaining({ description: '发放新的恢复码' })]);
+  });
+
+  test('早期 40 位恢复码格式一律拒绝', async () => {
+    await enroll();
+    const { agent, body } = await passwordStep();
+    await agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: body.challenge, code: 'a1b2c-d3e4f' }).expect(401);
+    await agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: body.challenge, code: 'x'.repeat(65) }).expect(401);
+  });
+
+  test('平滑轮换 ADMIN_TOTP_KEY：过渡期旧数据可用，登录后迁到新密钥，检查命令确认可删除旧密钥', async () => {
+    const { secret, recoveryCodes } = await enroll();
+    process.env.ADMIN_TOTP_KEY = randomBytes(32).toString('base64');
+    process.env.ADMIN_TOTP_KEY_PREVIOUS = KEY;
+    expect(await twoFactorKeyReport(false)).toEqual({ resealed: [], staleSecrets: ['boss'], unreadableSecrets: [], staleRecoveryCodes: ['boss'] });
+
+    // A recovery code hashed with the previous key still signs in, and the sign-in moves everything to the new key.
+    const { agent, body } = await passwordStep();
+    const res = await agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: body.challenge, code: recoveryCodes[1] }).expect(200);
+    expect(res.body.recovery_codes_remaining).toBe(0);
+    expect(res.body.recovery_codes).toHaveLength(10);
+    expect(await twoFactorKeyReport(false)).toEqual({ resealed: [], staleSecrets: [], unreadableSecrets: [], staleRecoveryCodes: [] });
+
+    // Without the previous key the authenticator and the new codes keep working.
+    delete process.env.ADMIN_TOTP_KEY_PREVIOUS;
+    expect(openSecret((await row()).totp_secret)).toBe(secret);
+    const next = await passwordStep();
+    await next.agent.post('/api/admin/login/2fa').set(XRW).send({ challenge: next.body.challenge, code: res.body.recovery_codes[0] }).expect(200);
+  });
+
+  test('轮换检查 --rekey 直接把验证器密钥迁到新密钥；两把密钥都解不开时列为需要重置', async () => {
+    const { secret } = await enroll();
+    process.env.ADMIN_TOTP_KEY = randomBytes(32).toString('base64');
+    process.env.ADMIN_TOTP_KEY_PREVIOUS = KEY;
+    expect((await twoFactorKeyReport(true)).resealed).toEqual(['boss']);
+    delete process.env.ADMIN_TOTP_KEY_PREVIOUS;
+    expect(openSecret((await row()).totp_secret)).toBe(secret);
+    process.env.ADMIN_TOTP_KEY = randomBytes(32).toString('base64');
+    expect((await twoFactorKeyReport(false)).unreadableSecrets).toEqual(['boss']);
+  });
+
+  test('迁移作废早期无密钥恢复码并补上 key_id，可重复执行', async () => {
+    await db.query('DROP TABLE admin_recovery_codes');
+    await db.query(`CREATE TABLE admin_recovery_codes (admin_id BIGINT NOT NULL, code_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+      used_at TIMESTAMP NULL DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (admin_id, code_hash),
+      FOREIGN KEY (admin_id) REFERENCES admins(admin_id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await db.query("INSERT INTO admin_recovery_codes (admin_id, code_hash) VALUES (1, REPEAT('a', 64))");
+    await migrateAdminTwoFactor(db);
+    await migrateAdminTwoFactor(db);
+    expect((await db.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM admin_recovery_codes'))[0][0].n).toBe(0);
+    const [columns] = await db.query<RowDataPacket[]>(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admin_recovery_codes' AND COLUMN_NAME = 'key_id'");
+    expect(columns).toHaveLength(1);
   });
 
   test('没有经过两步验证的会话（包括升级前签发的）一律拒绝', async () => {

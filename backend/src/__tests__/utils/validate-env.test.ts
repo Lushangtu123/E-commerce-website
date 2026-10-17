@@ -236,6 +236,19 @@ describe('validateEnv 管理员两步验证密钥', () => {
     expect(JSON.stringify(logger.error.mock.calls)).toContain('ADMIN_TOTP_KEY');
   });
 
+  test('轮换期合格的 ADMIN_TOTP_KEY_PREVIOUS：正常启动', () => {
+    process.env.ADMIN_TOTP_KEY_PREVIOUS = Buffer.alloc(32, 9).toString('base64');
+    validateEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([['长度不对', Buffer.alloc(16).toString('base64')], ['与当前密钥相同', Buffer.alloc(32, 7).toString('base64')]])('生产环境 ADMIN_TOTP_KEY_PREVIOUS %s：拒绝启动', (_label, value) => {
+    process.env.ADMIN_TOTP_KEY_PREVIOUS = value;
+    validateEnv();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(JSON.stringify(logger.error.mock.calls)).toContain('ADMIN_TOTP_KEY_PREVIOUS');
+  });
+
   test('开发环境未配置：只提示', () => {
     process.env.NODE_ENV = 'development';
     delete process.env.ADMIN_TOTP_KEY;

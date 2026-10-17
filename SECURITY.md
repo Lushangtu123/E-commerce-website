@@ -393,6 +393,7 @@ if (failedAttempts > 5) {
 4. **双因素认证**
    - ✅ 所有管理员强制 TOTP 两步验证（RFC 6238），首次登录绑定并发放 10 个一次性恢复码
    - ✅ 验证器密钥以 `ADMIN_TOTP_KEY` 加密存储，同一动态码不能重放
+   - ✅ 恢复码 160 位随机，只存以 `ADMIN_TOTP_KEY` 派生密钥计算的 HMAC；支持平滑轮换（`ADMIN_TOTP_KEY_PREVIOUS`）
    - 📝 顾客账户尚未提供两步验证
 
 5. **审计日志**

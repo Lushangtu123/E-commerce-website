@@ -116,11 +116,24 @@ describe('admin login', () => {
     expect(router.push.mock.calls).toEqual([['/admin/dashboard']]);
   });
 
+  it('shows a newly issued set of recovery codes before the dashboard', async () => {
+    const codes = Array.from({ length: 10 }, (_, index) => `abcd-efgh-ijkl-mnop-qrst-uvwx-yz23-456${index}`);
+    setup(json(200, { admin, recovery_codes: codes }));
+
+    await signIn();
+    expect(localStorage.getItem('admin_session')).toEqual(expect.any(String));
+    expect(Array.from(screen.getByRole('list', { name: '恢复码' }).querySelectorAll('li'), item => item.textContent)).toEqual(codes);
+    expect(screen.getByText('这组恢复码会替换之前的全部恢复码。')).toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '我已保存，进入后台' }));
+    expect(router.push.mock.calls).toEqual([['/admin/dashboard']]);
+  });
+
   it('warns when a recovery code sign-in leaves few codes', async () => {
     setup(json(200, { admin, recovery_codes_remaining: 2 }));
 
     await signIn();
-    expect(toasts).toEqual([['error', '恢复码只剩 2 个，请尽快重置两步验证以生成新的恢复码'], ['success', '登录成功']]);
+    expect(toasts).toEqual([['error', '恢复码只剩 2 个；全部用完后，下次登录时会自动生成新的一组'], ['success', '登录成功']]);
   });
 
   it('keeps the code step after a wrong code and returns to the password after an expired challenge', async () => {

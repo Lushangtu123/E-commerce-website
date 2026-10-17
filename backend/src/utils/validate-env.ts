@@ -133,6 +133,20 @@ export function validateEnv(): void {
     logger.warn('JWT_SECRET_PREVIOUS 是弱密钥或与 JWT_SECRET 相同');
   }
 
+  // 轮换期的旧 TOTP 密钥只用于解开旧数据（docs/KEY_ROTATION.md）
+  const previousTotpKey = process.env.ADMIN_TOTP_KEY_PREVIOUS;
+  if (previousTotpKey) {
+    const problem = secretBoxKeyProblem(previousTotpKey, 'ADMIN_TOTP_KEY_PREVIOUS')
+      ?? (previousTotpKey === process.env.ADMIN_TOTP_KEY ? 'ADMIN_TOTP_KEY_PREVIOUS 不能与 ADMIN_TOTP_KEY 相同' : null);
+    if (problem) {
+      if (isProd) {
+        logger.error(`${problem}，拒绝启动`);
+        process.exit(1);
+      }
+      logger.warn(problem);
+    }
+  }
+
   if (!getCorsOrigins()) {
     if (isProd) {
       logger.error('生产环境必须把 CORS_ORIGIN 配置为允许的前端域名（逗号分隔，不能用 *），拒绝启动');

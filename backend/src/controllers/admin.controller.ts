@@ -134,11 +134,18 @@ export const adminLoginVerify = async (req: Request, res: Response) => {
   if (!hasTrustedSessionSource(req)) return res.status(403).json({ error: CSRF_ERROR });
   try {
     const { challenge, code } = challengeBody(req.body);
-    const { admin, recovery } = await verify(challenge, code);
+    const { admin, recovery, recoveryCodes } = await verify(challenge, code);
     if (recovery) {
       await logAdminAction(admin.admin_id, 'TWO_FACTOR_RECOVERY', null, null, `使用恢复码登录，剩余 ${recovery.remaining} 个`, req.ip, req.get('user-agent'));
     }
-    await completeAdminLogin(req, res, admin, recovery ? { recovery_codes_remaining: recovery.remaining } : {});
+    if (recoveryCodes) {
+      await logAdminAction(admin.admin_id, 'TWO_FACTOR_RECOVERY_CODES', null, null, '发放新的恢复码', req.ip, req.get('user-agent'));
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    await completeAdminLogin(req, res, admin, {
+      ...(recovery ? { recovery_codes_remaining: recovery.remaining } : {}),
+      ...(recoveryCodes ? { recovery_codes: recoveryCodes } : {}),
+    });
   } catch (error) {
     twoFactorFailure(res, error, '管理员两步验证失败');
   }

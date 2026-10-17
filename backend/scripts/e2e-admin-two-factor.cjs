@@ -9,17 +9,21 @@ const dist = path.resolve(__dirname, '../dist');
 const ADMIN_TOTP_KEY = Buffer.alloc(32, 7).toString('base64');
 // RFC 6238's own test secret ("12345678901234567890").
 const SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
-const RECOVERY_CODES = Array.from({ length: 20 }, (_, index) => `fixtr-${String(index + 1).padStart(5, '0')}`);
+// Deterministic codes in the production format (160 bits, eight groups of four base32 characters).
+const RECOVERY_CODES = Array.from({ length: 20 }, (_, index) => require(path.join(dist, 'utils/totp'))
+  .base32Encode(createHash('sha256').update(`fixture-recovery-${index}`).digest().subarray(0, 20)).toLowerCase().match(/.{4}/g).join('-'));
 
 /** Binds the fixture secret and recovery codes to existing administrators. */
 async function bindFixtureTwoFactor(pool, usernames) {
   const { sealSecret } = require(path.join(dist, 'utils/secret-box'));
+  const { normalizeRecoveryCode, recoveryCodeHash, recoveryKeys } = require(path.join(dist, 'utils/recovery-code'));
+  const [key] = recoveryKeys();
   for (const username of usernames) {
     const [[admin]] = await pool.query('SELECT admin_id FROM admins WHERE username = ?', [username]);
     await pool.query('UPDATE admins SET totp_secret = ?, totp_enabled_at = NOW(), totp_last_step = NULL WHERE admin_id = ?',
       [sealSecret(SECRET), admin.admin_id]);
-    await pool.query('INSERT INTO admin_recovery_codes (admin_id, code_hash) VALUES ?',
-      [RECOVERY_CODES.map(code => [admin.admin_id, createHash('sha256').update(code.replace(/[\s-]/g, '')).digest('hex')])]);
+    await pool.query('INSERT INTO admin_recovery_codes (admin_id, code_hash, key_id) VALUES ?',
+      [RECOVERY_CODES.map(code => [admin.admin_id, recoveryCodeHash(key, admin.admin_id, normalizeRecoveryCode(code)), key.id])]);
   }
 }
 
