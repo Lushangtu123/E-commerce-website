@@ -40,7 +40,7 @@ test('empty profile update is rejected without emitting empty SET SQL', async ()
 
 test('profile fields can be cleared to NULL and response excludes private account fields', async () => {
   const res = response(); await UserController.updateProfile(req({ phone: '', avatar_url: null }), res);
-  expect(query).toHaveBeenCalledWith('UPDATE users SET phone = ?, avatar_url = ? WHERE user_id = ?', [null, null, 7]);
+  expect(query).toHaveBeenCalledWith('UPDATE users SET phone = ?, avatar_url = ? WHERE user_id = ? AND status = 1 AND deleted_at IS NULL', [null, null, 7]);
   expect(res.json).toHaveBeenCalledWith({ message: '更新成功', user: expect.objectContaining({ user_id: 7, phone: null, avatar_url: null }) });
   const output = (res.json as jest.Mock).mock.calls[0][0];
   expect(output.user.password_hash).toBeUndefined(); expect(output.user.role).toBeUndefined();
@@ -95,6 +95,13 @@ test('unchanged profile is still a successful update; missing user returns 404',
   (query as jest.Mock).mockImplementation(async sql => sql.startsWith('UPDATE') ? { affectedRows: 0 } : []);
   const missing = response(); await UserController.updateProfile(req({ username: '客户' }), missing);
   expect(missing.status).toHaveBeenCalledWith(404);
+});
+
+test('a profile update that waited out account deletion answers 401', async () => {
+  (query as jest.Mock).mockImplementation(async sql => sql.startsWith('UPDATE') ? { affectedRows: 0 } : [{ ...profile, status: 0, deleted_at: new Date() }]);
+  const res = response(); await UserController.updateProfile(req({ username: '客户' }), res);
+  expect(res.status).toHaveBeenCalledWith(401);
+  expect(res.json).toHaveBeenCalledWith({ error: '登录已过期，请重新登录' });
 });
 
 test('registration races and profile username conflicts return 409 without database details', async () => {

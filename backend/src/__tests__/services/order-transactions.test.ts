@@ -53,7 +53,7 @@ beforeEach(() => {
     rollback: jest.fn().mockResolvedValue(undefined),
     release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[] = []) => {
-      if (sql.includes('FROM users')) return [[{ user_id: 7 }], []];
+      if (sql.includes('FROM users')) return [[{ user_id: 7, status: 1, deleted_at: null }], []];
       if (failSql && sql.includes(failSql)) throw new Error('database failure');
       if (sql.includes('FROM product_skus')) return [[], []];
       if (sql.includes('FROM products')) return [productMissing ? [] : [{ ...PRODUCT, product_id: params[0] }], []];

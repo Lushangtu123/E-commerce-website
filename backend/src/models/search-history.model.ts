@@ -1,4 +1,5 @@
-import { query } from '../database/mysql';
+import { getPool, query } from '../database/mysql';
+import { ACTIVE_ACCOUNT } from '../utils/customer-account-lock';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export interface SearchHistory {
@@ -12,11 +13,19 @@ export interface SearchHistory {
 export class SearchHistoryModel {
   // 添加搜索记录
   static async add(keyword: string, userId?: number, resultCount: number = 0): Promise<number> {
-    const result = await query<ResultSetHeader>(
-      'INSERT INTO search_history (user_id, keyword, result_count) VALUES (?, ?, ?)',
-      [userId || null, keyword, resultCount]
-    );
-    return result.insertId;
+    const insert = 'INSERT INTO search_history (user_id, keyword, result_count) VALUES (?, ?, ?)';
+    if (!userId) return (await query<ResultSetHeader>(insert, [null, keyword, resultCount])).insertId;
+    const connection = await getPool().getConnection();
+    try {
+      await connection.beginTransaction();
+      // Under the account lock: a search that waited out account deletion is kept only anonymously.
+      const [users] = await connection.execute<RowDataPacket[]>(
+        `SELECT user_id FROM users WHERE user_id = ? AND ${ACTIVE_ACCOUNT} FOR UPDATE`, [userId]);
+      const [result] = await connection.execute<ResultSetHeader>(insert, [users.length ? userId : null, keyword, resultCount]);
+      await connection.commit();
+      return result.insertId;
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
   }
 
   // 获取用户搜索历史（最近10条）

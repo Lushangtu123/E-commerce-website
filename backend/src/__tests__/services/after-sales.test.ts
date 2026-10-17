@@ -12,6 +12,7 @@ beforeEach(() => {
   existing = undefined;
   connection = { beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[] = []) => {
+      if (sql.includes('FROM users')) return [[{ status: 1, deleted_at: null }], []];
       if (sql.includes('FROM orders')) return [[{ ...order }], []];
       if (sql.includes('FROM after_sales_requests')) return [existing ? [{ ...existing }] : [], []];
       if (sql.includes('INSERT INTO after_sales_requests')) {

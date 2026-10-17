@@ -15,7 +15,7 @@ describe('durable cart add receipts', () => {
     jest.clearAllMocks(); quantities = new Map(); receipts = new Map(); stock = 20;
     (getPool as jest.Mock).mockReturnValue({ getConnection: async () => connection });
     connection.execute.mockImplementation(async (sql: string, values: unknown[]) => {
-      if (sql.includes('FROM users')) return [[{ user_id: values[0] }]];
+      if (sql.includes('FROM users')) return [[{ user_id: values[0], status: 1, deleted_at: null }]];
       if (sql.includes('FROM cart_add_receipts')) {
         const fingerprint = receipts.get(`${values[0]}:${values[1]}`);
         return [fingerprint ? [{ payload_fingerprint: fingerprint }] : []];
@@ -34,7 +34,7 @@ describe('durable cart add receipts', () => {
     expect([...quantities.values()]).toEqual([2]);
     expect(receipts.get(`1:${key}`)).toMatch(/^[a-f0-9]{64}$/);
     expect(connection.execute.mock.calls.filter(([sql]) => sql.includes('INSERT INTO cart '))).toHaveLength(1);
-    expect(connection.execute.mock.calls[0][0]).toContain('SELECT user_id FROM users');
+    expect(connection.execute.mock.calls[0][0]).toContain('FROM users WHERE user_id = ? FOR UPDATE');
   });
   test.each(['remove', 'clear', 'change'])('a receipt replay after %s never restores the original quantity', async change => {
     await add(); quantities.clear(); if (change === 'change') quantities.set('1:1:0', 7);

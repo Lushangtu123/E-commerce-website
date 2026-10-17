@@ -32,7 +32,7 @@ beforeEach(() => {
     release: jest.fn(),
     execute: jest.fn(async (sql: string) => {
       if (sql.includes('checkout_key =')) return [[], []];
-      if (sql.includes('FROM users')) return [[{ user_id: 7 }], []];
+      if (sql.includes('FROM users')) return [[{ user_id: 7, status: 1, deleted_at: null }], []];
       if (sql.includes('FROM product_skus')) return [[], []];
       if (sql.includes('FROM products')) return [products, []];
       if (sql.includes('FROM shipping_addresses')) return [[{ address_id: 3, ...ADDRESS }], []];

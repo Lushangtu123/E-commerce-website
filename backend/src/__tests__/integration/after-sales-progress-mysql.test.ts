@@ -20,7 +20,7 @@ integration('after-sales return and manual closure in real MySQL', () => {
     for (const file of ['migrate.ts', 'admin-migrate.ts']) {
       const source = fs.readFileSync(path.join(__dirname, '../../database', file), 'utf8');
       for (const match of source.matchAll(/`(\s*CREATE TABLE IF NOT EXISTS (\w+)[\s\S]*?)`/g)) {
-        if (['orders', 'roles', 'admins', 'admin_logs'].includes(match[2])) await db.query(match[1]);
+        if (['users', 'orders', 'roles', 'admins', 'admin_logs'].includes(match[2])) await db.query(match[1]);
       }
     }
     await migrateFulfillment(db);
@@ -36,7 +36,8 @@ integration('after-sales return and manual closure in real MySQL', () => {
   });
   beforeEach(async () => {
     (getPool as jest.Mock).mockReturnValue(db);
-    for (const table of ['after_sales_requests', 'admin_logs', 'admins', 'roles', 'orders']) await db.query(`DELETE FROM ${table}`);
+    for (const table of ['after_sales_requests', 'admin_logs', 'admins', 'roles', 'orders', 'users']) await db.query(`DELETE FROM ${table}`);
+    await db.query("INSERT INTO users(user_id,username,email,password_hash) VALUES(7,'customer','customer@example.test','test')");
     await db.query("INSERT INTO roles(role_id,role_name) VALUES(1,'operator')");
     await db.query("INSERT INTO admins(admin_id,username,password_hash,role_id) VALUES(2,'operator','test',1)");
     await db.query("INSERT INTO orders(order_id,order_no,user_id,total_amount,status,payment_method) VALUES(10,'order10',7,29.99,3,'external')");

@@ -20,7 +20,7 @@ beforeEach(() => {
   connection = {
     beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
     execute: jest.fn(async (sql: string, params: any[]) => {
-      if (sql.includes('FROM users')) return [[{ user_id: params[0] }], []];
+      if (sql.includes('FROM users')) return [[{ user_id: params[0], status: 1, deleted_at: null }], []];
       if (sql.includes('FROM address_creation_receipts')) return [[], []];
       if (sql.startsWith('SELECT')) return [rows.filter(address => address.user_id === params[0]), []];
       return [{ insertId: 21, affectedRows: 1 }, []];

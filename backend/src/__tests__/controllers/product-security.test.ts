@@ -113,7 +113,7 @@ test('购物车保留数量为零时删除及正常添加', async () => {
   const connection = {
     beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
     execute: jest.fn(async (statement: string) => {
-      if (statement.includes('FROM users')) return [[{ user_id: 1 }], []];
+      if (statement.includes('FROM users')) return [[{ user_id: 1, status: 1, deleted_at: null }], []];
       if (statement.includes('FROM products')) return [[{ product_id: 1, title: '商品', price: '5.00', stock: 10, status: 1 }], []];
       if (statement.includes('SELECT')) return [[], []];
       return [{ affectedRows: 1 }, []];

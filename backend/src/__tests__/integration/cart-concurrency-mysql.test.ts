@@ -52,7 +52,7 @@ integration('real MySQL cart write serialization', () => {
       return new Proxy(connection, { get(target, property) {
         if (property === 'execute') return async (sql: string, values: any[]) => {
           // A serialized implementation may wait on the user mutex instead of reaching the cart read.
-          if (index === 1 && sql.startsWith('SELECT user_id FROM users')) secondBoundary.resolve();
+          if (index === 1 && sql.startsWith('SELECT status, deleted_at FROM users')) secondBoundary.resolve();
           const result = await target.execute(sql, values);
           if (sql.startsWith('SELECT quantity FROM cart')) {
             (index === 0 ? firstRead : secondBoundary).resolve();

@@ -29,6 +29,7 @@ CI (`.github/workflows/ci.yml`) runs on pull requests to `main` and pushes to `m
 
 - Validate request input with Joi or the existing `normalize*` helpers; reject unknown fields and answer 400, never 500, for bad input.
 - Domain errors use the existing classes (`OrderError`, `SKUError`, `AddressError`, ...) whose `statusCode` defaults to 400; controllers map them with `res.status(error.statusCode)`.
+- Every write to a customer's own data starts with `lockCustomerAccount` (`utils/customer-account-lock.ts`): authentication ran before that lock, so it rechecks under the lock that the account was not deleted or disabled meanwhile and answers 401 otherwise. Single-statement writes add `ACTIVE_ACCOUNT` to their condition instead.
 - Money is handled in integer cents (`couponMoneyToCents`, `calculateDiscountCents`); order, stock and coupon changes happen in one MySQL transaction with row locks taken in a fixed order (user → address → products → SKUs → coupons).
 - Adding, removing or renaming a route means updating the API lists in both `README.md` and `README_ZH.md` in the same PR; `__tests__/docs/readme-routes.test.ts` fails otherwise.
 - User-facing API messages are Chinese. Every new message the UI can show needs an English entry in `frontend/src/lib/error-translations.ts`.

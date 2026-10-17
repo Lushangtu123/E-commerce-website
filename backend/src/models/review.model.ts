@@ -3,6 +3,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { OrderStatus } from './order.model';
 import { ReviewError, assertReviewId, assertReviewPage, parseReviewInput } from '../utils/review-validation';
 import logger from '../utils/logger';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 
 export { ReviewError } from '../utils/review-validation';
 
@@ -39,6 +40,7 @@ export class ReviewModel {
     const connection = await getPool().getConnection();
     try {
       await connection.beginTransaction();
+      await lockCustomerAccount(connection, userId, (message, status) => new ReviewError(message, status));
       // Serialize every review of this purchase, including older databases
       // that do not yet have the unique (order_id, product_id) index.
       const [orders] = await connection.execute<RowDataPacket[]>(

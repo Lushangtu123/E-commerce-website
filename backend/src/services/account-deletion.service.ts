@@ -8,8 +8,8 @@
  *   以及评价内容（作者显示为“已注销用户”）。
  * - 用户行去身份化：清空邮箱、手机号、头像，用户名改为占位值，密码不可再用，禁用并递增 auth_version 使所有会话失效。
  *
- * 写入顺序与其他账户写操作一致：先锁用户行（FOR UPDATE），因此并发的下单、加购、地址写入会排在注销之后，
- * 而注销后它们的会话已失效。
+ * 写入顺序与其他账户写操作一致：先锁用户行（FOR UPDATE），因此并发的下单、加购、地址等写入会排在注销之后；
+ * 它们拿到锁后用 lockCustomerAccount 重新检查账号，注销已提交时返回 401，不会再写入数据。
  */
 import bcrypt from 'bcryptjs';
 import type { RowDataPacket } from 'mysql2/promise';

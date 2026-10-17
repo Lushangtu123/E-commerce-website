@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { getPool } from '../database/mysql';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
+import { lockCustomerAccount } from '../utils/customer-account-lock';
 
 export class AddressError extends Error {
   constructor(message: string, public readonly statusCode = 400, public readonly code?: 'ADDRESS_CAPACITY_REACHED') { super(message); }
@@ -79,8 +80,7 @@ async function transaction<T>(userId: number, work: (connection: PoolConnection,
   try {
     await connection.beginTransaction();
     // The user lock serializes inserts even when the address list is still empty.
-    const [users] = await connection.execute<RowDataPacket[]>('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE', [userId]);
-    if (!users.length) throw new AddressError('用户不存在', 404);
+    await lockCustomerAccount(connection, userId, (message, status) => new AddressError(message, status));
     // The first consistent read starts after the user mutex, so it sees a preceding
     // writer's commit. Locking missing address ranges would block other users' inserts.
     const [addresses] = await connection.execute<LockedAddress[]>(

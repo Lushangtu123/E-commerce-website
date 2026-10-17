@@ -25,6 +25,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   order = { order_id: input.order_id, user_id: 7, status: 3 }; belongs = true; reviewed = false; failure = undefined;
   const execute = async (sql: string, params: any[] = []) => {
+    if (sql.includes('FROM users')) return [{ status: 1, deleted_at: null }];
     if (sql.includes('FROM orders')) return order ? [order] : [];
     if (sql.includes('FROM order_items')) return belongs ? [{ item_id: 1, product_id: input.product_id }] : [];
     if (sql.includes('FROM reviews') && sql.includes('COUNT(')) return [{ count: reviewed ? 1 : 0, total: 0 }];
@@ -82,7 +83,8 @@ test.each([undefined, '', null, 'x'.repeat(2000)])('owned completed purchase all
   expect(res.status).toHaveBeenCalledWith(201); expect(res.json).toHaveBeenCalledWith({ message: '评论成功', review_id: 81 });
   expect(connection.beginTransaction).toHaveBeenCalledTimes(1); expect(connection.commit).toHaveBeenCalledTimes(1);
   expect(connection.rollback).not.toHaveBeenCalled(); expect(connection.release).toHaveBeenCalledTimes(1);
-  expect(connection.execute.mock.calls[0]).toEqual([expect.stringMatching(/FROM orders.*FOR UPDATE/s), [input.order_id]]);
+  expect(connection.execute.mock.calls[0]).toEqual([expect.stringMatching(/FROM users.*FOR UPDATE/s), [7]]);
+  expect(connection.execute.mock.calls[1]).toEqual([expect.stringMatching(/FROM orders.*FOR UPDATE/s), [input.order_id]]);
   expect(inserts()).toHaveLength(1);
   expect(inserts()[0][1]).toEqual([input.product_id, 7, input.order_id, 5, content ?? null, JSON.stringify(Array(9).fill('https://example.test/image.png'))]);
   expect(query).not.toHaveBeenCalled();
