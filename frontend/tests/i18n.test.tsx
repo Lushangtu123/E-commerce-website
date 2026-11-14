@@ -355,8 +355,11 @@ describe('language changes on rendered pages', () => {
     vi.mocked(api.get).mockImplementation((async (url: string) => url === '/admin/dashboard/sales-trend'
       ? [{ date: '2026-10-02T00:00:00.000Z', revenue: 80, order_count: 1 }] : url === '/admin/dashboard/stats' ? {} : []) as never);
     useLocaleStore.getState().setLocale('en');
+    Object.assign(chart, { tickFormatter: undefined, labelFormatter: undefined });
     render(<AdminDashboardPage />);
     await settle();
+    // The chart is loaded on demand; wait until it has rendered and handed over its formatters.
+    await vi.waitFor(() => expect(chart.tickFormatter).toBeDefined());
 
     for (const value of ['2026-10-02', '2026-10-02T00:00:00.000Z']) {
       expect(chart.tickFormatter?.(value)).toBe('10/2/2026');

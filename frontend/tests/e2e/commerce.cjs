@@ -841,6 +841,13 @@ async function localPlatformScripts(context) {
   assert.equal(dashboardReads, beforeDashboardRetry + 1);
   await admin.unroute(`${dashboardOrdersEndpoint}*`, dashboardFault); expectedReadFailure = undefined;
   console.log('PASS browser dashboard region retry restores real orders');
+  // recharts is loaded on demand; the chart must still draw both series from the real trend.
+  const trendRegion = admin.getByRole('heading', { name: '销售趋势（最近7天）', exact: true }).locator('..');
+  // The fixture has one day of sales, so each line is a single point with no drawn path.
+  await trendRegion.locator('svg.recharts-surface').first().waitFor({ state: 'visible' });
+  assert.equal(await trendRegion.locator('.recharts-line').count(), 2);
+  for (const series of ['销售额', '订单数']) await trendRegion.locator('.recharts-legend-item').getByText(series, { exact: true }).waitFor({ state: 'visible' });
+  console.log('PASS browser dashboard sales trend chart loads on demand');
   const realOrderNo = (await (await context.request.get(detailEndpoint)).json()).order.order_no;
   for (const [kind, label, keyword, parameter] of [
     ['products', '搜索商品', 'Browser', 'keyword'], ['users', '搜索用户', 'browser', 'keyword'], ['orders', '订单号', realOrderNo.slice(0, 6), 'orderNo'],

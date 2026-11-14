@@ -127,7 +127,7 @@ describe('dashboard permission sections', () => {
 
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText('授权商品')).toBeInTheDocument();
-    expect(screen.getByText('2026-10-07: 123.45')).toBeInTheDocument();
+    expect(await screen.findByText('2026-10-07: 123.45')).toBeInTheDocument();
     expect(within(section('最近订单')).getByRole('alert')).toHaveTextContent('权限不足');
     expect(screen.queryByText('暂无订单数据')).not.toBeInTheDocument();
     expect(screen.queryByText('ORDER-AUTHORIZED')).not.toBeInTheDocument();
@@ -181,7 +181,7 @@ describe('dashboard permission sections', () => {
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText('授权商品')).toBeInTheDocument();
     expect(screen.getByText('ORDER-AUTHORIZED')).toBeInTheDocument();
-    expect(screen.getByText('2026-10-07: 123.45')).toBeInTheDocument();
+    expect(await screen.findByText('2026-10-07: 123.45')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
