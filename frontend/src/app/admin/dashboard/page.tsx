@@ -8,8 +8,14 @@ import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import api from '@/lib/api';
 import { readDashboardStats, readDashboardOrders, readDashboardProducts, readDashboardTrend } from '@/lib/dashboard-response';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import dynamic from 'next/dynamic';
 import { logger } from '@/lib/logger';
+
+// recharts is the largest dependency of the admin bundle; load it only when there is a trend to draw.
+const SalesTrendChart = dynamic(() => import('@/components/AdminSalesTrendChart'), {
+  ssr: false,
+  loading: () => <div className="h-[300px]" aria-hidden="true" />,
+});
 import { useAdminQuery } from '@/hooks/use-admin-query';
 import { requestFailure } from '@/lib/api-error';
 
@@ -180,18 +186,7 @@ export default function AdminDashboardPage() {
             ) : !trendQuery.data ? (
               <div className="h-[300px] flex items-center justify-center text-gray-500">{t("加载中...")}</div>
             ) : salesTrend && salesTrend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={salesTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={value => formatDate(value, true, { timeZone: 'UTC' })} />
-                <YAxis />
-                <Tooltip labelFormatter={label => typeof label === 'string' || typeof label === 'number'
-                  ? formatDate(label, true, { timeZone: 'UTC' }) : label} />
-                <Legend />
-                <Line type="monotone" dataKey="revenue" name={t("销售额")} stroke="#3b82f6" strokeWidth={2} />
-                <Line type="monotone" dataKey="order_count" name={t("订单数")} stroke="#10b981" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
+            <SalesTrendChart data={salesTrend} />
             ) : (
               <div className="h-[300px] flex items-center justify-center text-gray-500">
                 {t("暂无销售数据")}
