@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useAuthStore, storedSessionId } from '@/store/useAuthStore';
 import { signOut } from '@/lib/sign-out';
 import { useCartBadge } from '@/hooks/use-cart-badge';
-import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift, FiHeart, FiShoppingBag } from 'react-icons/fi';
+import { FiShoppingCart, FiUser, FiSearch, FiLogOut, FiClock, FiX, FiTrendingUp, FiGift, FiHeart, FiShoppingBag, FiMenu, FiPackage } from 'react-icons/fi';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi, type HotKeyword, type SearchKeyword } from '@/lib/api';
@@ -26,6 +26,11 @@ export default function Header() {
   const [history, setHistory] = useState<{ scope: string | null; rows: SearchKeyword[] }>({ scope: null, rows: [] });
   const [hotKeywords, setHotKeywords] = useState<HotKeyword[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  // Phones collapse the account and site links into this menu so the header keeps two rows.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = () => setMenuOpen(false);
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
@@ -200,6 +205,25 @@ export default function Header() {
     await fetchSearchHistory();
   };
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !menuButtonRef.current?.contains(target)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [menuOpen]);
+
   const handleLogout = async () => {
     // A full page load would cancel the request that clears the session cookie, so wait for it.
     await signOut();
@@ -319,6 +343,8 @@ export default function Header() {
           </form>
           {/* 右侧菜单 */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            {/* Desktop keeps these inline; display: contents leaves the md+ layout unchanged. */}
+            <div className="hidden md:contents">
             <LanguageSwitcher />
             {/* 优惠券 - 始终显示 */}
             <Link
@@ -341,6 +367,7 @@ export default function Header() {
                 <FiHeart size={20} />
               </Link>
             )}
+            </div>
 
             {/* 购物车 */}
             <Link
@@ -359,6 +386,7 @@ export default function Header() {
               aria-label={t('重新加载购物车')} title={t('加载购物车失败，请重试')}
               className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-red-600 hover:bg-red-50">!</button>}
 
+            <div className="hidden md:contents">
             {isAuthenticated ? (
               <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                 <Link
@@ -402,9 +430,56 @@ export default function Header() {
                   {t("注册")}</Link>
               </div>
             )}
+            </div>
+            <button
+              ref={menuButtonRef}
+              type="button"
+              onClick={() => setMenuOpen(open => !open)}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-site-menu"
+              aria-label={t(menuOpen ? '关闭菜单' : '打开菜单')}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden"
+            >
+              {menuOpen ? <FiX size={20} /> : <FiMenu size={20} />}
+            </button>
           </div>
         </div>
       </div>
+      {menuOpen && (
+        <div ref={menuRef} id="mobile-site-menu" className="absolute inset-x-0 top-full border-b border-gray-200 bg-white shadow-lg md:hidden">
+          <nav aria-label={t('网站菜单')} className="container-custom py-2">
+            <ul className="divide-y divide-gray-100">
+              <li className="flex h-12 items-center justify-between">
+                <span className="text-sm text-gray-700">{t('界面语言')}</span>
+                <LanguageSwitcher />
+              </li>
+              <li>
+                <Link href={isAuthenticated ? '/coupons' : '/login'} onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800">
+                  <FiGift size={18} aria-hidden="true" />{isAuthenticated ? t('优惠券') : t('登录领取优惠券')}
+                </Link>
+              </li>
+              {isAuthenticated ? (
+                <>
+                  <li><Link href="/profile" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiUser size={18} aria-hidden="true" />{t('我的')}</Link></li>
+                  <li><Link href="/orders" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiPackage size={18} aria-hidden="true" />{t('订单')}</Link></li>
+                  <li><Link href="/favorites" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiHeart size={18} aria-hidden="true" />{t('我的收藏')}</Link></li>
+                  <li><Link href="/history" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiClock size={18} aria-hidden="true" />{t('足迹')}</Link></li>
+                  <li>
+                    <button type="button" onClick={() => { closeMenu(); void handleLogout(); }} className="flex h-12 w-full items-center gap-3 text-left text-sm text-gray-800">
+                      <FiLogOut size={18} aria-hidden="true" />{t('退出登录')}
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <li className="flex gap-3 py-3">
+                  <Link href="/login" onClick={closeMenu} className="btn btn-secondary flex-1 rounded-full text-center text-sm">{t('登录')}</Link>
+                  <Link href="/register" onClick={closeMenu} className="btn btn-primary flex-1 rounded-full text-center text-sm">{t('注册')}</Link>
+                </li>
+              )}
+            </ul>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
