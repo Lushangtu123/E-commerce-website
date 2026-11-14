@@ -30,6 +30,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = () => setMenuOpen(false);
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
@@ -453,26 +454,26 @@ export default function Header() {
                 <LanguageSwitcher />
               </li>
               <li>
-                <Link href={isAuthenticated ? '/coupons' : '/login'} onClick={() => setMenuOpen(false)} className="flex h-12 items-center gap-3 text-sm text-gray-800">
+                <Link href={isAuthenticated ? '/coupons' : '/login'} onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800">
                   <FiGift size={18} aria-hidden="true" />{isAuthenticated ? t('优惠券') : t('登录领取优惠券')}
                 </Link>
               </li>
               {isAuthenticated ? (
                 <>
-                  <li><Link href="/profile" onClick={() => setMenuOpen(false)} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiUser size={18} aria-hidden="true" />{t('我的')}</Link></li>
-                  <li><Link href="/orders" onClick={() => setMenuOpen(false)} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiPackage size={18} aria-hidden="true" />{t('订单')}</Link></li>
-                  <li><Link href="/favorites" onClick={() => setMenuOpen(false)} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiHeart size={18} aria-hidden="true" />{t('我的收藏')}</Link></li>
-                  <li><Link href="/history" onClick={() => setMenuOpen(false)} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiClock size={18} aria-hidden="true" />{t('足迹')}</Link></li>
+                  <li><Link href="/profile" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiUser size={18} aria-hidden="true" />{t('我的')}</Link></li>
+                  <li><Link href="/orders" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiPackage size={18} aria-hidden="true" />{t('订单')}</Link></li>
+                  <li><Link href="/favorites" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiHeart size={18} aria-hidden="true" />{t('我的收藏')}</Link></li>
+                  <li><Link href="/history" onClick={closeMenu} className="flex h-12 items-center gap-3 text-sm text-gray-800"><FiClock size={18} aria-hidden="true" />{t('足迹')}</Link></li>
                   <li>
-                    <button type="button" onClick={() => { setMenuOpen(false); void handleLogout(); }} className="flex h-12 w-full items-center gap-3 text-left text-sm text-gray-800">
+                    <button type="button" onClick={() => { closeMenu(); void handleLogout(); }} className="flex h-12 w-full items-center gap-3 text-left text-sm text-gray-800">
                       <FiLogOut size={18} aria-hidden="true" />{t('退出登录')}
                     </button>
                   </li>
                 </>
               ) : (
                 <li className="flex gap-3 py-3">
-                  <Link href="/login" onClick={() => setMenuOpen(false)} className="btn btn-secondary flex-1 rounded-full text-center text-sm">{t('登录')}</Link>
-                  <Link href="/register" onClick={() => setMenuOpen(false)} className="btn btn-primary flex-1 rounded-full text-center text-sm">{t('注册')}</Link>
+                  <Link href="/login" onClick={closeMenu} className="btn btn-secondary flex-1 rounded-full text-center text-sm">{t('登录')}</Link>
+                  <Link href="/register" onClick={closeMenu} className="btn btn-primary flex-1 rounded-full text-center text-sm">{t('注册')}</Link>
                 </li>
               )}
             </ul>

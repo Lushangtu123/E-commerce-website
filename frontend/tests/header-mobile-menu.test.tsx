@@ -9,6 +9,8 @@ import { render, settle } from './helpers';
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
+const signOut = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('@/lib/sign-out', () => ({ signOut }));
 
 describe('mobile site menu', () => {
   const original = api.defaults.adapter;
@@ -55,5 +57,36 @@ describe('mobile site menu', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open menu' }));
     await userEvent.click(document.body);
     expect(screen.queryByRole('navigation', { name: 'Site menu' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['guest', [['登录领取优惠券', '/login'], ['登录', '/login'], ['注册', '/register']]],
+    ['customer', [['优惠券', '/coupons'], ['我的', '/profile'], ['订单', '/orders'], ['我的收藏', '/favorites'], ['足迹', '/history']]],
+  ] as const)('every %s menu link points at its page and closes the menu', async (who, links) => {
+    useLocaleStore.setState({ locale: 'zh-CN' });
+    if (who === 'customer') useAuthStore.getState().login({ user_id: 1, username: 'Fixture', email: 'fixture@example.invalid' }, 'menu-links');
+    render(<Header />); await settle();
+    for (const [name, href] of links) {
+      await userEvent.click(screen.getByRole('button', { name: '打开菜单' }));
+      const link = within(screen.getByRole('navigation', { name: '网站菜单' })).getByRole('link', { name });
+      expect(link).toHaveAttribute('href', href);
+      await userEvent.click(link);
+      expect(screen.queryByRole('navigation', { name: '网站菜单' })).not.toBeInTheDocument();
+    }
+  });
+
+  it('signs out from the menu and reloads the home page', async () => {
+    const location = window.location.href;
+    window.history.replaceState(null, '', '/orders');
+    useLocaleStore.setState({ locale: 'zh-CN' });
+    useAuthStore.getState().login({ user_id: 1, username: 'Fixture', email: 'fixture@example.invalid' }, 'menu-sign-out');
+    render(<Header />); await settle();
+    await userEvent.click(screen.getByRole('button', { name: '打开菜单' }));
+    await userEvent.click(within(screen.getByRole('navigation', { name: '网站菜单' })).getByRole('button', { name: '退出登录' }));
+    await settle();
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('navigation', { name: '网站菜单' })).not.toBeInTheDocument();
+    expect(new URL(window.location.href).pathname).toBe('/');
+    window.history.replaceState(null, '', location);
   });
 });
