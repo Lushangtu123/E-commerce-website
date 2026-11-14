@@ -63,14 +63,15 @@ class DashboardBoundary extends Component<{ children: ReactNode }, { crashed: bo
 const sectionNames = ['stats', 'recent-orders', 'top-products', 'sales-trend'] as const;
 type SectionName = typeof sectionNames[number];
 
-function expectSectionFailure(name: SectionName) {
+async function expectSectionFailure(name: SectionName) {
   expect(screen.getByRole('alert')).toHaveTextContent('获取数据失败');
   expect(screen.getByRole('button', { name: '重新加载' })).toBeVisible();
   expect(screen.queryByText('Dashboard crashed')).not.toBeInTheDocument();
   if (name !== 'stats') expect(screen.getByText('7')).toBeVisible();
   if (name !== 'recent-orders') expect(screen.getByText('ORDER-AUTHORIZED')).toBeVisible();
   if (name !== 'top-products') expect(screen.getByText('授权商品')).toBeVisible();
-  if (name !== 'sales-trend') expect(screen.getByText('2026-10-07: 123.45')).toBeVisible();
+  // The chart is loaded on demand, so its points can appear after the other sections.
+  if (name !== 'sales-trend') expect(await screen.findByText('2026-10-07: 123.45')).toBeVisible();
   expect(screen.queryByText('暂无订单数据')).not.toBeInTheDocument();
   expect(screen.queryByText('暂无销售数据')).not.toBeInTheDocument();
   expect(screen.queryByText('暂无数据')).not.toBeInTheDocument();
@@ -89,7 +90,7 @@ describe('dashboard response validation', () => {
 
   it.each(malformedStats)('rejects stats with $label without hiding other sections', async ({ data }) => {
     await setup(config => config.url === '/admin/dashboard/stats' ? data : success(config));
-    expectSectionFailure('stats');
+    await expectSectionFailure('stats');
     expect(screen.queryByText('今日订单')).not.toBeInTheDocument();
     expect(screen.queryByText('¥0.00')).not.toBeInTheDocument();
   });
@@ -107,17 +108,17 @@ describe('dashboard response validation', () => {
     { label: 'NaN growth', field: 'revenue_growth', value: NaN },
   ])('rejects $label in stats', async ({ field, value }) => {
     await setup(config => config.url === '/admin/dashboard/stats' ? { ...stats, [field]: value } : success(config));
-    expectSectionFailure('stats');
+    await expectSectionFailure('stats');
   });
 
   it.each([null, false, []])('rejects a stats response of %s', async data => {
     await setup(config => config.url === '/admin/dashboard/stats' ? data : success(config));
-    expectSectionFailure('stats');
+    await expectSectionFailure('stats');
   });
 
   it.each(sectionNames)('rejects a missing %s response object', async name => {
     await setup(config => config.url === `/admin/dashboard/${name}` ? {} : success(config));
-    expectSectionFailure(name);
+    await expectSectionFailure(name);
   });
 
   const listSections = [
@@ -134,7 +135,7 @@ describe('dashboard response validation', () => {
     { name, label: 'string list', data: { [key]: 'invalid' } },
   ]))('rejects $name $label', async ({ name, data }) => {
     await setup(config => config.url === `/admin/dashboard/${name}` ? data : success(config));
-    expectSectionFailure(name);
+    await expectSectionFailure(name);
   });
 
   it.each(listSections.flatMap(({ name, key, row }) => [
@@ -143,7 +144,7 @@ describe('dashboard response validation', () => {
     { name, label: 'wrong row type inside wrapper', data: { [key]: [row, false] } },
   ]))('rejects the whole $name section for a $label', async ({ name, data }) => {
     await setup(config => config.url === `/admin/dashboard/${name}` ? data : success(config));
-    expectSectionFailure(name);
+    await expectSectionFailure(name);
     const hidden = { 'recent-orders': 'ORDER-AUTHORIZED', 'top-products': '授权商品', 'sales-trend': '2026-10-07: 123.45' };
     expect(screen.queryByText(hidden[name])).not.toBeInTheDocument();
   });
@@ -165,7 +166,7 @@ describe('dashboard response validation', () => {
     { name: 'sales-trend', label: 'array count', row: { ...trend[0], order_count: [] } },
   ] as const)('rejects $name $label before rendering a row', async ({ name, row }) => {
     await setup(config => config.url === `/admin/dashboard/${name}` ? [row] : success(config));
-    expectSectionFailure(name);
+    await expectSectionFailure(name);
   });
 
   it.each(sectionNames)('retries only the invalid %s response and coalesces repeated retry actions', async name => {
@@ -177,7 +178,7 @@ describe('dashboard response validation', () => {
       if (config.url === target) return calls.filter(url => url === target).length === 1 ? {} : retry.promise;
       return success(config);
     });
-    expectSectionFailure(name);
+    await expectSectionFailure(name);
     const action = captureHandler(screen.getByRole('button', { name: '重新加载' }));
     const first = action(); const second = action(); await settle();
     expect(calls.filter(url => url === target)).toHaveLength(2);
@@ -193,7 +194,7 @@ describe('dashboard response validation', () => {
   it('keeps invalid retries recoverable and translates the existing error and retry controls', async () => {
     let attempts = 0;
     await setup(config => config.url === '/admin/dashboard/recent-orders' && ++attempts < 3 ? {} : success(config));
-    expectSectionFailure('recent-orders');
+    await expectSectionFailure('recent-orders');
     act(() => useLocaleStore.setState({ locale: 'en' }));
     await captureHandler(screen.getByRole('button', { name: 'Retry' }))(); await settle();
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load data');
@@ -235,7 +236,7 @@ describe('dashboard response validation', () => {
     expect(screen.getByText('¥123.45')).toBeVisible();
     expect(screen.getByText('未知用户')).toBeVisible();
     expect(screen.getAllByText('¥0.00')).toHaveLength(2);
-    expect(screen.getByText(`2026-10-07: ${wrappers ? '0.00' : 0}`)).toBeVisible();
+    expect(await screen.findByText(`2026-10-07: ${wrappers ? '0.00' : 0}`)).toBeVisible();
     act(() => useLocaleStore.setState({ locale: 'en' }));
     expect(screen.getByText('Authorized product')).toBeVisible();
     expect(screen.getByText('Unknown user')).toBeVisible();
