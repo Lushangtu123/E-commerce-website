@@ -56,3 +56,10 @@ test('network errors, redirects and malformed bodies are reported', async () => 
   })));
   assert.deepEqual(results.map(result => result.problem), ['请求失败：fetch failed', 'HTTP 307', '响应缺少 products 列表']);
 });
+
+test('a protection bypass secret is sent as the Vercel automation header', async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => { seen.push(init.headers['x-vercel-protection-bypass']); return site(healthy)(url); };
+  await runChecks('https://shop.test', { ...options(fetchImpl), headers: { 'x-vercel-protection-bypass': 'secret' } });
+  assert.deepEqual(seen, ['secret', 'secret', 'secret']);
+});
